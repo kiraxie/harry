@@ -1,6 +1,6 @@
 ---
-description: Hunt over-engineering in the diff (or whole repo with --repo) — what to delete, simplify, or replace with stdlib/native. Read-only report.
-argument-hint: '[--repo] [focus...]'
+description: Hunt over-engineering across the whole project (or just the diff with --diff) — what to delete, simplify, or replace with stdlib/native. Read-only report.
+argument-hint: '[--diff] [focus...]'
 allowed-tools: Read, Glob, Grep, Bash(git diff:*), Bash(git status:*), Bash(git ls-files:*)
 ---
 
@@ -13,10 +13,10 @@ Arguments: `$ARGUMENTS`
 
 ## Scope
 
-- Default: the current diff. Run `git diff` (and `git diff --cached`, `git status`)
-  to get changed lines. Cite real line numbers from the diff.
-- `--repo`: scan the whole tree instead. Use `git ls-files`, Glob, and Grep to
-  sweep source files. Skip vendored/generated/lock files.
+- Default: the whole project. Use `git ls-files`, Glob, and Grep to sweep source
+  files. Skip vendored/generated/lock files. Cite real file paths and line numbers.
+- `--diff`: scan only the current diff instead. Run `git diff` (and
+  `git diff --cached`, `git status`) to get changed lines; cite lines from the diff.
 - Any remaining words are a `focus...` filter — narrow the hunt to those files,
   modules, or concerns.
 

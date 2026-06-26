@@ -55,7 +55,7 @@
     {
       "skill": "lean",
       "from": "ponytail:skills/ponytail-review + ponytail-audit",
-      "note": "merged; --repo for whole tree; §2 contract carve-out (don't flag contracts as over-engineering)."
+      "note": "merged; default whole-project, --diff for diff-only; §2 contract carve-out (don't flag contracts as over-engineering)."
     },
     {
       "skill": "debt",
