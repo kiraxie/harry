@@ -8,9 +8,9 @@
 //   node scripts/init.mjs --remove [dir]  # uninstall the block
 //   node scripts/init.mjs --selftest      # runnable check (no project needed)
 
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 
 const BEGIN = "# >>> harry >>>";
@@ -32,7 +32,11 @@ function run(targetDir, { remove = false } = {}) {
 }
 
 function selftest() {
-  const assert = (cond, msg) => { if (!cond) { throw new Error("selftest failed: " + msg); } };
+  const assert = (cond, msg) => {
+    if (!cond) {
+      throw new Error(`selftest failed: ${msg}`);
+    }
+  };
   const dir = mkdtempSync(join(tmpdir(), "harry-init-"));
   try {
     // Pre-existing content is preserved; block appended once.
@@ -57,7 +61,10 @@ function selftest() {
     // Works when no .gitignore exists yet.
     const dir2 = mkdtempSync(join(tmpdir(), "harry-init-"));
     run(dir2);
-    assert(readFileSync(join(dir2, ".gitignore"), "utf8").split(BEGIN).length === 2, "creates fresh .gitignore");
+    assert(
+      readFileSync(join(dir2, ".gitignore"), "utf8").split(BEGIN).length === 2,
+      "creates fresh .gitignore",
+    );
     rmSync(dir2, { recursive: true, force: true });
 
     console.log("init selftest: OK");

@@ -27,16 +27,60 @@
     }
   },
   "derived": [
-    { "skill": "HARRY.md", "from": "superpowers + ponytail", "note": "All iron laws (TDD/debugging/verification/receiving-review/worktrees/parallel-dispatch/using-superpowers) folded into resident laws + ponytail philosophy recalibrated (correctness>cost). Folded user's CLAUDE.shared.md universal principles." },
-    { "skill": "brainstorming", "from": "superpowers:skills/brainstorming", "note": "HARD-GATE; SCQA+tech spec to .local/ (not committed); tier-aware; Visual Companion frontend-only; Major contested → /debate." },
-    { "skill": "writing-plans", "from": "superpowers:skills/writing-plans", "note": "tier-aware depth; Global Constraints from spec §5; Major only full-code + Interfaces; plans to .local/." },
-    { "skill": "executing", "from": "superpowers:skills/subagent-driven-development + executing-plans", "note": "merged; tier auto-routes session/subagent (no choice prompt); implementer = CC subagents." },
-    { "skill": "finishing", "from": "superpowers:skills/finishing-a-development-branch", "note": "merge-vs-PR always ask; merge flow adds archive + CI monitor; native worktree cleanup first." },
-    { "skill": "lean", "from": "ponytail:skills/ponytail-review + ponytail-audit", "note": "merged; --repo for whole tree; §2 contract carve-out (don't flag contracts as over-engineering)." },
-    { "skill": "debt", "from": "ponytail:skills/ponytail-debt", "note": "redefined as deferral re-judge: reconcile DEBT:/TODO + spec Non-Goals + plan defers, freshness flag, promotion." },
-    { "skill": "review", "from": "codex-plugin-cc", "note": "REVIEW'S TRUE UPSTREAM IS codex-plugin-cc (copilot review is ported from it). Sync review against codex-plugin-cc, not copilot." },
-    { "skill": "debate", "from": "copilot-plugin-cc", "note": "3-model debate (opus/gpt-5.5/gemini); judge-panel for Major decisions." },
-    { "skill": "ask / status / result", "from": "copilot-plugin-cc + codex-plugin-cc", "note": "runtime commands; setup+status merged into status; quota fallback at premium <5%." },
-    { "skill": "init", "from": "original", "note": "no upstream; harry-authored gitignore initializer." }
+    {
+      "skill": "HARRY.md",
+      "from": "superpowers + ponytail",
+      "note": "All iron laws (TDD/debugging/verification/receiving-review/worktrees/parallel-dispatch/using-superpowers) folded into resident laws + ponytail philosophy recalibrated (correctness>cost). Folded user's CLAUDE.shared.md universal principles."
+    },
+    {
+      "skill": "brainstorming",
+      "from": "superpowers:skills/brainstorming",
+      "note": "HARD-GATE; SCQA+tech spec to .local/ (not committed); tier-aware; Visual Companion frontend-only; Major contested → /debate."
+    },
+    {
+      "skill": "writing-plans",
+      "from": "superpowers:skills/writing-plans",
+      "note": "tier-aware depth; Global Constraints from spec §5; Major only full-code + Interfaces; plans to .local/."
+    },
+    {
+      "skill": "executing",
+      "from": "superpowers:skills/subagent-driven-development + executing-plans",
+      "note": "merged; tier auto-routes session/subagent (no choice prompt); implementer = CC subagents."
+    },
+    {
+      "skill": "finishing",
+      "from": "superpowers:skills/finishing-a-development-branch",
+      "note": "merge-vs-PR always ask; merge flow adds archive + CI monitor; native worktree cleanup first."
+    },
+    {
+      "skill": "lean",
+      "from": "ponytail:skills/ponytail-review + ponytail-audit",
+      "note": "merged; --repo for whole tree; §2 contract carve-out (don't flag contracts as over-engineering)."
+    },
+    {
+      "skill": "debt",
+      "from": "ponytail:skills/ponytail-debt",
+      "note": "redefined as deferral re-judge: reconcile DEBT:/TODO + spec Non-Goals + plan defers, freshness flag, promotion."
+    },
+    {
+      "skill": "review",
+      "from": "codex-plugin-cc",
+      "note": "REVIEW'S TRUE UPSTREAM IS codex-plugin-cc (copilot review is ported from it). Sync review against codex-plugin-cc, not copilot."
+    },
+    {
+      "skill": "debate",
+      "from": "copilot-plugin-cc",
+      "note": "3-model debate (opus/gpt-5.5/gemini); judge-panel for Major decisions."
+    },
+    {
+      "skill": "ask / status / result",
+      "from": "copilot-plugin-cc + codex-plugin-cc",
+      "note": "runtime commands; setup+status merged into status; quota fallback at premium <5%."
+    },
+    {
+      "skill": "init",
+      "from": "original",
+      "note": "no upstream; harry-authored gitignore initializer."
+    }
   ]
 }

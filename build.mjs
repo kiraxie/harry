@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { build } from 'esbuild';
-import { builtinModules } from 'node:module';
+import { builtinModules } from "node:module";
+import { build } from "esbuild";
 
 // Bundle all npm deps into the output, keep Node built-ins external.
 // @github/copilot-sdk ships both ESM and CJS entry points; esbuild resolves
@@ -14,15 +14,15 @@ import { builtinModules } from 'node:module';
 // dormant dead code in dist, harmless. Upgrade path: drop src/commands/implement.ts
 // + background.ts and their dispatch in copilot-companion.ts, then rebuild.
 await build({
-  entryPoints: ['src/copilot-companion.ts'],
-  outfile: 'dist/copilot-companion.cjs',
+  entryPoints: ["src/copilot-companion.ts"],
+  outfile: "dist/copilot-companion.cjs",
   bundle: true,
-  platform: 'node',
-  target: 'node26',
-  format: 'cjs',
+  platform: "node",
+  target: "node26",
+  format: "cjs",
   sourcemap: false,
   minify: false,
   external: builtinModules.flatMap((m) => [m, `node:${m}`]),
 });
 
-console.log('Built dist/copilot-companion.cjs');
+console.log("Built dist/copilot-companion.cjs");

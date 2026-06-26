@@ -12,10 +12,10 @@
 //   node scripts/install.mjs --remove   # uninstall
 //   node scripts/install.mjs --selftest # runnable check
 
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 
 const BEGIN = "# >>> harry >>>";
@@ -27,7 +27,10 @@ const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // `@` import can't silently win over hand-written lines in the same file, so we
 // surface these for the user to remove, rather than editing their file.
 const STALE = [
-  { pattern: /copilot:implement/i, why: "harry removed /copilot:implement; implementer = CC subagents" },
+  {
+    pattern: /copilot:implement/i,
+    why: "harry removed /copilot:implement; implementer = CC subagents",
+  },
   { pattern: /copilot:status/i, why: "renamed to `status` in harry" },
   { pattern: /gemini:investigate/i, why: "research dispatch deferred in harry; remove for now" },
 ];
@@ -44,7 +47,9 @@ export function applyImport(existing, { remove = false, root = pluginRoot } = {}
 function warnStale(text) {
   const hits = STALE.filter((s) => s.pattern.test(text));
   if (hits.length) {
-    console.warn("\n  Stale entries in your global instructions (harry supersedes — edit manually):");
+    console.warn(
+      "\n  Stale entries in your global instructions (harry supersedes — edit manually):",
+    );
     for (const h of hits) console.warn(`    - ${h.pattern.source} → ${h.why}`);
   }
 }
@@ -59,7 +64,9 @@ function run({ remove = false } = {}) {
 }
 
 function selftest() {
-  const assert = (c, m) => { if (!c) throw new Error("selftest failed: " + m); };
+  const assert = (c, m) => {
+    if (!c) throw new Error(`selftest failed: ${m}`);
+  };
   const dir = mkdtempSync(join(tmpdir(), "harry-install-"));
   try {
     const g = join(dir, "CLAUDE.md");
@@ -80,7 +87,8 @@ function selftest() {
       assert(!out.includes(BEGIN), "remove strips the block");
       assert(out.includes("Use TDD."), "remove keeps existing content");
     } finally {
-      if (env === undefined) delete process.env.HARRY_GLOBAL; else process.env.HARRY_GLOBAL = env;
+      if (env === undefined) delete process.env.HARRY_GLOBAL;
+      else process.env.HARRY_GLOBAL = env;
     }
     console.log("install selftest: OK");
   } finally {
@@ -93,5 +101,7 @@ if (args.includes("--selftest")) {
   selftest();
 } else {
   const path = run({ remove: args.includes("--remove") });
-  console.log(`${args.includes("--remove") ? "Removed harry import from" : "Wired HARRY.md into"} ${path}`);
+  console.log(
+    `${args.includes("--remove") ? "Removed harry import from" : "Wired HARRY.md into"} ${path}`,
+  );
 }

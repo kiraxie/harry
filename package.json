@@ -13,6 +13,8 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write .",
     "install-laws": "node scripts/install.mjs",
     "init-ignore": "node scripts/init.mjs"
   },
@@ -20,6 +22,7 @@
     "@github/copilot-sdk": "^1.0.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.1",
     "@types/node": "^20.0.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.4.0"

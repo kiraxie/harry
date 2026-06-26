@@ -17,7 +17,7 @@ export function applyMarkerBlock(existing, { begin, end, body, remove = false })
     base = text.slice(0, bi) + tail;
   }
   base = base.replace(/\s+$/, ""); // drop trailing whitespace/newlines
-  if (remove) return base === "" ? "" : base + "\n";
+  if (remove) return base === "" ? "" : `${base}\n`;
   const block = [begin, body, end].join("\n");
-  return base === "" ? block + "\n" : base + "\n\n" + block + "\n";
+  return base === "" ? `${block}\n` : `${base}\n\n${block}\n`;
 }
