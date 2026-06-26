@@ -141,3 +141,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# harry
+.references/
+.local/
+.worktrees/
+CLAUDE.local.md
+# dist/copilot-companion.cjs is committed (plugin must work without a build step);
+# re-include it despite the generic `dist` rule above.
+!dist/

@@ -1,0 +1,42 @@
+{
+  "_comment": "Tracks which upstream each derived file came from + the commit it was last synced at. To check for upstream changes worth pulling, see references/upstream-sync.md. JSON chosen for LLM-friendly precise edits.",
+  "sources": {
+    "superpowers": {
+      "repo": "https://github.com/obra/superpowers",
+      "synced_version": "6.0.3",
+      "synced_commit": "896224c4b1879920ab573417e68fd51d2ccc9072",
+      "synced_date": "2026-06-26"
+    },
+    "ponytail": {
+      "repo": "https://github.com/DietrichGebert/ponytail",
+      "synced_version": "4.8.3",
+      "synced_commit": "c4d1925ae9b76a1b641877328209ad25cfeb5ef2",
+      "synced_date": "2026-06-26"
+    },
+    "copilot-plugin-cc": {
+      "repo": "https://github.com/kiraxie/copilot-plugin-cc",
+      "synced_version": "0.4.2",
+      "synced_commit": "c3e8a8a48b86a4d57de0a89d5520c74ad0bdd715",
+      "synced_date": "2026-06-26"
+    },
+    "codex-plugin-cc": {
+      "repo": "https://github.com/openai/codex-plugin-cc",
+      "synced_version": "1.0.5",
+      "synced_commit": "80c31f99570876c3ef40327838b0a2ca1ae2cd9c",
+      "synced_date": "2026-06-26"
+    }
+  },
+  "derived": [
+    { "skill": "HARRY.md", "from": "superpowers + ponytail", "note": "All iron laws (TDD/debugging/verification/receiving-review/worktrees/parallel-dispatch/using-superpowers) folded into resident laws + ponytail philosophy recalibrated (correctness>cost). Folded user's CLAUDE.shared.md universal principles." },
+    { "skill": "brainstorming", "from": "superpowers:skills/brainstorming", "note": "HARD-GATE; SCQA+tech spec to .local/ (not committed); tier-aware; Visual Companion frontend-only; Major contested → /debate." },
+    { "skill": "writing-plans", "from": "superpowers:skills/writing-plans", "note": "tier-aware depth; Global Constraints from spec §5; Major only full-code + Interfaces; plans to .local/." },
+    { "skill": "executing", "from": "superpowers:skills/subagent-driven-development + executing-plans", "note": "merged; tier auto-routes session/subagent (no choice prompt); implementer = CC subagents." },
+    { "skill": "finishing", "from": "superpowers:skills/finishing-a-development-branch", "note": "merge-vs-PR always ask; merge flow adds archive + CI monitor; native worktree cleanup first." },
+    { "skill": "lean", "from": "ponytail:skills/ponytail-review + ponytail-audit", "note": "merged; --repo for whole tree; §2 contract carve-out (don't flag contracts as over-engineering)." },
+    { "skill": "debt", "from": "ponytail:skills/ponytail-debt", "note": "redefined as deferral re-judge: reconcile DEBT:/TODO + spec Non-Goals + plan defers, freshness flag, promotion." },
+    { "skill": "review", "from": "codex-plugin-cc", "note": "REVIEW'S TRUE UPSTREAM IS codex-plugin-cc (copilot review is ported from it). Sync review against codex-plugin-cc, not copilot." },
+    { "skill": "debate", "from": "copilot-plugin-cc", "note": "3-model debate (opus/gpt-5.5/gemini); judge-panel for Major decisions." },
+    { "skill": "ask / status / result", "from": "copilot-plugin-cc + codex-plugin-cc", "note": "runtime commands; setup+status merged into status; quota fallback at premium <5%." },
+    { "skill": "init", "from": "original", "note": "no upstream; harry-authored gitignore initializer." }
+  ]
+}

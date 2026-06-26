@@ -1,0 +1,27 @@
+{
+  "name": "harry",
+  "version": "0.1.0",
+  "description": "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
+  "type": "module",
+  "license": "MIT",
+  "author": "kiraxie <kiraxie11287@gmail.com>",
+  "homepage": "https://github.com/kiraxie/harry",
+  "repository": "https://github.com/kiraxie/harry",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "install-laws": "node scripts/install.mjs",
+    "init-ignore": "node scripts/init.mjs"
+  },
+  "dependencies": {
+    "@github/copilot-sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.4.0"
+  }
+}
