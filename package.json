@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
+    "test": "node --test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
