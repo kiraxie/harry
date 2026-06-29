@@ -14,6 +14,7 @@ import { resolveStateDir, generateJobId, appendLog, jobLogPath } from '../lib/st
 import { readSnapshot, evaluateGate, isPremiumModel, fmtNum } from '../lib/quota.js';
 import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
 import { runAgentSession } from '../lib/run-agent-session.ts';
+import { makeProgress, startTurnTimeout, formatCodexUsage } from '../lib/turn-runtime.ts';
 import type { ProviderId } from '../lib/provider.ts';
 import type { ReasoningEffort } from '../lib/provider.ts';
 
@@ -34,17 +35,10 @@ const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const COPILOT_DEFAULT_MODEL = 'gpt-5.5';
 const DEFAULT_EFFORT: ReasoningEffort = 'high';
 
-function progressFactory(): (message: string) => void {
-  return (message: string) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-    process.stderr.write(`[${time}] ${message}\n`);
-  };
-}
-
 export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
-  const progress = progressFactory();
+  const progress = makeProgress();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
   // The model copilot WOULD use (for the copilot-only quota pre-gate). The actual
   // model is filled per-provider by runAgentSession's defaultModelFor.
@@ -63,18 +57,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
     onWarn: (m) => { progress(m); log(m); },
   });
 
-  // DEBT: per-call --timeout is honored only by the Copilot provider (via the
-  // AbortSignal below). Codex enforces its own turn timeout in runCodexTurn and
-  // does not consume this signal, so --timeout is effectively a no-op for codex.
-  // Unify on a single signal-driven timeout once turn.ts accepts a signal.
-  const abort = new AbortController();
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms — aborting session.`);
-    log(`timeout ${timeout}ms`);
-    abort.abort();
-  }, timeout);
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
 
   let provider: ProviderId;
   let result;
@@ -93,7 +76,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
         systemMessage: buildSystemMessage('ask', { extraContext }),
         appendLog: log,
         progress,
-        signal: abort.signal,
+        signal: turn.signal,
       },
       defaultModelFor: (id) => (id === 'copilot' ? COPILOT_DEFAULT_MODEL : undefined),
       enforceQuota: () => {
@@ -112,13 +95,13 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
       log,
     }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
+    turn.clear();
     const msg = (err as Error).message;
     process.stderr.write(`Ask failed: ${msg}\n`);
     log(`ask failed: ${msg}`);
     throw err instanceof Error ? err : new Error(msg);
   } finally {
-    clearTimeout(timeoutHandle);
+    turn.clear();
   }
 
   const body =
@@ -126,9 +109,9 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
     (result.summary && result.summary.trim()) ||
     '_(The model returned an empty answer.)_';
 
-  const success = result.success && !timedOut;
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = timedOut ? `Timed out after ${timeout}ms.` : 'Ask did not complete successfully.';
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : 'Ask did not complete successfully.';
     // Print the (partial) body before throwing — mirrors prior failure behavior.
     process.stdout.write(`${body}\n`);
     log(`ask failed: ${reason}`);
@@ -144,11 +127,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
     log(`ask done: provider=${provider} premium=${premium}`);
   } else if (result.usage?.kind === 'codex') {
     const u = result.usage;
-    const pct = u.rateLimits?.primaryUsedPercent;
-    const rate = pct !== undefined ? ` rate-limit=${pct}%` : '';
-    progress(
-      `Ask done — provider=${provider} effort=${reasoning} tokens(in/out)=${u.inputTokens ?? '?'}/${u.outputTokens ?? '?'}${rate}`,
-    );
+    progress(`Ask done — provider=${provider} effort=${reasoning} ${formatCodexUsage(u)}`);
     log(`ask done: provider=${provider} inputTokens=${u.inputTokens ?? '?'} outputTokens=${u.outputTokens ?? '?'}`);
   } else {
     progress(`Ask done — provider=${provider} effort=${reasoning}`);

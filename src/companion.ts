@@ -131,8 +131,13 @@ function flagString(flags: Record<string, string | boolean>, key: string): strin
 function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
   const v = flags[key];
   if (typeof v !== 'string') return undefined;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : undefined;
+  // Strict parse: Number() rejects trailing garbage ("30sec" → NaN) that
+  // parseInt would silently accept. Reject NaN and non-positive values so a
+  // bad `--timeout 0`/`-5` falls back to the default instead of arming a
+  // 0ms timer (spurious "Timed out after 0ms") downstream.
+  const n = Number(v.trim());
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return n;
 }
 
 function flagEnum<T extends string>(

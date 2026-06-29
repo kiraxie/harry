@@ -141,6 +141,13 @@ const bootState = loadState();
 bootState.appServerStarts = (bootState.appServerStarts || 0) + 1;
 saveState(bootState);
 
+if (BEHAVIOR === "ignore-sigterm") {
+  // Swallow SIGTERM to simulate a child that refuses a graceful shutdown. The
+  // registered signal listener also keeps the event loop alive after stdin
+  // ends, so only the caller's SIGKILL escalation can reap this process.
+  process.on("SIGTERM", () => {});
+}
+
 const rl = readline.createInterface({ input: process.stdin });
 rl.on("line", (line) => {
   if (!line.trim()) {
@@ -203,6 +210,23 @@ rl.on("line", (line) => {
         thread.updatedAt = now();
         state.lastTurnStart = { threadId: message.params.threadId, turnId, prompt };
         saveState(state);
+
+        if (BEHAVIOR === "task-no-turnid") {
+          // turn/start result carries NO turn.id; later notifications must still
+          // drive the turn to completion instead of buffering forever.
+          send({ id: message.id, result: { turn: { status: "inProgress" } } });
+          send({ method: "turn/started", params: { threadId: thread.id, turn: { status: "inProgress" } } });
+          send({
+            method: "item/completed",
+            params: {
+              threadId: thread.id,
+              item: { type: "agentMessage", id: "msg_" + turnId, text: "Done without a turn id.", phase: "final_answer" }
+            }
+          });
+          send({ method: "turn/completed", params: { threadId: thread.id, turn: { status: "completed" } } });
+          break;
+        }
+
         send({ id: message.id, result: { turn: buildTurn(turnId) } });
 
         if (BEHAVIOR === "task-stuck") {
@@ -233,6 +257,90 @@ rl.on("line", (line) => {
               }
             });
           }
+          send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
+          break;
+        }
+
+        if (BEHAVIOR === "task-missing-item") {
+          send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
+          // Malformed: item/completed with NO item field — must be ignored, not crash the turn.
+          send({ method: "item/completed", params: { threadId: thread.id, turnId } });
+          send({
+            method: "item/completed",
+            params: {
+              threadId: thread.id,
+              turnId,
+              item: { type: "agentMessage", id: "msg_" + turnId, text: "Survived a malformed item notification.", phase: "final_answer" }
+            }
+          });
+          send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
+          break;
+        }
+
+        if (BEHAVIOR === "task-account-token") {
+          send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
+          send({
+            method: "item/completed",
+            params: {
+              threadId: thread.id,
+              turnId,
+              item: { type: "agentMessage", id: "msg_" + turnId, text: "Account-scoped usage.", phase: "final_answer" }
+            }
+          });
+          // Account/connection-scoped: NO threadId. Must still update usage.
+          send({
+            method: "token_count",
+            params: {
+              rate_limits: { primary: { used_percent: 42 } },
+              last_token_usage: { input_tokens: 11, output_tokens: 13 }
+            }
+          });
+          send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
+          break;
+        }
+
+        if (BEHAVIOR === "task-account-error") {
+          send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
+          // Account/connection-scoped error: NO threadId. Must still surface.
+          send({ method: "error", params: { error: { message: "rate limit exceeded" } } });
+          send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
+          break;
+        }
+
+        if (BEHAVIOR === "task-partial-ratelimits") {
+          send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
+          // First snapshot carries the full rate-limit picture.
+          send({
+            method: "token_count",
+            params: {
+              threadId: thread.id,
+              turnId,
+              rate_limits: {
+                primary: { used_percent: 12 },
+                secondary: { used_percent: 30 },
+                plan_type: "plus",
+                resets_at: "2026-07-01T00:00:00Z"
+              },
+              last_token_usage: { input_tokens: 5, output_tokens: 7 }
+            }
+          });
+          // Later partial snapshot carries ONLY primary — must not wipe the rest.
+          send({
+            method: "token_count",
+            params: {
+              threadId: thread.id,
+              turnId,
+              rate_limits: { primary: { used_percent: 50 } }
+            }
+          });
+          send({
+            method: "item/completed",
+            params: {
+              threadId: thread.id,
+              turnId,
+              item: { type: "agentMessage", id: "msg_" + turnId, text: "Merged partial rate limits.", phase: "final_answer" }
+            }
+          });
           send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
           break;
         }

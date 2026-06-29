@@ -8,7 +8,6 @@ export type ProviderId = "copilot" | "codex";
 
 export interface ProviderCapabilities {
   metersQuota: boolean;
-  reportsUsage: boolean;
 }
 
 export interface CodexRateLimits {
@@ -17,23 +16,6 @@ export interface CodexRateLimits {
   planType?: string;
   resetsAt?: string;
 }
-
-export type ProviderEvent =
-  | { type: "assistant_message"; content: string }
-  | {
-      type: "usage";
-      copilot?: { cost?: number };
-      codex?: { inputTokens?: number; outputTokens?: number; rateLimits?: CodexRateLimits };
-    }
-  | { type: "tool_start"; name: string }
-  | { type: "permission_request"; kind: string; detail?: string }
-  | { type: "task_complete"; summary?: string; success?: boolean }
-  | { type: "idle" }
-  | { type: "error"; message: string }
-  | {
-      type: "shutdown";
-      codeChanges?: { linesAdded: number; linesRemoved: number; filesModified: string[] };
-    };
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
@@ -80,6 +62,15 @@ export interface Provider {
   readonly capabilities: ProviderCapabilities;
   checkAuth(cwd: string): Promise<AuthSummary>;
   run(opts: RunOpts): Promise<RunResult>;
+  /**
+   * Best-effort immediate teardown of any subprocess this provider spawned,
+   * for use from an interrupt (SIGINT/SIGTERM) handler before the process
+   * exits. Optional: a provider whose subprocess lifecycle is fully owned by
+   * its turn runner (e.g. Codex, whose {@link runCodexTurn} bounds its own
+   * teardown) may omit it. CopilotProvider implements it to force-stop the
+   * Copilot CLI client so an interrupt does not orphan that subprocess.
+   */
+  forceStop?(): Promise<void>;
 }
 
 const norm = (v: unknown): string | undefined =>

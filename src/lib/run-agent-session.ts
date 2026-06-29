@@ -7,7 +7,7 @@
  * cannot await an auth check).
  */
 
-import { getCodexAuthStatus, getCodexAvailability } from "./codex/auth.ts";
+import { getCodexAuthStatus } from "./codex/auth.ts";
 import {
   resolveExplicit,
   type Provider,
@@ -21,14 +21,38 @@ import {
  * in. Never throws — any failure resolves to false so the default chain falls
  * back to copilot rather than erroring when uncertain. Uses the ambient
  * environment by default.
+ *
+ * `getCodexAuthStatus` itself probes availability first and short-circuits to
+ * `loggedIn:false` when codex is not installed, so we do NOT re-run
+ * `getCodexAvailability` here (that doubled the `codex --version` /
+ * `codex app-server --help` spawns on every auto-resolved run).
  */
 export async function probeCodexUsable(cwd: string, env?: NodeJS.ProcessEnv): Promise<boolean> {
   try {
-    if (!getCodexAvailability(cwd).available) return false;
     return (await getCodexAuthStatus(cwd, { env })).loggedIn;
   } catch {
     return false;
   }
+}
+
+/**
+ * The ONE provider-resolution authority every provider-facing entry point
+ * (ask/review/fix via {@link runAgentSession}, and setup/status) must call, so
+ * resolution can never silently diverge: an explicit `--provider` flag or the
+ * `CLAUDE_PLUGIN_OPTION_PROVIDER` setting wins (via {@link resolveExplicit});
+ * otherwise codex is the default IFF it is installed and logged in, else
+ * copilot. Pass `probe` to override the codex-usable check (tests; or a setup
+ * `--check` that wants to stay cheap by skipping the spawn).
+ */
+export async function resolveActiveProvider(
+  flags: { provider?: string },
+  cwd: string,
+  opts: { env?: NodeJS.ProcessEnv; probe?: (cwd: string) => Promise<boolean> } = {},
+): Promise<{ id: ProviderId; explicit: boolean }> {
+  const explicit = resolveExplicit(flags);
+  if (explicit) return { id: explicit, explicit: true };
+  const probe = opts.probe ?? ((c: string) => probeCodexUsable(c, opts.env));
+  return { id: (await probe(cwd)) ? "codex" : "copilot", explicit: false };
 }
 
 export interface RunAgentSessionArgs {
@@ -55,15 +79,26 @@ export interface RunAgentSessionArgs {
    * codex → undefined so ~/.codex/config.toml decides) after the id is resolved.
    */
   defaultModelFor?: (id: ProviderId) => string | undefined;
+  /**
+   * Command-specific reaction to a SIGINT/SIGTERM that arrives mid-run, invoked
+   * synchronously by the centralized interrupt handler BEFORE the provider is
+   * force-stopped and the process exits 130. Use it to flush a command's stdout
+   * contract (e.g. `fix`'s terminal `failed` envelope). Do NOT call
+   * `process.exit` here — the handler owns the exit.
+   */
+  onInterrupt?: () => void;
   log?: (m: string) => void;
 }
+
+/** Hard ceiling on interrupt teardown so a wedged forceStop cannot hang exit. */
+const INTERRUPT_TEARDOWN_CEILING_MS = 2000;
 
 export async function runAgentSession(
   args: RunAgentSessionArgs,
 ): Promise<{ provider: ProviderId; result: RunResult }> {
-  const explicit = resolveExplicit(args.flags);
-  const id: ProviderId =
-    explicit ?? ((await (args.resolveUsable ?? probeCodexUsable)(args.cwd)) ? "codex" : "copilot");
+  const { id, explicit } = await resolveActiveProvider(args.flags, args.cwd, {
+    probe: args.resolveUsable,
+  });
   args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
 
   const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
@@ -89,11 +124,35 @@ export async function runAgentSession(
     args.run = { ...args.run, model: args.defaultModelFor(id) };
   }
 
-  // Post-gate / pre-run hook: side effects (e.g. fix's pre-fix snapshot) that
-  // must NOT run when the quota gate above blocked the run.
-  await args.beforeRun?.(provider);
+  // Centralized interrupt handling: this is the single place that holds the live
+  // provider, so it owns force-stopping its subprocess on SIGINT/SIGTERM. Each
+  // command previously registered its own handler (or, for ask/review, none),
+  // which is how the interrupt-time forceStop got dropped in the refactor and
+  // left orphaned Copilot subprocesses. Installed only around the actual run.
+  const onInterrupt = (): void => {
+    args.onInterrupt?.();
+    const exit = (): never => process.exit(130);
+    const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
+    guard.unref();
+    void Promise.resolve(provider.forceStop?.())
+      .catch(() => {
+        /* best-effort teardown */
+      })
+      .finally(exit);
+  };
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onInterrupt);
 
-  const result = await provider.run(args.run);
+  let result: RunResult;
+  try {
+    // Post-gate / pre-run hook: side effects (e.g. fix's pre-fix snapshot) that
+    // must NOT run when the quota gate above blocked the run.
+    await args.beforeRun?.(provider);
+    result = await provider.run(args.run);
+  } finally {
+    process.removeListener("SIGINT", onInterrupt);
+    process.removeListener("SIGTERM", onInterrupt);
+  }
   return { provider: id, result };
 }
 

@@ -7,6 +7,7 @@ import type { ModelInfo } from '@github/copilot-sdk';
 
 import { checkAuth } from '../lib/copilot-auth.js';
 import { getCodexAvailability, getCodexAuthStatus } from '../lib/codex/auth.js';
+import { resolveActiveProvider } from '../lib/run-agent-session.ts';
 import { readSnapshot, summarize, renderQuotaBar, fetchQuota } from '../lib/quota.js';
 import { pruneOrphans } from '../lib/worktree.js';
 import { resolveStateDir } from '../lib/state.js';
@@ -39,11 +40,19 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const stateDir = resolveStateDir(cwd);
   const isCheck = options.check === true;
 
-  // Provider routing: an explicit `--provider codex` always shows codex; when
-  // unset, codex is shown only if it is actually available (the auto-default).
-  // `--provider copilot` skips the availability probe entirely so the common
-  // SessionStart `setup --check` does not spawn `codex` subprocesses.
-  if (options.provider === 'codex' || (options.provider === undefined && getCodexAvailability(cwd).available)) {
+  // Provider routing goes through the SAME single authority the run commands use
+  // (resolveActiveProvider), so `setup`/`status` can never show a different
+  // provider than `ask`/`review`/`fix` actually run — an explicit `--provider`
+  // flag or the CLAUDE_PLUGIN_OPTION_PROVIDER setting wins, else codex iff
+  // installed AND logged in. For the SessionStart `setup --check` we suppress the
+  // codex-usable probe (probe → false) so a copilot-default session start does
+  // NOT spawn `codex` subprocesses just to decide routing.
+  const { id } = await resolveActiveProvider(
+    { provider: options.provider },
+    cwd,
+    isCheck ? { probe: async () => false } : {},
+  );
+  if (id === 'codex') {
     await runCodexSetup(cwd, options, isCheck);
     return;
   }
@@ -168,13 +177,15 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
  * in v1). Reuses the Task 3 probes; never throws (getCodexAuthStatus is fail-safe).
  */
 async function runCodexSetup(cwd: string, options: SetupOptions, isCheck: boolean): Promise<void> {
-  const availability = getCodexAvailability(cwd);
-  const auth = await getCodexAuthStatus(cwd);
-
   if (isCheck) {
-    // SessionStart hook — silent success.
+    // SessionStart hook — silent success. Return BEFORE the availability/auth
+    // probe so we do not spawn `codex app-server` (a full connect + account/read
+    // + config/read RPC) on every session start just to discard the result.
     return;
   }
+
+  const availability = getCodexAvailability(cwd);
+  const auth = await getCodexAuthStatus(cwd);
 
   if (options.json) {
     console.log(JSON.stringify({

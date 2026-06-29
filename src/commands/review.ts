@@ -18,6 +18,7 @@ import { buildReviewPrompt, type ReviewKind } from '../lib/review-prompts.js';
 import { extractJsonBlock, normalizeFindings, FINDINGS_OUTPUT_INSTRUCTION } from '../lib/findings.js';
 import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
 import { runAgentSession } from '../lib/run-agent-session.ts';
+import { makeProgress, startTurnTimeout, formatCodexUsage } from '../lib/turn-runtime.ts';
 import type { ProviderId } from '../lib/provider.ts';
 import type { ReasoningEffort } from '../lib/provider.ts';
 
@@ -76,18 +77,11 @@ function defaultEffortFor(kind: ReviewKind): ReasoningEffort {
   return DEFAULT_EFFORT_STANDARD;
 }
 
-function progressFactory(): (message: string) => void {
-  return (message: string) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-    process.stderr.write(`[${time}] ${message}\n`);
-  };
-}
-
 export async function runReview(cwd: string, options: ReviewOptions = {}): Promise<void> {
-  const progress = progressFactory();
+  const progress = makeProgress();
   const kind: ReviewKind = resolveKind(options);
   const reasoning = options.reasoning ?? defaultEffortFor(kind);
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
   // The model copilot WOULD use (for the copilot-only quota pre-gate and the
   // markdown/envelope metadata). The actual model is filled per-provider by
@@ -123,17 +117,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   });
 
   // 3. Timeout → abort signal. -----------------------------------------------
-  // DEBT: per-call --timeout is honored only by the Copilot provider (via the
-  // AbortSignal below). Codex enforces its own turn timeout in runCodexTurn and
-  // does not consume this signal, so --timeout is effectively a no-op for codex.
-  const abort = new AbortController();
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms — aborting session.`);
-    log(`timeout ${timeout}ms`);
-    abort.abort();
-  }, timeout);
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
 
   // 4. Run the agent session through the resolved provider. ------------------
   let provider: ProviderId;
@@ -153,7 +137,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
         systemMessage: buildSystemMessage('review', { extraContext }),
         appendLog: log,
         progress,
-        signal: abort.signal,
+        signal: turn.signal,
       },
       defaultModelFor: (id) => (id === 'copilot' ? defaultModelFor(kind) : undefined),
       enforceQuota: () => {
@@ -175,13 +159,13 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
       log,
     }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
+    turn.clear();
     const msg = (err as Error).message;
     process.stderr.write(`Review failed: ${msg}\n`);
     log(`review failed: ${msg}`);
     throw err instanceof Error ? err : new Error(msg);
   } finally {
-    clearTimeout(timeoutHandle);
+    turn.clear();
   }
 
   // 5. Compose output --------------------------------------------------------
@@ -192,9 +176,9 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     (result.summary && result.summary.trim()) ||
     '_(The model returned an empty review.)_';
 
-  const success = result.success && !timedOut;
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = timedOut ? `Timed out after ${timeout}ms.` : 'Review did not complete successfully.';
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : 'Review did not complete successfully.';
     process.stderr.write(`Review failed: ${reason}\n`);
     process.stdout.write(`# Review Failed\n\n${reason}\n\n${reviewBody}\n`);
     log(`review failed: ${reason}`);
@@ -238,10 +222,8 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   // still see it, background workers log it, and stdout stays clean.
   if (result.usage?.kind === 'codex') {
     const u = result.usage;
-    const pct = u.rateLimits?.primaryUsedPercent;
-    const rate = pct !== undefined ? ` rate-limit=${pct}%` : '';
     progress(
-      `Review done — kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} tokens(in/out)=${u.inputTokens ?? '?'}/${u.outputTokens ?? '?'}${rate}`,
+      `Review done — kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`,
     );
     log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} inputTokens=${u.inputTokens ?? '?'} outputTokens=${u.outputTokens ?? '?'}`);
   } else {

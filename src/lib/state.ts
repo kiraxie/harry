@@ -18,7 +18,7 @@ import type { CodexRateLimits } from './provider.ts';
 
 export interface JobRecord {
   id: string;
-  kind: string;           // 'implement'
+  kind: string;           // 'review' | 'ask' | 'fix'
   title: string;
   summary: string;
   status: 'queued' | 'running' | 'completed' | 'failed';
@@ -36,7 +36,7 @@ export interface JobRecord {
 }
 
 export interface JobRequest {
-  command: string;        // 'implement'
+  command: string;        // 'review' | 'ask' | 'fix'
   args: string[];
   flags: Record<string, string | boolean>;
   cwd: string;
@@ -56,6 +56,9 @@ const SESSION_ID_ENV = 'HARRY_SESSION_ID';
 // set the old env var. Drop after one release.
 const LEGACY_SESSION_ID_ENV = 'COPILOT_COMPANION_SESSION_ID';
 const FALLBACK_STATE_ROOT = join(tmpdir(), 'harry');
+// DEBT: back-compat fallback for background jobs queued by a pre-rename build,
+// which wrote their state under the old tmp root. Drop after one release.
+const LEGACY_FALLBACK_STATE_ROOT = join(tmpdir(), 'copilot-companion');
 
 // ─── State Directory ─────────────────────────────────────────────────────────
 
@@ -63,9 +66,21 @@ export function resolveStateDir(cwd: string): string {
   const workspaceRoot = resolve(cwd);
   const slug = basename(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'workspace';
   const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);
+  const dirName = `${slug}-${hash}`;
   const pluginDataDir = process.env[PLUGIN_DATA_ENV];
-  const stateRoot = pluginDataDir ? join(pluginDataDir, 'state') : FALLBACK_STATE_ROOT;
-  return join(stateRoot, `${slug}-${hash}`);
+  if (pluginDataDir) {
+    return join(pluginDataDir, 'state', dirName);
+  }
+  // Fallback (no CLAUDE_PLUGIN_DATA): a job queued by a pre-rename build lives
+  // under the legacy tmp root. If the current root has no state for this
+  // workspace yet but the legacy one does, keep using the legacy dir so those
+  // queued jobs remain retrievable after the rename.
+  const fallbackDir = join(FALLBACK_STATE_ROOT, dirName);
+  if (!existsSync(fallbackDir)) {
+    const legacyDir = join(LEGACY_FALLBACK_STATE_ROOT, dirName);
+    if (existsSync(legacyDir)) return legacyDir;
+  }
+  return fallbackDir;
 }
 
 function ensureDir(dir: string): void {

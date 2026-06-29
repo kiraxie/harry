@@ -32,6 +32,7 @@ import { resolveRepoRoot } from '../lib/worktree.js';
 import { extractJsonBlock, normalizeFindings, type Finding } from '../lib/findings.js';
 import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
 import { runAgentSession } from '../lib/run-agent-session.ts';
+import { makeProgress, startTurnTimeout } from '../lib/turn-runtime.ts';
 import type { ProviderId } from '../lib/provider.ts';
 
 export interface FixOptions {
@@ -56,13 +57,6 @@ export interface FixOptions {
 const DEFAULT_MODEL = 'claude-opus-4.8';
 const DEFAULT_EFFORT: ReasoningEffort = 'high';
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-
-function progressFactory(): (message: string) => void {
-  return (message: string) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-    process.stderr.write(`[${time}] ${message}\n`);
-  };
-}
 
 function tryGit(args: string[], cwd: string): { ok: boolean; stdout: string; stderr: string } {
   const res = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -214,11 +208,11 @@ function computeStagedDiff(cwd: string, baseline: string): { filesModified: stri
 }
 
 export async function runFix(cwd: string, options: FixOptions = {}): Promise<void> {
-  const progress = progressFactory();
+  const progress = makeProgress();
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
   // The model copilot WOULD use (for the copilot-only quota pre-gate and the
   // envelope metadata). The actual model is filled per-provider by
@@ -261,32 +255,21 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   let baselineCommit = '';
 
   // 3. Timeout → abort signal. -----------------------------------------------
-  // DEBT: per-call --timeout is honored only by the Copilot provider (via the
-  // AbortSignal below). Codex enforces its own turn timeout in runCodexTurn and
-  // does not consume this signal, so --timeout is effectively a no-op for codex.
-  const abort = new AbortController();
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms — aborting session.`);
-    log(`timeout ${timeout}ms`);
-    abort.abort();
-  }, timeout);
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
 
-  // Single-envelope guard: a late SIGINT/SIGTERM must not emit a second stdout
-  // line once the terminal envelope has been written.
+  // Single-envelope guard: a late interrupt must not emit a second stdout line
+  // once the terminal envelope has been written. The actual SIGINT/SIGTERM
+  // handling (force-stop the live provider subprocess, then exit 130) is owned by
+  // runAgentSession's centralized handler; we only supply `onInterrupt` below to
+  // flush this command's terminal `failed` envelope before that exit.
   let envelopeDone = false;
-  const onSignal = (): void => {
+  const onInterrupt = (): void => {
     if (envelopeDone) return;
     envelopeDone = true;
-    clearTimeout(timeoutHandle);
+    turn.clear();
     progress('Received interrupt signal; aborting fix session.');
-    abort.abort();
     emit({ status: 'failed', jobId, error: 'Interrupted by signal' });
-    process.exit(130);
   };
-  process.on('SIGINT', onSignal);
-  process.on('SIGTERM', onSignal);
 
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
@@ -312,8 +295,9 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         systemMessage: buildSystemMessage('fix', { extraContext }),
         appendLog: log,
         progress,
-        signal: abort.signal,
+        signal: turn.signal,
       },
+      onInterrupt,
       defaultModelFor: (id) => (id === 'copilot' ? DEFAULT_MODEL : undefined),
       enforceQuota: () => {
         // Copilot-only gate (runAgentSession invokes this only when the provider
@@ -328,7 +312,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         if (!gate.ok) {
           log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
           envelopeDone = true;
-          clearTimeout(timeoutHandle);
+          turn.clear();
           emit({
             status: 'blocked',
             reason: gate.reason,
@@ -362,7 +346,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         // into the reported fix diff. Abort instead.
         if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
           envelopeDone = true;
-          clearTimeout(timeoutHandle);
+          turn.clear();
           emit({
             status: 'failed',
             jobId,
@@ -376,7 +360,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         // diff against (unborn HEAD) the diff would silently report nothing.
         if (!baselineCommit) {
           envelopeDone = true;
-          clearTimeout(timeoutHandle);
+          turn.clear();
           emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).' });
           process.exit(1);
         }
@@ -384,20 +368,20 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
       log,
     }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
+    turn.clear();
     if (!envelopeDone) {
       envelopeDone = true;
       emit({ status: 'failed', jobId, error: (err as Error).message });
     }
     process.exit(1);
   }
-  clearTimeout(timeoutHandle);
+  turn.clear();
 
-  const success = result.success && !timedOut;
+  const success = result.success && !turn.timedOut();
   if (!success) {
     if (!envelopeDone) {
       envelopeDone = true;
-      emit({ status: 'failed', jobId, error: timedOut ? `Timed out after ${timeout}ms` : 'Fix session did not complete successfully.' });
+      emit({ status: 'failed', jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : 'Fix session did not complete successfully.' });
     }
     process.exit(0);
   }

@@ -33,8 +33,25 @@ export class CopilotProvider implements Provider {
   readonly id = 'copilot' as const;
   readonly capabilities: ProviderCapabilities = {
     metersQuota: true,
-    reportsUsage: true,
   };
+
+  /**
+   * The live client for the in-flight run, so {@link forceStop} (called from the
+   * centralized SIGINT/SIGTERM handler in runAgentSession) can force-stop the
+   * Copilot CLI subprocess instead of letting an interrupt orphan it. Set at the
+   * start of {@link run} and cleared on teardown.
+   */
+  private activeClient: CopilotClient | null = null;
+
+  /**
+   * Best-effort immediate teardown of the in-flight Copilot CLI client, for an
+   * interrupt handler. Never throws.
+   */
+  async forceStop(): Promise<void> {
+    await this.activeClient?.forceStop().catch(() => {
+      /* ignore */
+    });
+  }
 
   /**
    * Probe Copilot auth without running a session. Constructs a client, starts
@@ -60,7 +77,7 @@ export class CopilotProvider implements Provider {
 
   /**
    * Run a single prompt to completion and return the neutral result. Mirrors
-   * the ask/implement lifecycle: permission handler derived from
+   * the prior inline ask lifecycle: permission handler derived from
    * readOnly/allowShell, session created with the caller's model/effort
    * (passed through as-is — undefined stays undefined), completion awaited via
    * the event stream, usage metrics collected, code changes captured from the
@@ -71,6 +88,7 @@ export class CopilotProvider implements Provider {
     const stateDir = resolveStateDir(cwd);
 
     const client = new CopilotClient({ workingDirectory: cwd, env: process.env });
+    this.activeClient = client;
 
     let stopped = false;
     const stop = async (): Promise<void> => {
@@ -79,6 +97,7 @@ export class CopilotProvider implements Provider {
       await client.forceStop().catch(() => {
         /* ignore */
       });
+      this.activeClient = null;
     };
 
     try {

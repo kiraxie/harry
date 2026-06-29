@@ -14,6 +14,7 @@ import {
 } from '../lib/state.js';
 import { runReview, type ReviewOptions } from './review.js';
 import type { ReviewScope } from '../lib/git.js';
+import type { ProviderId } from '../lib/provider.ts';
 import { extractTask } from '../lib/args.js';
 
 declare const __filename: string | undefined;
@@ -39,7 +40,7 @@ export function enqueueBackground(
   const job: JobRecord = {
     id: jobId,
     kind: command,
-    title: `Copilot ${command}`,
+    title: `harry ${command}`,
     summary,
     status: 'queued',
     phase: 'queued',
@@ -83,8 +84,15 @@ function flagString(flags: Record<string, string | boolean>, key: string): strin
 function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
   const v = flags[key];
   if (typeof v !== 'string') return undefined;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : undefined;
+  // Strict: reject trailing garbage ("30sec"), NaN, zero, and negatives so the
+  // downstream `?? DEFAULT` fallback applies instead of e.g. a 0ms timeout.
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function flagProvider(flags: Record<string, string | boolean>): ProviderId | undefined {
+  const v = flags['provider'];
+  return v === 'copilot' || v === 'codex' ? v : undefined;
 }
 
 /**
@@ -158,6 +166,12 @@ export async function runWorker(jobId: string, cwd: string): Promise<void> {
       scope: scope && (validScopes as string[]).includes(scope) ? (scope as ReviewScope) : undefined,
       base: flagString(flags, 'base'),
       focusText: extractTask(args, flags),
+      // provider + simplify MUST be threaded here — the foreground dispatcher
+      // (companion.ts) passes them, so dropping them makes a backgrounded
+      // `review --simplify` / `--provider codex` silently run the wrong
+      // lane/backend.
+      provider: flagProvider(flags),
+      simplify: flags['simplify'] === true,
       model: flagString(flags, 'model'),
       reasoning: effort,
       timeout: flagNumber(flags, 'timeout'),

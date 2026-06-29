@@ -17,6 +17,24 @@ import type {
   ProtocolError
 } from "./protocol.ts";
 
+/**
+ * Default ceiling for the connect/initialize handshake. Canonical home for the
+ * transport layer; callers (auth probe, turn path) reuse this so a spawned
+ * `codex app-server` that blocks before answering `initialize` can never hang
+ * the caller forever.
+ */
+export const DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1000;
+
+/**
+ * Grace period after SIGTERM before escalating to SIGKILL on close(), and the
+ * absolute ceiling on how long close() will wait for the child to exit. These
+ * guarantee close() always resolves even if the child ignores SIGTERM or a
+ * grandchild leaks past the parent.
+ */
+const CLOSE_SIGTERM_DELAY_MS = 50;
+const CLOSE_SIGKILL_GRACE_MS = 500;
+const CLOSE_EXIT_WAIT_MS = 3000;
+
 const DEFAULT_CLIENT_INFO: ClientInfo = {
   title: "harry",
   name: "harry",
@@ -108,7 +126,10 @@ export class CodexAppServerClient {
 
   request<T = unknown>(method: string, params?: unknown): Promise<T> {
     if (this.closed) {
-      throw new Error("codex app-server client is closed.");
+      // Reject rather than throw synchronously: a Promise-returning API must
+      // surface failures through the promise chain so `.catch(...)` and a bare
+      // `Promise.race([request(...), ...])` (no enclosing try) still see it.
+      return Promise.reject(new Error("codex app-server client is closed."));
     }
 
     const id = this.nextId;
@@ -176,6 +197,13 @@ export class CodexAppServerClient {
   }
 
   private handleServerRequest(message: { id: number; method: string }): void {
+    // PRECONDITION: this blanket -32601 rejection is only safe because v1 runs
+    // every turn under `approvalPolicy:"never"` + a read-only sandbox, so codex
+    // never legitimately needs a client→server approval. The moment a codex
+    // write path is enabled, the server will send `applyPatchApproval` /
+    // `execCommandApproval` requests; hard-rejecting those stalls the turn.
+    // Enabling writes REQUIRES handling (auto-approving) those methods here
+    // instead of returning "Unsupported".
     this.sendMessage({
       id: message.id,
       error: buildJsonRpcError(-32601, `Unsupported server request: ${message.method}`)
@@ -282,7 +310,7 @@ export class CodexAppServerClient {
 
   async close(): Promise<void> {
     if (this.closed) {
-      await this.exitPromise;
+      await this.waitForExit();
       return;
     }
 
@@ -295,28 +323,60 @@ export class CodexAppServerClient {
     if (this.proc && !this.proc.killed) {
       this.proc.stdin.end();
       const proc = this.proc;
-      setTimeout(() => {
-        if (proc && !proc.killed && proc.exitCode === null) {
-          // On Windows with shell: true, the direct child is cmd.exe.
-          // Use terminateProcessTree to kill the entire tree including
-          // the grandchild node process.
-          if (process.platform === "win32") {
-            try {
-              if (proc.pid !== undefined) {
-                terminateProcessTree(proc.pid);
-              }
-            } catch {
-              // Best-effort cleanup inside an unref'd timer — swallow errors
-              // to avoid crashing the host process during shutdown.
-            }
-          } else {
-            proc.kill("SIGTERM");
-          }
+      const termTimer = setTimeout(() => {
+        if (proc.killed || proc.exitCode !== null) {
+          return;
         }
-      }, 50).unref?.();
+        // On Windows with shell: true, the direct child is cmd.exe.
+        // Use terminateProcessTree to kill the entire tree including
+        // the grandchild node process.
+        if (process.platform === "win32") {
+          try {
+            if (proc.pid !== undefined) {
+              terminateProcessTree(proc.pid);
+            }
+          } catch {
+            // Best-effort cleanup inside an unref'd timer — swallow errors
+            // to avoid crashing the host process during shutdown.
+          }
+          return;
+        }
+        proc.kill("SIGTERM");
+        // Escalate: a child that ignores SIGTERM (or refuses a graceful
+        // shutdown) must still be reaped, otherwise 'exit' never fires and
+        // exitPromise never resolves — hanging close().
+        const killTimer = setTimeout(() => {
+          if (!proc.killed && proc.exitCode === null) {
+            proc.kill("SIGKILL");
+          }
+        }, CLOSE_SIGKILL_GRACE_MS);
+        killTimer.unref?.();
+      }, CLOSE_SIGTERM_DELAY_MS);
+      termTimer.unref?.();
     }
 
-    await this.exitPromise;
+    await this.waitForExit();
+  }
+
+  /**
+   * Wait for the child to exit, but never longer than CLOSE_EXIT_WAIT_MS. Even
+   * with SIGKILL escalation a grandchild can keep stdio open or 'exit' can be
+   * delayed; this bound guarantees close() always resolves so a caller's
+   * `await client.close()` in a finally block can't hang the host.
+   */
+  private async waitForExit(): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, CLOSE_EXIT_WAIT_MS);
+      timer.unref?.();
+    });
+    try {
+      await Promise.race([this.exitPromise, bound]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
   }
 
   private sendMessage(message: unknown): void {

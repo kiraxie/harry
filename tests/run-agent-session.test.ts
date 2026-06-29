@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Provider, ProviderId, RunOpts } from "../src/lib/provider.ts";
-import { runAgentSession } from "../src/lib/run-agent-session.ts";
+import { resolveActiveProvider, runAgentSession } from "../src/lib/run-agent-session.ts";
 
 const ENV_KEY = "CLAUDE_PLUGIN_OPTION_PROVIDER";
 
@@ -13,7 +13,7 @@ function stub(
 ): Provider {
   return {
     id,
-    capabilities: { metersQuota: opts.meters ?? false, reportsUsage: true },
+    capabilities: { metersQuota: opts.meters ?? false },
     checkAuth: async () => ({ ok: opts.authOk ?? true, message: "ok" }),
     run: async () => ({
       lastAssistantMessage: "done",
@@ -215,6 +215,62 @@ test("defaultModelFor fills run.model only when it is undefined", async () => {
       defaultModelFor: () => "gpt-5.5",
     });
     assert.equal(seenModel, "claude-opus");
+  });
+});
+
+test("resolveActiveProvider: explicit flag wins without consulting the probe", async () => {
+  await withoutEnv(async () => {
+    let probed = false;
+    const r = await resolveActiveProvider({ provider: "codex" }, "/tmp", {
+      probe: async () => {
+        probed = true;
+        return false;
+      },
+    });
+    assert.deepEqual(r, { id: "codex", explicit: true });
+    assert.equal(probed, false, "explicit flag must short-circuit the probe");
+  });
+});
+
+test("resolveActiveProvider: the user setting is authoritative when no flag", async () => {
+  await withoutEnv(async () => {
+    process.env[ENV_KEY] = "copilot";
+    let probed = false;
+    const r = await resolveActiveProvider({}, "/tmp", {
+      probe: async () => {
+        probed = true;
+        return true; // would pick codex if consulted
+      },
+    });
+    assert.deepEqual(r, { id: "copilot", explicit: true });
+    assert.equal(probed, false, "the setting must short-circuit the probe");
+  });
+});
+
+test("resolveActiveProvider: falls to the probe when neither flag nor setting", async () => {
+  await withoutEnv(async () => {
+    assert.deepEqual(await resolveActiveProvider({}, "/tmp", { probe: async () => true }), {
+      id: "codex",
+      explicit: false,
+    });
+    assert.deepEqual(await resolveActiveProvider({}, "/tmp", { probe: async () => false }), {
+      id: "copilot",
+      explicit: false,
+    });
+  });
+});
+
+test("runAgentSession removes its interrupt listeners after the run", async () => {
+  await withoutEnv(async () => {
+    const before = process.listenerCount("SIGINT") + process.listenerCount("SIGTERM");
+    await runAgentSession({
+      cwd: "/tmp",
+      flags: { provider: "copilot" },
+      run: baseRun("/tmp"),
+      pickProvider: (id) => stub(id),
+    });
+    const after = process.listenerCount("SIGINT") + process.listenerCount("SIGTERM");
+    assert.equal(after, before, "interrupt listeners must be cleaned up in the finally");
   });
 });
 

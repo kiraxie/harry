@@ -43,6 +43,95 @@ test("runCodexTurn parses token_count rate limits into usage", async () => {
   assert.equal(result.usage?.outputTokens, 7);
 });
 
+test("runCodexTurn completes even when turn/start omits a turn id (cr-1)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-no-turnid");
+
+  const startedAt = Date.now();
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 5_000
+  });
+  const elapsed = Date.now() - startedAt;
+
+  assert.equal(result.success, true);
+  assert.ok(result.finalMessage.length > 0, "expected a non-empty final message");
+  assert.ok(elapsed < 4_000, `expected no hang, took ${elapsed}ms`);
+});
+
+test("runCodexTurn ignores a malformed item notification without crashing (cr-2)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-missing-item");
+
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 5_000
+  });
+
+  assert.equal(result.success, true);
+  assert.ok(result.finalMessage.length > 0, "expected the turn to still complete");
+});
+
+test("runCodexTurn applies a token_count without a threadId (cr-10)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-account-token");
+
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 5_000
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.usage?.rateLimits?.primaryUsedPercent, 42);
+  assert.equal(result.usage?.inputTokens, 11);
+  assert.equal(result.usage?.outputTokens, 13);
+});
+
+test("runCodexTurn surfaces an error notification without a threadId (cr-10)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-account-error");
+
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 5_000
+  });
+
+  assert.equal(result.success, false);
+  assert.match(result.error ?? "", /rate limit/i);
+});
+
+test("runCodexTurn deep-merges partial token_count rate limits (adv-5)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-partial-ratelimits");
+
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 5_000
+  });
+
+  assert.equal(result.success, true);
+  // Later partial snapshot updates primary but must preserve the earlier fields.
+  assert.equal(result.usage?.rateLimits?.primaryUsedPercent, 50);
+  assert.equal(result.usage?.rateLimits?.secondaryUsedPercent, 30);
+  assert.equal(result.usage?.rateLimits?.planType, "plus");
+  assert.equal(result.usage?.rateLimits?.resetsAt, "2026-07-01T00:00:00Z");
+});
+
 test("runCodexTurn times out a turn that never completes", async () => {
   const binDir = makeTempDir();
   installFakeCodex(binDir, "task-stuck");

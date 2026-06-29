@@ -32,3 +32,18 @@ test("getCodexAuthStatus reports a logged-out account as not logged in", async (
   assert.equal(status.available, true);
   assert.equal(status.loggedIn, false);
 });
+
+test("getCodexAuthStatus threads the connect timeout and fails closed when initialize never answers", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "no-init");
+
+  const status = await getCodexAuthStatus(binDir, {
+    env: buildEnv(binDir),
+    connectTimeoutMs: 300
+  });
+
+  // The probe must not hang on a child that never answers initialize.
+  assert.equal(status.available, true);
+  assert.equal(status.loggedIn, false);
+  assert.match(status.detail, /did not answer initialize/);
+});

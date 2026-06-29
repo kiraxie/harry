@@ -13,17 +13,16 @@
  * reference lacks it).
  */
 
-import { CodexAppServerClient } from "./app-server.ts";
+import { CodexAppServerClient, DEFAULT_CONNECT_TIMEOUT_MS } from "./app-server.ts";
 import type { AppServerNotification, ThreadItem } from "./protocol.ts";
 import type { CodexRateLimits } from "../provider.ts";
 
 /** A turn must never hang the host process. */
 const DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1000;
 
-/** Ceiling on connect()/initialize() so a child that never answers `initialize`
- *  (e.g. blocked on an auth prompt) cannot hang the turn. Capped at the overall
- *  turn budget. */
-const DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1000;
+// DEFAULT_CONNECT_TIMEOUT_MS is the canonical connect()/initialize() ceiling and
+// lives in app-server.ts (its owner); imported here so the turn and auth/probe
+// paths share one value rather than drifting copies.
 
 export interface CodexTurnOpts {
   cwd: string;
@@ -187,11 +186,37 @@ function parseTokenCount(params: any): CodexTurnUsage {
   return usage;
 }
 
+/**
+ * Field-wise fold of rate-limit snapshots. `parseTokenCount` emits a rateLimits
+ * object whenever any single sub-field is present, so a later partial snapshot
+ * (e.g. only primaryUsedPercent) must NOT wholesale-replace the prior object and
+ * drop previously-seen secondary/planType/resetsAt — merge each sub-field with
+ * the new value winning when present.
+ */
+function foldRateLimits(
+  prev: CodexRateLimits | undefined,
+  next: CodexRateLimits | undefined
+): CodexRateLimits | undefined {
+  if (!prev) {
+    return next;
+  }
+  if (!next) {
+    return prev;
+  }
+  return {
+    primaryUsedPercent: next.primaryUsedPercent ?? prev.primaryUsedPercent,
+    secondaryUsedPercent: next.secondaryUsedPercent ?? prev.secondaryUsedPercent,
+    planType: next.planType ?? prev.planType,
+    resetsAt: next.resetsAt ?? prev.resetsAt
+  };
+}
+
 interface TurnCaptureState {
   threadId: string;
   threadIds: Set<string>;
   threadTurnIds: Map<string, string | null>;
   turnId: string | null;
+  turnStarted: boolean;
   bufferedNotifications: AppServerNotification[];
   completion: Promise<void>;
   resolveCompletion: () => void;
@@ -221,6 +246,7 @@ function createTurnCaptureState(
     threadIds: new Set([threadId]),
     threadTurnIds: new Map(),
     turnId: null,
+    turnStarted: false,
     bufferedNotifications: [],
     completion,
     resolveCompletion,
@@ -252,6 +278,25 @@ function belongsToTurn(state: TurnCaptureState, message: AppServerNotification):
   const trackedTurnId = state.threadTurnIds.get(messageThreadId) ?? null;
   const messageTurnId = extractTurnId(message);
   return trackedTurnId === null || messageTurnId === null || messageTurnId === trackedTurnId;
+}
+
+/**
+ * Decide whether a notification should be applied to this turn's capture state.
+ *
+ * `thread/started` is always applied (it registers sub-agent threads). `token_count`
+ * and top-level `error` are account/connection-scoped — rate limits are an account
+ * property and real codex may omit `threadId` on them — so they are exempt from the
+ * thread-membership gate. Everything else is item-scoped and must belong to a tracked
+ * thread/turn.
+ */
+function shouldApplyNotification(state: TurnCaptureState, message: AppServerNotification): boolean {
+  if (message.method === "thread/started") {
+    return true;
+  }
+  if (message.method === "token_count" || message.method === "error") {
+    return true;
+  }
+  return belongsToTurn(state, message);
 }
 
 function clearCompletionTimer(state: TurnCaptureState): void {
@@ -383,12 +428,20 @@ function applyTurnNotification(state: TurnCaptureState, message: AppServerNotifi
         state.activeSubagentTurns.add(message.params?.threadId);
       }
       break;
-    case "item/started":
-      recordItem(state, message.params.item, "started", message.params?.threadId ?? null);
+    case "item/started": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "started", message.params?.threadId ?? null);
+      }
       break;
-    case "item/completed":
-      recordItem(state, message.params.item, "completed", message.params?.threadId ?? null);
+    }
+    case "item/completed": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "completed", message.params?.threadId ?? null);
+      }
       break;
+    }
     case "token_count": {
       // FOLD field-wise rather than replace: real codex emits multiple
       // token_count notifications per multi-step turn and `rate_limits` is often
@@ -400,7 +453,7 @@ function applyTurnNotification(state: TurnCaptureState, message: AppServerNotifi
       const folded: CodexTurnUsage = {
         inputTokens: next.inputTokens ?? prev.inputTokens,
         outputTokens: next.outputTokens ?? prev.outputTokens,
-        rateLimits: next.rateLimits ?? prev.rateLimits
+        rateLimits: foldRateLimits(prev.rateLimits, next.rateLimits)
       };
       const hasContent =
         folded.inputTokens !== undefined ||
@@ -502,15 +555,16 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
     const capture = state;
 
     client.setNotificationHandler((message) => {
-      if (!capture.turnId) {
+      // Buffer only until the turn/start phase completes. Gating on `turnId`
+      // would buffer FOREVER when turn/start never echoes a turn id (null is a
+      // tolerated value) — including the terminal turn/completed — hanging the
+      // whole turn. Once the turn has started, `belongsToTurn` handles a null
+      // turn id permissively.
+      if (!capture.turnStarted) {
         capture.bufferedNotifications.push(message);
         return;
       }
-      if (message.method === "thread/started") {
-        applyTurnNotification(capture, message);
-        return;
-      }
-      if (belongsToTurn(capture, message)) {
+      if (shouldApplyNotification(capture, message)) {
         applyTurnNotification(capture, message);
       }
     });
@@ -540,13 +594,16 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
       capture.threadTurnIds.set(threadId, capture.turnId);
     }
 
-    // Drain notifications that arrived before the turn id was known.
+    // Drain notifications that arrived before the turn id was known, then let
+    // the live handler process the rest. Both paths run synchronously here (no
+    // await between), so no notification can slip in unbuffered-but-undrained.
     for (const message of capture.bufferedNotifications) {
-      if (message.method === "thread/started" || belongsToTurn(capture, message)) {
+      if (shouldApplyNotification(capture, message)) {
         applyTurnNotification(capture, message);
       }
     }
     capture.bufferedNotifications.length = 0;
+    capture.turnStarted = true;
 
     if (turnResponse.turn?.status && turnResponse.turn.status !== "inProgress") {
       completeTurn(capture, turnResponse.turn);

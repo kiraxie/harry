@@ -4,8 +4,18 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { CodexProvider } from "../src/lib/providers/codex.ts";
+import { CodexProvider, toCodexEffort } from "../src/lib/providers/codex.ts";
 import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
+
+test("toCodexEffort clamps xhigh to high and passes the rest through (cr-11)", () => {
+  // codex's app-server effort enum has no `xhigh`, but review defaults every
+  // codex lane to xhigh — so it MUST map to codex's strongest tier, not leak.
+  assert.equal(toCodexEffort("xhigh"), "high");
+  assert.equal(toCodexEffort("high"), "high");
+  assert.equal(toCodexEffort("medium"), "medium");
+  assert.equal(toCodexEffort("low"), "low");
+  assert.equal(toCodexEffort(undefined), undefined);
+});
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "harry-codex-provider-test-"));

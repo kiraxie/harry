@@ -20,15 +20,27 @@ import type {
   AuthSummary,
   Provider,
   ProviderCapabilities,
+  ReasoningEffort,
   RunOpts,
   RunResult,
 } from "../provider.ts";
+
+/**
+ * Translate the neutral {@link ReasoningEffort} (Copilot's vocabulary) into
+ * codex's app-server effort enum (`minimal | low | medium | high`). Codex has no
+ * `xhigh`, and `review` defaults every codex lane to `xhigh`, so without this
+ * map the most common auto-codex path would send an effort codex may reject.
+ * `xhigh` clamps to codex's strongest tier, `high`.
+ */
+export function toCodexEffort(reasoning?: ReasoningEffort): string | undefined {
+  if (reasoning === undefined) return undefined;
+  return reasoning === "xhigh" ? "high" : reasoning;
+}
 
 export class CodexProvider implements Provider {
   readonly id = "codex" as const;
   readonly capabilities: ProviderCapabilities = {
     metersQuota: false,
-    reportsUsage: true,
   };
 
   /**
@@ -46,8 +58,8 @@ export class CodexProvider implements Provider {
    * for visibility (never throwing on a stream event), then maps the
    * {@link CodexTurnResult} onto the neutral {@link RunResult}.
    *
-   * `opts.reasoning` is passed through as codex's `effort` (best-effort — codex
-   * resolves or ignores unknown values). `opts.model` is passed through as-is;
+   * `opts.reasoning` is mapped to codex's effort enum via {@link toCodexEffort}
+   * (xhigh→high, since codex has no xhigh). `opts.model` is passed through as-is;
    * undefined stays undefined so ~/.codex config picks the model.
    */
   async run(opts: RunOpts): Promise<RunResult> {
@@ -95,7 +107,7 @@ export class CodexProvider implements Provider {
       cwd: opts.cwd,
       prompt: opts.prompt,
       model: opts.model,
-      effort: opts.reasoning,
+      effort: toCodexEffort(opts.reasoning),
       readOnly: opts.readOnly,
       env: process.env,
       onItem,

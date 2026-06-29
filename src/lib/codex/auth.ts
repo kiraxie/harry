@@ -2,7 +2,7 @@
 // Modified from codex-plugin-cc (broker transport removed; ported to TypeScript).
 // See NOTICE.
 
-import { CodexAppServerClient } from "./app-server.ts";
+import { CodexAppServerClient, DEFAULT_CONNECT_TIMEOUT_MS } from "./app-server.ts";
 import { binaryAvailable } from "./process.ts";
 
 /** Result of probing whether codex is installed and its app-server runtime works. */
@@ -150,7 +150,7 @@ export function getCodexAvailability(cwd: string): CodexAvailability {
  */
 export async function getCodexAuthStatus(
   cwd: string,
-  opts: { env?: NodeJS.ProcessEnv } = {}
+  opts: { env?: NodeJS.ProcessEnv; connectTimeoutMs?: number } = {}
 ): Promise<CodexAuthStatus> {
   const availability = getCodexAvailability(cwd);
   if (!availability.available) {
@@ -167,7 +167,13 @@ export async function getCodexAuthStatus(
   try {
     client = await CodexAppServerClient.connect(cwd, {
       env: opts.env,
-      disableBroker: true
+      disableBroker: true,
+      // Anti-hang: this probe runs on the default provider-resolution path of
+      // every auto ask/review/fix and in SessionStart setup. Without a ceiling,
+      // a child that spawns but blocks before answering `initialize` (broken
+      // install, interactive/auth prompt) makes connect() await forever — a
+      // hang no try/catch can rescue.
+      connectTimeoutMs: opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
     });
     const accountResponse = await client.request<AccountReadResponse>("account/read", {
       refreshToken: false
