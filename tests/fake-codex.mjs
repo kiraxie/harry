@@ -194,6 +194,32 @@ rl.on("line", (line) => {
         state.lastTurnStart = { threadId: message.params.threadId, turnId, prompt };
         saveState(state);
         send({ id: message.id, result: { turn: buildTurn(turnId) } });
+
+        if (BEHAVIOR === "task-ok" || BEHAVIOR === "task-with-ratelimits") {
+          send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
+          send({
+            method: "item/completed",
+            params: {
+              threadId: thread.id,
+              turnId,
+              item: { type: "agentMessage", id: "msg_" + turnId, text: "Handled the requested task.\\n" + prompt, phase: "final_answer" }
+            }
+          });
+          if (BEHAVIOR === "task-with-ratelimits") {
+            send({
+              method: "token_count",
+              params: {
+                threadId: thread.id,
+                turnId,
+                rate_limits: { primary: { used_percent: 12 } },
+                last_token_usage: { input_tokens: 5, output_tokens: 7 }
+              }
+            });
+          }
+          send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
+          break;
+        }
+
         emitTurnCompleted(thread.id, turnId, [
           {
             completed: { type: "agentMessage", id: "msg_" + turnId, text: "Handled the requested task.\\n" + prompt, phase: "final_answer" }
