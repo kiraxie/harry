@@ -6,6 +6,7 @@ import { CopilotClient } from '@github/copilot-sdk';
 import type { ModelInfo } from '@github/copilot-sdk';
 
 import { checkAuth } from '../lib/copilot-auth.js';
+import { getCodexAvailability, getCodexAuthStatus } from '../lib/codex/auth.js';
 import { readSnapshot, summarize, renderQuotaBar, fetchQuota } from '../lib/quota.js';
 import { pruneOrphans } from '../lib/worktree.js';
 import { resolveStateDir } from '../lib/state.js';
@@ -17,6 +18,7 @@ export interface SetupOptions {
   check?: boolean;
   json?: boolean;
   cwd?: string;
+  provider?: 'copilot' | 'codex';
 }
 
 interface SetupReport {
@@ -36,6 +38,15 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const stateDir = resolveStateDir(cwd);
   const isCheck = options.check === true;
+
+  // Provider routing: an explicit `--provider codex` always shows codex; when
+  // unset, codex is shown only if it is actually available (the auto-default).
+  // `--provider copilot` skips the availability probe entirely so the common
+  // SessionStart `setup --check` does not spawn `codex` subprocesses.
+  if (options.provider === 'codex' || (options.provider === undefined && getCodexAvailability(cwd).available)) {
+    await runCodexSetup(cwd, options, isCheck);
+    return;
+  }
 
   const client = new CopilotClient({ workingDirectory: cwd });
 
@@ -149,6 +160,49 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   lines.push('- `/copilot:status` to see quota + running jobs');
   lines.push('- `/copilot:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
 
+  console.log(lines.join('\n'));
+}
+
+/**
+ * Codex setup branch — availability + auth status only (no live rate-limit RPC
+ * in v1). Reuses the Task 3 probes; never throws (getCodexAuthStatus is fail-safe).
+ */
+async function runCodexSetup(cwd: string, options: SetupOptions, isCheck: boolean): Promise<void> {
+  const availability = getCodexAvailability(cwd);
+  const auth = await getCodexAuthStatus(cwd);
+
+  if (isCheck) {
+    // SessionStart hook — silent success.
+    return;
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      status: auth.loggedIn ? 'ok' : 'error',
+      provider: 'codex',
+      codex: {
+        available: availability.available,
+        availabilityDetail: availability.detail,
+        loggedIn: auth.loggedIn,
+        authMethod: auth.authMethod,
+        detail: auth.detail,
+      },
+    }, null, 2));
+    return;
+  }
+
+  const lines: string[] = [];
+  lines.push(`## Codex Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push('');
+  lines.push(`**Provider:** Codex`);
+  lines.push(`**Availability:** ${availability.available ? 'available' : 'unavailable'} — ${availability.detail}`);
+  lines.push(`**Status:** ${auth.loggedIn ? 'Authenticated' : 'Not authenticated'}${auth.authMethod ? ` (${auth.authMethod})` : ''}`);
+  lines.push(`**Detail:** ${auth.detail}`);
+  if (!auth.loggedIn) {
+    lines.push('');
+    lines.push('### Next steps');
+    lines.push('- Run `codex login` to authenticate, then re-run setup.');
+  }
   console.log(lines.join('\n'));
 }
 

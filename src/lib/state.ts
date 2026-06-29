@@ -12,6 +12,8 @@ import {
 import { join, basename, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
+import type { CodexRateLimits } from './provider.ts';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface JobRecord {
@@ -200,4 +202,66 @@ export function listJobs(stateDir: string, sessionId?: string): JobRecord[] {
     return state.jobs.filter((j) => j.sessionId === sessionId);
   }
   return state.jobs;
+}
+
+// ─── Codex rate-limit snapshot ───────────────────────────────────────────────
+//
+// Codex is a rate-limit backend (no metered quota), so instead of a live quota
+// poll we persist the last rate-limit snapshot reported by a codex turn and let
+// `status` render it from cache. Mirrors the job-file read/write style above.
+
+const CODEX_RATE_LIMITS_FILE = 'codex-rate-limits.json';
+
+/** Last codex rate-limit snapshot plus the ISO time it was captured. */
+export interface CodexRateLimitSnapshot extends CodexRateLimits {
+  capturedAt?: string;
+}
+
+function codexRateLimitsPath(stateDir: string): string {
+  return join(stateDir, CODEX_RATE_LIMITS_FILE);
+}
+
+/**
+ * Best-effort persist of a codex rate-limit snapshot. Never throws — a failed
+ * write (read-only FS, missing dir we can't create) must not break a turn.
+ */
+export function writeCodexRateLimits(stateDir: string, rateLimits: CodexRateLimits): void {
+  try {
+    ensureDir(stateDir);
+    const snapshot: CodexRateLimitSnapshot = { ...rateLimits, capturedAt: new Date().toISOString() };
+    writeFileSync(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), 'utf-8');
+  } catch {
+    // best-effort: snapshot is a convenience, never a correctness dependency.
+  }
+}
+
+/** Read the last codex rate-limit snapshot, or null if none/unreadable. */
+export function readCodexRateLimits(stateDir: string): CodexRateLimitSnapshot | null {
+  const filePath = codexRateLimitsPath(stateDir);
+  if (!existsSync(filePath)) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf-8')) as CodexRateLimitSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pure one-line formatter for a codex rate-limit snapshot. Absent fields are
+ * omitted, e.g. `primary 42% / secondary 10% used · plan pro · resets <iso>`.
+ */
+export function formatCodexRateLimits(rl: CodexRateLimits): string {
+  const parts: string[] = [];
+  const used: string[] = [];
+  if (rl.primaryUsedPercent !== undefined) used.push(`primary ${rl.primaryUsedPercent}%`);
+  if (rl.secondaryUsedPercent !== undefined) used.push(`secondary ${rl.secondaryUsedPercent}%`);
+  if (used.length > 0) parts.push(`${used.join(' / ')} used`);
+  if (rl.planType) parts.push(`plan ${rl.planType}`);
+  if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
+  return parts.join(' · ');
+}
+
+/** Pure renderer for the `## Codex` status block from a snapshot. */
+export function renderCodexBlock(rl: CodexRateLimits): string {
+  return ['## Codex', formatCodexRateLimits(rl)].join('\n');
 }

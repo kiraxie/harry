@@ -7,6 +7,7 @@
 
 import {
   resolveStateDir, listJobs, readJobFile, readLogTail, getSessionId,
+  readCodexRateLimits, renderCodexBlock,
   type JobRecord,
 } from '../lib/state.js';
 import { readSnapshot, summarize, renderQuotaBar } from '../lib/quota.js';
@@ -41,15 +42,20 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
   const jobs = listJobs(stateDir, sessionId);
   const snapshot = readSnapshot(stateDir);
   const quota = summarize(snapshot);
+  const codexRateLimits = readCodexRateLimits(stateDir);
 
   if (options.json) {
-    console.log(JSON.stringify({ quota, jobs }, null, 2));
+    console.log(JSON.stringify(
+      { quota, ...(codexRateLimits ? { codex: codexRateLimits } : {}), jobs },
+      null, 2,
+    ));
     return;
   }
 
   const sections: string[] = [];
 
   sections.push(renderQuotaBlock(snapshot !== null, quota));
+  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits));
 
   const running = jobs.filter((j) => j.status === 'queued' || j.status === 'running');
   const finished = jobs.filter((j) => j.status === 'completed' || j.status === 'failed');

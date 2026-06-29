@@ -13,6 +13,7 @@
  */
 
 import { getCodexAuthStatus } from "../codex/auth.ts";
+import { resolveStateDir, writeCodexRateLimits } from "../state.ts";
 import { runCodexTurn } from "../codex/turn.ts";
 import type { CodexTurnEvent } from "../codex/turn.ts";
 import type {
@@ -92,6 +93,12 @@ export class CodexProvider implements Provider {
     });
 
     if (result.error) appendLog(`turn error: ${result.error}`);
+
+    // Persist the rate-limit snapshot (best-effort) so `status` can render it
+    // from cache without a live codex RPC. writeCodexRateLimits never throws.
+    if (result.usage?.rateLimits) {
+      writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);
+    }
 
     // DEBT: codeChanges is always undefined — the turn runner does not collect
     // file changes in v1 (codex write-flows are out of scope). A future codex

@@ -19,7 +19,7 @@ function printUsage(): void {
   console.log(
     [
       'Usage:',
-      '  copilot-companion setup [--check] [--json]',
+      '  copilot-companion setup [--check] [--json] [--provider copilot|codex]',
       '  copilot-companion review [focus...] [--adversarial] [--base <ref>]',
       '                           [--scope auto|working-tree|branch] [--fix]',
       '                           [--model <id>] [--reasoning <low|medium|high|xhigh>]',
@@ -154,12 +154,15 @@ async function main(): Promise<void> {
   const { command, args, flags } = parseArgs(process.argv.slice(2));
 
   switch (command) {
-    case 'setup':
+    case 'setup': {
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
       await runSetup({
         check: flags['check'] === true,
         json: flags['json'] === true,
+        provider,
       });
       break;
+    }
 
     case 'review': {
       // --full and --harry-fix are orchestration-only flags handled by the
