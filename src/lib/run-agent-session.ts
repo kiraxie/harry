@@ -96,45 +96,21 @@ const INTERRUPT_TEARDOWN_CEILING_MS = 2000;
 export async function runAgentSession(
   args: RunAgentSessionArgs,
 ): Promise<{ provider: ProviderId; result: RunResult }> {
-  const { id, explicit } = await resolveActiveProvider(args.flags, args.cwd, {
-    probe: args.resolveUsable,
-  });
-  args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
-
-  const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
-
-  // DEBT: copilot double-auths — runAgentSession.checkAuth here and again inside
-  // CopilotProvider.run()'s session start. Perf only (one extra auth probe), no
-  // correctness impact; collapse if it ever shows up on the hot path.
-  const auth = await provider.checkAuth(args.cwd);
-  if (!auth.ok) {
-    // Explicit choice that fails auth surfaces the error (NO fallback). An
-    // auto-resolved codex would already have probed loggedIn, so reaching here
-    // is a real failure either way.
-    throw new Error(`${id} not authenticated: ${auth.message}`);
-  }
-
-  if (provider.capabilities.metersQuota && args.enforceQuota) {
-    await args.enforceQuota(provider);
-  }
-
-  // Apply the provider-aware default model only when the caller left it unset,
-  // so an explicit --model always wins and codex can keep model undefined.
-  if (args.run.model === undefined && args.defaultModelFor) {
-    args.run = { ...args.run, model: args.defaultModelFor(id) };
-  }
-
-  // Centralized interrupt handling: this is the single place that holds the live
-  // provider, so it owns force-stopping its subprocess on SIGINT/SIGTERM. Each
-  // command previously registered its own handler (or, for ask/review, none),
-  // which is how the interrupt-time forceStop got dropped in the refactor and
-  // left orphaned Copilot subprocesses. Installed only around the actual run.
+  // Centralized interrupt handling, installed across the WHOLE session span
+  // (resolution → auth → quota gate → run), not just the run: a command's
+  // `onInterrupt` (e.g. fix's terminal `failed` envelope) and the live
+  // provider's forceStop must fire for an interrupt anywhere in here, including
+  // the multi-second auth/probe window that spawns subprocesses. `activeProvider`
+  // is assigned once the provider exists; forceStop is skipped before then.
+  // This is also where the interrupt-time forceStop (dropped in the refactor,
+  // which orphaned Copilot subprocesses) is centralized for ALL commands.
+  let activeProvider: Provider | undefined;
   const onInterrupt = (): void => {
     args.onInterrupt?.();
     const exit = (): never => process.exit(130);
     const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
     guard.unref();
-    void Promise.resolve(provider.forceStop?.())
+    void Promise.resolve(activeProvider?.forceStop?.())
       .catch(() => {
         /* best-effort teardown */
       })
@@ -143,17 +119,45 @@ export async function runAgentSession(
   process.on("SIGINT", onInterrupt);
   process.on("SIGTERM", onInterrupt);
 
-  let result: RunResult;
   try {
+    const { id, explicit } = await resolveActiveProvider(args.flags, args.cwd, {
+      probe: args.resolveUsable,
+    });
+    args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
+
+    const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
+    activeProvider = provider;
+
+    // DEBT: copilot double-auths — runAgentSession.checkAuth here and again inside
+    // CopilotProvider.run()'s session start. Perf only (one extra auth probe), no
+    // correctness impact; collapse if it ever shows up on the hot path.
+    const auth = await provider.checkAuth(args.cwd);
+    if (!auth.ok) {
+      // Explicit choice that fails auth surfaces the error (NO fallback). An
+      // auto-resolved codex would already have probed loggedIn, so reaching here
+      // is a real failure either way.
+      throw new Error(`${id} not authenticated: ${auth.message}`);
+    }
+
+    if (provider.capabilities.metersQuota && args.enforceQuota) {
+      await args.enforceQuota(provider);
+    }
+
+    // Apply the provider-aware default model only when the caller left it unset,
+    // so an explicit --model always wins and codex can keep model undefined.
+    if (args.run.model === undefined && args.defaultModelFor) {
+      args.run = { ...args.run, model: args.defaultModelFor(id) };
+    }
+
     // Post-gate / pre-run hook: side effects (e.g. fix's pre-fix snapshot) that
     // must NOT run when the quota gate above blocked the run.
     await args.beforeRun?.(provider);
-    result = await provider.run(args.run);
+    const result = await provider.run(args.run);
+    return { provider: id, result };
   } finally {
     process.removeListener("SIGINT", onInterrupt);
     process.removeListener("SIGTERM", onInterrupt);
   }
-  return { provider: id, result };
 }
 
 /**
