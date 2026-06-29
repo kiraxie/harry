@@ -165,9 +165,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   lines.push(`- Merged copilot/* branches removed: ${pruneReport.branchesRemoved}`);
   lines.push('');
   lines.push('### Next steps');
-  lines.push('- `/copilot:ask "<prompt>"` to ask a frontier model a single question');
-  lines.push('- `/copilot:status` to see quota + running jobs');
-  lines.push('- `/copilot:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
+  lines.push('- `/harry:ask "<prompt>"` to ask a frontier model a single question');
+  lines.push('- `/harry:status` to see quota + running jobs');
+  lines.push('- `/harry:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
 
   console.log(lines.join('\n'));
 }

@@ -1,7 +1,7 @@
 /**
  * ask command — sends an arbitrary prompt to a frontier model (Copilot or Codex)
  * and prints the assistant's markdown verbatim. Read-only: no worktree, no file
- * writes, no shell. The reasoning backend for the `/copilot:debate` skill's
+ * writes, no shell. The reasoning backend for the `/harry:debate` skill's
  * gpt-5.5 voice, and a generic single-prompt query command.
  *
  * The whole agent lifecycle (provider resolution, auth, run) is delegated to

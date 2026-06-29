@@ -119,7 +119,7 @@ export async function runWorker(jobId: string, cwd: string): Promise<void> {
 
   // If anything inside this worker calls process.exit with a non-zero
   // code before the try/catch below can persist failure, this hook is
-  // the backstop so /copilot:status doesn't leave the job stuck at
+  // the backstop so /harry:status doesn't leave the job stuck at
   // `running`. markJobFailed itself is idempotent on terminal states.
   process.on('exit', (code) => {
     if (code === 0) return;
@@ -139,7 +139,7 @@ export async function runWorker(jobId: string, cwd: string): Promise<void> {
     return originalStdoutWrite(chunk as never, ...(rest as []));
   }) as typeof process.stdout.write;
 
-  // Route stderr progress into the job log so /copilot:status can show it.
+  // Route stderr progress into the job log so /harry:status can show it.
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]): boolean => {
     const text = typeof chunk === 'string' ? chunk : chunk.toString();

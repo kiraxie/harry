@@ -37,7 +37,7 @@ export async function runResult(cwd: string, options: ResultOptions = {}): Promi
   }
 
   if (job.status === 'queued' || job.status === 'running') {
-    console.error(`Job ${jobId} is still ${job.status}. Use /copilot:status to check progress.`);
+    console.error(`Job ${jobId} is still ${job.status}. Use /harry:status to check progress.`);
     process.exit(1);
   }
 
