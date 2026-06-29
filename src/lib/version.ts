@@ -5,4 +5,4 @@
  */
 
 export const PLUGIN_VERSION = '0.4.2';
-export const CLIENT_NAME = 'copilot-plugin-cc';
+export const CLIENT_NAME = 'harry';

@@ -1,6 +1,6 @@
 /**
  * Shared CLI argument helpers used by both the foreground dispatcher
- * (`copilot-companion.ts`) and the background worker (`commands/background.ts`).
+ * (`companion.ts`) and the background worker (`commands/background.ts`).
  */
 
 /**

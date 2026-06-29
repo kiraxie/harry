@@ -13,12 +13,12 @@ Run both runtime subcommands and return their stdout **verbatim** in your text r
 
 Step 1 — auth + available models + quota (the `setup` check):
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" setup
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" setup
 ```
 
 Step 2 — quota plus background-job status (forward `$ARGUMENTS`; a `job-id` shows that job's detail, `--all` shows jobs from every session):
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" status $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status $ARGUMENTS
 ```
 
 Return both outputs verbatim, labeled. Then, only if something is worth flagging, append at most one short line:

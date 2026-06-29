@@ -10,8 +10,8 @@ import { build } from "esbuild";
 // sibling gemini plugin's handling of google-auth-library).
 
 await build({
-  entryPoints: ["src/copilot-companion.ts"],
-  outfile: "dist/copilot-companion.cjs",
+  entryPoints: ["src/companion.ts"],
+  outfile: "dist/companion.cjs",
   bundle: true,
   platform: "node",
   target: "node26",
@@ -21,4 +21,4 @@ await build({
   external: builtinModules.flatMap((m) => [m, `node:${m}`]),
 });
 
-console.log("Built dist/copilot-companion.cjs");
+console.log("Built dist/companion.cjs");

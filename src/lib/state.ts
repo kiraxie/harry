@@ -51,8 +51,11 @@ interface StateFile {
 
 const MAX_JOBS = 50;
 const PLUGIN_DATA_ENV = 'CLAUDE_PLUGIN_DATA';
-const SESSION_ID_ENV = 'COPILOT_COMPANION_SESSION_ID';
-const FALLBACK_STATE_ROOT = join(tmpdir(), 'copilot-companion');
+const SESSION_ID_ENV = 'HARRY_SESSION_ID';
+// DEBT: back-compat read for background jobs spawned by a pre-rename build that
+// set the old env var. Drop after one release.
+const LEGACY_SESSION_ID_ENV = 'COPILOT_COMPANION_SESSION_ID';
+const FALLBACK_STATE_ROOT = join(tmpdir(), 'harry');
 
 // ─── State Directory ─────────────────────────────────────────────────────────
 
@@ -155,7 +158,7 @@ export function generateJobId(): string {
 }
 
 export function getSessionId(): string | undefined {
-  return process.env[SESSION_ID_ENV] || undefined;
+  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || undefined;
 }
 
 export function createJob(stateDir: string, job: JobRecord): void {

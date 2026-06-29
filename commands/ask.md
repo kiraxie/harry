@@ -11,7 +11,7 @@ Raw slash-command arguments:
 
 Execute:
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" ask $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask $ARGUMENTS
 ```
 
 - The first quoted argument is the prompt. `--model <id>` (default is the runtime's frontier model, gpt-5.5 for debate use) and `--reasoning <low|medium|high>` override defaults; forward all of `$ARGUMENTS` verbatim.

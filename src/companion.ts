@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * copilot-companion — CLI entry point for the Copilot Claude Code plugin.
+ * companion — CLI entry point for the Copilot Claude Code plugin.
  */
 
 import process from 'node:process';
@@ -19,19 +19,19 @@ function printUsage(): void {
   console.log(
     [
       'Usage:',
-      '  copilot-companion setup [--check] [--json] [--provider copilot|codex]',
-      '  copilot-companion review [focus...] [--adversarial] [--base <ref>]',
+      '  companion setup [--check] [--json] [--provider copilot|codex]',
+      '  companion review [focus...] [--adversarial] [--base <ref>]',
       '                           [--scope auto|working-tree|branch] [--fix]',
       '                           [--model <id>] [--reasoning <low|medium|high|xhigh>]',
       '                           [--context <text|@file|@->]',
       '                           [--timeout <ms>] [--min-quota <n>] [--background]',
-      '  copilot-companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
-      '  copilot-companion fix --findings <path> [--model <id>]',
+      '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
+      '  companion fix --findings <path> [--model <id>]',
       '                        [--reasoning <low|medium|high|xhigh>]',
       '                        [--context <text|@file|@->]',
       '                        [--timeout <ms>] [--min-quota <n>] [--write <path>]',
-      '  copilot-companion status [job-id] [--all] [--json]',
-      '  copilot-companion result [job-id] [--json]',
+      '  companion status [job-id] [--all] [--json]',
+      '  companion result [job-id] [--json]',
       '',
       'Commands:',
       '  setup       Check GitHub Copilot authentication, available models, quota',

@@ -55,7 +55,7 @@ export function enqueueBackground(
   const scriptPath = getScriptPath();
   const child = spawn(process.execPath, [scriptPath, '_worker', '--job-id', jobId, '--cwd', cwd], {
     cwd,
-    env: { ...process.env, COPILOT_COMPANION_SESSION_ID: getSessionId() ?? '' },
+    env: { ...process.env, HARRY_SESSION_ID: getSessionId() ?? '' },
     detached: true,
     stdio: 'ignore',
   });
@@ -68,7 +68,7 @@ export function enqueueBackground(
 
 function getScriptPath(): string {
   // The companion is always shipped as a CJS bundle (see build.mjs), so
-  // __filename points to dist/copilot-companion.cjs at runtime.
+  // __filename points to dist/companion.cjs at runtime.
   if (typeof __filename === 'undefined' || !__filename) {
     throw new Error('Unable to resolve script path: __filename is not defined. The companion must be run via the bundled CJS output.');
   }
