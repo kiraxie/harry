@@ -42,9 +42,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/is.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/is.js
 var require_is = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/is.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/is.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.stringArray = exports2.array = exports2.func = exports2.error = exports2.number = exports2.string = exports2.boolean = void 0;
@@ -79,9 +79,9 @@ var require_is = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messages.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messages.js
 var require_messages = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messages.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messages.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Message = exports2.NotificationType9 = exports2.NotificationType8 = exports2.NotificationType7 = exports2.NotificationType6 = exports2.NotificationType5 = exports2.NotificationType4 = exports2.NotificationType3 = exports2.NotificationType2 = exports2.NotificationType1 = exports2.NotificationType0 = exports2.NotificationType = exports2.RequestType9 = exports2.RequestType8 = exports2.RequestType7 = exports2.RequestType6 = exports2.RequestType5 = exports2.RequestType4 = exports2.RequestType3 = exports2.RequestType2 = exports2.RequestType1 = exports2.RequestType = exports2.RequestType0 = exports2.AbstractMessageSignature = exports2.ParameterStructures = exports2.ResponseError = exports2.ErrorCodes = void 0;
@@ -317,9 +317,9 @@ var require_messages = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/linkedMap.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/linkedMap.js
 var require_linkedMap = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/linkedMap.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/linkedMap.js"(exports2) {
     "use strict";
     var _a;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -687,9 +687,9 @@ var require_linkedMap = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/disposable.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/disposable.js
 var require_disposable = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/disposable.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/disposable.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Disposable = void 0;
@@ -705,9 +705,9 @@ var require_disposable = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/ral.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/ral.js
 var require_ral = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/ral.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/ral.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var _ral;
@@ -730,9 +730,9 @@ var require_ral = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/events.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/events.js
 var require_events = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/events.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/events.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Emitter = exports2.Event = void 0;
@@ -859,9 +859,9 @@ var require_events = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/cancellation.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/cancellation.js
 var require_cancellation = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/cancellation.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/cancellation.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.CancellationTokenSource = exports2.CancellationToken = void 0;
@@ -948,9 +948,9 @@ var require_cancellation = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js
 var require_sharedArrayCancellation = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.SharedArrayReceiverStrategy = exports2.SharedArraySenderStrategy = void 0;
@@ -1026,9 +1026,9 @@ var require_sharedArrayCancellation = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/semaphore.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/semaphore.js
 var require_semaphore = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/semaphore.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/semaphore.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Semaphore = void 0;
@@ -1094,9 +1094,9 @@ var require_semaphore = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messageReader.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageReader.js
 var require_messageReader = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messageReader.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageReader.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ReadableStreamMessageReader = exports2.AbstractMessageReader = exports2.MessageReader = void 0;
@@ -1283,9 +1283,9 @@ ${JSON.stringify(Object.fromEntries(headers))}`));
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messageWriter.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageWriter.js
 var require_messageWriter = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messageWriter.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageWriter.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.WriteableStreamMessageWriter = exports2.AbstractMessageWriter = exports2.MessageWriter = void 0;
@@ -1395,9 +1395,9 @@ var require_messageWriter = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messageBuffer.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageBuffer.js
 var require_messageBuffer = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messageBuffer.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageBuffer.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AbstractMessageBuffer = void 0;
@@ -1543,9 +1543,9 @@ ${header}`);
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/connection.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/connection.js
 var require_connection = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/connection.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/connection.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.createMessageConnection = exports2.ConnectionOptions = exports2.MessageStrategy = exports2.CancellationStrategy = exports2.CancellationSenderStrategy = exports2.CancellationReceiverStrategy = exports2.RequestCancellationReceiverStrategy = exports2.IdCancellationReceiverStrategy = exports2.ConnectionStrategy = exports2.ConnectionError = exports2.ConnectionErrors = exports2.LogTraceNotification = exports2.SetTraceNotification = exports2.TraceFormat = exports2.TraceValues = exports2.Trace = exports2.NullLogger = exports2.ProgressType = exports2.ProgressToken = void 0;
@@ -2672,9 +2672,9 @@ ${JSON.stringify(message, null, 4)}`);
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/api.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/api.js
 var require_api = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/api.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/api.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ProgressType = exports2.ProgressToken = exports2.createMessageConnection = exports2.NullLogger = exports2.ConnectionOptions = exports2.ConnectionStrategy = exports2.AbstractMessageBuffer = exports2.WriteableStreamMessageWriter = exports2.AbstractMessageWriter = exports2.MessageWriter = exports2.ReadableStreamMessageReader = exports2.AbstractMessageReader = exports2.MessageReader = exports2.SharedArrayReceiverStrategy = exports2.SharedArraySenderStrategy = exports2.CancellationToken = exports2.CancellationTokenSource = exports2.Emitter = exports2.Event = exports2.Disposable = exports2.LRUCache = exports2.Touch = exports2.LinkedMap = exports2.ParameterStructures = exports2.NotificationType9 = exports2.NotificationType8 = exports2.NotificationType7 = exports2.NotificationType6 = exports2.NotificationType5 = exports2.NotificationType4 = exports2.NotificationType3 = exports2.NotificationType2 = exports2.NotificationType1 = exports2.NotificationType0 = exports2.NotificationType = exports2.ErrorCodes = exports2.ResponseError = exports2.RequestType9 = exports2.RequestType8 = exports2.RequestType7 = exports2.RequestType6 = exports2.RequestType5 = exports2.RequestType4 = exports2.RequestType3 = exports2.RequestType2 = exports2.RequestType1 = exports2.RequestType0 = exports2.RequestType = exports2.Message = exports2.RAL = void 0;
@@ -2874,9 +2874,9 @@ var require_api = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/node/ril.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/ril.js
 var require_ril = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/node/ril.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/ril.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var util_1 = require("util");
@@ -3030,9 +3030,9 @@ var require_ril = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/node/main.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/main.js
 var require_main = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/node/main.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/main.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -3290,15 +3290,15 @@ var require_main = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/node.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/node.js
 var require_node = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/node.js"(exports2, module2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/node.js"(exports2, module2) {
     "use strict";
     module2.exports = require_main();
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/generated/rpc.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/generated/rpc.js
 function createServerRpc(connection) {
   return {
     /**
@@ -5222,25 +5222,25 @@ function registerClientGlobalApiHandlers(connection, handlers) {
   });
 }
 var init_rpc = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/generated/rpc.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/generated/rpc.js"() {
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js
 function getSdkProtocolVersion() {
   return SDK_PROTOCOL_VERSION;
 }
 var SDK_PROTOCOL_VERSION;
 var init_sdkProtocolVersion = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js"() {
     SDK_PROTOCOL_VERSION = 3;
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/canvas.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/canvas.js
 var CanvasError;
 var init_canvas = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/canvas.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/canvas.js"() {
     CanvasError = class _CanvasError extends Error {
       constructor(code, message) {
         super(message);
@@ -5259,7 +5259,7 @@ var init_canvas = __esm({
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/telemetry.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/telemetry.js
 async function getTraceContext(provider) {
   if (!provider) return {};
   try {
@@ -5269,11 +5269,11 @@ async function getTraceContext(provider) {
   }
 }
 var init_telemetry = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/telemetry.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/telemetry.js"() {
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/session.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/session.js
 function deserializeHookInput(raw) {
   if (!raw || typeof raw !== "object" || typeof raw.timestamp !== "number") {
     return raw;
@@ -5316,7 +5316,7 @@ function toCanvasRpcError(error) {
 }
 var import_node, CopilotSession;
 var init_session = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/session.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/session.js"() {
     import_node = __toESM(require_node(), 1);
     init_rpc();
     init_canvas();
@@ -6280,7 +6280,7 @@ var init_session = __esm({
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/sessionFsProvider.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sessionFsProvider.js
 function normalizeSqliteParams(params) {
   if (!params) {
     return void 0;
@@ -6410,11 +6410,11 @@ function toSessionFsError(err) {
   return { code, message: e.message ?? String(err) };
 }
 var init_sessionFsProvider = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/sessionFsProvider.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sessionFsProvider.js"() {
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/copilotRequestHandler.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/copilotRequestHandler.js
 function createCopilotRequestAdapter(handler, getServerRpc) {
   const pending = /* @__PURE__ */ new Map();
   function getOrCreate(requestId) {
@@ -6595,7 +6595,7 @@ function normalizeWsData(data) {
 }
 var sharedTextDecoder, sharedTextEncoder, kBridge, kCompletion, kOpen, kSuppressCloseOnDispose, kHandle, CopilotWebSocketCloseStatus, CopilotWebSocketHandler, CopilotWebSocketForwarder, CopilotRequestHandler, CopilotRequestExchange, FORBIDDEN_REQUEST_HEADERS, CopilotWebSocketResponseBridge;
 var init_copilotRequestHandler = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/copilotRequestHandler.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/copilotRequestHandler.js"() {
     sharedTextDecoder = new TextDecoder("utf-8", { fatal: false });
     sharedTextEncoder = new TextEncoder();
     kBridge = /* @__PURE__ */ Symbol("copilotWebSocketResponseBridge");
@@ -7015,7 +7015,7 @@ var init_copilotRequestHandler = __esm({
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/toolSet.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/toolSet.js
 function validateName(kind, name) {
   if (name === "*") {
     return;
@@ -7028,7 +7028,7 @@ function validateName(kind, name) {
 }
 var VALID_TOOL_NAME, ToolSet;
 var init_toolSet = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/toolSet.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/toolSet.js"() {
     VALID_TOOL_NAME = /^[a-zA-Z0-9_-]+$/;
     ToolSet = class {
       items = [];
@@ -7075,10 +7075,10 @@ var init_toolSet = __esm({
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/types.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/types.js
 var defaultJoinSessionPermissionHandler;
 var init_types = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/types.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/types.js"() {
     init_sessionFsProvider();
     init_copilotRequestHandler();
     defaultJoinSessionPermissionHandler = () => ({
@@ -7087,7 +7087,7 @@ var init_types = __esm({
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/client.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/client.js
 function isZodSchema(value) {
   return value != null && typeof value === "object" && "toJSONSchema" in value && typeof value.toJSONSchema === "function";
 }
@@ -7280,7 +7280,7 @@ function getBundledCliPath() {
 }
 var import_node_child_process, import_node_crypto, import_node_fs, import_node_module, import_node_net, import_node_path, import_node_url, import_node2, import_meta, MIN_PROTOCOL_VERSION, RUNTIME_SHUTDOWN_TIMEOUT_MS, DEFAULT_PROVIDER_NAME, TeardownResilientStreamMessageWriter, CopilotClient;
 var init_client = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/client.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/client.js"() {
     import_node_child_process = require("node:child_process");
     import_node_crypto = require("node:crypto");
     import_node_fs = require("node:fs");
@@ -9049,9 +9049,9 @@ stderr: ${stderrOutput}`
   }
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/index.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/index.js
 var init_dist = __esm({
-  "../../../node_modules/@github/copilot-sdk/dist/index.js"() {
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/index.js"() {
     init_client();
     init_types();
     init_toolSet();
@@ -9110,6 +9110,7 @@ var init_package = __esm({
       engines: {
         node: ">=26.0.0"
       },
+      packageManager: "pnpm@10.33.0",
       scripts: {
         build: "node build.mjs",
         test: "node --test",
@@ -9127,6 +9128,9 @@ var init_package = __esm({
         "@types/node": "^26.0.1",
         esbuild: "^0.28.1",
         typescript: "7.0.1-rc"
+      },
+      pnpm: {
+        onlyBuiltDependencies: ["@biomejs/biome", "esbuild"]
       }
     };
   }

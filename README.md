@@ -23,15 +23,15 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 - Node.js **>= 26**
 - [Claude Code](https://claude.com/claude-code)
-- For the runtime commands (`review`, `ask`, `debate`): a GitHub Copilot subscription, authenticated via `gh auth login`. `npm install` pulls the `@github/copilot` CLI.
+- For the runtime commands (`review`, `ask`, `debate`): a GitHub Copilot subscription, authenticated via `gh auth login`. `pnpm install` pulls the `@github/copilot` CLI.
 - For `debate`'s Gemini voice: the `agy` (Antigravity) CLI on `PATH`.
 
 ## Install
 
 ```bash
 # 1. Build the Copilot runtime (the committed dist drifts as the Copilot CLI updates)
-npm install
-npm run build
+pnpm install
+pnpm run build
 
 # 2. Wire the resident laws into your global ~/.claude/CLAUDE.md (idempotent)
 node scripts/install.mjs          # adds `@<path>/HARRY.md` in a marked block
