@@ -12634,7 +12634,7 @@ async function runStatus(cwd, options = {}) {
     return;
   }
   const sections = [];
-  sections.push(renderQuotaBlock(snapshot !== null, quota));
+  sections.push(renderQuotaBlock(snapshot !== null, quota, snapshot?.checkedAt));
   if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits));
   const running = jobs.filter((j) => j.status === "queued" || j.status === "running");
   const finished = jobs.filter((j) => j.status === "completed" || j.status === "failed");
@@ -12660,8 +12660,20 @@ async function runStatus(cwd, options = {}) {
   }
   console.log(sections.join("\n\n"));
 }
-function renderQuotaBlock(haveSnapshot, q) {
-  return ["## Quota", ...renderQuotaBar(q, haveSnapshot)].join("\n");
+function renderQuotaBlock(haveSnapshot, q, checkedAt) {
+  const header = haveSnapshot && checkedAt ? `## Quota (snapshot ${formatAge(checkedAt)})` : "## Quota";
+  return [header, ...renderQuotaBar(q, haveSnapshot)].join("\n");
+}
+function formatAge(iso) {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1e3));
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 function toTableRow(job) {
   const icon = job.status === "completed" ? "\u2713 " : job.status === "failed" ? "\u2717 " : job.status === "running" ? "\u25B6 " : job.status === "queued" ? "\u2026 " : "  ";
