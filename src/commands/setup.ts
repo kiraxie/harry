@@ -8,7 +8,7 @@ import type { ModelInfo } from '@github/copilot-sdk';
 import { checkAuth } from '../lib/copilot-auth.js';
 import { getCodexAvailability, getCodexAuthStatus } from '../lib/codex/auth.js';
 import { resolveActiveProvider } from '../lib/run-agent-session.ts';
-import { readSnapshot, summarize, renderQuotaBar, fetchQuota } from '../lib/quota.js';
+import { readSnapshot, summarize, fetchQuota } from '../lib/quota.js';
 import { resolveStateDir } from '../lib/state.js';
 import { CLIENT_NAME, PLUGIN_VERSION } from '../lib/version.js';
 
@@ -142,10 +142,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ''})`);
   if (auth.host) lines.push(`**Host:** ${auth.host}`);
   lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? '(available)' : '(NOT listed — pass --model to override)'}`);
-  lines.push('');
-  lines.push('### Quota');
-  const haveSnapshot = !!(report.quota && (report.quota.premium !== undefined || report.quota.unlimited));
-  lines.push(...renderQuotaBar(report.quota ?? { pools: [], allUnlimited: false }, haveSnapshot));
+  // Quota is intentionally NOT shown here — it lives in `status` (the runtime
+  // view) to avoid printing it twice in the merged /harry:status. setup still
+  // refreshes the snapshot above (fetchQuota) so status shows fresh numbers.
 
   console.log(lines.join('\n'));
 }
