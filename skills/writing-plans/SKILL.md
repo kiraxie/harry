@@ -47,6 +47,14 @@ Copy the spec's §5 Constraints **verbatim** into a block at the top of the plan
 
 ## Step 4 — Write the tasks
 
+Before writing a task's `Test:` line, reframe the ask as a verifiable goal — an imperative verb hides its own success check:
+
+- "Add validation" → "invalid inputs are rejected — test them, then make them pass"
+- "Fix the bug" → "a test reproduces it, then passes" (the failing reproduction test, HARRY.md §6)
+- "Refactor X" → "the same tests pass before and after"
+
+A vague ask ("make it work") that resists this reframe is an under-specified task — sharpen it into a concrete `Test:` here, not mid-implementation.
+
 ### Standard — bullet plan
 
 Per task, just the three things a reviewer needs:
