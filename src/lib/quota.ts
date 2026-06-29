@@ -4,9 +4,8 @@
  * Quota is fetched actively via the SDK's `account.getQuota` RPC (the
  * `assistant.usage` event no longer carries `quotaSnapshots` as of SDK 1.0).
  * Callers fetch a fresh snapshot and hand the loosely-typed `quotaSnapshots`
- * record to `recordSnapshot`; we persist the most recent view so the
- * `implement` command can refuse work before opening a session when quota is
- * exhausted.
+ * record to `recordSnapshot`; we persist the most recent view so a command can
+ * refuse work before opening a session when quota is exhausted.
  *
  * Billing note: premium usage is metered as a *cost* with per-model
  * multipliers, so `usedRequests` / `entitlementRequests` may be fractional.
