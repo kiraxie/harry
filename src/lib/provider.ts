@@ -100,6 +100,25 @@ function defaultCodexUsable(_cwd: string): boolean {
 }
 
 /**
+ * The authoritative part of resolution: an explicit `--provider` flag, then the
+ * user setting (env). Returns the named provider when either explicitly selects
+ * one, else undefined (caller falls through to the codex-if-usable default).
+ *
+ * This is the SINGLE source of the flag>setting precedence — both the sync
+ * {@link resolveProvider} and the async session runner build on it, so the
+ * "explicit choice is authoritative, no fallback" rule lives in exactly one place.
+ */
+export function resolveExplicit(flags: { provider?: string }): ProviderId | undefined {
+  const flag = norm(flags.provider);
+  if (isId(flag)) return flag; // explicit flag, authoritative
+
+  const setting = norm(process.env.CLAUDE_PLUGIN_OPTION_PROVIDER);
+  if (isId(setting)) return setting; // user setting, authoritative
+
+  return undefined;
+}
+
+/**
  * Resolve the active provider. Precedence:
  *   explicit flag > user setting (env) > codex-if-usable > copilot.
  *
@@ -112,11 +131,8 @@ export function resolveProvider(
   flags: { provider?: string },
   deps: { codexUsable?: (cwd: string) => boolean } = {},
 ): ProviderId {
-  const flag = norm(flags.provider);
-  if (isId(flag)) return flag; // explicit flag, authoritative
-
-  const setting = norm(process.env.CLAUDE_PLUGIN_OPTION_PROVIDER);
-  if (isId(setting)) return setting; // user setting, authoritative
+  const explicit = resolveExplicit(flags);
+  if (explicit) return explicit;
 
   const usable = deps.codexUsable ?? defaultCodexUsable; // default chain
   return usable(cwd) ? "codex" : "copilot";
