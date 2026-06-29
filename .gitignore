@@ -38,7 +38,9 @@ bower_components
 build/Release
 
 # Dependency directories
-node_modules/
+# No trailing slash: in a git worktree `node_modules` is a SYMLINK to the main
+# checkout's modules, and `node_modules/` (directory-only) would not match it.
+node_modules
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
