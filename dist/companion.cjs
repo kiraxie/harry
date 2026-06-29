@@ -11304,9 +11304,9 @@ async function runSetup(options = {}) {
   lines.push(`- Merged copilot/* branches removed: ${pruneReport.branchesRemoved}`);
   lines.push("");
   lines.push("### Next steps");
-  lines.push('- `/copilot:ask "<prompt>"` to ask a frontier model a single question');
-  lines.push("- `/copilot:status` to see quota + running jobs");
-  lines.push('- `/copilot:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
+  lines.push('- `/harry:ask "<prompt>"` to ask a frontier model a single question');
+  lines.push("- `/harry:status` to see quota + running jobs");
+  lines.push('- `/harry:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
   console.log(lines.join("\n"));
 }
 async function runCodexSetup(cwd, options, isCheck) {
@@ -12752,7 +12752,7 @@ async function runResult(cwd, options = {}) {
     process.exit(1);
   }
   if (job.status === "queued" || job.status === "running") {
-    console.error(`Job ${jobId} is still ${job.status}. Use /copilot:status to check progress.`);
+    console.error(`Job ${jobId} is still ${job.status}. Use /harry:status to check progress.`);
     process.exit(1);
   }
   if (options.json) {
