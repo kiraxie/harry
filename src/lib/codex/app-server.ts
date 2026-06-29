@@ -89,9 +89,12 @@ export class CodexAppServerClient {
     });
   }
 
-  static async connect(cwd: string, opts: CodexConnectOpts = {}): Promise<CodexAppServerClient> {
+  static async connect(
+    cwd: string,
+    opts: CodexConnectOpts & { connectTimeoutMs?: number } = {}
+  ): Promise<CodexAppServerClient> {
     const client = new CodexAppServerClient(cwd, opts);
-    await client.initialize();
+    await client.initialize(opts.connectTimeoutMs);
     return client;
   }
 
@@ -194,7 +197,7 @@ export class CodexAppServerClient {
     this.resolveExit();
   }
 
-  private async initialize(): Promise<void> {
+  private async initialize(connectTimeoutMs?: number): Promise<void> {
     this.proc = spawn("codex", ["app-server"], {
       cwd: this.cwd,
       env: this.options.env ?? process.env,
@@ -232,10 +235,48 @@ export class CodexAppServerClient {
       this.handleLine(line);
     });
 
-    await this.request("initialize", {
+    const initRequest = this.request("initialize", {
       clientInfo: this.options.clientInfo ?? DEFAULT_CLIENT_INFO,
       capabilities: this.options.capabilities ?? DEFAULT_CAPABILITIES
     });
+
+    if (connectTimeoutMs !== undefined && connectTimeoutMs > 0) {
+      // Anti-hang at the SOURCE: if the spawned child never answers `initialize`
+      // (e.g. blocked on an interactive/auth prompt), reject AND tear down the
+      // child so no process leaks. Without this, connect() could hang forever.
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          const stderr = this.stderrBuffer.trim();
+          reject(
+            createProtocolError(
+              `codex app-server did not answer initialize within ${connectTimeoutMs}ms.${
+                stderr ? `\n${stderr}` : ""
+              }`
+            )
+          );
+        }, connectTimeoutMs);
+        timer.unref?.();
+      });
+      // Prevent an unhandled rejection if the timeout wins the race: the pending
+      // initialize request is rejected later by handleExit() during close().
+      initRequest.catch(() => {});
+      try {
+        await Promise.race([initRequest, timeout]);
+      } catch (error) {
+        if (timer) {
+          clearTimeout(timer);
+        }
+        await this.close();
+        throw error;
+      }
+      if (timer) {
+        clearTimeout(timer);
+      }
+    } else {
+      await initRequest;
+    }
+
     this.notify("initialized", {});
   }
 

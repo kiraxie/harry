@@ -148,6 +148,11 @@ rl.on("line", (line) => {
   try {
     switch (message.method) {
       case "initialize":
+        if (BEHAVIOR === "no-init") {
+          // Never answer initialize: simulate a child blocked on an interactive
+          // / auth prompt. The caller's connect timeout must fire.
+          break;
+        }
         state.capabilities = message.params.capabilities || null;
         saveState(state);
         send({ id: message.id, result: { userAgent: "fake-codex-app-server" } });
@@ -194,6 +199,13 @@ rl.on("line", (line) => {
         state.lastTurnStart = { threadId: message.params.threadId, turnId, prompt };
         saveState(state);
         send({ id: message.id, result: { turn: buildTurn(turnId) } });
+
+        if (BEHAVIOR === "task-stuck") {
+          // Ack the turn but NEVER emit turn/completed (and no final answer): the
+          // caller's anti-hang timeout must end the turn.
+          send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
+          break;
+        }
 
         if (BEHAVIOR === "task-ok" || BEHAVIOR === "task-with-ratelimits") {
           send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });

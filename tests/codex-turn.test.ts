@@ -42,3 +42,46 @@ test("runCodexTurn parses token_count rate limits into usage", async () => {
   assert.equal(result.usage?.inputTokens, 5);
   assert.equal(result.usage?.outputTokens, 7);
 });
+
+test("runCodexTurn times out a turn that never completes", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-stuck");
+
+  const startedAt = Date.now();
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 600
+  });
+  const elapsed = Date.now() - startedAt;
+
+  assert.equal(result.success, false);
+  assert.ok(
+    elapsed < 10_000,
+    `expected the stuck turn to be bounded by the timeout, took ${elapsed}ms`
+  );
+});
+
+test("runCodexTurn times out when codex never answers initialize", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "no-init");
+
+  const startedAt = Date.now();
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 600
+  });
+  const elapsed = Date.now() - startedAt;
+
+  assert.equal(result.success, false);
+  assert.match(result.error ?? "", /initialize/i);
+  assert.ok(
+    elapsed < 10_000,
+    `expected connect to be bounded by the timeout, took ${elapsed}ms`
+  );
+});

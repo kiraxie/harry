@@ -17,9 +17,13 @@ import { CodexAppServerClient } from "./app-server.ts";
 import type { AppServerNotification, ThreadItem } from "./protocol.ts";
 import type { CodexRateLimits } from "../provider.ts";
 
-/** A turn must never hang the host process; the request layer can stall forever
- *  if the codex child dies without a close() (see DEBT below). */
+/** A turn must never hang the host process. */
 const DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1000;
+
+/** Ceiling on connect()/initialize() so a child that never answers `initialize`
+ *  (e.g. blocked on an auth prompt) cannot hang the turn. Capped at the overall
+ *  turn budget. */
+const DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1000;
 
 export interface CodexTurnOpts {
   cwd: string;
@@ -31,6 +35,9 @@ export interface CodexTurnOpts {
   onItem?: (ev: CodexTurnEvent) => void;
   /** Hard ceiling on a single turn. Defaults to {@link DEFAULT_TURN_TIMEOUT_MS}. */
   timeoutMs?: number;
+  /** Ceiling on connect()/initialize(). Defaults to the lesser of
+   *  {@link DEFAULT_CONNECT_TIMEOUT_MS} and {@link timeoutMs}. */
+  connectTimeoutMs?: number;
 }
 
 export type CodexTurnEvent =
@@ -383,10 +390,28 @@ function applyTurnNotification(state: TurnCaptureState, message: AppServerNotifi
       recordItem(state, message.params.item, "completed", message.params?.threadId ?? null);
       break;
     case "token_count": {
-      const usage = parseTokenCount(message.params);
-      // Fold the LATEST snapshot in (later snapshots supersede earlier ones).
-      state.usage = usage;
-      state.onItem?.({ kind: "usage", ...usage });
+      // FOLD field-wise rather than replace: real codex emits multiple
+      // token_count notifications per multi-step turn and `rate_limits` is often
+      // null/absent on later snapshots — a full replace would WIPE the
+      // previously-captured rate limits. Keep prior values when the new snapshot
+      // lacks a field.
+      const next = parseTokenCount(message.params);
+      const prev = state.usage ?? {};
+      const folded: CodexTurnUsage = {
+        inputTokens: next.inputTokens ?? prev.inputTokens,
+        outputTokens: next.outputTokens ?? prev.outputTokens,
+        rateLimits: next.rateLimits ?? prev.rateLimits
+      };
+      const hasContent =
+        folded.inputTokens !== undefined ||
+        folded.outputTokens !== undefined ||
+        folded.rateLimits !== undefined;
+      if (hasContent) {
+        state.usage = folded;
+        // Don't emit an empty usage event when a snapshot carries neither
+        // rate_limits nor last_token_usage.
+        state.onItem?.({ kind: "usage", ...folded });
+      }
       break;
     }
     case "error":
@@ -413,17 +438,37 @@ function applyTurnNotification(state: TurnCaptureState, message: AppServerNotifi
 
 export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
-  const client = await CodexAppServerClient.connect(opts.cwd, {
-    env: opts.env,
-    disableBroker: true
-  });
+  const connectTimeoutMs =
+    opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
 
-  // DEBT: CodexAppServerClient.request() never settles if the codex child dies
-  // without a close() (the client's `closed` flag stays false and the pending
-  // promise is never rejected). Until app-server.ts grows its own watchdog
-  // (Task 1 review, Minor), this timeout race is the only thing guaranteeing a
-  // turn cannot hang the host process. On fire we close() the client, which
-  // drains pending requests and the completion promise via handleExit().
+  // connect() awaits initialize() OUTSIDE the per-turn timeout race below, so it
+  // gets its own ceiling at the source (app-server connectTimeoutMs): on expiry
+  // the spawned child is torn down and connect() rejects rather than hanging.
+  let client: CodexAppServerClient;
+  try {
+    client = await CodexAppServerClient.connect(opts.cwd, {
+      env: opts.env,
+      disableBroker: true,
+      connectTimeoutMs
+    });
+  } catch (error) {
+    const message = (error as Error)?.message ?? String(error);
+    return {
+      success: false,
+      finalMessage: "",
+      reasoningSummary: [],
+      error: message,
+      stderr: ""
+    };
+  }
+
+  // DEBT: an in-turn request() (thread/start, turn/start, completion await) can
+  // still stall forever if the codex child dies without a close() — the client's
+  // `closed` flag stays false and the pending promise is never rejected. The
+  // connect/initialize gap is now closed at the source (connectTimeoutMs above);
+  // the remaining in-turn stalls are guarded by this turn-level Promise.race. On
+  // fire we close() the client, which drains pending requests and the completion
+  // promise via handleExit().
   let timer: ReturnType<typeof setTimeout> | null = null;
   let timedOut = false;
   const timeout = new Promise<void>((resolve) => {
