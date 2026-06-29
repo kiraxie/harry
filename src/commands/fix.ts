@@ -1,9 +1,9 @@
 /**
  * fix command — applies a Claude-Code-approved set of review findings to the
- * CURRENT working tree using a write-enabled Copilot session.
+ * CURRENT working tree using a write-enabled agent session (Copilot or Codex).
  *
  * This is stage 3 of the review→fix pipeline:
- *   1. `review --fix`  — Copilot emits structured findings (read-only).
+ *   1. `review --fix`  — the model emits structured findings (read-only).
  *   2. Claude Code     — judges each finding against its conversation context
  *                        (some flagged "issues" are intentional choices only CC
  *                        knows about) and writes the approved subset to a file.
@@ -14,29 +14,30 @@
  * uncommitted changes as a baseline snapshot, then leaves the fix edits staged
  * for the user to inspect and commit.
  *
- * Emits a single JSON envelope on stdout. Best-effort: findings the model could
- * not apply are reported under `skipped` rather than failing the whole run.
+ * The agent lifecycle (provider resolution, auth, run) is delegated to
+ * {@link runAgentSession}; fix only supplies the prompt/options, the
+ * copilot-only quota gate, the provider-aware default model, and its single
+ * JSON-envelope stdout contract. Best-effort: findings the model could not apply
+ * are reported under `skipped` rather than failing the whole run.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { CopilotClient } from '@github/copilot-sdk';
 
 import type { ReasoningEffort } from './implement.js';
 import { resolveStateDir, generateJobId, appendLog, jobLogPath } from '../lib/state.js';
-import { readSnapshot, evaluateGate, summarize, fetchQuota } from '../lib/quota.js';
-import { checkAuth } from '../lib/copilot-auth.js';
-import { makePermissionHandler } from '../lib/permission.js';
-import { attachStream } from '../lib/event-stream.js';
+import { readSnapshot, evaluateGate, summarize, isPremiumModel } from '../lib/quota.js';
 import { resolveRepoRoot } from '../lib/worktree.js';
 import { extractJsonBlock, normalizeFindings, type Finding } from '../lib/findings.js';
 import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
-import { CLIENT_NAME, PLUGIN_VERSION } from '../lib/version.js';
+import { runAgentSession } from '../lib/run-agent-session.ts';
+import type { ProviderId } from '../lib/provider.ts';
 
 export interface FixOptions {
   /** Path to the approved-findings JSON (array, or a {findings:[...]} object). */
   findingsPath?: string;
+  provider?: ProviderId;
   model?: string;
   reasoning?: ReasoningEffort;
   timeout?: number;
@@ -45,8 +46,8 @@ export interface FixOptions {
   allowUrl?: boolean;
   writePath?: string;
   /**
-   * Extra context appended to Copilot's system message. Literal text, or `@file`
-   * / `@-` (stdin) to read from a source — see `resolveExtraContext`.
+   * Extra context appended to the model's system message. Literal text, or
+   * `@file` / `@-` (stdin) to read from a source — see `resolveExtraContext`.
    */
   context?: string;
   jobId?: string;
@@ -216,10 +217,13 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   const progress = progressFactory();
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
-  const model = options.model ?? DEFAULT_MODEL;
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
+  // The model copilot WOULD use (for the copilot-only quota pre-gate and the
+  // envelope metadata). The actual model is filled per-provider by
+  // runAgentSession's defaultModelFor.
+  const copilotModel = options.model ?? DEFAULT_MODEL;
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
 
   // 1. Load + validate findings ----------------------------------------------
@@ -239,25 +243,9 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     emit({ status: 'failed', jobId, error: 'No findings to fix (empty list after parsing).' });
     process.exit(1);
   }
-  log(`fix start: model=${model} findings=${findings.length} source=${findingsAbs}`);
+  log(`fix start: model=${copilotModel} findings=${findings.length} source=${findingsAbs}`);
 
-  // 2. Quota gate ------------------------------------------------------------
-  const snapshot = readSnapshot(stateDir);
-  const gate = evaluateGate(snapshot, { minRemaining: minQuota });
-  if (!gate.ok) {
-    log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-    emit({
-      status: 'blocked',
-      reason: gate.reason,
-      resetAt: gate.resetAt,
-      remaining: gate.remaining,
-      message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || 'unknown'}.`,
-    });
-    return;
-  }
-  if (gate.ok && 'warning' in gate && gate.warning) progress(gate.warning);
-
-  // 3. Repo + pre-fix snapshot -----------------------------------------------
+  // 2. Repo + pre-fix snapshot -----------------------------------------------
   let repoRoot: string;
   try {
     repoRoot = resolveRepoRoot(cwd);
@@ -300,125 +288,125 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     process.exit(1);
   }
 
-  // 4. Copilot client (write-enabled, real working tree) ---------------------
-  const client = new CopilotClient({ workingDirectory: repoRoot, env: process.env });
-  let cleanupDone = false;
-  const finalizeFailure = async (error: string): Promise<void> => {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    await client.forceStop().catch(() => { /* ignore */ });
-    emit({ status: 'failed', jobId, error });
-  };
-  const onSignal = async (): Promise<void> => {
+  // 3. Timeout → abort signal. -----------------------------------------------
+  // DEBT: per-call --timeout is honored only by the Copilot provider (via the
+  // AbortSignal below). Codex enforces its own turn timeout in runCodexTurn and
+  // does not consume this signal, so --timeout is effectively a no-op for codex.
+  const abort = new AbortController();
+  let timedOut = false;
+  const timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    progress(`Timeout after ${timeout}ms — aborting session.`);
+    log(`timeout ${timeout}ms`);
+    abort.abort();
+  }, timeout);
+
+  // Single-envelope guard: a late SIGINT/SIGTERM must not emit a second stdout
+  // line once the terminal envelope has been written.
+  let envelopeDone = false;
+  const onSignal = (): void => {
+    if (envelopeDone) return;
+    envelopeDone = true;
+    clearTimeout(timeoutHandle);
     progress('Received interrupt signal; aborting fix session.');
-    await finalizeFailure('Interrupted by signal');
+    abort.abort();
+    emit({ status: 'failed', jobId, error: 'Interrupted by signal' });
     process.exit(130);
   };
-  process.on('SIGINT', () => void onSignal());
-  process.on('SIGTERM', () => void onSignal());
-
-  try {
-    await client.start();
-  } catch (err) {
-    await finalizeFailure(`Failed to start Copilot CLI: ${(err as Error).message}`);
-    process.exit(1);
-  }
-
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    await finalizeFailure(`Not authenticated: ${auth.message}`);
-    await client.stop().catch(() => { /* ignore */ });
-    process.exit(1);
-  }
-  log(`auth ok: ${auth.authType}${auth.login ? ` as ${auth.login}` : ''}`);
-
-  // 5. Session (writes auto-approved inside the repo) ------------------------
-  const permissionHandler = makePermissionHandler({
-    allowShell: options.allowShell ?? false,
-    allowUrl: options.allowUrl ?? false,
-    worktreePath: repoRoot,
-    appendLog: log,
-  });
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
 
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
     onWarn: (m) => { progress(m); log(m); },
   });
 
-  const session = await client.createSession({
-    clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
-    model,
-    reasoningEffort: reasoning,
-    workingDirectory: repoRoot,
-    infiniteSessions: { enabled: false },
-    onPermissionRequest: permissionHandler,
-    systemMessage: {
-      mode: 'append',
-      content: buildSystemMessage('fix', { extraContext }),
-    },
-  });
-
-  const stream = attachStream({ session, stateDir, appendLog: log, progress });
-
-  progress(`Applying ${findings.length} approved fix(es) (model=${model})…`);
-  await session.send({ prompt: buildFixPrompt(findings) });
-
-  let completionResult: Awaited<typeof stream.completion> | null = null;
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms — aborting session.`);
-    session.abort().catch((e) => log(`abort error: ${(e as Error).message}`));
-  }, timeout);
-
+  // 4. Run the agent session (write-enabled, real working tree). -------------
+  // DEBT: --allow-url is no longer plumbed to the session — the CopilotProvider
+  // hardcodes allowUrl:false (RunOpts carries no allowUrl field). Re-thread it
+  // through RunOpts if a fix run ever needs network fetches.
+  progress(`Applying ${findings.length} approved fix(es) (model=${copilotModel})…`);
+  let provider: ProviderId;
+  let result;
   try {
-    completionResult = await stream.completion;
+    ({ provider, result } = await runAgentSession({
+      cwd: repoRoot,
+      flags: { provider: options.provider },
+      run: {
+        cwd: repoRoot,
+        prompt: buildFixPrompt(findings),
+        model: options.model, // undefined → defaultModelFor fills it per provider
+        reasoning,
+        readOnly: false,
+        allowShell: options.allowShell ?? false,
+        systemMessage: buildSystemMessage('fix', { extraContext }),
+        appendLog: log,
+        progress,
+        signal: abort.signal,
+      },
+      defaultModelFor: (id) => (id === 'copilot' ? DEFAULT_MODEL : undefined),
+      enforceQuota: () => {
+        // Copilot-only gate (runAgentSession invokes this only when the provider
+        // meters quota). Block early so the user is told to apply fixes directly
+        // rather than burning the run. Standard-tier models don't consume the
+        // premium pool, so skip the gate for them.
+        if (!isPremiumModel(copilotModel)) {
+          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
+          return;
+        }
+        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
+        if (!gate.ok) {
+          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
+          envelopeDone = true;
+          clearTimeout(timeoutHandle);
+          emit({
+            status: 'blocked',
+            reason: gate.reason,
+            resetAt: gate.resetAt,
+            remaining: gate.remaining,
+            message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || 'unknown'}.`,
+          });
+          process.exit(0);
+        }
+        if ('warning' in gate && gate.warning) progress(gate.warning);
+      },
+      log,
+    }));
   } catch (err) {
     clearTimeout(timeoutHandle);
-    stream.dispose();
-    await session.disconnect().catch(() => { /* ignore */ });
-    await client.stop().catch(() => { /* ignore */ });
-    await finalizeFailure((err as Error).message);
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit({ status: 'failed', jobId, error: (err as Error).message });
+    }
     process.exit(1);
   }
   clearTimeout(timeoutHandle);
 
-  // 6. Metrics + quota refresh -----------------------------------------------
-  let premiumRequestCost: number | undefined;
-  try {
-    const metrics = await session.rpc.usage.getMetrics();
-    premiumRequestCost = metrics.totalPremiumRequestCost;
-  } catch (e) {
-    log(`usage.getMetrics failed: ${(e as Error).message}`);
-  }
-
-  await session.disconnect().catch((e) => log(`disconnect warn: ${(e as Error).message}`));
-  const shutdownResult = await Promise.race([
-    stream.shutdown,
-    new Promise<null>((res) => setTimeout(() => res(null), 5000)),
-  ]);
-  stream.dispose();
-  await fetchQuota(client, stateDir).catch(() => null);
-  await client.stop().catch(() => { /* ignore */ });
-
-  const success = completionResult?.success !== false && !timedOut;
+  const success = result.success && !timedOut;
   if (!success) {
-    await finalizeFailure(timedOut ? `Timed out after ${timeout}ms` : 'Fix session did not complete successfully.');
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit({ status: 'failed', jobId, error: timedOut ? `Timed out after ${timeout}ms` : 'Fix session did not complete successfully.' });
+    }
     process.exit(0);
   }
 
   // Past the point of no return: claim the single-envelope slot so a late
   // SIGINT/SIGTERM during teardown cannot emit a second (failed) stdout line.
-  cleanupDone = true;
+  envelopeDone = true;
 
-  // 7. Diff stats + apply report ---------------------------------------------
-  const assistant = stream.getLastAssistantMessage() ?? '';
-  const report = parseApplyReport(assistant, findings);
+  // 5. Diff stats + apply report ---------------------------------------------
+  const report = parseApplyReport(result.lastAssistantMessage, findings);
   const diff = computeStagedDiff(repoRoot, baselineCommit);
 
   const summary =
-    (completionResult?.summary && completionResult.summary.trim()) ||
+    (result.summary && result.summary.trim()) ||
     `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
+
+  const premium = result.usage?.kind === 'copilot' ? result.usage.premiumRequestCost ?? 0 : 0;
+  // copilot ran the model it was asked for; codex decides via config, so report
+  // the requested model or a neutral 'codex' label.
+  const usedModel = provider === 'copilot' ? copilotModel : options.model ?? 'codex';
 
   const envelope: FixedEnvelope = {
     status: 'fixed',
@@ -431,8 +419,8 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     linesRemoved: diff.linesRemoved,
     applied: report.applied,
     skipped: report.skipped,
-    premiumRequestCost: premiumRequestCost ?? shutdownResult?.premiumRequestCost ?? 0,
-    model: shutdownResult?.currentModel ?? model,
+    premiumRequestCost: premium,
+    model: usedModel,
     quotaRemaining: summarize(readSnapshot(stateDir)),
   };
 
@@ -445,8 +433,8 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   }
 
   progress(
-    `Fix done — applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`,
+    `Fix done — provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`,
   );
-  log(`fix done: applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
+  log(`fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }

@@ -1,24 +1,24 @@
 /**
- * review command — sends a review prompt to GitHub Copilot and prints the
- * assistant's markdown verbatim.
+ * review command — sends a review prompt to a frontier model (Copilot or Codex)
+ * and prints the assistant's markdown verbatim (or a structured `reviewed` JSON
+ * envelope in --fix mode).
  *
- * Read-only: no worktree, permission handler in readOnly mode (writes denied
- * regardless of path). Default model and reasoning effort differ between the
- * standard and --adversarial modes.
+ * Read-only: no worktree, no file writes regardless of path. Default model and
+ * reasoning effort differ between the standard / --adversarial / --simplify
+ * modes. The whole agent lifecycle (provider resolution, auth, run) is delegated
+ * to {@link runAgentSession}; review only supplies the prompt/options, the
+ * copilot-only quota gate, the provider-aware default model, and the three
+ * output contracts (markdown, `reviewed` envelope, failure text).
  */
 
-import { CopilotClient } from '@github/copilot-sdk';
-
 import { resolveStateDir, generateJobId, appendLog, jobLogPath } from '../lib/state.js';
-import { readSnapshot, evaluateGate, summarize, isPremiumModel, fetchQuota, fmtNum } from '../lib/quota.js';
-import { checkAuth } from '../lib/copilot-auth.js';
-import { makePermissionHandler } from '../lib/permission.js';
-import { attachStream } from '../lib/event-stream.js';
+import { readSnapshot, evaluateGate, summarize, isPremiumModel, fmtNum } from '../lib/quota.js';
 import { resolveReviewTarget, collectReviewContext, type ReviewScope } from '../lib/git.js';
 import { buildReviewPrompt, type ReviewKind } from '../lib/review-prompts.js';
 import { extractJsonBlock, normalizeFindings, FINDINGS_OUTPUT_INSTRUCTION } from '../lib/findings.js';
 import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
-import { CLIENT_NAME, PLUGIN_VERSION } from '../lib/version.js';
+import { runAgentSession } from '../lib/run-agent-session.ts';
+import type { ProviderId } from '../lib/provider.ts';
 import type { ReasoningEffort } from './implement.js';
 
 export interface ReviewOptions {
@@ -28,13 +28,14 @@ export interface ReviewOptions {
   scope?: ReviewScope;
   base?: string;
   focusText?: string;
+  provider?: ProviderId;
   model?: string;
   reasoning?: ReasoningEffort;
   timeout?: number;
   minQuota?: number;
   /**
-   * Extra context appended to Copilot's system message. Literal text, or `@file`
-   * / `@-` (stdin) to read from a source — see `resolveExtraContext`.
+   * Extra context appended to the model's system message. Literal text, or
+   * `@file` / `@-` (stdin) to read from a source — see `resolveExtraContext`.
    */
   context?: string;
   jobId?: string;
@@ -85,15 +86,18 @@ function progressFactory(): (message: string) => void {
 export async function runReview(cwd: string, options: ReviewOptions = {}): Promise<void> {
   const progress = progressFactory();
   const kind: ReviewKind = resolveKind(options);
-  const model = options.model ?? defaultModelFor(kind);
   const reasoning = options.reasoning ?? defaultEffortFor(kind);
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
+  // The model copilot WOULD use (for the copilot-only quota pre-gate and the
+  // markdown/envelope metadata). The actual model is filled per-provider by
+  // runAgentSession's defaultModelFor.
+  const copilotModel = options.model ?? defaultModelFor(kind);
 
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
-  log(`review start: kind=${kind} model=${model} effort=${reasoning} scope=${options.scope ?? 'auto'} base=${options.base ?? '(auto)'}`);
+  log(`review start: kind=${kind} model=${copilotModel} effort=${reasoning} scope=${options.scope ?? 'auto'} base=${options.base ?? '(auto)'}`);
 
   // 1. Resolve target + collect context (read-only git ops). -----------------
   const target = resolveReviewTarget(cwd, { scope: options.scope, base: options.base });
@@ -107,175 +111,87 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
 
   progress(`Target: ${context.target.label} — ${context.fileCount} file(s), ~${context.diffBytes}B diff (${context.inputMode}).`);
 
-  // 2. Quota gate — only block when the chosen model actually consumes the
-  //    premium request pool. Standard-tier models (Sonnet/Haiku/GPT-*) don't
-  //    increment `premium_interactions`, so blocking them when premium is
-  //    exhausted would be a false negative.
-  const snapshot = readSnapshot(stateDir);
-  if (isPremiumModel(model)) {
-    const gate = evaluateGate(snapshot, { minRemaining: minQuota });
-    if (!gate.ok) {
-      log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-      throw new Error(`Quota exhausted — review not started. Resets at ${gate.resetAt || 'unknown'}.`);
-    }
-    if (gate.ok && 'warning' in gate && gate.warning) progress(gate.warning);
-  } else {
-    log(`quota gate skipped: model ${model} is not premium-metered`);
-  }
-
-  // 3. Build prompt ----------------------------------------------------------
+  // 2. Build prompt ----------------------------------------------------------
   const fixMode = options.fix === true;
   let prompt = buildReviewPrompt(kind, { context, focusText: options.focusText ?? '' });
   if (fixMode) prompt += `\n${FINDINGS_OUTPUT_INSTRUCTION}`;
   log(`prompt built: ${prompt.length} chars${fixMode ? ' (structured findings mode)' : ''}`);
-
-  // 4. Copilot client (read-only) --------------------------------------------
-  const client = new CopilotClient({ workingDirectory: context.repoRoot, env: process.env });
-  let cleanupDone = false;
-  let aborted = false;
-
-  const finalize = async (errorMessage?: string): Promise<void> => {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    try { await client.forceStop(); } catch { /* ignore */ }
-    if (errorMessage) {
-      process.stderr.write(`Review failed: ${errorMessage}\n`);
-    }
-  };
-
-  const onSignal = async (): Promise<void> => {
-    if (aborted) return;
-    aborted = true;
-    progress('Received interrupt; aborting review.');
-    log('interrupt');
-    await finalize('Interrupted by signal');
-    process.exit(130);
-  };
-  process.on('SIGINT', () => void onSignal());
-  process.on('SIGTERM', () => void onSignal());
-
-  try {
-    await client.start();
-  } catch (err) {
-    const msg = `Failed to start Copilot CLI: ${(err as Error).message}`;
-    await finalize(msg);
-    throw new Error(msg);
-  }
-
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    log(`auth failed: ${auth.message}`);
-    const msg = `Not authenticated: ${auth.message}`;
-    await finalize(msg);
-    await client.stop().catch(() => { /* ignore */ });
-    throw new Error(msg);
-  }
-  log(`auth ok: ${auth.authType}${auth.login ? ` as ${auth.login}` : ''}`);
-
-  // 5. Session: read-only permission handler ---------------------------------
-  const permissionHandler = makePermissionHandler({
-    allowShell: false,
-    allowUrl: false,
-    worktreePath: context.repoRoot,
-    appendLog: log,
-    readOnly: true,
-  });
 
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
     onWarn: (m) => { progress(m); log(m); },
   });
 
-  // Wrap createSession so a model/parameter error (after client.start
-  // succeeds) still releases the Copilot client.
-  let session;
-  try {
-    session = await client.createSession({
-      clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
-      model,
-      reasoningEffort: reasoning,
-      workingDirectory: context.repoRoot,
-      infiniteSessions: { enabled: false },
-      onPermissionRequest: permissionHandler,
-      systemMessage: {
-        mode: 'append',
-        content: buildSystemMessage('review', { extraContext }),
-      },
-    });
-  } catch (err) {
-    const msg = `Failed to create Copilot session: ${(err as Error).message}`;
-    log(msg);
-    await client.stop().catch((e) => log(`client.stop warn: ${(e as Error).message}`));
-    await finalize(msg);
-    throw new Error(msg);
-  }
-
-  const stream = attachStream({ session, stateDir, appendLog: log, progress });
-
-  // 6. Send + wait — every failure path between here and shutdown collection
-  //    must release the session, stream listeners, and the Copilot client.
-  let completionResult: Awaited<typeof stream.completion> | null = null;
-  let shutdownResult: Awaited<typeof stream.shutdown> | null = null;
-  let premiumRequestCost: number | undefined;
+  // 3. Timeout → abort signal. -----------------------------------------------
+  // DEBT: per-call --timeout is honored only by the Copilot provider (via the
+  // AbortSignal below). Codex enforces its own turn timeout in runCodexTurn and
+  // does not consume this signal, so --timeout is effectively a no-op for codex.
+  const abort = new AbortController();
   let timedOut = false;
-  let sessionTorn = false;
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
     progress(`Timeout after ${timeout}ms — aborting session.`);
     log(`timeout ${timeout}ms`);
-    session.abort().catch((e) => log(`abort error: ${(e as Error).message}`));
+    abort.abort();
   }, timeout);
 
-  const tearDownSession = async (): Promise<void> => {
-    if (sessionTorn) return;
-    sessionTorn = true;
-    clearTimeout(timeoutHandle);
-    await session.disconnect().catch((e) => log(`disconnect warn: ${(e as Error).message}`));
-    stream.dispose();
-    // Refresh quota while the client is still live (SDK no longer pushes it).
-    await fetchQuota(client, stateDir).catch(() => null);
-    await client.stop().catch((e) => log(`client.stop warn: ${(e as Error).message}`));
-  };
-
+  // 4. Run the agent session through the resolved provider. ------------------
+  let provider: ProviderId;
+  let result;
   try {
-    progress(`Sending ${kind} review prompt to Copilot (model=${model}, effort=${reasoning})…`);
-    await session.send({ prompt });
-    completionResult = await stream.completion;
-    progress('Review complete; collecting usage metrics.');
-    // Premium cost via session usage metrics while the session is alive.
-    try {
-      const metrics = await session.rpc.usage.getMetrics();
-      premiumRequestCost = metrics.totalPremiumRequestCost;
-    } catch (e) {
-      log(`usage.getMetrics failed: ${(e as Error).message}`);
-    }
-    // Disconnect before waiting for shutdown so the SDK flushes its final event.
-    await session.disconnect().catch((e) => log(`disconnect warn: ${(e as Error).message}`));
-    shutdownResult = await Promise.race([
-      stream.shutdown,
-      new Promise<null>((res) => setTimeout(() => res(null), 5000)),
-    ]);
+    ({ provider, result } = await runAgentSession({
+      cwd: context.repoRoot,
+      flags: { provider: options.provider },
+      run: {
+        cwd: context.repoRoot,
+        prompt,
+        model: options.model, // undefined → defaultModelFor fills it per provider
+        reasoning,
+        readOnly: true,
+        allowShell: false,
+        systemMessage: buildSystemMessage('review', { extraContext }),
+        appendLog: log,
+        progress,
+        signal: abort.signal,
+      },
+      defaultModelFor: (id) => (id === 'copilot' ? defaultModelFor(kind) : undefined),
+      enforceQuota: () => {
+        // Copilot-only gate, evaluated against the model copilot WOULD use.
+        // Standard-tier models (Sonnet/Haiku/GPT-*) don't increment
+        // `premium_interactions`, so blocking them when premium is exhausted
+        // would be a false negative.
+        if (!isPremiumModel(copilotModel)) {
+          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
+          return;
+        }
+        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
+        if (!gate.ok) {
+          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
+          throw new Error(`Quota exhausted — review not started. Resets at ${gate.resetAt || 'unknown'}.`);
+        }
+        if ('warning' in gate && gate.warning) progress(gate.warning);
+      },
+      log,
+    }));
   } catch (err) {
+    clearTimeout(timeoutHandle);
     const msg = (err as Error).message;
-    log(`session error: ${msg}`);
-    await tearDownSession();
-    await finalize(msg);
-    throw new Error(msg);
+    process.stderr.write(`Review failed: ${msg}\n`);
+    log(`review failed: ${msg}`);
+    throw err instanceof Error ? err : new Error(msg);
   } finally {
-    await tearDownSession();
+    clearTimeout(timeoutHandle);
   }
 
-  // 7. Compose markdown output ----------------------------------------------
-  // For review we want the verbatim assistant markdown, not the structured
-  // `session.task_complete.summary` (which may be a condensed recap and is
-  // not even emitted by every model run). Prefer the last assistant message;
-  // fall back to the structured summary only when no message was captured.
+  // 5. Compose output --------------------------------------------------------
+  // Prefer the verbatim assistant markdown over the structured task_complete
+  // summary (which may be a condensed recap and is not emitted by every run).
   const reviewBody =
-    stream.getLastAssistantMessage()?.trim() ||
-    (completionResult?.summary && completionResult.summary.trim()) ||
-    '_(Copilot returned an empty review.)_';
+    result.lastAssistantMessage?.trim() ||
+    (result.summary && result.summary.trim()) ||
+    '_(The model returned an empty review.)_';
 
-  const success = completionResult?.success !== false && !timedOut;
+  const success = result.success && !timedOut;
   if (!success) {
     const reason = timedOut ? `Timed out after ${timeout}ms.` : 'Review did not complete successfully.';
     process.stderr.write(`Review failed: ${reason}\n`);
@@ -287,8 +203,11 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   }
 
   const quotaRemaining = summarize(readSnapshot(stateDir));
-  const premium = premiumRequestCost ?? shutdownResult?.premiumRequestCost ?? 0;
-  const usedModel = shutdownResult?.currentModel ?? model;
+  const premium = result.usage?.kind === 'copilot' ? result.usage.premiumRequestCost ?? 0 : 0;
+  // The model that actually ran: copilot reports the model it was asked for;
+  // codex decides via ~/.codex/config.toml, so surface the requested model or a
+  // neutral 'codex' label rather than a copilot default it never used.
+  const usedModel = provider === 'copilot' ? copilotModel : options.model ?? 'codex';
 
   if (fixMode) {
     // Structured mode: emit a single JSON envelope on stdout so Claude Code can
@@ -309,28 +228,38 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     process.stdout.write(`${JSON.stringify(envelope)}\n`);
     log(`review (fix mode) done: ${findings.length} structured finding(s)`);
   } else {
-    // Stdout is Copilot's markdown verbatim — slash-command consumers and
+    // Stdout is the model's markdown verbatim — slash-command consumers and
     // anything piping the output should see exactly what the model produced.
     process.stdout.write(`${reviewBody.trim()}\n`);
   }
 
   // Run metadata goes to stderr (same channel as progress) so foreground users
-  // still see it, background workers log it, and stdout stays clean. Render
-  // every observed pool — Copilot only meters `premium_interactions` today,
-  // but Standard-tier models do not consume it, so a per-pool footer is more
-  // honest than a single conflated "remaining" number.
-  const poolNote = quotaRemaining.pools.length > 0
-    ? quotaRemaining.pools
-        .map((p) =>
-          p.unlimited
-            ? `${p.label}=unlimited`
-            : `${p.label}=${fmtNum(p.remaining ?? 0)}/${fmtNum(p.total ?? 0)}`,
-        )
-        .join(', ')
-    : 'no quota snapshot yet';
-  progress(
-    `Review done — kind=${kind} model=${usedModel} effort=${reasoning} files=${context.fileCount} premium-cost=${fmtNum(premium)} | ${poolNote}`,
-  );
-  log(`review done: kind=${kind} files=${context.fileCount} premium=${premium} pools=${poolNote}`);
+  // still see it, background workers log it, and stdout stays clean.
+  if (result.usage?.kind === 'codex') {
+    const u = result.usage;
+    const pct = u.rateLimits?.primaryUsedPercent;
+    const rate = pct !== undefined ? ` rate-limit=${pct}%` : '';
+    progress(
+      `Review done — kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} tokens(in/out)=${u.inputTokens ?? '?'}/${u.outputTokens ?? '?'}${rate}`,
+    );
+    log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} inputTokens=${u.inputTokens ?? '?'} outputTokens=${u.outputTokens ?? '?'}`);
+  } else {
+    // Render every observed pool — Copilot only meters `premium_interactions`
+    // today, but Standard-tier models do not consume it, so a per-pool footer is
+    // more honest than a single conflated "remaining" number.
+    const poolNote = quotaRemaining.pools.length > 0
+      ? quotaRemaining.pools
+          .map((p) =>
+            p.unlimited
+              ? `${p.label}=unlimited`
+              : `${p.label}=${fmtNum(p.remaining ?? 0)}/${fmtNum(p.total ?? 0)}`,
+          )
+          .join(', ')
+      : 'no quota snapshot yet';
+    progress(
+      `Review done — kind=${kind} provider=${provider} model=${usedModel} effort=${reasoning} files=${context.fileCount} premium-cost=${fmtNum(premium)} | ${poolNote}`,
+    );
+    log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} premium=${premium} pools=${poolNote}`);
+  }
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }

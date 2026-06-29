@@ -219,6 +219,7 @@ async function main(): Promise<void> {
       const validEfforts = ['low', 'medium', 'high', 'xhigh'] as const;
       const scope = flagEnum<ReviewScope>(flags, 'scope', validScopes);
       const reasoning = flagEnum(flags, 'reasoning', validEfforts);
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
 
       if (flags['background'] === true) {
         const jobId = enqueueBackground('review', args, flags, process.cwd());
@@ -231,6 +232,7 @@ async function main(): Promise<void> {
         scope,
         base: flagString(flags, 'base'),
         focusText: args.join(' '),
+        provider,
         model: flagString(flags, 'model'),
         reasoning,
         timeout: flagNumber(flags, 'timeout'),
@@ -259,8 +261,10 @@ async function main(): Promise<void> {
 
     case 'fix': {
       const reasoning = flagEnum(flags, 'reasoning', ['low', 'medium', 'high', 'xhigh'] as const);
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
       await runFix(process.cwd(), {
         findingsPath: flagString(flags, 'findings'),
+        provider,
         model: flagString(flags, 'model'),
         reasoning,
         timeout: flagNumber(flags, 'timeout'),
