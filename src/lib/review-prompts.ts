@@ -13,7 +13,7 @@ interface PromptVars {
   focusText: string;
 }
 
-export type ReviewKind = 'standard' | 'adversarial';
+export type ReviewKind = 'standard' | 'adversarial' | 'simplify';
 
 const STANDARD = `<role>
 You are a careful, technically rigorous code reviewer.
@@ -166,12 +166,71 @@ If the change looks safe, say so directly and return no findings.
 </repository_context>
 `;
 
+const SIMPLIFY = `<role>
+You are a senior engineer reviewing a change for simplification and cleanup ONLY.
+You do NOT hunt for correctness bugs — a separate reviewer covers those.
+Your job is to find where the change can be made simpler, smaller, or more reuse-driven without altering behavior.
+</role>
+
+<task>
+Review the repository context below for cleanup opportunities.
+Target: {{TARGET_LABEL}}
+{{USER_FOCUS_BLOCK}}
+</task>
+
+<focus_areas>
+Prioritize quality cleanups that preserve behavior:
+- reuse: duplicated logic, copy-paste, or knowledge that should be extracted to one source of truth (apply the drift test — extract only when divergence would be a bug)
+- simplification: dead code, redundant branches, needless indirection, over-engineering, an abstraction with a single caller
+- the ladder: hand-rolled code that a stdlib, native platform feature, or an already-installed dependency already provides
+- efficiency: obviously wasteful work (repeated recomputation, O(n^2) where a map suffices) — only when the simpler form is also faster
+- altitude: logic sitting at the wrong layer, or a one-liner buried in scaffolding
+</focus_areas>
+
+<finding_bar>
+Report only material cleanups. Each must be behavior-preserving — if a change would alter behavior, it belongs to the bug reviewer, not here. Skip pure style/naming nits.
+Each finding should answer:
+1. What is more complex than it needs to be?
+2. Where is it (file + line range)?
+3. Why is the simpler form equivalent in behavior?
+4. What concrete change makes it simpler?
+</finding_bar>
+
+<output_format>
+Return markdown. Structure:
+
+# Cleanup Review
+One terse paragraph: how much incidental complexity the change carries.
+
+## Cleanups
+For each finding, a level-3 heading with the file path and line range, then:
+- **Complexity**: one sentence on what is over-built
+- **Equivalent because**: why the simpler form preserves behavior
+- **Simpler form**: concrete change
+
+If there is nothing material to simplify, say so directly and skip "Cleanups".
+</output_format>
+
+<grounding_rules>
+Ground every cleanup in the repository context. Do not invent files or behavior.
+If a simplification depends on an assumption about behavior, state it — never propose a change you cannot show is behavior-preserving.
+</grounding_rules>
+
+<collection_guidance>
+{{REVIEW_COLLECTION_GUIDANCE}}
+</collection_guidance>
+
+<repository_context>
+{{REVIEW_INPUT}}
+</repository_context>
+`;
+
 function interpolate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => Object.prototype.hasOwnProperty.call(vars, key) ? vars[key]! : '');
 }
 
 export function buildReviewPrompt(kind: ReviewKind, vars: PromptVars): string {
-  const template = kind === 'adversarial' ? ADVERSARIAL : STANDARD;
+  const template = kind === 'adversarial' ? ADVERSARIAL : kind === 'simplify' ? SIMPLIFY : STANDARD;
   const focusBlock = vars.focusText.trim()
     ? `User focus: ${vars.focusText.trim()}`
     : 'No extra focus provided.';

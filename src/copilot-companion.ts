@@ -68,7 +68,10 @@ const BOOLEAN_FLAGS = new Set<string>([
   'background',
   'check',
   'fix',
+  'full',
+  'harry-fix',
   'help',
+  'simplify',
   'json',
   'no-worktree',
   'wait',
@@ -189,8 +192,29 @@ async function main(): Promise<void> {
     }
 
     case 'review': {
-      // Validate enums up-front so typos error loudly instead of silently
-      // falling back to defaults.
+      // --full and --harry-fix are orchestration-only flags handled by the
+      // /review slash command: --full fans out the simplify + adversarial reviews
+      // alongside the CC code-review and the agent consolidates them; --harry-fix
+      // selects the isolated `fix` command as the apply backend. Neither has
+      // meaning for a single runReview — letting them through would silently run a
+      // plain standard review. Reject on PRESENCE (not just `=== true`) so an
+      // explicit `--full=false` cannot slip past, and BEFORE enum validation so a
+      // co-occurring flag typo does not mask this targeted guidance. (`node review
+      // --fix` — structured findings output — stays valid and is unaffected.)
+      if (flags['full'] !== undefined) {
+        throw new Error(
+          '--full is handled by the /review command orchestrator, not the CLI. ' +
+            'Run the simplify/adversarial reviews separately, or use /review --full.',
+        );
+      }
+      if (flags['harry-fix'] !== undefined) {
+        throw new Error(
+          '--harry-fix is a /review fix-backend selector, not a CLI flag. ' +
+            'To apply findings via Copilot, run: fix --findings <path> --model gpt-5.5 --reasoning xhigh.',
+        );
+      }
+
+      // Validate enums so typos error loudly instead of silently falling back.
       const validScopes = ['auto', 'working-tree', 'branch'] as const;
       const validEfforts = ['low', 'medium', 'high', 'xhigh'] as const;
       const scope = flagEnum<ReviewScope>(flags, 'scope', validScopes);
@@ -203,6 +227,7 @@ async function main(): Promise<void> {
       }
       await runReview(process.cwd(), {
         adversarial: flags['adversarial'] === true,
+        simplify: flags['simplify'] === true,
         scope,
         base: flagString(flags, 'base'),
         focusText: args.join(' '),

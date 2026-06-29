@@ -23,6 +23,8 @@ import type { ReasoningEffort } from './implement.js';
 
 export interface ReviewOptions {
   adversarial?: boolean;
+  /** Cleanup/simplification review (codex lane) — behavior-preserving cleanups, not defects. */
+  simplify?: boolean;
   scope?: ReviewScope;
   base?: string;
   focusText?: string;
@@ -47,8 +49,31 @@ export interface ReviewOptions {
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MODEL_STANDARD = 'gpt-5.3-codex';
 const DEFAULT_MODEL_ADVERSARIAL = 'gpt-5.5';
+// Cleanup lane: codex's code specialization is well-suited to behavior-preserving
+// simplification, and keeping it off gpt-5.5 leaves the design lane distinct.
+const DEFAULT_MODEL_SIMPLIFY = 'gpt-5.3-codex';
 const DEFAULT_EFFORT_STANDARD: ReasoningEffort = 'xhigh';
 const DEFAULT_EFFORT_ADVERSARIAL: ReasoningEffort = 'xhigh';
+const DEFAULT_EFFORT_SIMPLIFY: ReasoningEffort = 'xhigh';
+
+/** Resolve the review kind from the (mutually exclusive) angle flags. */
+function resolveKind(options: ReviewOptions): ReviewKind {
+  if (options.simplify) return 'simplify';
+  if (options.adversarial) return 'adversarial';
+  return 'standard';
+}
+
+function defaultModelFor(kind: ReviewKind): string {
+  if (kind === 'adversarial') return DEFAULT_MODEL_ADVERSARIAL;
+  if (kind === 'simplify') return DEFAULT_MODEL_SIMPLIFY;
+  return DEFAULT_MODEL_STANDARD;
+}
+
+function defaultEffortFor(kind: ReviewKind): ReasoningEffort {
+  if (kind === 'adversarial') return DEFAULT_EFFORT_ADVERSARIAL;
+  if (kind === 'simplify') return DEFAULT_EFFORT_SIMPLIFY;
+  return DEFAULT_EFFORT_STANDARD;
+}
 
 function progressFactory(): (message: string) => void {
   return (message: string) => {
@@ -59,9 +84,9 @@ function progressFactory(): (message: string) => void {
 
 export async function runReview(cwd: string, options: ReviewOptions = {}): Promise<void> {
   const progress = progressFactory();
-  const kind: ReviewKind = options.adversarial ? 'adversarial' : 'standard';
-  const model = options.model ?? (kind === 'adversarial' ? DEFAULT_MODEL_ADVERSARIAL : DEFAULT_MODEL_STANDARD);
-  const reasoning = options.reasoning ?? (kind === 'adversarial' ? DEFAULT_EFFORT_ADVERSARIAL : DEFAULT_EFFORT_STANDARD);
+  const kind: ReviewKind = resolveKind(options);
+  const model = options.model ?? defaultModelFor(kind);
+  const reasoning = options.reasoning ?? defaultEffortFor(kind);
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
 
