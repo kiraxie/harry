@@ -6,7 +6,6 @@
 
 import process from 'node:process';
 import { runSetup } from './commands/setup.js';
-import { runImplement } from './commands/implement.js';
 import { runReview } from './commands/review.js';
 import { runAsk } from './commands/ask.js';
 import { runFix } from './commands/fix.js';
@@ -21,11 +20,6 @@ function printUsage(): void {
     [
       'Usage:',
       '  copilot-companion setup [--check] [--json]',
-      '  copilot-companion implement "<task>" [--model <id>] [--reasoning <low|medium|high>]',
-      '                               [--no-worktree] [--allow-shell] [--allow-url]',
-      '                               [--timeout <ms>] [--min-quota <n>]',
-      '                               [--context <text|@file|@->]',
-      '                               [--background] [--write <path>]',
       '  copilot-companion review [focus...] [--adversarial] [--base <ref>]',
       '                           [--scope auto|working-tree|branch] [--fix]',
       '                           [--model <id>] [--reasoning <low|medium|high|xhigh>]',
@@ -41,7 +35,6 @@ function printUsage(): void {
       '',
       'Commands:',
       '  setup       Check GitHub Copilot authentication, available models, quota',
-      '  implement   Delegate an implementation task to GitHub Copilot',
       '  review      Run a Copilot code review (markdown, or JSON findings with --fix)',
       '  ask         Ask Copilot a single prompt (read-only) and print the answer',
       '  fix         Apply Claude-Code-approved review findings to the working tree',
@@ -167,29 +160,6 @@ async function main(): Promise<void> {
         json: flags['json'] === true,
       });
       break;
-
-    case 'implement': {
-      const reasoning = flagEnum(flags, 'reasoning', ['low', 'medium', 'high', 'xhigh'] as const);
-
-      if (flags['background'] === true) {
-        const jobId = enqueueBackground('implement', args, flags, process.cwd());
-        console.log(JSON.stringify({ status: 'queued', jobId }));
-        break;
-      }
-      const task = extractTask(args, flags);
-      await runImplement(task, process.cwd(), {
-        model: flagString(flags, 'model'),
-        reasoning,
-        timeout: flagNumber(flags, 'timeout'),
-        worktree: flags['no-worktree'] !== true,
-        allowShell: flags['allow-shell'] === true,
-        allowUrl: flags['allow-url'] === true,
-        minQuota: flagNumber(flags, 'min-quota'),
-        writePath: flagString(flags, 'write'),
-        context: flagString(flags, 'context'),
-      });
-      break;
-    }
 
     case 'review': {
       // --full and --harry-fix are orchestration-only flags handled by the

@@ -15,7 +15,7 @@ import { readSnapshot, evaluateGate, isPremiumModel, fmtNum } from '../lib/quota
 import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
 import { runAgentSession } from '../lib/run-agent-session.ts';
 import type { ProviderId } from '../lib/provider.ts';
-import type { ReasoningEffort } from './implement.js';
+import type { ReasoningEffort } from '../lib/provider.ts';
 
 export interface AskOptions {
   prompt: string;

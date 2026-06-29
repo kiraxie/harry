@@ -1,12 +1,9 @@
 /**
- * Background execution for the implement command.
+ * Background execution for the review command.
  *
  * Spawns a detached worker that re-invokes the companion with `_worker
- * --job-id <id>`. The worker runs runImplement with a preallocated jobId and
+ * --job-id <id>`. The worker runs runReview with a preallocated jobId and
  * captures stdout (the JSON envelope) into the job state file.
- *
- * Adapted from reference/src/commands/background.ts; scope reduced to the
- * single `implement` command.
  */
 
 import { spawn } from 'node:child_process';
@@ -15,7 +12,6 @@ import {
   appendLog, getSessionId, readJobFile,
   type JobRecord,
 } from '../lib/state.js';
-import { runImplement, type ImplementOptions } from './implement.js';
 import { runReview, type ReviewOptions } from './review.js';
 import type { ReviewScope } from '../lib/git.js';
 import { extractTask } from '../lib/args.js';
@@ -23,7 +19,7 @@ import { extractTask } from '../lib/args.js';
 declare const __filename: string | undefined;
 
 /**
- * Enqueue an implement run in the background. Returns the job id. The caller
+ * Enqueue a review run in the background. Returns the job id. The caller
  * (CLI dispatcher) is expected to emit the queued envelope to stdout.
  */
 export function enqueueBackground(
@@ -32,8 +28,8 @@ export function enqueueBackground(
   flags: Record<string, string | boolean>,
   cwd: string,
 ): string {
-  if (command !== 'implement' && command !== 'review') {
-    throw new Error(`Background execution is only supported for 'implement' or 'review', got '${command}'.`);
+  if (command !== 'review') {
+    throw new Error(`Background execution is only supported for 'review', got '${command}'.`);
   }
 
   const stateDir = resolveStateDir(cwd);
@@ -92,7 +88,7 @@ function flagNumber(flags: Record<string, string | boolean>, key: string): numbe
 }
 
 /**
- * Worker entrypoint. Runs `runImplement` with the jobId from the parent and
+ * Worker entrypoint. Runs `runReview` with the jobId from the parent and
  * captures its stdout into the job record.
  */
 export async function runWorker(jobId: string, cwd: string): Promise<void> {
@@ -152,40 +148,25 @@ export async function runWorker(jobId: string, cwd: string): Promise<void> {
       : undefined;
 
   try {
-    if (job.request.command === 'review') {
-      const scope = flagString(flags, 'scope');
-      const validScopes: ReviewScope[] = ['auto', 'working-tree', 'branch'];
-      const reviewOpts: ReviewOptions = {
-        adversarial: flags['adversarial'] === true,
-        scope: scope && (validScopes as string[]).includes(scope) ? (scope as ReviewScope) : undefined,
-        base: flagString(flags, 'base'),
-        focusText: extractTask(args, flags),
-        model: flagString(flags, 'model'),
-        reasoning: effort,
-        timeout: flagNumber(flags, 'timeout'),
-        minQuota: flagNumber(flags, 'min-quota'),
-        fix: flags['fix'] === true,
-        context: flagString(flags, 'context'),
-        jobId,
-      };
-      await runReview(cwd, reviewOpts);
-    } else {
-      const implementOpts: ImplementOptions = {
-        model: flagString(flags, 'model'),
-        reasoning: effort,
-        timeout: flagNumber(flags, 'timeout'),
-        worktree: flags['no-worktree'] !== true,
-        allowShell: flags['allow-shell'] === true,
-        allowUrl: flags['allow-url'] === true,
-        minQuota: flagNumber(flags, 'min-quota'),
-        writePath: flagString(flags, 'write'),
-        context: flagString(flags, 'context'),
-        jobId,
-      };
-      const task = extractTask(args, flags);
-      if (!task) throw new Error('Empty task; provide an implementation objective.');
-      await runImplement(task, cwd, implementOpts);
+    if (job.request.command !== 'review') {
+      throw new Error(`Background worker only supports 'review', got '${job.request.command}'.`);
     }
+    const scope = flagString(flags, 'scope');
+    const validScopes: ReviewScope[] = ['auto', 'working-tree', 'branch'];
+    const reviewOpts: ReviewOptions = {
+      adversarial: flags['adversarial'] === true,
+      scope: scope && (validScopes as string[]).includes(scope) ? (scope as ReviewScope) : undefined,
+      base: flagString(flags, 'base'),
+      focusText: extractTask(args, flags),
+      model: flagString(flags, 'model'),
+      reasoning: effort,
+      timeout: flagNumber(flags, 'timeout'),
+      minQuota: flagNumber(flags, 'min-quota'),
+      fix: flags['fix'] === true,
+      context: flagString(flags, 'context'),
+      jobId,
+    };
+    await runReview(cwd, reviewOpts);
     const captured = stdoutChunks.join('').trim();
     updateJob(stateDir, jobId, {
       status: 'completed',

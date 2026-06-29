@@ -25,7 +25,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import type { ReasoningEffort } from './implement.js';
+import type { ReasoningEffort } from '../lib/provider.ts';
 import { resolveStateDir, generateJobId, appendLog, jobLogPath } from '../lib/state.js';
 import { readSnapshot, evaluateGate, summarize, isPremiumModel } from '../lib/quota.js';
 import { resolveRepoRoot } from '../lib/worktree.js';
