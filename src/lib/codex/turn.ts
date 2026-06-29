@@ -27,6 +27,13 @@ const DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1000;
 export interface CodexTurnOpts {
   cwd: string;
   prompt: string;
+  /**
+   * System instructions (guardrails + injected `--context`) to carry into the
+   * turn. codex's app-server exposes no separate system slot through
+   * thread/turn start, so these ride as a leading input block ahead of the
+   * prompt — dropping them would silently strip the caller's guardrails.
+   */
+  instructions?: string;
   model?: string;
   effort?: string;
   readOnly?: boolean;
@@ -37,6 +44,12 @@ export interface CodexTurnOpts {
   /** Ceiling on connect()/initialize(). Defaults to the lesser of
    *  {@link DEFAULT_CONNECT_TIMEOUT_MS} and {@link timeoutMs}. */
   connectTimeoutMs?: number;
+  /**
+   * Abort the turn from outside (an interrupt handler / forceStop). On abort the
+   * codex child is torn down (client.close()) and the turn resolves to a failure
+   * instead of running to completion or hanging until {@link timeoutMs}.
+   */
+  signal?: AbortSignal;
 }
 
 export type CodexTurnEvent =
@@ -68,8 +81,14 @@ export interface CodexTurnResult {
 
 // --- ported helpers ---------------------------------------------------------
 
-function buildTurnInput(prompt: string): ThreadItem[] {
-  return [{ type: "text", text: prompt, text_elements: [] }];
+function buildTurnInput(prompt: string, instructions?: string): ThreadItem[] {
+  const items: ThreadItem[] = [];
+  const trimmed = instructions?.trim();
+  if (trimmed) {
+    items.push({ type: "text", text: trimmed, text_elements: [] });
+  }
+  items.push({ type: "text", text: prompt, text_elements: [] });
+  return items;
 }
 
 function shorten(text: unknown, limit = 96): string {
@@ -532,9 +551,32 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
     timer.unref?.();
   });
 
+  // External abort (interrupt handler / CodexProvider.forceStop): tear the codex
+  // child down via close() — which rejects in-flight requests — and unblock any
+  // await (request or completion) so the turn resolves to a failure rather than
+  // running on or hanging until timeoutMs. `aborted` drives the failure message.
+  let aborted = false;
+  let resolveAbort = (): void => {};
+  const abortGate = new Promise<void>((resolve) => {
+    resolveAbort = resolve;
+  });
+  const onAbort = (): void => {
+    aborted = true;
+    resolveAbort();
+    void client.close().catch(() => {});
+  };
+  if (opts.signal) {
+    if (opts.signal.aborted) onAbort();
+    else opts.signal.addEventListener("abort", onAbort, { once: true });
+  }
+
   let state: TurnCaptureState | null = null;
 
   try {
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+
     const started = await Promise.race([
       client.request<{ thread: { id: string } }>("thread/start", {
         cwd: opts.cwd,
@@ -543,9 +585,13 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
         sandbox: opts.readOnly ? "read-only" : "workspace-write",
         ephemeral: opts.readOnly ?? false
       }),
-      timeout.then(() => null)
+      timeout.then(() => null),
+      abortGate.then(() => null)
     ]);
 
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
     if (timedOut || !started) {
       return failure(client, "Codex turn timed out before the thread started.");
     }
@@ -571,7 +617,7 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
 
     const turnStartParams: Record<string, unknown> = {
       threadId,
-      input: buildTurnInput(opts.prompt)
+      input: buildTurnInput(opts.prompt, opts.instructions)
     };
     if (opts.model) {
       turnStartParams.model = opts.model;
@@ -582,9 +628,13 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
 
     const turnResponse = await Promise.race([
       client.request<{ turn?: { id?: string; status?: string } }>("turn/start", turnStartParams),
-      timeout.then(() => null)
+      timeout.then(() => null),
+      abortGate.then(() => null)
     ]);
 
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
     if (timedOut || !turnResponse) {
       return failure(client, "Codex turn timed out before the turn started.");
     }
@@ -609,8 +659,11 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
       completeTurn(capture, turnResponse.turn);
     }
 
-    await Promise.race([capture.completion, timeout]);
+    await Promise.race([capture.completion, timeout, abortGate]);
 
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
     if (timedOut && !capture.completed) {
       return failure(client, "Codex turn timed out while awaiting completion.");
     }
@@ -618,7 +671,7 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
     return buildResult(capture, client.stderr);
   } catch (error) {
     const stderr = client.stderr;
-    const message = (error as Error)?.message ?? String(error);
+    const message = aborted ? "Codex turn aborted." : ((error as Error)?.message ?? String(error));
     return {
       success: false,
       finalMessage: state?.lastAgentMessage ?? "",
@@ -628,6 +681,7 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
       usage: state?.usage ?? undefined
     };
   } finally {
+    opts.signal?.removeEventListener("abort", onAbort);
     if (timer) {
       clearTimeout(timer);
     }

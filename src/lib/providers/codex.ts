@@ -44,6 +44,18 @@ export class CodexProvider implements Provider {
   };
 
   /**
+   * Abort handle for the in-flight turn, so {@link forceStop} (driven by the
+   * session's centralized SIGINT/SIGTERM handler) can tear the codex child down
+   * immediately rather than orphaning it on `process.exit`. Null when idle.
+   */
+  private activeController: AbortController | null = null;
+
+  /** Best-effort immediate teardown from an interrupt — aborts the live turn. */
+  async forceStop(): Promise<void> {
+    this.activeController?.abort();
+  }
+
+  /**
    * Probe codex auth without running a turn. Codex has no login/host concept in
    * the neutral summary, so those stay undefined; `message` carries the codex
    * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
@@ -64,6 +76,26 @@ export class CodexProvider implements Provider {
    */
   async run(opts: RunOpts): Promise<RunResult> {
     const { appendLog, progress } = opts;
+
+    // Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
+    // turn is `workspace-write` + approvalPolicy:"never", which lets codex run
+    // shell commands autonomously. It has no "write files but no shell" mode, so
+    // a caller that grants writes while withholding shell (`fix` defaults to
+    // allowShell:false) CANNOT be honored. Rather than silently run MORE
+    // permissively than asked (fail-open), refuse and point at Copilot, whose
+    // per-command gating enforces the split. Read-only turns (ask/review) are
+    // unaffected — they map to codex's `read-only` sandbox.
+    if (!opts.readOnly && !opts.allowShell) {
+      throw new Error(
+        "Codex cannot grant write access without also allowing shell commands " +
+          "(its workspace-write sandbox runs commands autonomously). Re-run with " +
+          "--provider copilot, or explicitly allow shell.",
+      );
+    }
+    // NOTE: opts.allowUrl is not mapped to codex network access yet; codex's
+    // workspace-write sandbox keeps network OFF by default, so we under-grant
+    // (deny URL even when allowed) — the safe direction. Enabling it needs the
+    // app-server sandbox-network param confirmed against a live codex.
 
     const onItem = (ev: CodexTurnEvent): void => {
       switch (ev.kind) {
@@ -94,24 +126,33 @@ export class CodexProvider implements Provider {
 
     progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}…`);
 
-    // DEBT: only `readOnly` is threaded into runCodexTurn; opts.allowShell /
-    // opts.allowUrl are DROPPED. codex's sandbox is COARSE (turn.ts uses
-    // `read-only` when readOnly else `workspace-write` with
-    // approvalPolicy:"never") and does NOT granularly honor allowShell/allowUrl
-    // the way CopilotProvider's per-command gating does — so a write-enabled
-    // `fix --provider codex` is MORE permissive than copilot. The codex write
-    // path is deferred/untested (no subscription). A future fix should thread
-    // allowShell/allowUrl into turn.ts's sandbox/approvalPolicy choice (and/or
-    // warn when `fix --provider codex` is used).
-    const result = await runCodexTurn({
-      cwd: opts.cwd,
-      prompt: opts.prompt,
-      model: opts.model,
-      effort: toCodexEffort(opts.reasoning),
-      readOnly: opts.readOnly,
-      env: process.env,
-      onItem,
-    });
+    // Link the caller's signal (if any) and forceStop() into one controller the
+    // turn runner aborts on, so a SIGINT mid-turn tears the codex child down.
+    const controller = new AbortController();
+    if (opts.signal) {
+      if (opts.signal.aborted) controller.abort();
+      else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    this.activeController = controller;
+
+    let result: Awaited<ReturnType<typeof runCodexTurn>>;
+    try {
+      result = await runCodexTurn({
+        cwd: opts.cwd,
+        prompt: opts.prompt,
+        // Carry guardrails + injected --context into the turn (codex has no
+        // separate system slot; turn.ts rides them as a leading input block).
+        instructions: opts.systemMessage,
+        model: opts.model,
+        effort: toCodexEffort(opts.reasoning),
+        readOnly: opts.readOnly,
+        env: process.env,
+        onItem,
+        signal: controller.signal,
+      });
+    } finally {
+      this.activeController = null;
+    }
 
     if (result.error) appendLog(`turn error: ${result.error}`);
 

@@ -132,6 +132,49 @@ test("runCodexTurn deep-merges partial token_count rate limits (adv-5)", async (
   assert.equal(result.usage?.rateLimits?.resetsAt, "2026-07-01T00:00:00Z");
 });
 
+test("runCodexTurn prepends instructions (the system message) to the turn input (cr-14)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-ok");
+
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    instructions: "HARRY-GUARDRAIL-SENTINEL",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 5_000
+  });
+
+  assert.equal(result.success, true);
+  const state = JSON.parse(
+    fs.readFileSync(path.join(binDir, "fake-codex-state.json"), "utf8")
+  ) as { lastTurnStart?: { prompt?: string } };
+  // The guardrails + --context that ride in `instructions` must reach codex, not
+  // be dropped — assert both the instructions and the prompt are in the turn input.
+  assert.match(state.lastTurnStart?.prompt ?? "", /HARRY-GUARDRAIL-SENTINEL/);
+  assert.match(state.lastTurnStart?.prompt ?? "", /do the thing/);
+});
+
+test("runCodexTurn aborts promptly on an already-aborted signal (cr-15)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-stuck");
+
+  const startedAt = Date.now();
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+    timeoutMs: 2_000,
+    signal: AbortSignal.abort()
+  });
+  const elapsed = Date.now() - startedAt;
+
+  assert.equal(result.success, false);
+  assert.match(result.error ?? "", /abort/i);
+  assert.ok(elapsed < 2_000, `expected the abort to pre-empt the timeout, took ${elapsed}ms`);
+});
+
 test("runCodexTurn times out a turn that never completes", async () => {
   const binDir = makeTempDir();
   installFakeCodex(binDir, "task-stuck");

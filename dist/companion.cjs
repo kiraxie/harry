@@ -9130,7 +9130,10 @@ var init_package = __esm({
         typescript: "7.0.1-rc"
       },
       pnpm: {
-        onlyBuiltDependencies: ["@biomejs/biome", "esbuild"]
+        onlyBuiltDependencies: [
+          "@biomejs/biome",
+          "esbuild"
+        ]
       }
     };
   }
@@ -9835,8 +9838,14 @@ var init_state = __esm({
 });
 
 // src/lib/codex/turn.ts
-function buildTurnInput(prompt) {
-  return [{ type: "text", text: prompt, text_elements: [] }];
+function buildTurnInput(prompt, instructions) {
+  const items = [];
+  const trimmed = instructions?.trim();
+  if (trimmed) {
+    items.push({ type: "text", text: trimmed, text_elements: [] });
+  }
+  items.push({ type: "text", text: prompt, text_elements: [] });
+  return items;
 }
 function shorten(text, limit = 96) {
   const normalized = String(text ?? "").trim().replace(/\s+/g, " ");
@@ -10186,8 +10195,27 @@ async function runCodexTurn(opts) {
     }, timeoutMs);
     timer.unref?.();
   });
+  let aborted = false;
+  let resolveAbort = () => {
+  };
+  const abortGate = new Promise((resolve5) => {
+    resolveAbort = resolve5;
+  });
+  const onAbort = () => {
+    aborted = true;
+    resolveAbort();
+    void client.close().catch(() => {
+    });
+  };
+  if (opts.signal) {
+    if (opts.signal.aborted) onAbort();
+    else opts.signal.addEventListener("abort", onAbort, { once: true });
+  }
   let state = null;
   try {
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
     const started = await Promise.race([
       client.request("thread/start", {
         cwd: opts.cwd,
@@ -10196,8 +10224,12 @@ async function runCodexTurn(opts) {
         sandbox: opts.readOnly ? "read-only" : "workspace-write",
         ephemeral: opts.readOnly ?? false
       }),
-      timeout.then(() => null)
+      timeout.then(() => null),
+      abortGate.then(() => null)
     ]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
     if (timedOut || !started) {
       return failure(client, "Codex turn timed out before the thread started.");
     }
@@ -10215,7 +10247,7 @@ async function runCodexTurn(opts) {
     });
     const turnStartParams = {
       threadId,
-      input: buildTurnInput(opts.prompt)
+      input: buildTurnInput(opts.prompt, opts.instructions)
     };
     if (opts.model) {
       turnStartParams.model = opts.model;
@@ -10225,8 +10257,12 @@ async function runCodexTurn(opts) {
     }
     const turnResponse = await Promise.race([
       client.request("turn/start", turnStartParams),
-      timeout.then(() => null)
+      timeout.then(() => null),
+      abortGate.then(() => null)
     ]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
     if (timedOut || !turnResponse) {
       return failure(client, "Codex turn timed out before the turn started.");
     }
@@ -10244,14 +10280,17 @@ async function runCodexTurn(opts) {
     if (turnResponse.turn?.status && turnResponse.turn.status !== "inProgress") {
       completeTurn(capture, turnResponse.turn);
     }
-    await Promise.race([capture.completion, timeout]);
+    await Promise.race([capture.completion, timeout, abortGate]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
     if (timedOut && !capture.completed) {
       return failure(client, "Codex turn timed out while awaiting completion.");
     }
     return buildResult(capture, client.stderr);
   } catch (error) {
     const stderr = client.stderr;
-    const message = error?.message ?? String(error);
+    const message = aborted ? "Codex turn aborted." : error?.message ?? String(error);
     return {
       success: false,
       finalMessage: state?.lastAgentMessage ?? "",
@@ -10262,6 +10301,7 @@ ${stderr}` : message,
       usage: state?.usage ?? void 0
     };
   } finally {
+    opts.signal?.removeEventListener("abort", onAbort);
     if (timer) {
       clearTimeout(timer);
     }
@@ -10330,6 +10370,16 @@ var init_codex = __esm({
         metersQuota: false
       };
       /**
+       * Abort handle for the in-flight turn, so {@link forceStop} (driven by the
+       * session's centralized SIGINT/SIGTERM handler) can tear the codex child down
+       * immediately rather than orphaning it on `process.exit`. Null when idle.
+       */
+      activeController = null;
+      /** Best-effort immediate teardown from an interrupt — aborts the live turn. */
+      async forceStop() {
+        this.activeController?.abort();
+      }
+      /**
        * Probe codex auth without running a turn. Codex has no login/host concept in
        * the neutral summary, so those stay undefined; `message` carries the codex
        * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
@@ -10349,6 +10399,11 @@ var init_codex = __esm({
        */
       async run(opts) {
         const { appendLog: appendLog2, progress } = opts;
+        if (!opts.readOnly && !opts.allowShell) {
+          throw new Error(
+            "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with --provider copilot, or explicitly allow shell."
+          );
+        }
         const onItem = (ev) => {
           switch (ev.kind) {
             case "assistant":
@@ -10373,15 +10428,30 @@ var init_codex = __esm({
           }
         };
         progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}\u2026`);
-        const result = await runCodexTurn({
-          cwd: opts.cwd,
-          prompt: opts.prompt,
-          model: opts.model,
-          effort: toCodexEffort(opts.reasoning),
-          readOnly: opts.readOnly,
-          env: process.env,
-          onItem
-        });
+        const controller = new AbortController();
+        if (opts.signal) {
+          if (opts.signal.aborted) controller.abort();
+          else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
+        }
+        this.activeController = controller;
+        let result;
+        try {
+          result = await runCodexTurn({
+            cwd: opts.cwd,
+            prompt: opts.prompt,
+            // Carry guardrails + injected --context into the turn (codex has no
+            // separate system slot; turn.ts rides them as a leading input block).
+            instructions: opts.systemMessage,
+            model: opts.model,
+            effort: toCodexEffort(opts.reasoning),
+            readOnly: opts.readOnly,
+            env: process.env,
+            onItem,
+            signal: controller.signal
+          });
+        } finally {
+          this.activeController = null;
+        }
         if (result.error) appendLog2(`turn error: ${result.error}`);
         if (result.usage?.rateLimits) {
           writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);

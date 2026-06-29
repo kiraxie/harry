@@ -60,6 +60,80 @@ test("CodexProvider.run maps a turn to a successful RunResult with codex usage",
   assert.ok(res.lastAssistantMessage.length > 0, "expected a non-empty assistant message");
 });
 
+test("CodexProvider.run refuses write mode without shell access (cr-16 trust boundary)", async () => {
+  // codex's sandbox is coarse: workspace-write + approvalPolicy:never runs shell
+  // commands autonomously, so it CANNOT honor "write files but no shell". Rather
+  // than silently run MORE permissively than the caller allowed (fail-open), the
+  // provider must refuse (fail-closed). Guard fires before any codex spawn.
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-ok");
+
+  await withFakeOnPath(binDir, async () => {
+    const p = new CodexProvider();
+    await assert.rejects(
+      () =>
+        p.run({
+          cwd: binDir,
+          prompt: "x",
+          readOnly: false,
+          allowShell: false,
+          allowUrl: false,
+          systemMessage: "",
+          appendLog() {},
+          progress() {}
+        }),
+      /shell|copilot/i
+    );
+  });
+});
+
+test("CodexProvider.run allows write mode when shell is explicitly permitted (cr-16)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-ok");
+
+  const res = await withFakeOnPath(binDir, () =>
+    new CodexProvider().run({
+      cwd: binDir,
+      prompt: "x",
+      readOnly: false,
+      allowShell: true,
+      allowUrl: false,
+      systemMessage: "",
+      appendLog() {},
+      progress() {}
+    })
+  );
+
+  assert.equal(res.success, true);
+});
+
+test("CodexProvider.run aborts when opts.signal is already aborted (cr-15)", async () => {
+  // task-ok would normally succeed; a pre-aborted signal must short-circuit the
+  // turn (this also exercises the signal→forceStop linkage the interrupt uses).
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-ok");
+
+  const res = await withFakeOnPath(binDir, () =>
+    new CodexProvider().run({
+      cwd: binDir,
+      prompt: "x",
+      readOnly: true,
+      allowShell: false,
+      allowUrl: false,
+      systemMessage: "",
+      appendLog() {},
+      progress() {},
+      signal: AbortSignal.abort()
+    })
+  );
+
+  assert.equal(res.success, false);
+});
+
+test("CodexProvider.forceStop is a no-op when no run is in flight (cr-15)", async () => {
+  await new CodexProvider().forceStop();
+});
+
 test("CodexProvider.checkAuth reports a ChatGPT login as ok", async () => {
   const binDir = makeTempDir();
   installFakeCodex(binDir, "logged-in");
