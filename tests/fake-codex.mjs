@@ -1,3 +1,8 @@
+// Portions Copyright 2026 OpenAI, licensed under Apache-2.0.
+// Modified from codex-plugin-cc's tests/fake-codex-fixture.mjs (trimmed to the
+// app-server turn/auth surface; broker behaviors removed; harry test behaviors
+// added). See NOTICE.
+
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
