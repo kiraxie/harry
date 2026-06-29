@@ -28,8 +28,6 @@ export interface InitializeCapabilities {
 /** Options accepted by {@link CodexAppServerClient.connect}. */
 export interface CodexConnectOpts {
   env?: NodeJS.ProcessEnv;
-  /** v1 is direct-only; the broker transport was removed. */
-  disableBroker?: true;
   clientInfo?: ClientInfo;
   capabilities?: InitializeCapabilities;
 }

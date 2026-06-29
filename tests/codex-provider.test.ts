@@ -134,6 +134,38 @@ test("CodexProvider.forceStop is a no-op when no run is in flight (cr-15)", asyn
   await new CodexProvider().forceStop();
 });
 
+test("CodexProvider.forceStop awaits the in-flight run before resolving (cr-17)", { timeout: 8000 }, async () => {
+  // forceStop must not resolve until the codex child is torn down — otherwise the
+  // session's interrupt handler exits the process and orphans the subprocess.
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-stuck");
+
+  await withFakeOnPath(binDir, async () => {
+    const p = new CodexProvider();
+    let runSettled = false;
+    const runP = p
+      .run({
+        cwd: binDir,
+        prompt: "x",
+        readOnly: true,
+        allowShell: false,
+        allowUrl: false,
+        systemMessage: "",
+        appendLog() {},
+        progress() {}
+      })
+      .then((r) => {
+        runSettled = true;
+        return r;
+      });
+
+    await new Promise((r) => setTimeout(r, 200)); // let the turn start
+    await p.forceStop();
+    assert.ok(runSettled, "forceStop resolved before the run settled — child not reaped");
+    await runP;
+  });
+});
+
 test("CodexProvider.checkAuth reports a ChatGPT login as ok", async () => {
   const binDir = makeTempDir();
   installFakeCodex(binDir, "logged-in");

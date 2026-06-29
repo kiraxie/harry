@@ -241,6 +241,13 @@ export class CodexAppServerClient {
       this.stderrBuffer += chunk;
     });
 
+    // Swallow stream errors (EPIPE on a write/end to a child that already exited,
+    // etc.). Without an 'error' listener Node escalates these to an unhandled
+    // stream error that crashes the host — the exact crash this module exists to
+    // prevent. The child's death is handled by the 'exit'/'error' handlers below.
+    this.proc.stdin.on("error", () => {});
+    this.proc.stdout.on("error", () => {});
+
     this.proc.on("error", (error) => {
       this.handleExit(error);
     });
@@ -302,7 +309,15 @@ export class CodexAppServerClient {
         clearTimeout(timer);
       }
     } else {
-      await initRequest;
+      // Symmetry with the timeout branch: a spawn 'error' (ENOENT) or a parse
+      // failure rejects initRequest; tear the child + listeners down before
+      // propagating, rather than leaking them on the connect-failure path.
+      try {
+        await initRequest;
+      } catch (error) {
+        await this.close();
+        throw error;
+      }
     }
 
     this.notify("initialized", {});

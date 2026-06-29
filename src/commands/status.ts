@@ -7,7 +7,7 @@
 
 import {
   resolveStateDir, listJobs, readJobFile, readLogTail, getSessionId,
-  readCodexRateLimits, renderCodexBlock,
+  readCodexRateLimits, renderCodexBlock, formatSnapshotAge,
   type JobRecord,
 } from '../lib/state.js';
 import { readSnapshot, summarize, renderQuotaBar } from '../lib/quota.js';
@@ -55,7 +55,7 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
   const sections: string[] = [];
 
   sections.push(renderQuotaBlock(snapshot !== null, quota, snapshot?.checkedAt));
-  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits));
+  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits, codexRateLimits.capturedAt));
 
   const running = jobs.filter((j) => j.status === 'queued' || j.status === 'running');
   const finished = jobs.filter((j) => j.status === 'completed' || j.status === 'failed');
@@ -92,22 +92,11 @@ function renderQuotaBlock(
   checkedAt?: string,
 ): string {
   // The snapshot is a cache (refreshed by each ask/review/fix run), not a live
-  // fetch — surface its age so a stale number is never mistaken for current.
-  const header = haveSnapshot && checkedAt ? `## Quota (snapshot ${formatAge(checkedAt)})` : '## Quota';
+  // fetch — surface its age (shared formatter, same as the codex block) so a
+  // stale number is never mistaken for current.
+  const header =
+    haveSnapshot && checkedAt ? `## Quota (snapshot ${formatSnapshotAge(checkedAt)})` : '## Quota';
   return [header, ...renderQuotaBar(q, haveSnapshot)].join('\n');
-}
-
-/** Human-friendly "<n> ago" for a snapshot timestamp; falls back to the raw value. */
-function formatAge(iso: string): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return iso;
-  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
-  if (secs < 60) return 'just now';
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
 }
 
 interface JobRow {

@@ -29,12 +29,10 @@ export interface TurnTimeout {
 /**
  * Arm a per-call timeout that aborts the run when it elapses.
  *
- * DEBT: the abort is honored only by the Copilot provider (via RunOpts.signal).
- * Codex enforces its own turn timeout inside runCodexTurn and does not consume
- * this signal, so for codex the timer is advisory — the run continues until
- * codex's own ceiling. The message says "requesting abort" (not "aborted") to
- * stay honest about that. Unify on a single signal-driven timeout once turn.ts
- * accepts a signal.
+ * Both providers honor the abort via RunOpts.signal: Copilot stops its stream,
+ * and CodexProvider links the signal into runCodexTurn (which tears the codex
+ * child down). Codex additionally enforces its own internal turn ceiling, so
+ * whichever fires first ends the turn.
  */
 export function startTurnTimeout(opts: {
   timeoutMs: number;

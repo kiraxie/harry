@@ -5,6 +5,7 @@
  * Ported from the sibling gemini-plugin-cc with minimal changes.
  */
 
+import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync, mkdirSync, readFileSync, writeFileSync,
@@ -62,8 +63,28 @@ const LEGACY_FALLBACK_STATE_ROOT = join(tmpdir(), 'copilot-companion');
 
 // ─── State Directory ─────────────────────────────────────────────────────────
 
+/**
+ * Resolve the git repo root containing `cwd`, falling back to `resolve(cwd)`
+ * when it is not a git repo (or git is unavailable). Keying state on the repo
+ * root — not the raw cwd — keeps a command invoked from a subdirectory and a
+ * provider invoked with the repo root pointed at the SAME state dir, so their
+ * quota / codex rate-limit caches don't silently diverge.
+ */
+function repoRootOf(cwd: string): string {
+  try {
+    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return root || resolve(cwd);
+  } catch {
+    return resolve(cwd);
+  }
+}
+
 export function resolveStateDir(cwd: string): string {
-  const workspaceRoot = resolve(cwd);
+  const workspaceRoot = repoRootOf(cwd);
   const slug = basename(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'workspace';
   const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);
   const dirName = `${slug}-${hash}`;
@@ -279,7 +300,25 @@ export function formatCodexRateLimits(rl: CodexRateLimits): string {
   return parts.join(' · ');
 }
 
-/** Pure renderer for the `## Codex` status block from a snapshot. */
-export function renderCodexBlock(rl: CodexRateLimits): string {
-  return ['## Codex', formatCodexRateLimits(rl)].join('\n');
+/** Human-friendly "<n> ago" for a snapshot ISO timestamp; falls back to raw. */
+export function formatSnapshotAge(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+/**
+ * Pure renderer for the `## Codex` status block. `capturedAt` (from the
+ * persisted snapshot) labels the header with the cache age — codex rate-limits
+ * refresh only on an actual turn, so a stale reading must say so.
+ */
+export function renderCodexBlock(rl: CodexRateLimits, capturedAt?: string): string {
+  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : '## Codex';
+  return [header, formatCodexRateLimits(rl)].join('\n');
 }

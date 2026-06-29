@@ -520,7 +520,6 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
   try {
     client = await CodexAppServerClient.connect(opts.cwd, {
       env: opts.env,
-      disableBroker: true,
       connectTimeoutMs
     });
   } catch (error) {

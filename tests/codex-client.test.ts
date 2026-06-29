@@ -17,8 +17,7 @@ test("CodexAppServerClient connects and round-trips a request", async () => {
   installFakeCodex(binDir, "logged-in");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir),
-    disableBroker: true
+    env: buildEnv(binDir)
   });
 
   try {
@@ -42,8 +41,7 @@ test("CodexAppServerClient dispatches notifications during a turn", async () => 
   installFakeCodex(binDir, "logged-in");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir),
-    disableBroker: true
+    env: buildEnv(binDir)
   });
 
   try {
@@ -76,8 +74,7 @@ test("request() rejects (not synchronously throws) after the client is closed", 
   installFakeCodex(binDir, "logged-in");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir),
-    disableBroker: true
+    env: buildEnv(binDir)
   });
   await client.close();
 
@@ -98,8 +95,7 @@ test("close() resolves even when the child ignores SIGTERM", async (t) => {
   installFakeCodex(binDir, "ignore-sigterm");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir),
-    disableBroker: true
+    env: buildEnv(binDir)
   });
 
   const start = Date.now();

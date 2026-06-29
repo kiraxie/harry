@@ -15,7 +15,7 @@ import {
 import { runReview, type ReviewOptions } from './review.js';
 import type { ReviewScope } from '../lib/git.js';
 import type { ProviderId } from '../lib/provider.ts';
-import { extractTask } from '../lib/args.js';
+import { extractTask, flagString, flagNumber } from '../lib/args.js';
 
 declare const __filename: string | undefined;
 
@@ -74,20 +74,6 @@ function getScriptPath(): string {
     throw new Error('Unable to resolve script path: __filename is not defined. The companion must be run via the bundled CJS output.');
   }
   return __filename;
-}
-
-function flagString(flags: Record<string, string | boolean>, key: string): string | undefined {
-  const v = flags[key];
-  return typeof v === 'string' ? v : undefined;
-}
-
-function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
-  const v = flags[key];
-  if (typeof v !== 'string') return undefined;
-  // Strict: reject trailing garbage ("30sec"), NaN, zero, and negatives so the
-  // downstream `?? DEFAULT` fallback applies instead of e.g. a 0ms timeout.
-  const n = Number(v.trim());
-  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 function flagProvider(flags: Record<string, string | boolean>): ProviderId | undefined {

@@ -195,10 +195,17 @@ export class CopilotProvider implements Provider {
 
     // The shutdown event (which carries authoritative codeChanges) may only
     // arrive after disconnect; bound the wait so teardown cannot hang.
+    // unref + clear the bound: when stream.shutdown wins the race, an un-cleared
+    // 5s timer would otherwise keep the event loop alive and delay process exit.
+    let shutdownTimer: ReturnType<typeof setTimeout> | undefined;
     const shutdownResult = await Promise.race([
       stream.shutdown,
-      new Promise<null>((res) => setTimeout(() => res(null), SHUTDOWN_WAIT_MS)),
+      new Promise<null>((res) => {
+        shutdownTimer = setTimeout(() => res(null), SHUTDOWN_WAIT_MS);
+        shutdownTimer.unref?.();
+      }),
     ]);
+    if (shutdownTimer) clearTimeout(shutdownTimer);
 
     stream.dispose();
     await fetchQuota(client, stateDir).catch(() => null);

@@ -86,3 +86,10 @@ test("renderCodexBlock renders a `## Codex` block with percent and reset", () =>
   assert.match(block, /plan pro/);
   assert.match(block, /resets 2026-07-01T00:00:00Z/);
 });
+
+test("renderCodexBlock labels the snapshot age when capturedAt is given (C3)", () => {
+  // codex rate-limits are a cache refreshed only by an actual turn, so a stale
+  // reading must be marked — the same guard the quota block already has.
+  const block = renderCodexBlock({ primaryUsedPercent: 10 }, new Date().toISOString());
+  assert.match(block, /^## Codex \(snapshot /);
+});

@@ -61,6 +61,15 @@ export interface Provider {
   readonly id: ProviderId;
   readonly capabilities: ProviderCapabilities;
   checkAuth(cwd: string): Promise<AuthSummary>;
+  /**
+   * Synchronous capability/permission gate, run by {@link runAgentSession}
+   * BEFORE any side-effecting pre-run hook (e.g. fix's pre-fix snapshot commit).
+   * Throw to refuse a run the provider cannot honor — e.g. CodexProvider rejects
+   * write-without-shell here, so the refusal lands before the snapshot, not after
+   * it has already mutated git history. Optional: a provider with nothing to
+   * pre-check omits it.
+   */
+  precheckRun?(opts: RunOpts): void;
   run(opts: RunOpts): Promise<RunResult>;
   /**
    * Best-effort immediate teardown of any subprocess this provider spawned,

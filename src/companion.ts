@@ -14,7 +14,7 @@ import { runStatus } from './commands/status.js';
 import { runResult } from './commands/result.js';
 import { enqueueBackground, runWorker } from './commands/background.js';
 import type { ReviewScope } from './lib/git.js';
-import { extractTask } from './lib/args.js';
+import { extractTask, flagString, flagNumber } from './lib/args.js';
 
 function printUsage(): void {
   console.log(
@@ -121,23 +121,6 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return { command, args, flags };
-}
-
-function flagString(flags: Record<string, string | boolean>, key: string): string | undefined {
-  const v = flags[key];
-  return typeof v === 'string' ? v : undefined;
-}
-
-function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
-  const v = flags[key];
-  if (typeof v !== 'string') return undefined;
-  // Strict parse: Number() rejects trailing garbage ("30sec" → NaN) that
-  // parseInt would silently accept. Reject NaN and non-positive values so a
-  // bad `--timeout 0`/`-5` falls back to the default instead of arming a
-  // 0ms timer (spurious "Timed out after 0ms") downstream.
-  const n = Number(v.trim());
-  if (!Number.isFinite(n) || n <= 0) return undefined;
-  return n;
 }
 
 function flagEnum<T extends string>(

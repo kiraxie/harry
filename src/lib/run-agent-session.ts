@@ -27,7 +27,7 @@ import {
  * `getCodexAvailability` here (that doubled the `codex --version` /
  * `codex app-server --help` spawns on every auto-resolved run).
  */
-export async function probeCodexUsable(cwd: string, env?: NodeJS.ProcessEnv): Promise<boolean> {
+async function probeCodexUsable(cwd: string, env?: NodeJS.ProcessEnv): Promise<boolean> {
   try {
     return (await getCodexAuthStatus(cwd, { env })).loggedIn;
   } catch {
@@ -105,7 +105,13 @@ export async function runAgentSession(
   // This is also where the interrupt-time forceStop (dropped in the refactor,
   // which orphaned Copilot subprocesses) is centralized for ALL commands.
   let activeProvider: Provider | undefined;
+  let interrupting = false;
   const onInterrupt = (): void => {
+    // Single-shot: a second SIGINT during teardown must not re-fire onInterrupt
+    // (which would, e.g., emit fix's terminal `failed` envelope twice) — the
+    // listeners are only removed in the finally, which never runs before exit.
+    if (interrupting) return;
+    interrupting = true;
     args.onInterrupt?.();
     const exit = (): never => process.exit(130);
     const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
@@ -138,6 +144,12 @@ export async function runAgentSession(
       // is a real failure either way.
       throw new Error(`${id} not authenticated: ${auth.message}`);
     }
+
+    // Capability gate BEFORE the quota gate and beforeRun: a provider that cannot
+    // honor these run options (e.g. codex write-without-shell) must refuse here,
+    // so the refusal precedes fix's pre-fix snapshot commit rather than leaving
+    // the user's work committed by a run that then throws.
+    provider.precheckRun?.(args.run);
 
     if (provider.capabilities.metersQuota && args.enforceQuota) {
       await args.enforceQuota(provider);

@@ -100,14 +100,15 @@ export function terminateProcessTree(pid: number): void {
 
   try {
     process.kill(-pid, "SIGTERM");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code !== "ESRCH") {
-      try {
-        process.kill(pid, "SIGTERM");
-      } catch (innerError) {
-        if ((innerError as NodeJS.ErrnoException)?.code === "ESRCH") {
-          return;
-        }
+  } catch {
+    // Group kill failed — the child is not a process-group leader (spawned
+    // without detached:true), so the group does not exist (ESRCH) or is not
+    // ours. Fall back to signalling the single pid directly; previously an ESRCH
+    // here silently no-op'd and the child was never reaped.
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch (innerError) {
+      if ((innerError as NodeJS.ErrnoException)?.code !== "ESRCH") {
         throw innerError;
       }
     }

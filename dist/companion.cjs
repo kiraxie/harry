@@ -9219,14 +9219,11 @@ ${result.stdout}`.trim();
   }
   try {
     import_node_process.default.kill(-pid, "SIGTERM");
-  } catch (error) {
-    if (error?.code !== "ESRCH") {
-      try {
-        import_node_process.default.kill(pid, "SIGTERM");
-      } catch (innerError) {
-        if (innerError?.code === "ESRCH") {
-          return;
-        }
+  } catch {
+    try {
+      import_node_process.default.kill(pid, "SIGTERM");
+    } catch (innerError) {
+      if (innerError?.code !== "ESRCH") {
         throw innerError;
       }
     }
@@ -9403,6 +9400,10 @@ var init_app_server = __esm({
         this.proc.stderr.on("data", (chunk) => {
           this.stderrBuffer += chunk;
         });
+        this.proc.stdin.on("error", () => {
+        });
+        this.proc.stdout.on("error", () => {
+        });
         this.proc.on("error", (error) => {
           this.handleExit(error);
         });
@@ -9451,7 +9452,12 @@ ${stderr}` : ""}`
             clearTimeout(timer);
           }
         } else {
-          await initRequest;
+          try {
+            await initRequest;
+          } catch (error) {
+            await this.close();
+            throw error;
+          }
         }
         this.notify("initialized", {});
       }
@@ -9621,7 +9627,6 @@ async function getCodexAuthStatus(cwd, opts = {}) {
   try {
     client = await CodexAppServerClient.connect(cwd, {
       env: opts.env,
-      disableBroker: true,
       // Anti-hang: this probe runs on the default provider-resolution path of
       // every auto ask/review/fix and in SessionStart setup. Without a ceiling,
       // a child that spawns but blocks before answering `initialize` (broken
@@ -9661,8 +9666,20 @@ var init_auth = __esm({
 });
 
 // src/lib/state.ts
+function repoRootOf(cwd) {
+  try {
+    const root = (0, import_node_child_process4.execFileSync)("git", ["rev-parse", "--show-toplevel"], {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return root || (0, import_node_path2.resolve)(cwd);
+  } catch {
+    return (0, import_node_path2.resolve)(cwd);
+  }
+}
 function resolveStateDir(cwd) {
-  const workspaceRoot = (0, import_node_path2.resolve)(cwd);
+  const workspaceRoot = repoRootOf(cwd);
   const slug = (0, import_node_path2.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
   const hash = (0, import_node_crypto2.createHash)("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
   const dirName = `${slug}-${hash}`;
@@ -9816,13 +9833,26 @@ function formatCodexRateLimits(rl) {
   if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
   return parts.join(" \xB7 ");
 }
-function renderCodexBlock(rl) {
-  return ["## Codex", formatCodexRateLimits(rl)].join("\n");
+function formatSnapshotAge(iso) {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1e3));
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
-var import_node_crypto2, import_node_fs2, import_node_path2, import_node_os, MAX_JOBS, PLUGIN_DATA_ENV, SESSION_ID_ENV, LEGACY_SESSION_ID_ENV, FALLBACK_STATE_ROOT, LEGACY_FALLBACK_STATE_ROOT, CODEX_RATE_LIMITS_FILE;
+function renderCodexBlock(rl, capturedAt) {
+  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : "## Codex";
+  return [header, formatCodexRateLimits(rl)].join("\n");
+}
+var import_node_child_process4, import_node_crypto2, import_node_fs2, import_node_path2, import_node_os, MAX_JOBS, PLUGIN_DATA_ENV, SESSION_ID_ENV, LEGACY_SESSION_ID_ENV, FALLBACK_STATE_ROOT, LEGACY_FALLBACK_STATE_ROOT, CODEX_RATE_LIMITS_FILE;
 var init_state = __esm({
   "src/lib/state.ts"() {
     "use strict";
+    import_node_child_process4 = require("node:child_process");
     import_node_crypto2 = require("node:crypto");
     import_node_fs2 = require("node:fs");
     import_node_path2 = require("node:path");
@@ -10173,7 +10203,6 @@ async function runCodexTurn(opts) {
   try {
     client = await CodexAppServerClient.connect(opts.cwd, {
       env: opts.env,
-      disableBroker: true,
       connectTimeoutMs
     });
   } catch (error) {
@@ -10375,9 +10404,34 @@ var init_codex = __esm({
        * immediately rather than orphaning it on `process.exit`. Null when idle.
        */
       activeController = null;
-      /** Best-effort immediate teardown from an interrupt — aborts the live turn. */
+      /** The in-flight turn promise, awaited by {@link forceStop} so teardown completes. */
+      activeRun = null;
+      /**
+       * Best-effort immediate teardown from an interrupt — abort the live turn AND
+       * await it so the codex child is actually reaped before this resolves.
+       * Returning early (abort only) would let the session's interrupt handler
+       * `process.exit` before close() kills the child, orphaning it; CopilotProvider
+       * awaits its teardown the same way.
+       */
       async forceStop() {
         this.activeController?.abort();
+        await this.activeRun?.catch(() => {
+        });
+      }
+      /**
+       * Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
+       * turn is `workspace-write` + approvalPolicy:"never", which lets codex run
+       * shell commands autonomously. It has no "write files but no shell" mode, so a
+       * caller that grants writes while withholding shell (`fix` defaults to
+       * allowShell:false) CANNOT be honored. Refuse rather than silently run MORE
+       * permissively than asked. Runs via the precheckRun seam BEFORE fix's snapshot.
+       */
+      precheckRun(opts) {
+        if (!opts.readOnly && !opts.allowShell) {
+          throw new Error(
+            "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with --provider copilot, or explicitly allow shell."
+          );
+        }
       }
       /**
        * Probe codex auth without running a turn. Codex has no login/host concept in
@@ -10399,11 +10453,7 @@ var init_codex = __esm({
        */
       async run(opts) {
         const { appendLog: appendLog2, progress } = opts;
-        if (!opts.readOnly && !opts.allowShell) {
-          throw new Error(
-            "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with --provider copilot, or explicitly allow shell."
-          );
-        }
+        this.precheckRun(opts);
         const onItem = (ev) => {
           switch (ev.kind) {
             case "assistant":
@@ -10435,22 +10485,25 @@ var init_codex = __esm({
         }
         this.activeController = controller;
         let result;
+        const turnPromise = runCodexTurn({
+          cwd: opts.cwd,
+          prompt: opts.prompt,
+          // Carry guardrails + injected --context into the turn (codex has no
+          // separate system slot; turn.ts rides them as a leading input block).
+          instructions: opts.systemMessage,
+          model: opts.model,
+          effort: toCodexEffort(opts.reasoning),
+          readOnly: opts.readOnly,
+          env: process.env,
+          onItem,
+          signal: controller.signal
+        });
+        this.activeRun = turnPromise;
         try {
-          result = await runCodexTurn({
-            cwd: opts.cwd,
-            prompt: opts.prompt,
-            // Carry guardrails + injected --context into the turn (codex has no
-            // separate system slot; turn.ts rides them as a leading input block).
-            instructions: opts.systemMessage,
-            model: opts.model,
-            effort: toCodexEffort(opts.reasoning),
-            readOnly: opts.readOnly,
-            env: process.env,
-            onItem,
-            signal: controller.signal
-          });
+          result = await turnPromise;
         } finally {
           this.activeController = null;
+          this.activeRun = null;
         }
         if (result.error) appendLog2(`turn error: ${result.error}`);
         if (result.usage?.rateLimits) {
@@ -11138,10 +11191,15 @@ var init_copilot = __esm({
         }
         opts.signal?.removeEventListener("abort", onAbort);
         await session.disconnect().catch((e) => appendLog2(`disconnect warn: ${e.message}`));
+        let shutdownTimer;
         const shutdownResult = await Promise.race([
           stream.shutdown,
-          new Promise((res) => setTimeout(() => res(null), SHUTDOWN_WAIT_MS))
+          new Promise((res) => {
+            shutdownTimer = setTimeout(() => res(null), SHUTDOWN_WAIT_MS);
+            shutdownTimer.unref?.();
+          })
         ]);
+        if (shutdownTimer) clearTimeout(shutdownTimer);
         stream.dispose();
         await fetchQuota(client, stateDir).catch(() => null);
         await client.stop().catch((e) => appendLog2(`client.stop warn: ${e.message}`));
@@ -11201,7 +11259,10 @@ async function resolveActiveProvider(flags, cwd, opts = {}) {
 var INTERRUPT_TEARDOWN_CEILING_MS = 2e3;
 async function runAgentSession(args) {
   let activeProvider;
+  let interrupting = false;
   const onInterrupt = () => {
+    if (interrupting) return;
+    interrupting = true;
     args.onInterrupt?.();
     const exit = () => process.exit(130);
     const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
@@ -11222,6 +11283,7 @@ async function runAgentSession(args) {
     if (!auth.ok) {
       throw new Error(`${id} not authenticated: ${auth.message}`);
     }
+    provider.precheckRun?.(args.run);
     if (provider.capabilities.metersQuota && args.enforceQuota) {
       await args.enforceQuota(provider);
     }
@@ -11391,7 +11453,7 @@ init_state();
 init_quota();
 
 // src/lib/git.ts
-var import_node_child_process4 = require("node:child_process");
+var import_node_child_process5 = require("node:child_process");
 var import_node_fs5 = require("node:fs");
 var import_node_path5 = require("node:path");
 var MAX_UNTRACKED_BYTES = 24 * 1024;
@@ -11418,7 +11480,7 @@ function truncateUtf8(s, maxBytes) {
   return { text: cut, truncated: true };
 }
 function git(cwd, args, maxBuffer) {
-  const result = (0, import_node_child_process4.spawnSync)("git", args, {
+  const result = (0, import_node_child_process5.spawnSync)("git", args, {
     cwd,
     encoding: "utf8",
     maxBuffer,
@@ -12319,18 +12381,18 @@ async function runAsk(cwd, options) {
 }
 
 // src/commands/fix.ts
-var import_node_child_process6 = require("node:child_process");
+var import_node_child_process7 = require("node:child_process");
 var import_node_fs8 = require("node:fs");
 var import_node_path8 = require("node:path");
 init_state();
 init_quota();
 
 // src/lib/worktree.ts
-var import_node_child_process5 = require("node:child_process");
+var import_node_child_process6 = require("node:child_process");
 var import_node_fs7 = require("node:fs");
 var import_node_path7 = require("node:path");
 function tryGit(args, cwd) {
-  const res = (0, import_node_child_process5.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  const res = (0, import_node_child_process6.spawnSync)("git", args, { cwd, encoding: "utf-8" });
   return {
     ok: res.status === 0,
     stdout: (res.stdout ?? "").trim(),
@@ -12351,12 +12413,12 @@ var DEFAULT_MODEL2 = "claude-opus-4.8";
 var DEFAULT_EFFORT2 = "high";
 var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
 function tryGit2(args, cwd) {
-  const res = (0, import_node_child_process6.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  const res = (0, import_node_child_process7.spawnSync)("git", args, { cwd, encoding: "utf-8" });
   return { ok: res.status === 0, stdout: (res.stdout ?? "").trim(), stderr: (res.stderr ?? "").trim() };
 }
 function gitHead(cwd) {
   try {
-    return (0, import_node_child_process6.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
+    return (0, import_node_child_process7.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
   } catch {
     return "";
   }
@@ -12480,6 +12542,7 @@ async function runFix(cwd, options = {}) {
   }
   let preFixSnapshot = false;
   let baselineCommit = "";
+  const snapshotInfo = () => preFixSnapshot ? { preFixSnapshot, ...baselineCommit ? { baselineCommit } : {} } : {};
   const turn = startTurnTimeout({ timeoutMs, progress, log });
   let envelopeDone = false;
   const onInterrupt = () => {
@@ -12570,7 +12633,7 @@ async function runFix(cwd, options = {}) {
         if (!baselineCommit) {
           envelopeDone = true;
           turn.clear();
-          emit2({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet)." });
+          emit2({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet).", ...snapshotInfo() });
           process.exit(1);
         }
       },
@@ -12580,7 +12643,7 @@ async function runFix(cwd, options = {}) {
     turn.clear();
     if (!envelopeDone) {
       envelopeDone = true;
-      emit2({ status: "failed", jobId, error: err.message });
+      emit2({ status: "failed", jobId, error: err.message, ...snapshotInfo() });
     }
     process.exit(1);
   }
@@ -12589,7 +12652,7 @@ async function runFix(cwd, options = {}) {
   if (!success) {
     if (!envelopeDone) {
       envelopeDone = true;
-      emit2({ status: "failed", jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully." });
+      emit2({ status: "failed", jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.", ...snapshotInfo() });
     }
     process.exit(0);
   }
@@ -12709,7 +12772,7 @@ async function runStatus(cwd, options = {}) {
   }
   const sections = [];
   sections.push(renderQuotaBlock(snapshot !== null, quota, snapshot?.checkedAt));
-  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits));
+  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits, codexRateLimits.capturedAt));
   const running = jobs.filter((j) => j.status === "queued" || j.status === "running");
   const finished = jobs.filter((j) => j.status === "completed" || j.status === "failed");
   if (running.length > 0) {
@@ -12735,19 +12798,8 @@ async function runStatus(cwd, options = {}) {
   console.log(sections.join("\n\n"));
 }
 function renderQuotaBlock(haveSnapshot, q, checkedAt) {
-  const header = haveSnapshot && checkedAt ? `## Quota (snapshot ${formatAge(checkedAt)})` : "## Quota";
+  const header = haveSnapshot && checkedAt ? `## Quota (snapshot ${formatSnapshotAge(checkedAt)})` : "## Quota";
   return [header, ...renderQuotaBar(q, haveSnapshot)].join("\n");
-}
-function formatAge(iso) {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return iso;
-  const secs = Math.max(0, Math.round((Date.now() - then) / 1e3));
-  if (secs < 60) return "just now";
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
 }
 function toTableRow(job) {
   const icon = job.status === "completed" ? "\u2713 " : job.status === "failed" ? "\u2717 " : job.status === "running" ? "\u25B6 " : job.status === "queued" ? "\u2026 " : "  ";
@@ -12844,7 +12896,7 @@ async function runResult(cwd, options = {}) {
 }
 
 // src/commands/background.ts
-var import_node_child_process7 = require("node:child_process");
+var import_node_child_process8 = require("node:child_process");
 init_state();
 
 // src/lib/args.ts
@@ -12853,6 +12905,16 @@ function extractTask(args, flags) {
   if (positional) return positional;
   const flag = flags["task"];
   return typeof flag === "string" ? flag.trim() : "";
+}
+function flagString(flags, key) {
+  const v = flags[key];
+  return typeof v === "string" ? v : void 0;
+}
+function flagNumber(flags, key) {
+  const v = flags[key];
+  if (typeof v !== "string") return void 0;
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : void 0;
 }
 
 // src/commands/background.ts
@@ -12878,7 +12940,7 @@ function enqueueBackground(command, args, flags, cwd) {
   createJob(stateDir, job);
   appendLog(stateDir, jobId, `Queued for background execution: ${command} "${summary}"`);
   const scriptPath = getScriptPath();
-  const child = (0, import_node_child_process7.spawn)(process.execPath, [scriptPath, "_worker", "--job-id", jobId, "--cwd", cwd], {
+  const child = (0, import_node_child_process8.spawn)(process.execPath, [scriptPath, "_worker", "--job-id", jobId, "--cwd", cwd], {
     cwd,
     env: { ...process.env, HARRY_SESSION_ID: getSessionId() ?? "" },
     detached: true,
@@ -12893,16 +12955,6 @@ function getScriptPath() {
     throw new Error("Unable to resolve script path: __filename is not defined. The companion must be run via the bundled CJS output.");
   }
   return __filename;
-}
-function flagString(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number(v.trim());
-  return Number.isFinite(n) && n > 0 ? n : void 0;
 }
 function flagProvider(flags) {
   const v = flags["provider"];
@@ -13076,17 +13128,6 @@ function parseArgs(argv) {
   }
   return { command, args, flags };
 }
-function flagString2(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber2(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number(v.trim());
-  if (!Number.isFinite(n) || n <= 0) return void 0;
-  return n;
-}
 function flagEnum(flags, key, allowed) {
   const v = flags[key];
   if (v === void 0) return void 0;
@@ -13135,15 +13176,15 @@ async function main() {
         adversarial: flags["adversarial"] === true,
         simplify: flags["simplify"] === true,
         scope,
-        base: flagString2(flags, "base"),
+        base: flagString(flags, "base"),
         focusText: args.join(" "),
         provider,
-        model: flagString2(flags, "model"),
+        model: flagString(flags, "model"),
         reasoning,
-        timeout: flagNumber2(flags, "timeout"),
-        minQuota: flagNumber2(flags, "min-quota"),
+        timeout: flagNumber(flags, "timeout"),
+        minQuota: flagNumber(flags, "min-quota"),
         fix: flags["fix"] === true,
-        context: flagString2(flags, "context")
+        context: flagString(flags, "context")
       });
       break;
     }
@@ -13154,11 +13195,11 @@ async function main() {
       await runAsk(import_node_process3.default.cwd(), {
         prompt,
         provider,
-        model: flagString2(flags, "model"),
+        model: flagString(flags, "model"),
         reasoning,
-        timeout: flagNumber2(flags, "timeout"),
-        minQuota: flagNumber2(flags, "min-quota"),
-        context: flagString2(flags, "context")
+        timeout: flagNumber(flags, "timeout"),
+        minQuota: flagNumber(flags, "min-quota"),
+        context: flagString(flags, "context")
       });
       break;
     }
@@ -13166,16 +13207,16 @@ async function main() {
       const reasoning = flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"]);
       const provider = flagEnum(flags, "provider", ["copilot", "codex"]);
       await runFix(import_node_process3.default.cwd(), {
-        findingsPath: flagString2(flags, "findings"),
+        findingsPath: flagString(flags, "findings"),
         provider,
-        model: flagString2(flags, "model"),
+        model: flagString(flags, "model"),
         reasoning,
-        timeout: flagNumber2(flags, "timeout"),
-        minQuota: flagNumber2(flags, "min-quota"),
+        timeout: flagNumber(flags, "timeout"),
+        minQuota: flagNumber(flags, "min-quota"),
         allowShell: flags["allow-shell"] === true,
         allowUrl: flags["allow-url"] === true,
-        writePath: flagString2(flags, "write"),
-        context: flagString2(flags, "context")
+        writePath: flagString(flags, "write"),
+        context: flagString(flags, "context")
       });
       break;
     }
@@ -13194,8 +13235,8 @@ async function main() {
       break;
     // Internal: background worker entry point.
     case "_worker": {
-      const jobId = flagString2(flags, "job-id");
-      const workerCwd = flagString2(flags, "cwd") ?? import_node_process3.default.cwd();
+      const jobId = flagString(flags, "job-id");
+      const workerCwd = flagString(flags, "cwd") ?? import_node_process3.default.cwd();
       if (!jobId) {
         console.error("Worker requires --job-id");
         import_node_process3.default.exit(1);

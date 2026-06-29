@@ -49,10 +49,37 @@ export class CodexProvider implements Provider {
    * immediately rather than orphaning it on `process.exit`. Null when idle.
    */
   private activeController: AbortController | null = null;
+  /** The in-flight turn promise, awaited by {@link forceStop} so teardown completes. */
+  private activeRun: Promise<unknown> | null = null;
 
-  /** Best-effort immediate teardown from an interrupt — aborts the live turn. */
+  /**
+   * Best-effort immediate teardown from an interrupt — abort the live turn AND
+   * await it so the codex child is actually reaped before this resolves.
+   * Returning early (abort only) would let the session's interrupt handler
+   * `process.exit` before close() kills the child, orphaning it; CopilotProvider
+   * awaits its teardown the same way.
+   */
   async forceStop(): Promise<void> {
     this.activeController?.abort();
+    await this.activeRun?.catch(() => {});
+  }
+
+  /**
+   * Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
+   * turn is `workspace-write` + approvalPolicy:"never", which lets codex run
+   * shell commands autonomously. It has no "write files but no shell" mode, so a
+   * caller that grants writes while withholding shell (`fix` defaults to
+   * allowShell:false) CANNOT be honored. Refuse rather than silently run MORE
+   * permissively than asked. Runs via the precheckRun seam BEFORE fix's snapshot.
+   */
+  precheckRun(opts: RunOpts): void {
+    if (!opts.readOnly && !opts.allowShell) {
+      throw new Error(
+        "Codex cannot grant write access without also allowing shell commands " +
+          "(its workspace-write sandbox runs commands autonomously). Re-run with " +
+          "--provider copilot, or explicitly allow shell.",
+      );
+    }
   }
 
   /**
@@ -77,21 +104,9 @@ export class CodexProvider implements Provider {
   async run(opts: RunOpts): Promise<RunResult> {
     const { appendLog, progress } = opts;
 
-    // Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
-    // turn is `workspace-write` + approvalPolicy:"never", which lets codex run
-    // shell commands autonomously. It has no "write files but no shell" mode, so
-    // a caller that grants writes while withholding shell (`fix` defaults to
-    // allowShell:false) CANNOT be honored. Rather than silently run MORE
-    // permissively than asked (fail-open), refuse and point at Copilot, whose
-    // per-command gating enforces the split. Read-only turns (ask/review) are
-    // unaffected — they map to codex's `read-only` sandbox.
-    if (!opts.readOnly && !opts.allowShell) {
-      throw new Error(
-        "Codex cannot grant write access without also allowing shell commands " +
-          "(its workspace-write sandbox runs commands autonomously). Re-run with " +
-          "--provider copilot, or explicitly allow shell.",
-      );
-    }
+    // Defense in depth: the same fail-closed gate runAgentSession runs via
+    // precheckRun, in case run() is ever reached directly.
+    this.precheckRun(opts);
     // NOTE: opts.allowUrl is not mapped to codex network access yet; codex's
     // workspace-write sandbox keeps network OFF by default, so we under-grant
     // (deny URL even when allowed) — the safe direction. Enabling it needs the
@@ -136,22 +151,25 @@ export class CodexProvider implements Provider {
     this.activeController = controller;
 
     let result: Awaited<ReturnType<typeof runCodexTurn>>;
+    const turnPromise = runCodexTurn({
+      cwd: opts.cwd,
+      prompt: opts.prompt,
+      // Carry guardrails + injected --context into the turn (codex has no
+      // separate system slot; turn.ts rides them as a leading input block).
+      instructions: opts.systemMessage,
+      model: opts.model,
+      effort: toCodexEffort(opts.reasoning),
+      readOnly: opts.readOnly,
+      env: process.env,
+      onItem,
+      signal: controller.signal,
+    });
+    this.activeRun = turnPromise;
     try {
-      result = await runCodexTurn({
-        cwd: opts.cwd,
-        prompt: opts.prompt,
-        // Carry guardrails + injected --context into the turn (codex has no
-        // separate system slot; turn.ts rides them as a leading input block).
-        instructions: opts.systemMessage,
-        model: opts.model,
-        effort: toCodexEffort(opts.reasoning),
-        readOnly: opts.readOnly,
-        env: process.env,
-        onItem,
-        signal: controller.signal,
-      });
+      result = await turnPromise;
     } finally {
       this.activeController = null;
+      this.activeRun = null;
     }
 
     if (result.error) appendLog(`turn error: ${result.error}`);

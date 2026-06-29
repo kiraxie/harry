@@ -173,6 +173,39 @@ test("beforeRun is skipped when the quota gate blocks (throws)", async () => {
   });
 });
 
+test("precheckRun runs before beforeRun, so a refusal skips the fix snapshot (C1)", async () => {
+  await withoutEnv(async () => {
+    let beforeRunRan = false;
+    let runRan = false;
+    const capture = (id: ProviderId): Provider => ({
+      ...stub(id),
+      // Mirrors CodexProvider's write-without-shell refusal living in precheckRun.
+      precheckRun: () => {
+        throw new Error("Codex cannot grant write access without shell");
+      },
+      run: async () => {
+        runRan = true;
+        return { lastAssistantMessage: "done", success: true };
+      },
+    });
+    await assert.rejects(
+      runAgentSession({
+        cwd: "/tmp",
+        flags: { provider: "codex" },
+        run: { ...baseRun("/tmp"), readOnly: false, allowShell: false },
+        pickProvider: capture,
+        resolveUsable: async () => true,
+        beforeRun: () => {
+          beforeRunRan = true;
+        },
+      }),
+      /shell/,
+    );
+    assert.equal(beforeRunRan, false, "precheckRun must refuse BEFORE beforeRun (the snapshot) runs");
+    assert.equal(runRan, false);
+  });
+});
+
 test("defaultModelFor fills run.model only when it is undefined", async () => {
   await withoutEnv(async () => {
     let seenModel: string | undefined = "unset";

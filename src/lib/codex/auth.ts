@@ -167,7 +167,6 @@ export async function getCodexAuthStatus(
   try {
     client = await CodexAppServerClient.connect(cwd, {
       env: opts.env,
-      disableBroker: true,
       // Anti-hang: this probe runs on the default provider-resolution path of
       // every auto ask/review/fix and in SessionStart setup. Without a ceiling,
       // a child that spawns but blocks before answering `initialize` (broken

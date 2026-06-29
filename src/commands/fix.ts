@@ -95,6 +95,11 @@ interface FailedEnvelope {
   status: 'failed';
   jobId: string;
   error: string;
+  // beforeRun may have already committed the user's uncommitted work as a
+  // baseline before the run failed — report it so they are not surprised by a
+  // `pre-fix snapshot` commit with no machine-readable signal it happened.
+  preFixSnapshot?: boolean;
+  baselineCommit?: string;
 }
 
 interface BlockedEnvelope {
@@ -253,6 +258,10 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   // history. These outer vars are filled by that hook and read by the envelope.
   let preFixSnapshot = false;
   let baselineCommit = '';
+  // Snapshot facts to attach to a `failed` envelope, so a run that fails AFTER
+  // beforeRun committed the baseline still reports that commit.
+  const snapshotInfo = (): Pick<FailedEnvelope, 'preFixSnapshot' | 'baselineCommit'> =>
+    preFixSnapshot ? { preFixSnapshot, ...(baselineCommit ? { baselineCommit } : {}) } : {};
 
   // 3. Timeout → abort signal. -----------------------------------------------
   const turn = startTurnTimeout({ timeoutMs, progress, log });
@@ -361,7 +370,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         if (!baselineCommit) {
           envelopeDone = true;
           turn.clear();
-          emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).' });
+          emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).', ...snapshotInfo() });
           process.exit(1);
         }
       },
@@ -371,7 +380,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     turn.clear();
     if (!envelopeDone) {
       envelopeDone = true;
-      emit({ status: 'failed', jobId, error: (err as Error).message });
+      emit({ status: 'failed', jobId, error: (err as Error).message, ...snapshotInfo() });
     }
     process.exit(1);
   }
@@ -381,7 +390,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   if (!success) {
     if (!envelopeDone) {
       envelopeDone = true;
-      emit({ status: 'failed', jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : 'Fix session did not complete successfully.' });
+      emit({ status: 'failed', jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : 'Fix session did not complete successfully.', ...snapshotInfo() });
     }
     process.exit(0);
   }
