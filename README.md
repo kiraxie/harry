@@ -94,4 +94,7 @@ harry is distilled from `superpowers`, `ponytail`, `copilot-plugin-cc`, and `cod
 
 ## License
 
-MIT
+MIT, except the Codex provider. The files under `src/lib/codex/` and the test
+fixture `tests/fake-codex.mjs` are derived from
+[`codex-plugin-cc`](https://github.com/openai/codex) (Copyright 2026 OpenAI) and
+are licensed under Apache-2.0; see [`NOTICE`](NOTICE). All other code is MIT.
