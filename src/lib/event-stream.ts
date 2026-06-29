@@ -11,6 +11,8 @@
 
 import type { CopilotSession, SessionEvent } from '@github/copilot-sdk';
 
+import type { ProviderEvent } from './provider.ts';
+
 export interface AttachOptions {
   session: CopilotSession;
   stateDir: string;
@@ -18,6 +20,13 @@ export interface AttachOptions {
   appendLog: (message: string) => void;
   /** Stderr progress writer for foreground runs; no-op for background jobs. */
   progress: (message: string) => void;
+  /**
+   * Optional neutral-event sink. When provided, each handled SDK event is also
+   * mapped to a provider-agnostic {@link ProviderEvent} and pushed here. Purely
+   * additive: the completion/shutdown promises and all logging are unchanged,
+   * so callers that omit `emit` keep their exact current behavior.
+   */
+  emit?: (ev: ProviderEvent) => void;
 }
 
 export interface AttachedStream {
@@ -73,6 +82,7 @@ function truncate(text: string, max: number): string {
 
 export function attachStream(opts: AttachOptions): AttachedStream {
   const { session, stateDir, appendLog, progress } = opts;
+  const emit = opts.emit ?? ((): void => {});
 
   let lastAssistantMessage: string | undefined;
   let taskCompleteSummary: string | undefined;
@@ -101,6 +111,7 @@ export function attachStream(opts: AttachOptions): AttachedStream {
           lastAssistantMessage = content;
           progress(`[assistant] ${truncate(content, 160)}`);
           appendLog(`assistant.message: ${truncate(content, 400)}`);
+          emit({ type: 'assistant_message', content });
         }
         break;
       }
@@ -118,6 +129,7 @@ export function attachStream(opts: AttachOptions): AttachedStream {
         if (cost !== undefined && cost > 0) {
           progress(`[usage] ${event.data.model} +${cost} premium cost`);
         }
+        emit({ type: 'usage', copilot: { cost } });
         break;
       }
 
@@ -128,6 +140,7 @@ export function attachStream(opts: AttachOptions): AttachedStream {
         taskCompleteSuccess = event.data.success;
         appendLog(`session.task_complete success=${event.data.success ?? 'unknown'}`);
         progress(`[task_complete] ${event.data.success === false ? 'failed' : 'ok'}`);
+        emit({ type: 'task_complete', summary: taskCompleteSummary, success: taskCompleteSuccess });
         break;
       }
 
@@ -145,6 +158,7 @@ export function attachStream(opts: AttachOptions): AttachedStream {
             success: taskCompleteSuccess,
           });
         }
+        emit({ type: 'idle' });
         break;
       }
 
@@ -170,6 +184,14 @@ export function attachStream(opts: AttachOptions): AttachedStream {
           },
           currentModel: d.currentModel,
         });
+        emit({
+          type: 'shutdown',
+          codeChanges: {
+            linesAdded: d.codeChanges.linesAdded,
+            linesRemoved: d.codeChanges.linesRemoved,
+            filesModified: [...d.codeChanges.filesModified],
+          },
+        });
         break;
       }
 
@@ -181,6 +203,7 @@ export function attachStream(opts: AttachOptions): AttachedStream {
           completed = true;
           rejectCompletion(new Error(msg));
         }
+        emit({ type: 'error', message: msg });
         break;
       }
 
@@ -217,6 +240,7 @@ export function attachStream(opts: AttachOptions): AttachedStream {
         const toolName = (event.data as { toolName?: string }).toolName ?? 'unknown';
         appendLog(`tool.execution_start ${toolName}`);
         progress(`[tool] ${toolName} …`);
+        emit({ type: 'tool_start', name: toolName });
         break;
       }
 
@@ -249,17 +273,23 @@ export function attachStream(opts: AttachOptions): AttachedStream {
       case 'permission.requested': {
         const req = event.data.permissionRequest;
         const kind = req.kind;
+        let detail: string | undefined;
         if (kind === 'shell') {
-          appendLog(`permission.requested shell: ${(req as { fullCommandText?: string }).fullCommandText ?? ''}`);
+          detail = (req as { fullCommandText?: string }).fullCommandText;
+          appendLog(`permission.requested shell: ${detail ?? ''}`);
         } else if (kind === 'write') {
-          appendLog(`permission.requested write: ${(req as { fileName?: string }).fileName ?? ''}`);
+          detail = (req as { fileName?: string }).fileName;
+          appendLog(`permission.requested write: ${detail ?? ''}`);
         } else if (kind === 'read') {
-          appendLog(`permission.requested read: ${(req as { path?: string }).path ?? ''}`);
+          detail = (req as { path?: string }).path;
+          appendLog(`permission.requested read: ${detail ?? ''}`);
         } else if (kind === 'url') {
-          appendLog(`permission.requested url: ${(req as { url?: string }).url ?? ''}`);
+          detail = (req as { url?: string }).url;
+          appendLog(`permission.requested url: ${detail ?? ''}`);
         } else {
           appendLog(`permission.requested ${kind}`);
         }
+        emit({ type: 'permission_request', kind, detail });
         break;
       }
 
