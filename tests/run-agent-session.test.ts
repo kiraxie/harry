@@ -28,6 +28,7 @@ const baseRun = (cwd: string): RunOpts => ({
   prompt: "hi",
   readOnly: true,
   allowShell: false,
+  allowUrl: false,
   systemMessage: "",
   appendLog: () => {},
   progress: () => {},

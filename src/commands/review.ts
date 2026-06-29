@@ -149,6 +149,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
         reasoning,
         readOnly: true,
         allowShell: false,
+        allowUrl: false,
         systemMessage: buildSystemMessage('review', { extraContext }),
         appendLog: log,
         progress,

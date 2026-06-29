@@ -44,6 +44,7 @@ export interface RunOpts {
   reasoning?: ReasoningEffort;
   readOnly: boolean;
   allowShell: boolean;
+  allowUrl: boolean;
   systemMessage: string;
   appendLog: (m: string) => void;
   progress: (m: string) => void;

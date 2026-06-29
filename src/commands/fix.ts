@@ -322,9 +322,6 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   });
 
   // 4. Run the agent session (write-enabled, real working tree). -------------
-  // DEBT: --allow-url is no longer plumbed to the session — the CopilotProvider
-  // hardcodes allowUrl:false (RunOpts carries no allowUrl field). Re-thread it
-  // through RunOpts if a fix run ever needs network fetches.
   progress(`Applying ${findings.length} approved fix(es) (model=${copilotModel})…`);
   let provider: ProviderId;
   let result;
@@ -339,6 +336,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         reasoning,
         readOnly: false,
         allowShell: options.allowShell ?? false,
+        allowUrl: options.allowUrl ?? false,
         systemMessage: buildSystemMessage('fix', { extraContext }),
         appendLog: log,
         progress,

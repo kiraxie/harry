@@ -103,7 +103,7 @@ export class CopilotProvider implements Provider {
     // a writable run honors the caller's allowShell flag.
     const permissionHandler = makePermissionHandler({
       allowShell: opts.readOnly ? false : opts.allowShell,
-      allowUrl: false,
+      allowUrl: opts.allowUrl,
       worktreePath: cwd,
       appendLog,
       readOnly: opts.readOnly,

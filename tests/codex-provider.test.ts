@@ -37,6 +37,7 @@ test("CodexProvider.run maps a turn to a successful RunResult with codex usage",
       prompt: "hi",
       readOnly: true,
       allowShell: false,
+      allowUrl: false,
       systemMessage: "",
       appendLog() {},
       progress() {}

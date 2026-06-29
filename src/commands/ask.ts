@@ -89,6 +89,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
         reasoning,
         readOnly: true,
         allowShell: false,
+        allowUrl: false,
         systemMessage: buildSystemMessage('ask', { extraContext }),
         appendLog: log,
         progress,
