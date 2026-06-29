@@ -82,6 +82,15 @@ export class CodexProvider implements Provider {
 
     progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}…`);
 
+    // DEBT: only `readOnly` is threaded into runCodexTurn; opts.allowShell /
+    // opts.allowUrl are DROPPED. codex's sandbox is COARSE (turn.ts uses
+    // `read-only` when readOnly else `workspace-write` with
+    // approvalPolicy:"never") and does NOT granularly honor allowShell/allowUrl
+    // the way CopilotProvider's per-command gating does — so a write-enabled
+    // `fix --provider codex` is MORE permissive than copilot. The codex write
+    // path is deferred/untested (no subscription). A future fix should thread
+    // allowShell/allowUrl into turn.ts's sandbox/approvalPolicy choice (and/or
+    // warn when `fix --provider codex` is used).
     const result = await runCodexTurn({
       cwd: opts.cwd,
       prompt: opts.prompt,

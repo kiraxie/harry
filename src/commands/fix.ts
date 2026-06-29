@@ -245,7 +245,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   }
   log(`fix start: model=${copilotModel} findings=${findings.length} source=${findingsAbs}`);
 
-  // 2. Repo + pre-fix snapshot -----------------------------------------------
+  // 2. Repo --------------------------------------------------------------------
   let repoRoot: string;
   try {
     repoRoot = resolveRepoRoot(cwd);
@@ -254,39 +254,11 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     process.exit(1);
   }
 
-  // Commit any pre-existing uncommitted changes so the fix diff is isolated.
+  // The pre-fix snapshot is deferred to the `beforeRun` hook below so it runs
+  // ONLY after the quota gate passes — a blocked copilot fix must mutate NO git
+  // history. These outer vars are filled by that hook and read by the envelope.
   let preFixSnapshot = false;
-  const dirty = tryGit(['status', '--porcelain'], repoRoot);
-  if (dirty.ok && dirty.stdout.trim()) {
-    tryGit(['add', '-A'], repoRoot);
-    const c = tryGit(['commit', '-m', 'chore: pre-fix snapshot (copilot fix baseline)'], repoRoot);
-    preFixSnapshot = c.ok;
-    if (c.ok) {
-      progress('Committed pre-existing changes as a baseline snapshot before applying fixes.');
-      log('pre-fix snapshot commit created');
-    } else {
-      log(`pre-fix snapshot commit failed: ${c.stderr}`);
-    }
-  }
-  // If the tree was dirty but the snapshot commit failed, the baseline is
-  // contaminated — proceeding would mix the user's pre-existing changes into
-  // the reported fix diff. Abort instead.
-  if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
-    emit({
-      status: 'failed',
-      jobId,
-      error: 'Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry.',
-    });
-    process.exit(1);
-  }
-
-  const baselineCommit = gitHead(repoRoot);
-  // fix diffs the applied changes against this baseline; with no commit to
-  // diff against (unborn HEAD) the diff would silently report nothing.
-  if (!baselineCommit) {
-    emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).' });
-    process.exit(1);
-  }
+  let baselineCommit = '';
 
   // 3. Timeout → abort signal. -----------------------------------------------
   // DEBT: per-call --timeout is honored only by the Copilot provider (via the
@@ -367,6 +339,47 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
           process.exit(0);
         }
         if ('warning' in gate && gate.warning) progress(gate.warning);
+      },
+      // Post-gate / pre-run: snapshot pre-existing changes so the fix diff is
+      // isolated. Runs ONLY after the quota gate passes, so a blocked copilot
+      // fix leaves git history untouched.
+      beforeRun: () => {
+        // Commit any pre-existing uncommitted changes so the fix diff is isolated.
+        const dirty = tryGit(['status', '--porcelain'], repoRoot);
+        if (dirty.ok && dirty.stdout.trim()) {
+          tryGit(['add', '-A'], repoRoot);
+          const c = tryGit(['commit', '-m', 'chore: pre-fix snapshot (copilot fix baseline)'], repoRoot);
+          preFixSnapshot = c.ok;
+          if (c.ok) {
+            progress('Committed pre-existing changes as a baseline snapshot before applying fixes.');
+            log('pre-fix snapshot commit created');
+          } else {
+            log(`pre-fix snapshot commit failed: ${c.stderr}`);
+          }
+        }
+        // If the tree was dirty but the snapshot commit failed, the baseline is
+        // contaminated — proceeding would mix the user's pre-existing changes
+        // into the reported fix diff. Abort instead.
+        if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
+          envelopeDone = true;
+          clearTimeout(timeoutHandle);
+          emit({
+            status: 'failed',
+            jobId,
+            error: 'Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry.',
+          });
+          process.exit(1);
+        }
+
+        baselineCommit = gitHead(repoRoot);
+        // fix diffs the applied changes against this baseline; with no commit to
+        // diff against (unborn HEAD) the diff would silently report nothing.
+        if (!baselineCommit) {
+          envelopeDone = true;
+          clearTimeout(timeoutHandle);
+          emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).' });
+          process.exit(1);
+        }
       },
       log,
     }));

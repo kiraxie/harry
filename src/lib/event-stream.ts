@@ -5,8 +5,8 @@
  *   - a completion signal resolving on `session.task_complete` or timeout
  *   - a shutdown-capture promise resolving on `session.shutdown`
  *
- * The caller (src/commands/implement.ts) awaits these promises to drive the
- * implementation lifecycle, then assembles the final stdout envelope.
+ * The caller (CopilotProvider, via the event stream) awaits these promises to
+ * drive the session lifecycle, then assembles the final stdout envelope.
  */
 
 import type { CopilotSession, SessionEvent } from '@github/copilot-sdk';

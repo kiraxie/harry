@@ -4,9 +4,9 @@
  *
  * This is a refactor: the lifecycle (client construction, start, auth, session
  * creation, event-stream attach, send, completion, usage metrics, teardown) is
- * lifted verbatim in behavior from `src/commands/ask.ts` /
- * `src/commands/implement.ts`. It deliberately does NOT decide model/effort
- * defaults or perform quota gating — the caller (runAgentSession) owns those.
+ * lifted verbatim in behavior from the prior inline `ask` lifecycle. It
+ * deliberately does NOT decide model/effort defaults or perform quota gating —
+ * the caller (runAgentSession) owns those.
  * The provider only runs the session and reports usage.
  */
 

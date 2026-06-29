@@ -3,7 +3,8 @@
  * calls. It resolves the provider ONCE, auth-checks, runs the copilot-only quota
  * gate, runs the provider, and returns the neutral result. This is also where the
  * async "is codex usable as the implicit default" probe lives (the sync
- * `resolveProvider` in provider.ts cannot await an auth check).
+ * `resolveExplicit` in provider.ts only handles the flag/setting precedence and
+ * cannot await an auth check).
  */
 
 import { getCodexAuthStatus, getCodexAvailability } from "./codex/auth.ts";
@@ -42,6 +43,13 @@ export interface RunAgentSessionArgs {
   /** Copilot-only quota pre-gate; invoked only when the provider meters quota. */
   enforceQuota?: (provider: Provider) => void | Promise<void>;
   /**
+   * Post-gate / pre-run hook, invoked AFTER the quota gate passes and just
+   * BEFORE `provider.run`. Lets a command perform side effects that must not
+   * happen when the run is blocked — e.g. `fix`'s pre-fix snapshot commit, which
+   * would otherwise mutate git history even when the quota gate blocks the run.
+   */
+  beforeRun?: (provider: Provider) => void | Promise<void>;
+  /**
    * Provider-aware default model, applied only when `run.model` is undefined.
    * Lets the COMMAND supply the per-provider default (e.g. copilot → 'gpt-5.5',
    * codex → undefined so ~/.codex/config.toml decides) after the id is resolved.
@@ -60,6 +68,9 @@ export async function runAgentSession(
 
   const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
 
+  // DEBT: copilot double-auths — runAgentSession.checkAuth here and again inside
+  // CopilotProvider.run()'s session start. Perf only (one extra auth probe), no
+  // correctness impact; collapse if it ever shows up on the hot path.
   const auth = await provider.checkAuth(args.cwd);
   if (!auth.ok) {
     // Explicit choice that fails auth surfaces the error (NO fallback). An
@@ -77,6 +88,10 @@ export async function runAgentSession(
   if (args.run.model === undefined && args.defaultModelFor) {
     args.run = { ...args.run, model: args.defaultModelFor(id) };
   }
+
+  // Post-gate / pre-run hook: side effects (e.g. fix's pre-fix snapshot) that
+  // must NOT run when the quota gate above blocked the run.
+  await args.beforeRun?.(provider);
 
   const result = await provider.run(args.run);
   return { provider: id, result };

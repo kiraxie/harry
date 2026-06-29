@@ -116,6 +116,63 @@ test("quota gate runs only when provider meters quota", async () => {
   });
 });
 
+test("beforeRun runs after the quota gate and before provider.run", async () => {
+  await withoutEnv(async () => {
+    const order: string[] = [];
+    const capture = (id: ProviderId): Provider => ({
+      ...stub(id, { meters: true }),
+      run: async () => {
+        order.push("run");
+        return { lastAssistantMessage: "done", success: true };
+      },
+    });
+    await runAgentSession({
+      cwd: "/tmp",
+      flags: { provider: "copilot" },
+      run: baseRun("/tmp"),
+      pickProvider: capture,
+      enforceQuota: () => {
+        order.push("gate");
+      },
+      beforeRun: () => {
+        order.push("beforeRun");
+      },
+    });
+    assert.deepEqual(order, ["gate", "beforeRun", "run"]);
+  });
+});
+
+test("beforeRun is skipped when the quota gate blocks (throws)", async () => {
+  await withoutEnv(async () => {
+    let beforeRunRan = false;
+    let runRan = false;
+    const capture = (id: ProviderId): Provider => ({
+      ...stub(id, { meters: true }),
+      run: async () => {
+        runRan = true;
+        return { lastAssistantMessage: "done", success: true };
+      },
+    });
+    await assert.rejects(
+      runAgentSession({
+        cwd: "/tmp",
+        flags: { provider: "copilot" },
+        run: baseRun("/tmp"),
+        pickProvider: capture,
+        enforceQuota: () => {
+          throw new Error("blocked");
+        },
+        beforeRun: () => {
+          beforeRunRan = true;
+        },
+      }),
+      /blocked/,
+    );
+    assert.equal(beforeRunRan, false, "beforeRun must not run when the gate blocks");
+    assert.equal(runRan, false, "provider.run must not run when the gate blocks");
+  });
+});
+
 test("defaultModelFor fills run.model only when it is undefined", async () => {
   await withoutEnv(async () => {
     let seenModel: string | undefined = "unset";

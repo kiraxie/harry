@@ -88,26 +88,13 @@ const norm = (v: unknown): string | undefined =>
 const isId = (v?: string): v is ProviderId => v === "copilot" || v === "codex";
 
 /**
- * Fail-safe sync probe for whether Codex is usable as the implicit default.
- *
- * DEBT: stub that always returns false until Task 3 lands. Task 3's
- * `getCodexAvailability` + auth probe replaces this body. Callers may inject
- * `deps.codexUsable` to override (tests always do), so the real default is
- * never exercised in unit tests. Returning false here keeps the default chain
- * falling back to copilot rather than erroring when uncertain.
- */
-function defaultCodexUsable(_cwd: string): boolean {
-  return false;
-}
-
-/**
  * The authoritative part of resolution: an explicit `--provider` flag, then the
  * user setting (env). Returns the named provider when either explicitly selects
- * one, else undefined (caller falls through to the codex-if-usable default).
+ * one, else undefined (caller falls through to the codex-if-usable default,
+ * which the async session runner probes since it requires an auth check).
  *
- * This is the SINGLE source of the flag>setting precedence — both the sync
- * {@link resolveProvider} and the async session runner build on it, so the
- * "explicit choice is authoritative, no fallback" rule lives in exactly one place.
+ * This is the SINGLE source of the flag>setting precedence, so the "explicit
+ * choice is authoritative, no fallback" rule lives in exactly one place.
  */
 export function resolveExplicit(flags: { provider?: string }): ProviderId | undefined {
   const flag = norm(flags.provider);
@@ -117,24 +104,4 @@ export function resolveExplicit(flags: { provider?: string }): ProviderId | unde
   if (isId(setting)) return setting; // user setting, authoritative
 
   return undefined;
-}
-
-/**
- * Resolve the active provider. Precedence:
- *   explicit flag > user setting (env) > codex-if-usable > copilot.
- *
- * A flag/setting that explicitly names a provider is authoritative — there is
- * NO fallback here. If that provider later fails auth/run, the error surfaces
- * at that boundary, not in this resolver.
- */
-export function resolveProvider(
-  cwd: string,
-  flags: { provider?: string },
-  deps: { codexUsable?: (cwd: string) => boolean } = {},
-): ProviderId {
-  const explicit = resolveExplicit(flags);
-  if (explicit) return explicit;
-
-  const usable = deps.codexUsable ?? defaultCodexUsable; // default chain
-  return usable(cwd) ? "codex" : "copilot";
 }

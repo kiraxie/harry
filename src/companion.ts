@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * companion — CLI entry point for the Copilot Claude Code plugin.
+ * companion — CLI entry point for the harry Claude Code plugin; drives the
+ * Copilot or Codex provider behind one neutral command set.
  */
 
 import process from 'node:process';
@@ -34,9 +35,9 @@ function printUsage(): void {
       '  companion result [job-id] [--json]',
       '',
       'Commands:',
-      '  setup       Check GitHub Copilot authentication, available models, quota',
-      '  review      Run a Copilot code review (markdown, or JSON findings with --fix)',
-      '  ask         Ask Copilot a single prompt (read-only) and print the answer',
+      '  setup       Check provider auth, available models, quota',
+      '  review      Run a code review (Copilot or Codex; markdown, or JSON findings with --fix)',
+      '  ask         Ask a single prompt (read-only) and print the answer',
       '  fix         Apply Claude-Code-approved review findings to the working tree',
       '  status      Show quota plus background job status',
       '  result      Retrieve a background job\'s output',
