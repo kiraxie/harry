@@ -337,7 +337,7 @@ export function renderQuotaBar(
   haveSnapshot: boolean,
 ): string[] {
   if (!haveSnapshot) {
-    return ['- No snapshot yet. One will be captured on the next `implement` run.'];
+    return ['- No snapshot yet. One will be captured on the next run.'];
   }
   if (q.allUnlimited && q.pools.length > 0) {
     return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(', ')}).`];
@@ -347,7 +347,6 @@ export function renderQuotaBar(
   }
 
   const metered = q.pools.filter((p) => !p.unlimited);
-  const unlimited = q.pools.filter((p) => p.unlimited);
   const lines: string[] = [];
 
   for (const p of metered) {
@@ -370,11 +369,6 @@ export function renderQuotaBar(
   }
   // Drop trailing blank line introduced by the loop.
   if (lines[lines.length - 1] === '') lines.pop();
-
-  if (unlimited.length > 0) {
-    if (lines.length > 0) lines.push('');
-    lines.push(`Unlimited: ${unlimited.map((p) => p.label).join(', ')}`);
-  }
 
   return lines;
 }

@@ -87,7 +87,7 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
 }
 
 function renderQuotaBlock(haveSnapshot: boolean, q: ReturnType<typeof summarize>): string {
-  return ['## Copilot Quota', ...renderQuotaBar(q, haveSnapshot)].join('\n');
+  return ['## Quota', ...renderQuotaBar(q, haveSnapshot)].join('\n');
 }
 
 interface JobRow {

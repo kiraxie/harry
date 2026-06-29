@@ -9,7 +9,6 @@ import { checkAuth } from '../lib/copilot-auth.js';
 import { getCodexAvailability, getCodexAuthStatus } from '../lib/codex/auth.js';
 import { resolveActiveProvider } from '../lib/run-agent-session.ts';
 import { readSnapshot, summarize, renderQuotaBar, fetchQuota } from '../lib/quota.js';
-import { pruneOrphans } from '../lib/worktree.js';
 import { resolveStateDir } from '../lib/state.js';
 import { CLIENT_NAME, PLUGIN_VERSION } from '../lib/version.js';
 
@@ -109,8 +108,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const claudeModels = modelIds.filter((id) => id.toLowerCase().includes('claude'));
   const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
 
-  const pruneReport = pruneOrphans(cwd);
-
   // Actively refresh the quota snapshot while the client is live — the SDK no
   // longer pushes quota via events, so this is how `setup` shows real numbers.
   await fetchQuota(client, stateDir).catch(() => null);
@@ -145,29 +142,10 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ''})`);
   if (auth.host) lines.push(`**Host:** ${auth.host}`);
   lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? '(available)' : '(NOT listed — pass --model to override)'}`);
-  if (modelIds.length > 0) {
-    lines.push('');
-    lines.push('### Available models');
-    for (const m of modelIds) lines.push(`- \`${m}\``);
-  }
-  if (!defaultAvailable && claudeModels.length > 0) {
-    lines.push('');
-    lines.push('### Claude models detected');
-    for (const m of claudeModels) lines.push(`- \`${m}\``);
-  }
   lines.push('');
   lines.push('### Quota');
   const haveSnapshot = !!(report.quota && (report.quota.premium !== undefined || report.quota.unlimited));
   lines.push(...renderQuotaBar(report.quota ?? { pools: [], allUnlimited: false }, haveSnapshot));
-  lines.push('');
-  lines.push('### Housekeeping');
-  lines.push(`- Worktrees pruned: ${pruneReport.worktreesPruned ? 'yes' : 'skipped (not a git repo or prune failed)'}`);
-  lines.push(`- Merged copilot/* branches removed: ${pruneReport.branchesRemoved}`);
-  lines.push('');
-  lines.push('### Next steps');
-  lines.push('- `/harry:ask "<prompt>"` to ask a frontier model a single question');
-  lines.push('- `/harry:status` to see quota + running jobs');
-  lines.push('- `/harry:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
 
   console.log(lines.join('\n'));
 }
