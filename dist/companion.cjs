@@ -11890,6 +11890,7 @@ async function runAgentSession(args) {
   if (args.run.model === void 0 && args.defaultModelFor) {
     args.run = { ...args.run, model: args.defaultModelFor(id) };
   }
+  await args.beforeRun?.(provider);
   const result = await provider.run(args.run);
   return { provider: id, result };
 }
@@ -12337,31 +12338,7 @@ async function runFix(cwd, options = {}) {
     process.exit(1);
   }
   let preFixSnapshot = false;
-  const dirty = tryGit2(["status", "--porcelain"], repoRoot);
-  if (dirty.ok && dirty.stdout.trim()) {
-    tryGit2(["add", "-A"], repoRoot);
-    const c = tryGit2(["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"], repoRoot);
-    preFixSnapshot = c.ok;
-    if (c.ok) {
-      progress("Committed pre-existing changes as a baseline snapshot before applying fixes.");
-      log("pre-fix snapshot commit created");
-    } else {
-      log(`pre-fix snapshot commit failed: ${c.stderr}`);
-    }
-  }
-  if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
-    emit2({
-      status: "failed",
-      jobId,
-      error: "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry."
-    });
-    process.exit(1);
-  }
-  const baselineCommit = gitHead(repoRoot);
-  if (!baselineCommit) {
-    emit2({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet)." });
-    process.exit(1);
-  }
+  let baselineCommit = "";
   const abort = new AbortController();
   let timedOut = false;
   const timeoutHandle = setTimeout(() => {
@@ -12431,6 +12408,40 @@ async function runFix(cwd, options = {}) {
           process.exit(0);
         }
         if ("warning" in gate && gate.warning) progress(gate.warning);
+      },
+      // Post-gate / pre-run: snapshot pre-existing changes so the fix diff is
+      // isolated. Runs ONLY after the quota gate passes, so a blocked copilot
+      // fix leaves git history untouched.
+      beforeRun: () => {
+        const dirty = tryGit2(["status", "--porcelain"], repoRoot);
+        if (dirty.ok && dirty.stdout.trim()) {
+          tryGit2(["add", "-A"], repoRoot);
+          const c = tryGit2(["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"], repoRoot);
+          preFixSnapshot = c.ok;
+          if (c.ok) {
+            progress("Committed pre-existing changes as a baseline snapshot before applying fixes.");
+            log("pre-fix snapshot commit created");
+          } else {
+            log(`pre-fix snapshot commit failed: ${c.stderr}`);
+          }
+        }
+        if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
+          envelopeDone = true;
+          clearTimeout(timeoutHandle);
+          emit2({
+            status: "failed",
+            jobId,
+            error: "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry."
+          });
+          process.exit(1);
+        }
+        baselineCommit = gitHead(repoRoot);
+        if (!baselineCommit) {
+          envelopeDone = true;
+          clearTimeout(timeoutHandle);
+          emit2({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet)." });
+          process.exit(1);
+        }
       },
       log
     }));
@@ -12844,9 +12855,9 @@ function printUsage() {
       "  companion result [job-id] [--json]",
       "",
       "Commands:",
-      "  setup       Check GitHub Copilot authentication, available models, quota",
-      "  review      Run a Copilot code review (markdown, or JSON findings with --fix)",
-      "  ask         Ask Copilot a single prompt (read-only) and print the answer",
+      "  setup       Check provider auth, available models, quota",
+      "  review      Run a code review (Copilot or Codex; markdown, or JSON findings with --fix)",
+      "  ask         Ask a single prompt (read-only) and print the answer",
       "  fix         Apply Claude-Code-approved review findings to the working tree",
       "  status      Show quota plus background job status",
       "  result      Retrieve a background job's output"
