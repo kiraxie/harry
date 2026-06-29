@@ -115,6 +115,51 @@ test("quota gate runs only when provider meters quota", async () => {
   });
 });
 
+test("defaultModelFor fills run.model only when it is undefined", async () => {
+  await withoutEnv(async () => {
+    let seenModel: string | undefined = "unset";
+    const capture = (id: ProviderId): Provider => ({
+      ...stub(id),
+      run: async (opts: RunOpts) => {
+        seenModel = opts.model;
+        return { lastAssistantMessage: "done", success: true };
+      },
+    });
+
+    // model unset → default applied
+    await runAgentSession({
+      cwd: "/tmp",
+      flags: { provider: "copilot" },
+      run: baseRun("/tmp"),
+      pickProvider: capture,
+      defaultModelFor: (id) => (id === "copilot" ? "gpt-5.5" : undefined),
+    });
+    assert.equal(seenModel, "gpt-5.5");
+
+    // model unset, codex default is undefined → stays undefined
+    seenModel = "unset";
+    await runAgentSession({
+      cwd: "/tmp",
+      flags: { provider: "codex" },
+      run: baseRun("/tmp"),
+      pickProvider: capture,
+      defaultModelFor: (id) => (id === "copilot" ? "gpt-5.5" : undefined),
+    });
+    assert.equal(seenModel, undefined);
+
+    // explicit model → default NOT applied
+    seenModel = "unset";
+    await runAgentSession({
+      cwd: "/tmp",
+      flags: { provider: "copilot" },
+      run: { ...baseRun("/tmp"), model: "claude-opus" },
+      pickProvider: capture,
+      defaultModelFor: () => "gpt-5.5",
+    });
+    assert.equal(seenModel, "claude-opus");
+  });
+});
+
 test("auth failure throws with no fallback", async () => {
   await withoutEnv(async () => {
     await assert.rejects(

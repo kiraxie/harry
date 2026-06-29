@@ -243,9 +243,11 @@ async function main(): Promise<void> {
 
     case 'ask': {
       const reasoning = flagEnum(flags, 'reasoning', ['low', 'medium', 'high', 'xhigh'] as const);
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
       const prompt = extractTask(args, flags); // reuse positional/`--task`/stdin extraction
       await runAsk(process.cwd(), {
         prompt,
+        provider,
         model: flagString(flags, 'model'),
         reasoning,
         timeout: flagNumber(flags, 'timeout'),

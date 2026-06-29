@@ -41,6 +41,12 @@ export interface RunAgentSessionArgs {
   resolveUsable?: (cwd: string) => Promise<boolean>;
   /** Copilot-only quota pre-gate; invoked only when the provider meters quota. */
   enforceQuota?: (provider: Provider) => void | Promise<void>;
+  /**
+   * Provider-aware default model, applied only when `run.model` is undefined.
+   * Lets the COMMAND supply the per-provider default (e.g. copilot → 'gpt-5.5',
+   * codex → undefined so ~/.codex/config.toml decides) after the id is resolved.
+   */
+  defaultModelFor?: (id: ProviderId) => string | undefined;
   log?: (m: string) => void;
 }
 
@@ -64,6 +70,12 @@ export async function runAgentSession(
 
   if (provider.capabilities.metersQuota && args.enforceQuota) {
     await args.enforceQuota(provider);
+  }
+
+  // Apply the provider-aware default model only when the caller left it unset,
+  // so an explicit --model always wins and codex can keep model undefined.
+  if (args.run.model === undefined && args.defaultModelFor) {
+    args.run = { ...args.run, model: args.defaultModelFor(id) };
   }
 
   const result = await provider.run(args.run);
