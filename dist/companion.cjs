@@ -11092,40 +11092,41 @@ async function resolveActiveProvider(flags, cwd, opts = {}) {
 }
 var INTERRUPT_TEARDOWN_CEILING_MS = 2e3;
 async function runAgentSession(args) {
-  const { id, explicit } = await resolveActiveProvider(args.flags, args.cwd, {
-    probe: args.resolveUsable
-  });
-  args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
-  const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
-  const auth = await provider.checkAuth(args.cwd);
-  if (!auth.ok) {
-    throw new Error(`${id} not authenticated: ${auth.message}`);
-  }
-  if (provider.capabilities.metersQuota && args.enforceQuota) {
-    await args.enforceQuota(provider);
-  }
-  if (args.run.model === void 0 && args.defaultModelFor) {
-    args.run = { ...args.run, model: args.defaultModelFor(id) };
-  }
+  let activeProvider;
   const onInterrupt = () => {
     args.onInterrupt?.();
     const exit = () => process.exit(130);
     const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
     guard.unref();
-    void Promise.resolve(provider.forceStop?.()).catch(() => {
+    void Promise.resolve(activeProvider?.forceStop?.()).catch(() => {
     }).finally(exit);
   };
   process.on("SIGINT", onInterrupt);
   process.on("SIGTERM", onInterrupt);
-  let result;
   try {
+    const { id, explicit } = await resolveActiveProvider(args.flags, args.cwd, {
+      probe: args.resolveUsable
+    });
+    args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
+    const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
+    activeProvider = provider;
+    const auth = await provider.checkAuth(args.cwd);
+    if (!auth.ok) {
+      throw new Error(`${id} not authenticated: ${auth.message}`);
+    }
+    if (provider.capabilities.metersQuota && args.enforceQuota) {
+      await args.enforceQuota(provider);
+    }
+    if (args.run.model === void 0 && args.defaultModelFor) {
+      args.run = { ...args.run, model: args.defaultModelFor(id) };
+    }
     await args.beforeRun?.(provider);
-    result = await provider.run(args.run);
+    const result = await provider.run(args.run);
+    return { provider: id, result };
   } finally {
     process.removeListener("SIGINT", onInterrupt);
     process.removeListener("SIGTERM", onInterrupt);
   }
-  return { provider: id, result };
 }
 async function defaultPick(id) {
   if (id === "codex") {
