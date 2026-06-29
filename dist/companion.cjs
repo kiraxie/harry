@@ -11263,10 +11263,6 @@ async function runSetup(options = {}) {
   lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ""})`);
   if (auth.host) lines.push(`**Host:** ${auth.host}`);
   lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? "(available)" : "(NOT listed \u2014 pass --model to override)"}`);
-  lines.push("");
-  lines.push("### Quota");
-  const haveSnapshot = !!(report.quota && (report.quota.premium !== void 0 || report.quota.unlimited));
-  lines.push(...renderQuotaBar(report.quota ?? { pools: [], allUnlimited: false }, haveSnapshot));
   console.log(lines.join("\n"));
 }
 async function runCodexSetup(cwd, options, isCheck) {
