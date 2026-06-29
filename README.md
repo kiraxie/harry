@@ -28,18 +28,39 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 ## Install
 
+harry has two layers — install whichever your agent supports:
+
+- **Resident laws** (`HARRY.md`) — work in any agent that loads a global
+  instructions file via an `@`-import: **Claude Code**, **Codex**, **Antigravity** (`agy`).
+- **Commands + skills + hooks** (the plugin proper) — **Claude Code only**.
+
 ```bash
-# 1. Build the Copilot runtime (the committed dist drifts as the Copilot CLI updates)
+# Build the runtime once (the committed dist drifts as the provider CLIs update)
 pnpm install
 pnpm run build
+```
 
-# 2. Wire the resident laws into your global ~/.claude/CLAUDE.md (idempotent)
-node scripts/install.mjs          # adds `@<path>/HARRY.md` in a marked block
-                                  # warns about stale entries it supersedes
-# uninstall: node scripts/install.mjs --remove
+### 1. Resident laws — Claude Code, Codex, or Antigravity
 
-# 3. Install as a plugin so commands + skills are discovered
-#    (inside Claude Code)
+`scripts/install.mjs` wires a marker-wrapped `@<path>/HARRY.md` into a global
+instructions file (idempotent; `--remove` strips it; it warns about entries it
+supersedes). The target defaults to Claude Code's file; point `HARRY_GLOBAL` at the
+others:
+
+```bash
+node scripts/install.mjs                              # Claude Code → ~/.claude/CLAUDE.md (default)
+HARRY_GLOBAL=~/.codex/AGENTS.md  node scripts/install.mjs   # Codex
+HARRY_GLOBAL=~/.gemini/GEMINI.md node scripts/install.mjs   # Antigravity (agy)
+# uninstall: re-run the matching line with --remove
+```
+
+If a host does not resolve `@`-imports, paste `HARRY.md`'s contents into that file
+instead.
+
+### 2. Commands + skills — Claude Code only
+
+```bash
+# inside Claude Code
 /plugin marketplace add /path/to/harry
 /plugin install harry@harry-dev
 ```
