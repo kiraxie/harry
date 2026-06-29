@@ -9094,12 +9094,51 @@ var init_copilot_auth = __esm({
   }
 });
 
+// package.json
+var package_default;
+var init_package = __esm({
+  "package.json"() {
+    package_default = {
+      name: "harry",
+      version: "0.2.0",
+      description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
+      type: "module",
+      license: "MIT",
+      author: "kiraxie <kiraxie11287@gmail.com>",
+      homepage: "https://github.com/kiraxie/harry",
+      repository: "https://github.com/kiraxie/harry",
+      engines: {
+        node: ">=26.0.0"
+      },
+      scripts: {
+        build: "node build.mjs",
+        test: "node --test",
+        typecheck: "tsc -p tsconfig.json --noEmit",
+        lint: "biome check .",
+        format: "biome format --write .",
+        "install-laws": "node scripts/install.mjs",
+        "init-ignore": "node scripts/init.mjs"
+      },
+      dependencies: {
+        "@github/copilot-sdk": "^1.0.4"
+      },
+      devDependencies: {
+        "@biomejs/biome": "^2.5.1",
+        "@types/node": "^26.0.1",
+        esbuild: "^0.28.1",
+        typescript: "7.0.1-rc"
+      }
+    };
+  }
+});
+
 // src/lib/version.ts
 var PLUGIN_VERSION, CLIENT_NAME;
 var init_version = __esm({
   "src/lib/version.ts"() {
     "use strict";
-    PLUGIN_VERSION = "0.4.2";
+    init_package();
+    PLUGIN_VERSION = package_default.version;
     CLIENT_NAME = "harry";
   }
 });
@@ -10825,7 +10864,7 @@ function daysUntil(iso) {
 }
 function renderQuotaBar(q, haveSnapshot) {
   if (!haveSnapshot) {
-    return ["- No snapshot yet. One will be captured on the next `implement` run."];
+    return ["- No snapshot yet. One will be captured on the next run."];
   }
   if (q.allUnlimited && q.pools.length > 0) {
     return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(", ")}).`];
@@ -10834,7 +10873,6 @@ function renderQuotaBar(q, haveSnapshot) {
     return ["- No quota information reported by Copilot yet."];
   }
   const metered = q.pools.filter((p) => !p.unlimited);
-  const unlimited = q.pools.filter((p) => p.unlimited);
   const lines = [];
   for (const p of metered) {
     const remainingPct = p.remainingPercentage ?? 0;
@@ -10855,10 +10893,6 @@ function renderQuotaBar(q, haveSnapshot) {
     lines.push("");
   }
   if (lines[lines.length - 1] === "") lines.pop();
-  if (unlimited.length > 0) {
-    if (lines.length > 0) lines.push("");
-    lines.push(`Unlimited: ${unlimited.map((p) => p.label).join(", ")}`);
-  }
   return lines;
 }
 var import_node_fs4, import_node_path4, POOL_LABELS, BAR_WIDTH;
@@ -11139,60 +11173,6 @@ async function defaultPick(id) {
 
 // src/commands/setup.ts
 init_quota();
-
-// src/lib/worktree.ts
-var import_node_child_process4 = require("node:child_process");
-var import_node_fs5 = require("node:fs");
-var import_node_path5 = require("node:path");
-function tryGit(args, cwd) {
-  const res = (0, import_node_child_process4.spawnSync)("git", args, { cwd, encoding: "utf-8" });
-  return {
-    ok: res.status === 0,
-    stdout: (res.stdout ?? "").trim(),
-    stderr: (res.stderr ?? "").trim()
-  };
-}
-function resolveRepoRoot(cwd) {
-  const res = tryGit(["rev-parse", "--show-toplevel"], cwd);
-  if (!res.ok) {
-    throw new Error(`Not a git repository: ${cwd}${res.stderr ? `
-${res.stderr}` : ""}`);
-  }
-  return res.stdout;
-}
-function pruneOrphans(cwd, maxAgeDays = 7) {
-  let repoRoot;
-  try {
-    repoRoot = resolveRepoRoot(cwd);
-  } catch {
-    return { worktreesPruned: false, branchesRemoved: 0 };
-  }
-  const prune = tryGit(["worktree", "prune"], repoRoot);
-  const worktreesPruned = prune.ok;
-  const branches = tryGit(
-    ["for-each-ref", "--format=%(refname:short) %(committerdate:unix) %(objectname)", "refs/heads/copilot/"],
-    repoRoot
-  );
-  let branchesRemoved = 0;
-  if (branches.ok && branches.stdout) {
-    const now = Math.floor(Date.now() / 1e3);
-    const cutoff = now - maxAgeDays * 86400;
-    for (const line of branches.stdout.split("\n")) {
-      const [branch, tsStr, tip] = line.split(" ");
-      if (!branch || !tsStr || !tip) continue;
-      const ts = Number.parseInt(tsStr, 10);
-      if (!Number.isFinite(ts) || ts > cutoff) continue;
-      const merged = tryGit(["merge-base", "--is-ancestor", tip, "HEAD"], repoRoot);
-      if (merged.ok) {
-        const del = tryGit(["branch", "-D", branch], repoRoot);
-        if (del.ok) branchesRemoved++;
-      }
-    }
-  }
-  return { worktreesPruned, branchesRemoved };
-}
-
-// src/commands/setup.ts
 init_state();
 init_version();
 var DEFAULT_MODEL = "claude-opus-4.8";
@@ -11256,7 +11236,6 @@ async function runSetup(options = {}) {
   const modelIds = models.map((m) => m.id);
   const claudeModels = modelIds.filter((id2) => id2.toLowerCase().includes("claude"));
   const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
-  const pruneReport = pruneOrphans(cwd);
   await fetchQuota(client, stateDir).catch(() => null);
   await client.stop().catch(() => {
   });
@@ -11284,29 +11263,10 @@ async function runSetup(options = {}) {
   lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ""})`);
   if (auth.host) lines.push(`**Host:** ${auth.host}`);
   lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? "(available)" : "(NOT listed \u2014 pass --model to override)"}`);
-  if (modelIds.length > 0) {
-    lines.push("");
-    lines.push("### Available models");
-    for (const m of modelIds) lines.push(`- \`${m}\``);
-  }
-  if (!defaultAvailable && claudeModels.length > 0) {
-    lines.push("");
-    lines.push("### Claude models detected");
-    for (const m of claudeModels) lines.push(`- \`${m}\``);
-  }
   lines.push("");
   lines.push("### Quota");
   const haveSnapshot = !!(report.quota && (report.quota.premium !== void 0 || report.quota.unlimited));
   lines.push(...renderQuotaBar(report.quota ?? { pools: [], allUnlimited: false }, haveSnapshot));
-  lines.push("");
-  lines.push("### Housekeeping");
-  lines.push(`- Worktrees pruned: ${pruneReport.worktreesPruned ? "yes" : "skipped (not a git repo or prune failed)"}`);
-  lines.push(`- Merged copilot/* branches removed: ${pruneReport.branchesRemoved}`);
-  lines.push("");
-  lines.push("### Next steps");
-  lines.push('- `/harry:ask "<prompt>"` to ask a frontier model a single question');
-  lines.push("- `/harry:status` to see quota + running jobs");
-  lines.push('- `/harry:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
   console.log(lines.join("\n"));
 }
 async function runCodexSetup(cwd, options, isCheck) {
@@ -11361,9 +11321,9 @@ init_state();
 init_quota();
 
 // src/lib/git.ts
-var import_node_child_process5 = require("node:child_process");
-var import_node_fs6 = require("node:fs");
-var import_node_path6 = require("node:path");
+var import_node_child_process4 = require("node:child_process");
+var import_node_fs5 = require("node:fs");
+var import_node_path5 = require("node:path");
 var MAX_UNTRACKED_BYTES = 24 * 1024;
 var DEFAULT_INLINE_DIFF_MAX_FILES = 2;
 var DEFAULT_INLINE_DIFF_MAX_BYTES = 256 * 1024;
@@ -11388,7 +11348,7 @@ function truncateUtf8(s, maxBytes) {
   return { text: cut, truncated: true };
 }
 function git(cwd, args, maxBuffer) {
-  const result = (0, import_node_child_process5.spawnSync)("git", args, {
+  const result = (0, import_node_child_process4.spawnSync)("git", args, {
     cwd,
     encoding: "utf8",
     maxBuffer,
@@ -11500,12 +11460,12 @@ function formatSection(title, body) {
   return [`## ${title}`, "", body.trim() ? body.trim() : "(none)", ""].join("\n");
 }
 function formatUntrackedFile(cwd, relativePath) {
-  const absolute = (0, import_node_path6.join)(cwd, relativePath);
-  if (!(0, import_node_fs6.existsSync)(absolute)) return `### ${relativePath}
+  const absolute = (0, import_node_path5.join)(cwd, relativePath);
+  if (!(0, import_node_fs5.existsSync)(absolute)) return `### ${relativePath}
 (skipped: missing)`;
   let stat;
   try {
-    stat = (0, import_node_fs6.statSync)(absolute);
+    stat = (0, import_node_fs5.statSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
@@ -11516,7 +11476,7 @@ function formatUntrackedFile(cwd, relativePath) {
 (skipped: ${stat.size} bytes exceeds ${MAX_UNTRACKED_BYTES} byte limit)`;
   let buffer;
   try {
-    buffer = (0, import_node_fs6.readFileSync)(absolute);
+    buffer = (0, import_node_fs5.readFileSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
@@ -11955,8 +11915,8 @@ Rules:
 `;
 
 // src/lib/system-message.ts
-var import_node_fs7 = require("node:fs");
-var import_node_path7 = require("node:path");
+var import_node_fs6 = require("node:fs");
+var import_node_path6 = require("node:path");
 var FRAMING = {
   fix: [
     "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
@@ -11981,8 +11941,8 @@ function resolveExtraContext(cwd, opts) {
   if (!raw.startsWith("@")) return raw.trim();
   const ref = raw.slice(1);
   try {
-    const source = ref === "-" ? 0 : (0, import_node_path7.resolve)(cwd, ref);
-    const text = (0, import_node_fs7.readFileSync)(source, "utf-8").trim();
+    const source = ref === "-" ? 0 : (0, import_node_path6.resolve)(cwd, ref);
+    const text = (0, import_node_fs6.readFileSync)(source, "utf-8").trim();
     return text || void 0;
   } catch (err) {
     opts.onWarn?.(
@@ -12294,6 +12254,29 @@ var import_node_fs8 = require("node:fs");
 var import_node_path8 = require("node:path");
 init_state();
 init_quota();
+
+// src/lib/worktree.ts
+var import_node_child_process5 = require("node:child_process");
+var import_node_fs7 = require("node:fs");
+var import_node_path7 = require("node:path");
+function tryGit(args, cwd) {
+  const res = (0, import_node_child_process5.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  return {
+    ok: res.status === 0,
+    stdout: (res.stdout ?? "").trim(),
+    stderr: (res.stderr ?? "").trim()
+  };
+}
+function resolveRepoRoot(cwd) {
+  const res = tryGit(["rev-parse", "--show-toplevel"], cwd);
+  if (!res.ok) {
+    throw new Error(`Not a git repository: ${cwd}${res.stderr ? `
+${res.stderr}` : ""}`);
+  }
+  return res.stdout;
+}
+
+// src/commands/fix.ts
 var DEFAULT_MODEL2 = "claude-opus-4.8";
 var DEFAULT_EFFORT2 = "high";
 var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
@@ -12682,7 +12665,7 @@ async function runStatus(cwd, options = {}) {
   console.log(sections.join("\n\n"));
 }
 function renderQuotaBlock(haveSnapshot, q) {
-  return ["## Copilot Quota", ...renderQuotaBar(q, haveSnapshot)].join("\n");
+  return ["## Quota", ...renderQuotaBar(q, haveSnapshot)].join("\n");
 }
 function toTableRow(job) {
   const icon = job.status === "completed" ? "\u2713 " : job.status === "failed" ? "\u2717 " : job.status === "running" ? "\u25B6 " : job.status === "queued" ? "\u2026 " : "  ";
