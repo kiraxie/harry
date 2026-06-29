@@ -9207,7 +9207,7 @@ function createProtocolError(message, data) {
   }
   return error;
 }
-var import_node_child_process3, import_node_process2, import_node_readline, DEFAULT_CLIENT_INFO, DEFAULT_CAPABILITIES, CodexAppServerClient;
+var import_node_child_process3, import_node_process2, import_node_readline, DEFAULT_CONNECT_TIMEOUT_MS, CLOSE_SIGTERM_DELAY_MS, CLOSE_SIGKILL_GRACE_MS, CLOSE_EXIT_WAIT_MS, DEFAULT_CLIENT_INFO, DEFAULT_CAPABILITIES, CodexAppServerClient;
 var init_app_server = __esm({
   "src/lib/codex/app-server.ts"() {
     "use strict";
@@ -9216,6 +9216,10 @@ var init_app_server = __esm({
     import_node_readline = __toESM(require("node:readline"), 1);
     init_version();
     init_process();
+    DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1e3;
+    CLOSE_SIGTERM_DELAY_MS = 50;
+    CLOSE_SIGKILL_GRACE_MS = 500;
+    CLOSE_EXIT_WAIT_MS = 3e3;
     DEFAULT_CLIENT_INFO = {
       title: "harry",
       name: "harry",
@@ -9265,7 +9269,7 @@ var init_app_server = __esm({
       }
       request(method, params) {
         if (this.closed) {
-          throw new Error("codex app-server client is closed.");
+          return Promise.reject(new Error("codex app-server client is closed."));
         }
         const id = this.nextId;
         this.nextId += 1;
@@ -9407,7 +9411,7 @@ ${stderr}` : ""}`
       }
       async close() {
         if (this.closed) {
-          await this.exitPromise;
+          await this.waitForExit();
           return;
         }
         this.closed = true;
@@ -9417,22 +9421,50 @@ ${stderr}` : ""}`
         if (this.proc && !this.proc.killed) {
           this.proc.stdin.end();
           const proc = this.proc;
-          setTimeout(() => {
-            if (proc && !proc.killed && proc.exitCode === null) {
-              if (import_node_process2.default.platform === "win32") {
-                try {
-                  if (proc.pid !== void 0) {
-                    terminateProcessTree(proc.pid);
-                  }
-                } catch {
-                }
-              } else {
-                proc.kill("SIGTERM");
-              }
+          const termTimer = setTimeout(() => {
+            if (proc.killed || proc.exitCode !== null) {
+              return;
             }
-          }, 50).unref?.();
+            if (import_node_process2.default.platform === "win32") {
+              try {
+                if (proc.pid !== void 0) {
+                  terminateProcessTree(proc.pid);
+                }
+              } catch {
+              }
+              return;
+            }
+            proc.kill("SIGTERM");
+            const killTimer = setTimeout(() => {
+              if (!proc.killed && proc.exitCode === null) {
+                proc.kill("SIGKILL");
+              }
+            }, CLOSE_SIGKILL_GRACE_MS);
+            killTimer.unref?.();
+          }, CLOSE_SIGTERM_DELAY_MS);
+          termTimer.unref?.();
         }
-        await this.exitPromise;
+        await this.waitForExit();
+      }
+      /**
+       * Wait for the child to exit, but never longer than CLOSE_EXIT_WAIT_MS. Even
+       * with SIGKILL escalation a grandchild can keep stdio open or 'exit' can be
+       * delayed; this bound guarantees close() always resolves so a caller's
+       * `await client.close()` in a finally block can't hang the host.
+       */
+      async waitForExit() {
+        let timer = null;
+        const bound = new Promise((resolve5) => {
+          timer = setTimeout(resolve5, CLOSE_EXIT_WAIT_MS);
+          timer.unref?.();
+        });
+        try {
+          await Promise.race([this.exitPromise, bound]);
+        } finally {
+          if (timer) {
+            clearTimeout(timer);
+          }
+        }
       }
       sendMessage(message) {
         const line = `${JSON.stringify(message)}
@@ -9543,7 +9575,13 @@ async function getCodexAuthStatus(cwd, opts = {}) {
   try {
     client = await CodexAppServerClient.connect(cwd, {
       env: opts.env,
-      disableBroker: true
+      disableBroker: true,
+      // Anti-hang: this probe runs on the default provider-resolution path of
+      // every auto ask/review/fix and in SessionStart setup. Without a ceiling,
+      // a child that spawns but blocks before answering `initialize` (broken
+      // install, interactive/auth prompt) makes connect() await forever — a
+      // hang no try/catch can rescue.
+      connectTimeoutMs: opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
     });
     const accountResponse = await client.request("account/read", {
       refreshToken: false
@@ -9576,15 +9614,1068 @@ var init_auth = __esm({
   }
 });
 
+// src/lib/state.ts
+function resolveStateDir(cwd) {
+  const workspaceRoot = (0, import_node_path2.resolve)(cwd);
+  const slug = (0, import_node_path2.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
+  const hash = (0, import_node_crypto2.createHash)("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
+  const dirName = `${slug}-${hash}`;
+  const pluginDataDir = process.env[PLUGIN_DATA_ENV];
+  if (pluginDataDir) {
+    return (0, import_node_path2.join)(pluginDataDir, "state", dirName);
+  }
+  const fallbackDir = (0, import_node_path2.join)(FALLBACK_STATE_ROOT, dirName);
+  if (!(0, import_node_fs2.existsSync)(fallbackDir)) {
+    const legacyDir = (0, import_node_path2.join)(LEGACY_FALLBACK_STATE_ROOT, dirName);
+    if ((0, import_node_fs2.existsSync)(legacyDir)) return legacyDir;
+  }
+  return fallbackDir;
+}
+function ensureDir(dir) {
+  (0, import_node_fs2.mkdirSync)(dir, { recursive: true });
+}
+function stateFilePath(stateDir) {
+  return (0, import_node_path2.join)(stateDir, "state.json");
+}
+function loadState(stateDir) {
+  const filePath = stateFilePath(stateDir);
+  if (!(0, import_node_fs2.existsSync)(filePath)) {
+    return { version: 1, jobs: [] };
+  }
+  try {
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
+  } catch {
+    return { version: 1, jobs: [] };
+  }
+}
+function saveState(stateDir, state) {
+  ensureDir(stateDir);
+  if (state.jobs.length > MAX_JOBS) {
+    state.jobs = state.jobs.slice(0, MAX_JOBS);
+  }
+  (0, import_node_fs2.writeFileSync)(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
+}
+function jobsDir(stateDir) {
+  return (0, import_node_path2.join)(stateDir, "jobs");
+}
+function jobFilePath(stateDir, jobId) {
+  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.json`);
+}
+function jobLogPath(stateDir, jobId) {
+  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.log`);
+}
+function writeJobFile(stateDir, job) {
+  const dir = jobsDir(stateDir);
+  ensureDir(dir);
+  (0, import_node_fs2.writeFileSync)(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
+}
+function readJobFile(stateDir, jobId) {
+  const filePath = jobFilePath(stateDir, jobId);
+  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
+  try {
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function appendLog(stateDir, jobId, message) {
+  const logFile = jobLogPath(stateDir, jobId);
+  ensureDir(jobsDir(stateDir));
+  const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
+  (0, import_node_fs2.writeFileSync)(logFile, `[${time}] ${message}
+`, { flag: "a" });
+}
+function readLogTail(stateDir, jobId, maxLines = 10) {
+  const logFile = jobLogPath(stateDir, jobId);
+  if (!(0, import_node_fs2.existsSync)(logFile)) return [];
+  try {
+    const content = (0, import_node_fs2.readFileSync)(logFile, "utf-8");
+    const lines = content.trim().split("\n");
+    return lines.slice(-maxLines);
+  } catch {
+    return [];
+  }
+}
+function generateJobId() {
+  const ts = Date.now();
+  const rand = (0, import_node_crypto2.randomUUID)().slice(0, 8);
+  return `job-${ts}-${rand}`;
+}
+function getSessionId() {
+  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || void 0;
+}
+function createJob(stateDir, job) {
+  const state = loadState(stateDir);
+  state.jobs.unshift(job);
+  saveState(stateDir, state);
+  writeJobFile(stateDir, job);
+}
+function updateJob(stateDir, jobId, updates) {
+  const state = loadState(stateDir);
+  const idx = state.jobs.findIndex((j) => j.id === jobId);
+  if (idx >= 0) {
+    state.jobs[idx] = { ...state.jobs[idx], ...updates };
+    saveState(stateDir, state);
+  }
+  const full = readJobFile(stateDir, jobId);
+  if (full) {
+    writeJobFile(stateDir, { ...full, ...updates });
+  }
+}
+function markJobFailed(stateDir, jobId, errorMessage) {
+  const job = readJobFile(stateDir, jobId);
+  if (!job || job.status === "completed" || job.status === "failed") return;
+  updateJob(stateDir, jobId, {
+    status: "failed",
+    phase: "failed",
+    completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    errorMessage
+  });
+  appendLog(stateDir, jobId, `Marked failed: ${errorMessage}`);
+}
+function listJobs(stateDir, sessionId) {
+  const state = loadState(stateDir);
+  if (sessionId) {
+    return state.jobs.filter((j) => j.sessionId === sessionId);
+  }
+  return state.jobs;
+}
+function codexRateLimitsPath(stateDir) {
+  return (0, import_node_path2.join)(stateDir, CODEX_RATE_LIMITS_FILE);
+}
+function writeCodexRateLimits(stateDir, rateLimits) {
+  try {
+    ensureDir(stateDir);
+    const snapshot = { ...rateLimits, capturedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    (0, import_node_fs2.writeFileSync)(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
+  } catch {
+  }
+}
+function readCodexRateLimits(stateDir) {
+  const filePath = codexRateLimitsPath(stateDir);
+  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
+  try {
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function formatCodexRateLimits(rl) {
+  const parts = [];
+  const used = [];
+  if (rl.primaryUsedPercent !== void 0) used.push(`primary ${rl.primaryUsedPercent}%`);
+  if (rl.secondaryUsedPercent !== void 0) used.push(`secondary ${rl.secondaryUsedPercent}%`);
+  if (used.length > 0) parts.push(`${used.join(" / ")} used`);
+  if (rl.planType) parts.push(`plan ${rl.planType}`);
+  if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
+  return parts.join(" \xB7 ");
+}
+function renderCodexBlock(rl) {
+  return ["## Codex", formatCodexRateLimits(rl)].join("\n");
+}
+var import_node_crypto2, import_node_fs2, import_node_path2, import_node_os, MAX_JOBS, PLUGIN_DATA_ENV, SESSION_ID_ENV, LEGACY_SESSION_ID_ENV, FALLBACK_STATE_ROOT, LEGACY_FALLBACK_STATE_ROOT, CODEX_RATE_LIMITS_FILE;
+var init_state = __esm({
+  "src/lib/state.ts"() {
+    "use strict";
+    import_node_crypto2 = require("node:crypto");
+    import_node_fs2 = require("node:fs");
+    import_node_path2 = require("node:path");
+    import_node_os = require("node:os");
+    MAX_JOBS = 50;
+    PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
+    SESSION_ID_ENV = "HARRY_SESSION_ID";
+    LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
+    FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "harry");
+    LEGACY_FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "copilot-companion");
+    CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
+  }
+});
+
+// src/lib/codex/turn.ts
+function buildTurnInput(prompt) {
+  return [{ type: "text", text: prompt, text_elements: [] }];
+}
+function shorten(text, limit = 96) {
+  const normalized = String(text ?? "").trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 3)}...`;
+}
+function extractThreadId(message) {
+  return message?.params?.threadId ?? null;
+}
+function extractTurnId(message) {
+  if (message?.params?.turnId) {
+    return message.params.turnId;
+  }
+  if (message?.params?.turn?.id) {
+    return message.params.turn.id;
+  }
+  return null;
+}
+function normalizeReasoningText(text) {
+  return String(text ?? "").replace(/\s+/g, " ").trim();
+}
+function extractReasoningSections(value) {
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string") {
+    const normalized = normalizeReasoningText(value);
+    return normalized ? [normalized] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractReasoningSections(entry));
+  }
+  if (typeof value === "object") {
+    const obj = value;
+    if (typeof obj.text === "string") {
+      return extractReasoningSections(obj.text);
+    }
+    if ("summary" in obj) {
+      return extractReasoningSections(obj.summary);
+    }
+    if ("content" in obj) {
+      return extractReasoningSections(obj.content);
+    }
+    if ("parts" in obj) {
+      return extractReasoningSections(obj.parts);
+    }
+  }
+  return [];
+}
+function mergeReasoningSections(existing, next) {
+  const merged = [];
+  for (const section of [...existing, ...next]) {
+    const normalized = normalizeReasoningText(section);
+    if (!normalized || merged.includes(normalized)) {
+      continue;
+    }
+    merged.push(normalized);
+  }
+  return merged;
+}
+function toFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function parseTokenCount(params) {
+  const usage = {};
+  const lastUsage = params?.last_token_usage;
+  if (lastUsage && typeof lastUsage === "object") {
+    usage.inputTokens = toFiniteNumber(lastUsage.input_tokens);
+    usage.outputTokens = toFiniteNumber(lastUsage.output_tokens);
+  }
+  const rateLimits = params?.rate_limits;
+  if (rateLimits && typeof rateLimits === "object") {
+    const parsed = {};
+    const primary = toFiniteNumber(rateLimits.primary?.used_percent);
+    if (primary !== void 0) {
+      parsed.primaryUsedPercent = primary;
+    }
+    const secondary = toFiniteNumber(rateLimits.secondary?.used_percent);
+    if (secondary !== void 0) {
+      parsed.secondaryUsedPercent = secondary;
+    }
+    if (typeof rateLimits.plan_type === "string") {
+      parsed.planType = rateLimits.plan_type;
+    }
+    if (typeof rateLimits.resets_at === "string") {
+      parsed.resetsAt = rateLimits.resets_at;
+    }
+    if (Object.keys(parsed).length > 0) {
+      usage.rateLimits = parsed;
+    }
+  }
+  return usage;
+}
+function foldRateLimits(prev, next) {
+  if (!prev) {
+    return next;
+  }
+  if (!next) {
+    return prev;
+  }
+  return {
+    primaryUsedPercent: next.primaryUsedPercent ?? prev.primaryUsedPercent,
+    secondaryUsedPercent: next.secondaryUsedPercent ?? prev.secondaryUsedPercent,
+    planType: next.planType ?? prev.planType,
+    resetsAt: next.resetsAt ?? prev.resetsAt
+  };
+}
+function createTurnCaptureState(threadId, onItem) {
+  let resolveCompletion;
+  const completion = new Promise((resolve5) => {
+    resolveCompletion = resolve5;
+  });
+  return {
+    threadId,
+    threadIds: /* @__PURE__ */ new Set([threadId]),
+    threadTurnIds: /* @__PURE__ */ new Map(),
+    turnId: null,
+    turnStarted: false,
+    bufferedNotifications: [],
+    completion,
+    resolveCompletion,
+    finalTurn: null,
+    completed: false,
+    finalAnswerSeen: false,
+    pendingCollaborations: /* @__PURE__ */ new Set(),
+    activeSubagentTurns: /* @__PURE__ */ new Set(),
+    completionTimer: null,
+    lastAgentMessage: "",
+    reasoningSummary: [],
+    error: null,
+    usage: null,
+    onItem
+  };
+}
+function registerThread(state, threadId) {
+  if (threadId) {
+    state.threadIds.add(threadId);
+  }
+}
+function belongsToTurn(state, message) {
+  const messageThreadId = extractThreadId(message);
+  if (!messageThreadId || !state.threadIds.has(messageThreadId)) {
+    return false;
+  }
+  const trackedTurnId = state.threadTurnIds.get(messageThreadId) ?? null;
+  const messageTurnId = extractTurnId(message);
+  return trackedTurnId === null || messageTurnId === null || messageTurnId === trackedTurnId;
+}
+function shouldApplyNotification(state, message) {
+  if (message.method === "thread/started") {
+    return true;
+  }
+  if (message.method === "token_count" || message.method === "error") {
+    return true;
+  }
+  return belongsToTurn(state, message);
+}
+function clearCompletionTimer(state) {
+  if (state.completionTimer) {
+    clearTimeout(state.completionTimer);
+    state.completionTimer = null;
+  }
+}
+function completeTurn(state, turn = null) {
+  if (state.completed) {
+    return;
+  }
+  clearCompletionTimer(state);
+  state.completed = true;
+  if (turn) {
+    state.finalTurn = turn;
+    if (!state.turnId && turn.id) {
+      state.turnId = turn.id;
+    }
+  } else if (!state.finalTurn) {
+    state.finalTurn = { id: state.turnId ?? "inferred-turn", status: "completed" };
+  }
+  state.resolveCompletion();
+}
+function scheduleInferredCompletion(state) {
+  if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
+    return;
+  }
+  if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
+    return;
+  }
+  clearCompletionTimer(state);
+  state.completionTimer = setTimeout(() => {
+    state.completionTimer = null;
+    if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
+      return;
+    }
+    if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
+      return;
+    }
+    completeTurn(state, null);
+  }, 250);
+  state.completionTimer.unref?.();
+}
+function toolLabel(item) {
+  switch (item.type) {
+    case "commandExecution":
+      return `Running command: ${shorten(item.command)}`;
+    case "fileChange":
+      return `Applying ${item.changes?.length ?? 0} file change(s).`;
+    case "mcpToolCall":
+      return `Calling ${item.server}/${item.tool}.`;
+    case "dynamicToolCall":
+      return `Running tool: ${item.tool}.`;
+    case "webSearch":
+      return `Searching: ${shorten(item.query)}`;
+    default:
+      return null;
+  }
+}
+function recordItem(state, item, lifecycle, threadId = null) {
+  if (item.type === "collabAgentToolCall") {
+    if (!threadId || threadId === state.threadId) {
+      if (lifecycle === "started" || item.status === "inProgress") {
+        state.pendingCollaborations.add(item.id);
+      } else if (lifecycle === "completed") {
+        state.pendingCollaborations.delete(item.id);
+        scheduleInferredCompletion(state);
+      }
+    }
+    for (const receiverThreadId of item.receiverThreadIds ?? []) {
+      registerThread(state, receiverThreadId);
+    }
+  }
+  if (item.type === "agentMessage") {
+    if (item.text && (!threadId || threadId === state.threadId)) {
+      state.lastAgentMessage = item.text;
+      const final = lifecycle === "completed" && item.phase === "final_answer";
+      if (final) {
+        state.finalAnswerSeen = true;
+        scheduleInferredCompletion(state);
+      }
+      if (lifecycle === "completed") {
+        state.onItem?.({ kind: "assistant", text: item.text, final });
+      }
+    }
+    return;
+  }
+  if (item.type === "reasoning" && lifecycle === "completed") {
+    const nextSections = extractReasoningSections(item.summary);
+    state.reasoningSummary = mergeReasoningSections(state.reasoningSummary, nextSections);
+    for (const section of nextSections) {
+      state.onItem?.({ kind: "reasoning", text: section });
+    }
+    return;
+  }
+  if (lifecycle === "started") {
+    const label = toolLabel(item);
+    if (label) {
+      state.onItem?.({ kind: "tool", label });
+    }
+  }
+}
+function applyTurnNotification(state, message) {
+  switch (message.method) {
+    case "thread/started":
+      registerThread(state, message.params?.thread?.id);
+      break;
+    case "turn/started":
+      registerThread(state, message.params?.threadId);
+      state.threadTurnIds.set(message.params?.threadId, message.params?.turn?.id ?? null);
+      if ((message.params?.threadId ?? null) !== state.threadId) {
+        state.activeSubagentTurns.add(message.params?.threadId);
+      }
+      break;
+    case "item/started": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "started", message.params?.threadId ?? null);
+      }
+      break;
+    }
+    case "item/completed": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "completed", message.params?.threadId ?? null);
+      }
+      break;
+    }
+    case "token_count": {
+      const next = parseTokenCount(message.params);
+      const prev = state.usage ?? {};
+      const folded = {
+        inputTokens: next.inputTokens ?? prev.inputTokens,
+        outputTokens: next.outputTokens ?? prev.outputTokens,
+        rateLimits: foldRateLimits(prev.rateLimits, next.rateLimits)
+      };
+      const hasContent = folded.inputTokens !== void 0 || folded.outputTokens !== void 0 || folded.rateLimits !== void 0;
+      if (hasContent) {
+        state.usage = folded;
+        state.onItem?.({ kind: "usage", ...folded });
+      }
+      break;
+    }
+    case "error":
+      state.error = message.params?.error ?? { message: "Unknown codex error." };
+      state.onItem?.({
+        kind: "error",
+        message: state.error?.message ?? "Unknown codex error."
+      });
+      break;
+    case "turn/completed":
+      if ((message.params?.threadId ?? null) !== state.threadId) {
+        state.activeSubagentTurns.delete(message.params?.threadId);
+        scheduleInferredCompletion(state);
+        break;
+      }
+      completeTurn(state, message.params?.turn ?? null);
+      break;
+    default:
+      break;
+  }
+}
+async function runCodexTurn(opts) {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
+  const connectTimeoutMs = opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
+  let client;
+  try {
+    client = await CodexAppServerClient.connect(opts.cwd, {
+      env: opts.env,
+      disableBroker: true,
+      connectTimeoutMs
+    });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    return {
+      success: false,
+      finalMessage: "",
+      reasoningSummary: [],
+      error: message,
+      stderr: ""
+    };
+  }
+  let timer = null;
+  let timedOut = false;
+  const timeout = new Promise((resolve5) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      resolve5();
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  let state = null;
+  try {
+    const started = await Promise.race([
+      client.request("thread/start", {
+        cwd: opts.cwd,
+        model: opts.model ?? null,
+        approvalPolicy: "never",
+        sandbox: opts.readOnly ? "read-only" : "workspace-write",
+        ephemeral: opts.readOnly ?? false
+      }),
+      timeout.then(() => null)
+    ]);
+    if (timedOut || !started) {
+      return failure(client, "Codex turn timed out before the thread started.");
+    }
+    const threadId = started.thread.id;
+    state = createTurnCaptureState(threadId, opts.onItem);
+    const capture = state;
+    client.setNotificationHandler((message) => {
+      if (!capture.turnStarted) {
+        capture.bufferedNotifications.push(message);
+        return;
+      }
+      if (shouldApplyNotification(capture, message)) {
+        applyTurnNotification(capture, message);
+      }
+    });
+    const turnStartParams = {
+      threadId,
+      input: buildTurnInput(opts.prompt)
+    };
+    if (opts.model) {
+      turnStartParams.model = opts.model;
+    }
+    if (opts.effort) {
+      turnStartParams.effort = opts.effort;
+    }
+    const turnResponse = await Promise.race([
+      client.request("turn/start", turnStartParams),
+      timeout.then(() => null)
+    ]);
+    if (timedOut || !turnResponse) {
+      return failure(client, "Codex turn timed out before the turn started.");
+    }
+    capture.turnId = turnResponse.turn?.id ?? null;
+    if (capture.turnId) {
+      capture.threadTurnIds.set(threadId, capture.turnId);
+    }
+    for (const message of capture.bufferedNotifications) {
+      if (shouldApplyNotification(capture, message)) {
+        applyTurnNotification(capture, message);
+      }
+    }
+    capture.bufferedNotifications.length = 0;
+    capture.turnStarted = true;
+    if (turnResponse.turn?.status && turnResponse.turn.status !== "inProgress") {
+      completeTurn(capture, turnResponse.turn);
+    }
+    await Promise.race([capture.completion, timeout]);
+    if (timedOut && !capture.completed) {
+      return failure(client, "Codex turn timed out while awaiting completion.");
+    }
+    return buildResult(capture, client.stderr);
+  } catch (error) {
+    const stderr = client.stderr;
+    const message = error?.message ?? String(error);
+    return {
+      success: false,
+      finalMessage: state?.lastAgentMessage ?? "",
+      reasoningSummary: state?.reasoningSummary ?? [],
+      error: stderr ? `${message}
+${stderr}` : message,
+      stderr,
+      usage: state?.usage ?? void 0
+    };
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+    if (state) {
+      clearCompletionTimer(state);
+    }
+    await client.close();
+  }
+}
+function buildResult(state, stderr) {
+  const success = !state.error && (state.finalTurn?.status === "completed" || state.completed);
+  const result = {
+    success,
+    finalMessage: state.lastAgentMessage,
+    reasoningSummary: state.reasoningSummary,
+    stderr
+  };
+  if (state.error?.message) {
+    result.error = state.error.message;
+  }
+  if (state.usage) {
+    result.usage = state.usage;
+  }
+  return result;
+}
+function failure(client, reason) {
+  const stderr = client.stderr;
+  return {
+    success: false,
+    finalMessage: "",
+    reasoningSummary: [],
+    error: stderr ? `${reason}
+${stderr}` : reason,
+    stderr
+  };
+}
+var DEFAULT_TURN_TIMEOUT_MS;
+var init_turn = __esm({
+  "src/lib/codex/turn.ts"() {
+    "use strict";
+    init_app_server();
+    DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1e3;
+  }
+});
+
+// src/lib/providers/codex.ts
+var codex_exports = {};
+__export(codex_exports, {
+  CodexProvider: () => CodexProvider,
+  toCodexEffort: () => toCodexEffort
+});
+function toCodexEffort(reasoning) {
+  if (reasoning === void 0) return void 0;
+  return reasoning === "xhigh" ? "high" : reasoning;
+}
+var CodexProvider;
+var init_codex = __esm({
+  "src/lib/providers/codex.ts"() {
+    "use strict";
+    init_auth();
+    init_state();
+    init_turn();
+    CodexProvider = class {
+      id = "codex";
+      capabilities = {
+        metersQuota: false
+      };
+      /**
+       * Probe codex auth without running a turn. Codex has no login/host concept in
+       * the neutral summary, so those stay undefined; `message` carries the codex
+       * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
+       */
+      async checkAuth(cwd) {
+        const s = await getCodexAuthStatus(cwd);
+        return { ok: s.loggedIn, message: s.detail };
+      }
+      /**
+       * Run a single prompt to completion. Streams turn events to progress/appendLog
+       * for visibility (never throwing on a stream event), then maps the
+       * {@link CodexTurnResult} onto the neutral {@link RunResult}.
+       *
+       * `opts.reasoning` is mapped to codex's effort enum via {@link toCodexEffort}
+       * (xhigh→high, since codex has no xhigh). `opts.model` is passed through as-is;
+       * undefined stays undefined so ~/.codex config picks the model.
+       */
+      async run(opts) {
+        const { appendLog: appendLog2, progress } = opts;
+        const onItem = (ev) => {
+          switch (ev.kind) {
+            case "assistant":
+              if (ev.text) progress(ev.text);
+              break;
+            case "tool":
+              progress(ev.label);
+              break;
+            case "reasoning":
+              if (ev.text) appendLog2(`reasoning: ${ev.text}`);
+              break;
+            case "usage":
+              appendLog2(
+                `usage: in=${ev.inputTokens ?? "?"} out=${ev.outputTokens ?? "?"}` + (ev.rateLimits?.primaryUsedPercent !== void 0 ? ` primary=${ev.rateLimits.primaryUsedPercent}%` : "")
+              );
+              break;
+            case "error":
+              appendLog2(`codex error: ${ev.message}`);
+              break;
+            default:
+              break;
+          }
+        };
+        progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}\u2026`);
+        const result = await runCodexTurn({
+          cwd: opts.cwd,
+          prompt: opts.prompt,
+          model: opts.model,
+          effort: toCodexEffort(opts.reasoning),
+          readOnly: opts.readOnly,
+          env: process.env,
+          onItem
+        });
+        if (result.error) appendLog2(`turn error: ${result.error}`);
+        if (result.usage?.rateLimits) {
+          writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);
+        }
+        return {
+          lastAssistantMessage: result.finalMessage,
+          success: result.success,
+          summary: result.finalMessage || void 0,
+          usage: {
+            kind: "codex",
+            inputTokens: result.usage?.inputTokens,
+            outputTokens: result.usage?.outputTokens,
+            rateLimits: result.usage?.rateLimits
+          }
+        };
+      }
+    };
+  }
+});
+
+// src/lib/event-stream.ts
+function truncate(text, max) {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max)}\u2026` : flat;
+}
+function attachStream(opts) {
+  const { session, stateDir, appendLog: appendLog2, progress } = opts;
+  let lastAssistantMessage;
+  let taskCompleteSummary;
+  let taskCompleteSuccess;
+  let completed = false;
+  let resolveCompletion;
+  let rejectCompletion;
+  const completion = new Promise((res, rej) => {
+    resolveCompletion = res;
+    rejectCompletion = rej;
+  });
+  let resolveShutdown;
+  const shutdown = new Promise((res) => {
+    resolveShutdown = res;
+  });
+  const unsubscribers = [];
+  const handler = (event) => {
+    switch (event.type) {
+      case "assistant.message": {
+        const content = event.data.content ?? "";
+        if (content) {
+          lastAssistantMessage = content;
+          progress(`[assistant] ${truncate(content, 160)}`);
+          appendLog2(`assistant.message: ${truncate(content, 400)}`);
+        }
+        break;
+      }
+      case "assistant.usage": {
+        const reqId = event.data.providerCallId ?? event.data.apiCallId;
+        const cost = event.data.cost;
+        appendLog2(
+          `assistant.usage model=${event.data.model}${cost !== void 0 ? ` cost=${cost}` : ""}${reqId ? ` request=${reqId}` : ""}`
+        );
+        if (cost !== void 0 && cost > 0) {
+          progress(`[usage] ${event.data.model} +${cost} premium cost`);
+        }
+        break;
+      }
+      case "session.task_complete": {
+        taskCompleteSummary = event.data.summary;
+        taskCompleteSuccess = event.data.success;
+        appendLog2(`session.task_complete success=${event.data.success ?? "unknown"}`);
+        progress(`[task_complete] ${event.data.success === false ? "failed" : "ok"}`);
+        break;
+      }
+      case "session.idle": {
+        if (!completed) {
+          completed = true;
+          appendLog2("session.idle \u2014 resolving as completion");
+          progress("[idle] session finished processing");
+          resolveCompletion({
+            summary: taskCompleteSummary,
+            success: taskCompleteSuccess
+          });
+        }
+        break;
+      }
+      case "session.shutdown": {
+        const d = event.data;
+        let premiumRequestCost = 0;
+        for (const m of Object.values(d.modelMetrics ?? {})) {
+          premiumRequestCost += m?.requests?.cost ?? 0;
+        }
+        appendLog2(
+          `session.shutdown type=${d.shutdownType} premiumCost=${premiumRequestCost} files=${d.codeChanges.filesModified.length} +${d.codeChanges.linesAdded}/-${d.codeChanges.linesRemoved}`
+        );
+        resolveShutdown({
+          shutdownType: d.shutdownType,
+          errorReason: d.errorReason,
+          premiumRequestCost,
+          codeChanges: {
+            linesAdded: d.codeChanges.linesAdded,
+            linesRemoved: d.codeChanges.linesRemoved,
+            filesModified: [...d.codeChanges.filesModified]
+          },
+          currentModel: d.currentModel
+        });
+        break;
+      }
+      case "session.error": {
+        const msg = event.data.message ?? "unknown session error";
+        appendLog2(`session.error: ${msg}`);
+        progress(`[error] ${msg}`);
+        if (!completed) {
+          completed = true;
+          rejectCompletion(new Error(msg));
+        }
+        break;
+      }
+      case "session.warning": {
+        const msg = event.data.message ?? "";
+        if (msg) {
+          appendLog2(`session.warning: ${msg}`);
+          progress(`[warning] ${truncate(msg, 160)}`);
+        }
+        break;
+      }
+      case "session.info": {
+        const msg = event.data.message ?? "";
+        if (msg) {
+          appendLog2(`session.info: ${truncate(msg, 200)}`);
+        }
+        break;
+      }
+      case "session.compaction_start": {
+        appendLog2("session.compaction_start");
+        progress("[compaction] started");
+        break;
+      }
+      case "session.compaction_complete": {
+        appendLog2("session.compaction_complete");
+        progress("[compaction] complete");
+        break;
+      }
+      case "tool.execution_start": {
+        const toolName = event.data.toolName ?? "unknown";
+        appendLog2(`tool.execution_start ${toolName}`);
+        progress(`[tool] ${toolName} \u2026`);
+        break;
+      }
+      case "tool.execution_complete": {
+        const toolName = event.data.toolName ?? "unknown";
+        appendLog2(`tool.execution_complete ${toolName}`);
+        break;
+      }
+      case "subagent.started": {
+        const name = event.data.agentName ?? event.data.name ?? "subagent";
+        appendLog2(`subagent.started ${name}`);
+        progress(`[subagent:${name}] started`);
+        break;
+      }
+      case "subagent.completed": {
+        const name = event.data.agentName ?? event.data.name ?? "subagent";
+        appendLog2(`subagent.completed ${name}`);
+        break;
+      }
+      case "subagent.failed": {
+        const name = event.data.agentName ?? event.data.name ?? "subagent";
+        appendLog2(`subagent.failed ${name}`);
+        progress(`[subagent:${name}] failed`);
+        break;
+      }
+      case "permission.requested": {
+        const req = event.data.permissionRequest;
+        const kind = req.kind;
+        let detail;
+        if (kind === "shell") {
+          detail = req.fullCommandText;
+          appendLog2(`permission.requested shell: ${detail ?? ""}`);
+        } else if (kind === "write") {
+          detail = req.fileName;
+          appendLog2(`permission.requested write: ${detail ?? ""}`);
+        } else if (kind === "read") {
+          detail = req.path;
+          appendLog2(`permission.requested read: ${detail ?? ""}`);
+        } else if (kind === "url") {
+          detail = req.url;
+          appendLog2(`permission.requested url: ${detail ?? ""}`);
+        } else {
+          appendLog2(`permission.requested ${kind}`);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  };
+  const unsub = session.on(handler);
+  unsubscribers.push(unsub);
+  return {
+    getLastAssistantMessage: () => lastAssistantMessage,
+    completion,
+    shutdown,
+    dispose: () => {
+      for (const u of unsubscribers) u();
+    }
+  };
+}
+var init_event_stream = __esm({
+  "src/lib/event-stream.ts"() {
+    "use strict";
+  }
+});
+
+// src/lib/permission.ts
+function approved() {
+  return { kind: "approve-once" };
+}
+function denied(feedback) {
+  return { kind: "reject", feedback };
+}
+function canonicalize(p) {
+  try {
+    return (0, import_node_fs3.realpathSync)(p);
+  } catch {
+    const parent = (0, import_node_path3.dirname)(p);
+    if (parent === p) return (0, import_node_path3.resolve)(p);
+    return (0, import_node_path3.resolve)(canonicalize(parent), p.slice(parent.length).replace(/^[\\/]+/, ""));
+  }
+}
+function isPathInside(child, parent) {
+  const c = canonicalize((0, import_node_path3.resolve)(child));
+  const p = canonicalize((0, import_node_path3.resolve)(parent));
+  if (c === p) return true;
+  const rel = (0, import_node_path3.relative)(p, c);
+  return rel !== "" && !rel.startsWith("..") && !(0, import_node_path3.isAbsolute)(rel);
+}
+function makePermissionHandler(opts) {
+  return (request) => {
+    const kind = request.kind;
+    switch (kind) {
+      case "read": {
+        const path = request.path ?? "";
+        if (opts.isolated) {
+          opts.appendLog(`permission.read DENIED (isolated mode): ${path}`);
+          return denied("This Copilot session is isolated (reasoning only); filesystem reads are not permitted.");
+        }
+        if (opts.readOnly) {
+          if (!path) {
+            opts.appendLog("permission.read DENIED (read-only mode): empty path");
+            return denied("Permission request missing path.");
+          }
+          const absolute = path.startsWith("/") ? path : (0, import_node_path3.resolve)(opts.worktreePath, path);
+          if (!isPathInside(absolute, opts.worktreePath)) {
+            opts.appendLog(`permission.read DENIED (outside worktree): ${absolute}`);
+            return denied(`Reads outside the review target (${opts.worktreePath}) are not permitted.`);
+          }
+        }
+        opts.appendLog(`permission.read approved: ${path}`);
+        return approved();
+      }
+      case "write": {
+        const fileName = request.fileName ?? "";
+        if (opts.readOnly) {
+          opts.appendLog(`permission.write DENIED (read-only mode): ${fileName}`);
+          return denied("This Copilot session is read-only (review mode). File writes are not permitted.");
+        }
+        if (!fileName) {
+          opts.appendLog("permission.write denied: no fileName provided");
+          return denied("Permission request missing fileName.");
+        }
+        const absolute = fileName.startsWith("/") ? fileName : (0, import_node_path3.resolve)(opts.worktreePath, fileName);
+        if (isPathInside(absolute, opts.worktreePath)) {
+          opts.appendLog(`permission.write approved: ${fileName}`);
+          return approved();
+        }
+        opts.appendLog(`permission.write denied (outside worktree): ${absolute}`);
+        return denied(`Writes outside the worktree (${opts.worktreePath}) are not permitted by the Claude Code Copilot plugin.`);
+      }
+      case "mcp": {
+        const { serverName, toolName, readOnly } = request;
+        if (opts.isolated) {
+          opts.appendLog(`permission.mcp DENIED (isolated mode): ${serverName}/${toolName}`);
+          return denied(`This Copilot session is isolated (reasoning only); MCP tool ${serverName}/${toolName} is not permitted.`);
+        }
+        if (opts.readOnly && readOnly !== true) {
+          opts.appendLog(`permission.mcp DENIED (read-only mode): ${serverName}/${toolName} (readOnly=${readOnly ?? "unknown"})`);
+          return denied(`MCP tool ${serverName}/${toolName} is not marked read-only; not permitted in this Copilot review session.`);
+        }
+        opts.appendLog(`permission.mcp approved: ${serverName}/${toolName} (readOnly=${readOnly ?? false})`);
+        return approved();
+      }
+      case "shell": {
+        const { fullCommandText, intention } = request;
+        const preview = (fullCommandText ?? "").slice(0, 160);
+        if (opts.allowShell) {
+          opts.appendLog(`permission.shell approved: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
+          return approved();
+        }
+        opts.appendLog(`permission.shell DENIED: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
+        return denied("Shell execution is disabled for this Copilot session. Re-run the implement command with --allow-shell if you want to permit shell commands.");
+      }
+      case "url": {
+        const { url } = request;
+        if (opts.allowUrl) {
+          opts.appendLog(`permission.url approved: ${url}`);
+          return approved();
+        }
+        opts.appendLog(`permission.url DENIED: ${url}`);
+        return denied("URL fetching is disabled for this Copilot session. Re-run with --allow-url to permit it.");
+      }
+      case "custom-tool": {
+        const { toolName } = request;
+        opts.appendLog(`permission.custom-tool DENIED: ${toolName}`);
+        return denied(`Custom tool ${toolName} requires explicit user approval; not permitted in automated Copilot sessions.`);
+      }
+      default: {
+        opts.appendLog(`permission.${kind} DENIED (unknown kind, conservative default)`);
+        return denied(`Permission kind "${kind}" is not auto-approved by the Claude Code Copilot plugin.`);
+      }
+    }
+  };
+}
+var import_node_fs3, import_node_path3;
+var init_permission = __esm({
+  "src/lib/permission.ts"() {
+    "use strict";
+    import_node_fs3 = require("node:fs");
+    import_node_path3 = require("node:path");
+  }
+});
+
 // src/lib/quota.ts
 function snapshotPath(stateDir) {
-  return (0, import_node_path2.join)(stateDir, "quota.json");
+  return (0, import_node_path4.join)(stateDir, "quota.json");
 }
 function readSnapshot(stateDir) {
   const path = snapshotPath(stateDir);
-  if (!(0, import_node_fs2.existsSync)(path)) return null;
+  if (!(0, import_node_fs4.existsSync)(path)) return null;
   try {
-    return JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
+    return JSON.parse((0, import_node_fs4.readFileSync)(path, "utf-8"));
   } catch {
     return null;
   }
@@ -9608,8 +10699,8 @@ function recordSnapshot(stateDir, quotas) {
       overageAllowedWithExhaustedQuota: entry.overageAllowedWithExhaustedQuota ?? false
     };
   }
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(snapshotPath(stateDir)), { recursive: true });
-  (0, import_node_fs2.writeFileSync)(snapshotPath(stateDir), JSON.stringify(merged, null, 2), "utf-8");
+  (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(snapshotPath(stateDir)), { recursive: true });
+  (0, import_node_fs4.writeFileSync)(snapshotPath(stateDir), JSON.stringify(merged, null, 2), "utf-8");
   return merged;
 }
 async function fetchQuota(client, stateDir) {
@@ -9770,1047 +10861,18 @@ function renderQuotaBar(q, haveSnapshot) {
   }
   return lines;
 }
-var import_node_fs2, import_node_path2, POOL_LABELS, BAR_WIDTH;
+var import_node_fs4, import_node_path4, POOL_LABELS, BAR_WIDTH;
 var init_quota = __esm({
   "src/lib/quota.ts"() {
     "use strict";
-    import_node_fs2 = require("node:fs");
-    import_node_path2 = require("node:path");
+    import_node_fs4 = require("node:fs");
+    import_node_path4 = require("node:path");
     POOL_LABELS = {
       premium_interactions: "Premium requests",
       chat: "Chat",
       completions: "Completions"
     };
     BAR_WIDTH = 30;
-  }
-});
-
-// src/lib/state.ts
-function resolveStateDir(cwd) {
-  const workspaceRoot = (0, import_node_path4.resolve)(cwd);
-  const slug = (0, import_node_path4.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
-  const hash = (0, import_node_crypto2.createHash)("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
-  const pluginDataDir = process.env[PLUGIN_DATA_ENV];
-  const stateRoot = pluginDataDir ? (0, import_node_path4.join)(pluginDataDir, "state") : FALLBACK_STATE_ROOT;
-  return (0, import_node_path4.join)(stateRoot, `${slug}-${hash}`);
-}
-function ensureDir(dir) {
-  (0, import_node_fs4.mkdirSync)(dir, { recursive: true });
-}
-function stateFilePath(stateDir) {
-  return (0, import_node_path4.join)(stateDir, "state.json");
-}
-function loadState(stateDir) {
-  const filePath = stateFilePath(stateDir);
-  if (!(0, import_node_fs4.existsSync)(filePath)) {
-    return { version: 1, jobs: [] };
-  }
-  try {
-    return JSON.parse((0, import_node_fs4.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return { version: 1, jobs: [] };
-  }
-}
-function saveState(stateDir, state) {
-  ensureDir(stateDir);
-  if (state.jobs.length > MAX_JOBS) {
-    state.jobs = state.jobs.slice(0, MAX_JOBS);
-  }
-  (0, import_node_fs4.writeFileSync)(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
-}
-function jobsDir(stateDir) {
-  return (0, import_node_path4.join)(stateDir, "jobs");
-}
-function jobFilePath(stateDir, jobId) {
-  return (0, import_node_path4.join)(jobsDir(stateDir), `${jobId}.json`);
-}
-function jobLogPath(stateDir, jobId) {
-  return (0, import_node_path4.join)(jobsDir(stateDir), `${jobId}.log`);
-}
-function writeJobFile(stateDir, job) {
-  const dir = jobsDir(stateDir);
-  ensureDir(dir);
-  (0, import_node_fs4.writeFileSync)(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
-}
-function readJobFile(stateDir, jobId) {
-  const filePath = jobFilePath(stateDir, jobId);
-  if (!(0, import_node_fs4.existsSync)(filePath)) return null;
-  try {
-    return JSON.parse((0, import_node_fs4.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-function appendLog(stateDir, jobId, message) {
-  const logFile = jobLogPath(stateDir, jobId);
-  ensureDir(jobsDir(stateDir));
-  const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-  (0, import_node_fs4.writeFileSync)(logFile, `[${time}] ${message}
-`, { flag: "a" });
-}
-function readLogTail(stateDir, jobId, maxLines = 10) {
-  const logFile = jobLogPath(stateDir, jobId);
-  if (!(0, import_node_fs4.existsSync)(logFile)) return [];
-  try {
-    const content = (0, import_node_fs4.readFileSync)(logFile, "utf-8");
-    const lines = content.trim().split("\n");
-    return lines.slice(-maxLines);
-  } catch {
-    return [];
-  }
-}
-function generateJobId() {
-  const ts = Date.now();
-  const rand = (0, import_node_crypto2.randomUUID)().slice(0, 8);
-  return `job-${ts}-${rand}`;
-}
-function getSessionId() {
-  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || void 0;
-}
-function createJob(stateDir, job) {
-  const state = loadState(stateDir);
-  state.jobs.unshift(job);
-  saveState(stateDir, state);
-  writeJobFile(stateDir, job);
-}
-function updateJob(stateDir, jobId, updates) {
-  const state = loadState(stateDir);
-  const idx = state.jobs.findIndex((j) => j.id === jobId);
-  if (idx >= 0) {
-    state.jobs[idx] = { ...state.jobs[idx], ...updates };
-    saveState(stateDir, state);
-  }
-  const full = readJobFile(stateDir, jobId);
-  if (full) {
-    writeJobFile(stateDir, { ...full, ...updates });
-  }
-}
-function markJobFailed(stateDir, jobId, errorMessage) {
-  const job = readJobFile(stateDir, jobId);
-  if (!job || job.status === "completed" || job.status === "failed") return;
-  updateJob(stateDir, jobId, {
-    status: "failed",
-    phase: "failed",
-    completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    errorMessage
-  });
-  appendLog(stateDir, jobId, `Marked failed: ${errorMessage}`);
-}
-function listJobs(stateDir, sessionId) {
-  const state = loadState(stateDir);
-  if (sessionId) {
-    return state.jobs.filter((j) => j.sessionId === sessionId);
-  }
-  return state.jobs;
-}
-function codexRateLimitsPath(stateDir) {
-  return (0, import_node_path4.join)(stateDir, CODEX_RATE_LIMITS_FILE);
-}
-function writeCodexRateLimits(stateDir, rateLimits) {
-  try {
-    ensureDir(stateDir);
-    const snapshot = { ...rateLimits, capturedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    (0, import_node_fs4.writeFileSync)(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
-  } catch {
-  }
-}
-function readCodexRateLimits(stateDir) {
-  const filePath = codexRateLimitsPath(stateDir);
-  if (!(0, import_node_fs4.existsSync)(filePath)) return null;
-  try {
-    return JSON.parse((0, import_node_fs4.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-function formatCodexRateLimits(rl) {
-  const parts = [];
-  const used = [];
-  if (rl.primaryUsedPercent !== void 0) used.push(`primary ${rl.primaryUsedPercent}%`);
-  if (rl.secondaryUsedPercent !== void 0) used.push(`secondary ${rl.secondaryUsedPercent}%`);
-  if (used.length > 0) parts.push(`${used.join(" / ")} used`);
-  if (rl.planType) parts.push(`plan ${rl.planType}`);
-  if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
-  return parts.join(" \xB7 ");
-}
-function renderCodexBlock(rl) {
-  return ["## Codex", formatCodexRateLimits(rl)].join("\n");
-}
-var import_node_crypto2, import_node_fs4, import_node_path4, import_node_os, MAX_JOBS, PLUGIN_DATA_ENV, SESSION_ID_ENV, LEGACY_SESSION_ID_ENV, FALLBACK_STATE_ROOT, CODEX_RATE_LIMITS_FILE;
-var init_state = __esm({
-  "src/lib/state.ts"() {
-    "use strict";
-    import_node_crypto2 = require("node:crypto");
-    import_node_fs4 = require("node:fs");
-    import_node_path4 = require("node:path");
-    import_node_os = require("node:os");
-    MAX_JOBS = 50;
-    PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
-    SESSION_ID_ENV = "HARRY_SESSION_ID";
-    LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
-    FALLBACK_STATE_ROOT = (0, import_node_path4.join)((0, import_node_os.tmpdir)(), "harry");
-    CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
-  }
-});
-
-// src/lib/codex/turn.ts
-function buildTurnInput(prompt) {
-  return [{ type: "text", text: prompt, text_elements: [] }];
-}
-function shorten(text, limit = 96) {
-  const normalized = String(text ?? "").trim().replace(/\s+/g, " ");
-  if (!normalized) {
-    return "";
-  }
-  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 3)}...`;
-}
-function extractThreadId(message) {
-  return message?.params?.threadId ?? null;
-}
-function extractTurnId(message) {
-  if (message?.params?.turnId) {
-    return message.params.turnId;
-  }
-  if (message?.params?.turn?.id) {
-    return message.params.turn.id;
-  }
-  return null;
-}
-function normalizeReasoningText(text) {
-  return String(text ?? "").replace(/\s+/g, " ").trim();
-}
-function extractReasoningSections(value) {
-  if (!value) {
-    return [];
-  }
-  if (typeof value === "string") {
-    const normalized = normalizeReasoningText(value);
-    return normalized ? [normalized] : [];
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap((entry) => extractReasoningSections(entry));
-  }
-  if (typeof value === "object") {
-    const obj = value;
-    if (typeof obj.text === "string") {
-      return extractReasoningSections(obj.text);
-    }
-    if ("summary" in obj) {
-      return extractReasoningSections(obj.summary);
-    }
-    if ("content" in obj) {
-      return extractReasoningSections(obj.content);
-    }
-    if ("parts" in obj) {
-      return extractReasoningSections(obj.parts);
-    }
-  }
-  return [];
-}
-function mergeReasoningSections(existing, next) {
-  const merged = [];
-  for (const section of [...existing, ...next]) {
-    const normalized = normalizeReasoningText(section);
-    if (!normalized || merged.includes(normalized)) {
-      continue;
-    }
-    merged.push(normalized);
-  }
-  return merged;
-}
-function toFiniteNumber(value) {
-  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
-}
-function parseTokenCount(params) {
-  const usage = {};
-  const lastUsage = params?.last_token_usage;
-  if (lastUsage && typeof lastUsage === "object") {
-    usage.inputTokens = toFiniteNumber(lastUsage.input_tokens);
-    usage.outputTokens = toFiniteNumber(lastUsage.output_tokens);
-  }
-  const rateLimits = params?.rate_limits;
-  if (rateLimits && typeof rateLimits === "object") {
-    const parsed = {};
-    const primary = toFiniteNumber(rateLimits.primary?.used_percent);
-    if (primary !== void 0) {
-      parsed.primaryUsedPercent = primary;
-    }
-    const secondary = toFiniteNumber(rateLimits.secondary?.used_percent);
-    if (secondary !== void 0) {
-      parsed.secondaryUsedPercent = secondary;
-    }
-    if (typeof rateLimits.plan_type === "string") {
-      parsed.planType = rateLimits.plan_type;
-    }
-    if (typeof rateLimits.resets_at === "string") {
-      parsed.resetsAt = rateLimits.resets_at;
-    }
-    if (Object.keys(parsed).length > 0) {
-      usage.rateLimits = parsed;
-    }
-  }
-  return usage;
-}
-function createTurnCaptureState(threadId, onItem) {
-  let resolveCompletion;
-  const completion = new Promise((resolve5) => {
-    resolveCompletion = resolve5;
-  });
-  return {
-    threadId,
-    threadIds: /* @__PURE__ */ new Set([threadId]),
-    threadTurnIds: /* @__PURE__ */ new Map(),
-    turnId: null,
-    bufferedNotifications: [],
-    completion,
-    resolveCompletion,
-    finalTurn: null,
-    completed: false,
-    finalAnswerSeen: false,
-    pendingCollaborations: /* @__PURE__ */ new Set(),
-    activeSubagentTurns: /* @__PURE__ */ new Set(),
-    completionTimer: null,
-    lastAgentMessage: "",
-    reasoningSummary: [],
-    error: null,
-    usage: null,
-    onItem
-  };
-}
-function registerThread(state, threadId) {
-  if (threadId) {
-    state.threadIds.add(threadId);
-  }
-}
-function belongsToTurn(state, message) {
-  const messageThreadId = extractThreadId(message);
-  if (!messageThreadId || !state.threadIds.has(messageThreadId)) {
-    return false;
-  }
-  const trackedTurnId = state.threadTurnIds.get(messageThreadId) ?? null;
-  const messageTurnId = extractTurnId(message);
-  return trackedTurnId === null || messageTurnId === null || messageTurnId === trackedTurnId;
-}
-function clearCompletionTimer(state) {
-  if (state.completionTimer) {
-    clearTimeout(state.completionTimer);
-    state.completionTimer = null;
-  }
-}
-function completeTurn(state, turn = null) {
-  if (state.completed) {
-    return;
-  }
-  clearCompletionTimer(state);
-  state.completed = true;
-  if (turn) {
-    state.finalTurn = turn;
-    if (!state.turnId && turn.id) {
-      state.turnId = turn.id;
-    }
-  } else if (!state.finalTurn) {
-    state.finalTurn = { id: state.turnId ?? "inferred-turn", status: "completed" };
-  }
-  state.resolveCompletion();
-}
-function scheduleInferredCompletion(state) {
-  if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
-    return;
-  }
-  if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
-    return;
-  }
-  clearCompletionTimer(state);
-  state.completionTimer = setTimeout(() => {
-    state.completionTimer = null;
-    if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
-      return;
-    }
-    if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
-      return;
-    }
-    completeTurn(state, null);
-  }, 250);
-  state.completionTimer.unref?.();
-}
-function toolLabel(item) {
-  switch (item.type) {
-    case "commandExecution":
-      return `Running command: ${shorten(item.command)}`;
-    case "fileChange":
-      return `Applying ${item.changes?.length ?? 0} file change(s).`;
-    case "mcpToolCall":
-      return `Calling ${item.server}/${item.tool}.`;
-    case "dynamicToolCall":
-      return `Running tool: ${item.tool}.`;
-    case "webSearch":
-      return `Searching: ${shorten(item.query)}`;
-    default:
-      return null;
-  }
-}
-function recordItem(state, item, lifecycle, threadId = null) {
-  if (item.type === "collabAgentToolCall") {
-    if (!threadId || threadId === state.threadId) {
-      if (lifecycle === "started" || item.status === "inProgress") {
-        state.pendingCollaborations.add(item.id);
-      } else if (lifecycle === "completed") {
-        state.pendingCollaborations.delete(item.id);
-        scheduleInferredCompletion(state);
-      }
-    }
-    for (const receiverThreadId of item.receiverThreadIds ?? []) {
-      registerThread(state, receiverThreadId);
-    }
-  }
-  if (item.type === "agentMessage") {
-    if (item.text && (!threadId || threadId === state.threadId)) {
-      state.lastAgentMessage = item.text;
-      const final = lifecycle === "completed" && item.phase === "final_answer";
-      if (final) {
-        state.finalAnswerSeen = true;
-        scheduleInferredCompletion(state);
-      }
-      if (lifecycle === "completed") {
-        state.onItem?.({ kind: "assistant", text: item.text, final });
-      }
-    }
-    return;
-  }
-  if (item.type === "reasoning" && lifecycle === "completed") {
-    const nextSections = extractReasoningSections(item.summary);
-    state.reasoningSummary = mergeReasoningSections(state.reasoningSummary, nextSections);
-    for (const section of nextSections) {
-      state.onItem?.({ kind: "reasoning", text: section });
-    }
-    return;
-  }
-  if (lifecycle === "started") {
-    const label = toolLabel(item);
-    if (label) {
-      state.onItem?.({ kind: "tool", label });
-    }
-  }
-}
-function applyTurnNotification(state, message) {
-  switch (message.method) {
-    case "thread/started":
-      registerThread(state, message.params?.thread?.id);
-      break;
-    case "turn/started":
-      registerThread(state, message.params?.threadId);
-      state.threadTurnIds.set(message.params?.threadId, message.params?.turn?.id ?? null);
-      if ((message.params?.threadId ?? null) !== state.threadId) {
-        state.activeSubagentTurns.add(message.params?.threadId);
-      }
-      break;
-    case "item/started":
-      recordItem(state, message.params.item, "started", message.params?.threadId ?? null);
-      break;
-    case "item/completed":
-      recordItem(state, message.params.item, "completed", message.params?.threadId ?? null);
-      break;
-    case "token_count": {
-      const next = parseTokenCount(message.params);
-      const prev = state.usage ?? {};
-      const folded = {
-        inputTokens: next.inputTokens ?? prev.inputTokens,
-        outputTokens: next.outputTokens ?? prev.outputTokens,
-        rateLimits: next.rateLimits ?? prev.rateLimits
-      };
-      const hasContent = folded.inputTokens !== void 0 || folded.outputTokens !== void 0 || folded.rateLimits !== void 0;
-      if (hasContent) {
-        state.usage = folded;
-        state.onItem?.({ kind: "usage", ...folded });
-      }
-      break;
-    }
-    case "error":
-      state.error = message.params?.error ?? { message: "Unknown codex error." };
-      state.onItem?.({
-        kind: "error",
-        message: state.error?.message ?? "Unknown codex error."
-      });
-      break;
-    case "turn/completed":
-      if ((message.params?.threadId ?? null) !== state.threadId) {
-        state.activeSubagentTurns.delete(message.params?.threadId);
-        scheduleInferredCompletion(state);
-        break;
-      }
-      completeTurn(state, message.params?.turn ?? null);
-      break;
-    default:
-      break;
-  }
-}
-async function runCodexTurn(opts) {
-  const timeoutMs = opts.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
-  const connectTimeoutMs = opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
-  let client;
-  try {
-    client = await CodexAppServerClient.connect(opts.cwd, {
-      env: opts.env,
-      disableBroker: true,
-      connectTimeoutMs
-    });
-  } catch (error) {
-    const message = error?.message ?? String(error);
-    return {
-      success: false,
-      finalMessage: "",
-      reasoningSummary: [],
-      error: message,
-      stderr: ""
-    };
-  }
-  let timer = null;
-  let timedOut = false;
-  const timeout = new Promise((resolve5) => {
-    timer = setTimeout(() => {
-      timedOut = true;
-      resolve5();
-    }, timeoutMs);
-    timer.unref?.();
-  });
-  let state = null;
-  try {
-    const started = await Promise.race([
-      client.request("thread/start", {
-        cwd: opts.cwd,
-        model: opts.model ?? null,
-        approvalPolicy: "never",
-        sandbox: opts.readOnly ? "read-only" : "workspace-write",
-        ephemeral: opts.readOnly ?? false
-      }),
-      timeout.then(() => null)
-    ]);
-    if (timedOut || !started) {
-      return failure(client, "Codex turn timed out before the thread started.");
-    }
-    const threadId = started.thread.id;
-    state = createTurnCaptureState(threadId, opts.onItem);
-    const capture = state;
-    client.setNotificationHandler((message) => {
-      if (!capture.turnId) {
-        capture.bufferedNotifications.push(message);
-        return;
-      }
-      if (message.method === "thread/started") {
-        applyTurnNotification(capture, message);
-        return;
-      }
-      if (belongsToTurn(capture, message)) {
-        applyTurnNotification(capture, message);
-      }
-    });
-    const turnStartParams = {
-      threadId,
-      input: buildTurnInput(opts.prompt)
-    };
-    if (opts.model) {
-      turnStartParams.model = opts.model;
-    }
-    if (opts.effort) {
-      turnStartParams.effort = opts.effort;
-    }
-    const turnResponse = await Promise.race([
-      client.request("turn/start", turnStartParams),
-      timeout.then(() => null)
-    ]);
-    if (timedOut || !turnResponse) {
-      return failure(client, "Codex turn timed out before the turn started.");
-    }
-    capture.turnId = turnResponse.turn?.id ?? null;
-    if (capture.turnId) {
-      capture.threadTurnIds.set(threadId, capture.turnId);
-    }
-    for (const message of capture.bufferedNotifications) {
-      if (message.method === "thread/started" || belongsToTurn(capture, message)) {
-        applyTurnNotification(capture, message);
-      }
-    }
-    capture.bufferedNotifications.length = 0;
-    if (turnResponse.turn?.status && turnResponse.turn.status !== "inProgress") {
-      completeTurn(capture, turnResponse.turn);
-    }
-    await Promise.race([capture.completion, timeout]);
-    if (timedOut && !capture.completed) {
-      return failure(client, "Codex turn timed out while awaiting completion.");
-    }
-    return buildResult(capture, client.stderr);
-  } catch (error) {
-    const stderr = client.stderr;
-    const message = error?.message ?? String(error);
-    return {
-      success: false,
-      finalMessage: state?.lastAgentMessage ?? "",
-      reasoningSummary: state?.reasoningSummary ?? [],
-      error: stderr ? `${message}
-${stderr}` : message,
-      stderr,
-      usage: state?.usage ?? void 0
-    };
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-    if (state) {
-      clearCompletionTimer(state);
-    }
-    await client.close();
-  }
-}
-function buildResult(state, stderr) {
-  const success = !state.error && (state.finalTurn?.status === "completed" || state.completed);
-  const result = {
-    success,
-    finalMessage: state.lastAgentMessage,
-    reasoningSummary: state.reasoningSummary,
-    stderr
-  };
-  if (state.error?.message) {
-    result.error = state.error.message;
-  }
-  if (state.usage) {
-    result.usage = state.usage;
-  }
-  return result;
-}
-function failure(client, reason) {
-  const stderr = client.stderr;
-  return {
-    success: false,
-    finalMessage: "",
-    reasoningSummary: [],
-    error: stderr ? `${reason}
-${stderr}` : reason,
-    stderr
-  };
-}
-var DEFAULT_TURN_TIMEOUT_MS, DEFAULT_CONNECT_TIMEOUT_MS;
-var init_turn = __esm({
-  "src/lib/codex/turn.ts"() {
-    "use strict";
-    init_app_server();
-    DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1e3;
-    DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1e3;
-  }
-});
-
-// src/lib/providers/codex.ts
-var codex_exports = {};
-__export(codex_exports, {
-  CodexProvider: () => CodexProvider
-});
-var CodexProvider;
-var init_codex = __esm({
-  "src/lib/providers/codex.ts"() {
-    "use strict";
-    init_auth();
-    init_state();
-    init_turn();
-    CodexProvider = class {
-      id = "codex";
-      capabilities = {
-        metersQuota: false,
-        reportsUsage: true
-      };
-      /**
-       * Probe codex auth without running a turn. Codex has no login/host concept in
-       * the neutral summary, so those stay undefined; `message` carries the codex
-       * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
-       */
-      async checkAuth(cwd) {
-        const s = await getCodexAuthStatus(cwd);
-        return { ok: s.loggedIn, message: s.detail };
-      }
-      /**
-       * Run a single prompt to completion. Streams turn events to progress/appendLog
-       * for visibility (never throwing on a stream event), then maps the
-       * {@link CodexTurnResult} onto the neutral {@link RunResult}.
-       *
-       * `opts.reasoning` is passed through as codex's `effort` (best-effort — codex
-       * resolves or ignores unknown values). `opts.model` is passed through as-is;
-       * undefined stays undefined so ~/.codex config picks the model.
-       */
-      async run(opts) {
-        const { appendLog: appendLog2, progress } = opts;
-        const onItem = (ev) => {
-          switch (ev.kind) {
-            case "assistant":
-              if (ev.text) progress(ev.text);
-              break;
-            case "tool":
-              progress(ev.label);
-              break;
-            case "reasoning":
-              if (ev.text) appendLog2(`reasoning: ${ev.text}`);
-              break;
-            case "usage":
-              appendLog2(
-                `usage: in=${ev.inputTokens ?? "?"} out=${ev.outputTokens ?? "?"}` + (ev.rateLimits?.primaryUsedPercent !== void 0 ? ` primary=${ev.rateLimits.primaryUsedPercent}%` : "")
-              );
-              break;
-            case "error":
-              appendLog2(`codex error: ${ev.message}`);
-              break;
-            default:
-              break;
-          }
-        };
-        progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}\u2026`);
-        const result = await runCodexTurn({
-          cwd: opts.cwd,
-          prompt: opts.prompt,
-          model: opts.model,
-          effort: opts.reasoning,
-          readOnly: opts.readOnly,
-          env: process.env,
-          onItem
-        });
-        if (result.error) appendLog2(`turn error: ${result.error}`);
-        if (result.usage?.rateLimits) {
-          writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);
-        }
-        return {
-          lastAssistantMessage: result.finalMessage,
-          success: result.success,
-          summary: result.finalMessage || void 0,
-          usage: {
-            kind: "codex",
-            inputTokens: result.usage?.inputTokens,
-            outputTokens: result.usage?.outputTokens,
-            rateLimits: result.usage?.rateLimits
-          }
-        };
-      }
-    };
-  }
-});
-
-// src/lib/event-stream.ts
-function truncate(text, max) {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? `${flat.slice(0, max)}\u2026` : flat;
-}
-function attachStream(opts) {
-  const { session, stateDir, appendLog: appendLog2, progress } = opts;
-  const emit3 = opts.emit ?? (() => {
-  });
-  let lastAssistantMessage;
-  let taskCompleteSummary;
-  let taskCompleteSuccess;
-  let completed = false;
-  let resolveCompletion;
-  let rejectCompletion;
-  const completion = new Promise((res, rej) => {
-    resolveCompletion = res;
-    rejectCompletion = rej;
-  });
-  let resolveShutdown;
-  const shutdown = new Promise((res) => {
-    resolveShutdown = res;
-  });
-  const unsubscribers = [];
-  const handler = (event) => {
-    switch (event.type) {
-      case "assistant.message": {
-        const content = event.data.content ?? "";
-        if (content) {
-          lastAssistantMessage = content;
-          progress(`[assistant] ${truncate(content, 160)}`);
-          appendLog2(`assistant.message: ${truncate(content, 400)}`);
-          emit3({ type: "assistant_message", content });
-        }
-        break;
-      }
-      case "assistant.usage": {
-        const reqId = event.data.providerCallId ?? event.data.apiCallId;
-        const cost = event.data.cost;
-        appendLog2(
-          `assistant.usage model=${event.data.model}${cost !== void 0 ? ` cost=${cost}` : ""}${reqId ? ` request=${reqId}` : ""}`
-        );
-        if (cost !== void 0 && cost > 0) {
-          progress(`[usage] ${event.data.model} +${cost} premium cost`);
-        }
-        emit3({ type: "usage", copilot: { cost } });
-        break;
-      }
-      case "session.task_complete": {
-        taskCompleteSummary = event.data.summary;
-        taskCompleteSuccess = event.data.success;
-        appendLog2(`session.task_complete success=${event.data.success ?? "unknown"}`);
-        progress(`[task_complete] ${event.data.success === false ? "failed" : "ok"}`);
-        emit3({ type: "task_complete", summary: taskCompleteSummary, success: taskCompleteSuccess });
-        break;
-      }
-      case "session.idle": {
-        if (!completed) {
-          completed = true;
-          appendLog2("session.idle \u2014 resolving as completion");
-          progress("[idle] session finished processing");
-          resolveCompletion({
-            summary: taskCompleteSummary,
-            success: taskCompleteSuccess
-          });
-        }
-        emit3({ type: "idle" });
-        break;
-      }
-      case "session.shutdown": {
-        const d = event.data;
-        let premiumRequestCost = 0;
-        for (const m of Object.values(d.modelMetrics ?? {})) {
-          premiumRequestCost += m?.requests?.cost ?? 0;
-        }
-        appendLog2(
-          `session.shutdown type=${d.shutdownType} premiumCost=${premiumRequestCost} files=${d.codeChanges.filesModified.length} +${d.codeChanges.linesAdded}/-${d.codeChanges.linesRemoved}`
-        );
-        resolveShutdown({
-          shutdownType: d.shutdownType,
-          errorReason: d.errorReason,
-          premiumRequestCost,
-          codeChanges: {
-            linesAdded: d.codeChanges.linesAdded,
-            linesRemoved: d.codeChanges.linesRemoved,
-            filesModified: [...d.codeChanges.filesModified]
-          },
-          currentModel: d.currentModel
-        });
-        emit3({
-          type: "shutdown",
-          codeChanges: {
-            linesAdded: d.codeChanges.linesAdded,
-            linesRemoved: d.codeChanges.linesRemoved,
-            filesModified: [...d.codeChanges.filesModified]
-          }
-        });
-        break;
-      }
-      case "session.error": {
-        const msg = event.data.message ?? "unknown session error";
-        appendLog2(`session.error: ${msg}`);
-        progress(`[error] ${msg}`);
-        if (!completed) {
-          completed = true;
-          rejectCompletion(new Error(msg));
-        }
-        emit3({ type: "error", message: msg });
-        break;
-      }
-      case "session.warning": {
-        const msg = event.data.message ?? "";
-        if (msg) {
-          appendLog2(`session.warning: ${msg}`);
-          progress(`[warning] ${truncate(msg, 160)}`);
-        }
-        break;
-      }
-      case "session.info": {
-        const msg = event.data.message ?? "";
-        if (msg) {
-          appendLog2(`session.info: ${truncate(msg, 200)}`);
-        }
-        break;
-      }
-      case "session.compaction_start": {
-        appendLog2("session.compaction_start");
-        progress("[compaction] started");
-        break;
-      }
-      case "session.compaction_complete": {
-        appendLog2("session.compaction_complete");
-        progress("[compaction] complete");
-        break;
-      }
-      case "tool.execution_start": {
-        const toolName = event.data.toolName ?? "unknown";
-        appendLog2(`tool.execution_start ${toolName}`);
-        progress(`[tool] ${toolName} \u2026`);
-        emit3({ type: "tool_start", name: toolName });
-        break;
-      }
-      case "tool.execution_complete": {
-        const toolName = event.data.toolName ?? "unknown";
-        appendLog2(`tool.execution_complete ${toolName}`);
-        break;
-      }
-      case "subagent.started": {
-        const name = event.data.agentName ?? event.data.name ?? "subagent";
-        appendLog2(`subagent.started ${name}`);
-        progress(`[subagent:${name}] started`);
-        break;
-      }
-      case "subagent.completed": {
-        const name = event.data.agentName ?? event.data.name ?? "subagent";
-        appendLog2(`subagent.completed ${name}`);
-        break;
-      }
-      case "subagent.failed": {
-        const name = event.data.agentName ?? event.data.name ?? "subagent";
-        appendLog2(`subagent.failed ${name}`);
-        progress(`[subagent:${name}] failed`);
-        break;
-      }
-      case "permission.requested": {
-        const req = event.data.permissionRequest;
-        const kind = req.kind;
-        let detail;
-        if (kind === "shell") {
-          detail = req.fullCommandText;
-          appendLog2(`permission.requested shell: ${detail ?? ""}`);
-        } else if (kind === "write") {
-          detail = req.fileName;
-          appendLog2(`permission.requested write: ${detail ?? ""}`);
-        } else if (kind === "read") {
-          detail = req.path;
-          appendLog2(`permission.requested read: ${detail ?? ""}`);
-        } else if (kind === "url") {
-          detail = req.url;
-          appendLog2(`permission.requested url: ${detail ?? ""}`);
-        } else {
-          appendLog2(`permission.requested ${kind}`);
-        }
-        emit3({ type: "permission_request", kind, detail });
-        break;
-      }
-      default:
-        break;
-    }
-  };
-  const unsub = session.on(handler);
-  unsubscribers.push(unsub);
-  return {
-    getLastAssistantMessage: () => lastAssistantMessage,
-    completion,
-    shutdown,
-    dispose: () => {
-      for (const u of unsubscribers) u();
-    }
-  };
-}
-var init_event_stream = __esm({
-  "src/lib/event-stream.ts"() {
-    "use strict";
-  }
-});
-
-// src/lib/permission.ts
-function approved() {
-  return { kind: "approve-once" };
-}
-function denied(feedback) {
-  return { kind: "reject", feedback };
-}
-function canonicalize(p) {
-  try {
-    return (0, import_node_fs7.realpathSync)(p);
-  } catch {
-    const parent = (0, import_node_path7.dirname)(p);
-    if (parent === p) return (0, import_node_path7.resolve)(p);
-    return (0, import_node_path7.resolve)(canonicalize(parent), p.slice(parent.length).replace(/^[\\/]+/, ""));
-  }
-}
-function isPathInside(child, parent) {
-  const c = canonicalize((0, import_node_path7.resolve)(child));
-  const p = canonicalize((0, import_node_path7.resolve)(parent));
-  if (c === p) return true;
-  const rel = (0, import_node_path7.relative)(p, c);
-  return rel !== "" && !rel.startsWith("..") && !(0, import_node_path7.isAbsolute)(rel);
-}
-function makePermissionHandler(opts) {
-  return (request) => {
-    const kind = request.kind;
-    switch (kind) {
-      case "read": {
-        const path = request.path ?? "";
-        if (opts.isolated) {
-          opts.appendLog(`permission.read DENIED (isolated mode): ${path}`);
-          return denied("This Copilot session is isolated (reasoning only); filesystem reads are not permitted.");
-        }
-        if (opts.readOnly) {
-          if (!path) {
-            opts.appendLog("permission.read DENIED (read-only mode): empty path");
-            return denied("Permission request missing path.");
-          }
-          const absolute = path.startsWith("/") ? path : (0, import_node_path7.resolve)(opts.worktreePath, path);
-          if (!isPathInside(absolute, opts.worktreePath)) {
-            opts.appendLog(`permission.read DENIED (outside worktree): ${absolute}`);
-            return denied(`Reads outside the review target (${opts.worktreePath}) are not permitted.`);
-          }
-        }
-        opts.appendLog(`permission.read approved: ${path}`);
-        return approved();
-      }
-      case "write": {
-        const fileName = request.fileName ?? "";
-        if (opts.readOnly) {
-          opts.appendLog(`permission.write DENIED (read-only mode): ${fileName}`);
-          return denied("This Copilot session is read-only (review mode). File writes are not permitted.");
-        }
-        if (!fileName) {
-          opts.appendLog("permission.write denied: no fileName provided");
-          return denied("Permission request missing fileName.");
-        }
-        const absolute = fileName.startsWith("/") ? fileName : (0, import_node_path7.resolve)(opts.worktreePath, fileName);
-        if (isPathInside(absolute, opts.worktreePath)) {
-          opts.appendLog(`permission.write approved: ${fileName}`);
-          return approved();
-        }
-        opts.appendLog(`permission.write denied (outside worktree): ${absolute}`);
-        return denied(`Writes outside the worktree (${opts.worktreePath}) are not permitted by the Claude Code Copilot plugin.`);
-      }
-      case "mcp": {
-        const { serverName, toolName, readOnly } = request;
-        if (opts.isolated) {
-          opts.appendLog(`permission.mcp DENIED (isolated mode): ${serverName}/${toolName}`);
-          return denied(`This Copilot session is isolated (reasoning only); MCP tool ${serverName}/${toolName} is not permitted.`);
-        }
-        if (opts.readOnly && readOnly !== true) {
-          opts.appendLog(`permission.mcp DENIED (read-only mode): ${serverName}/${toolName} (readOnly=${readOnly ?? "unknown"})`);
-          return denied(`MCP tool ${serverName}/${toolName} is not marked read-only; not permitted in this Copilot review session.`);
-        }
-        opts.appendLog(`permission.mcp approved: ${serverName}/${toolName} (readOnly=${readOnly ?? false})`);
-        return approved();
-      }
-      case "shell": {
-        const { fullCommandText, intention } = request;
-        const preview = (fullCommandText ?? "").slice(0, 160);
-        if (opts.allowShell) {
-          opts.appendLog(`permission.shell approved: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
-          return approved();
-        }
-        opts.appendLog(`permission.shell DENIED: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
-        return denied("Shell execution is disabled for this Copilot session. Re-run the implement command with --allow-shell if you want to permit shell commands.");
-      }
-      case "url": {
-        const { url } = request;
-        if (opts.allowUrl) {
-          opts.appendLog(`permission.url approved: ${url}`);
-          return approved();
-        }
-        opts.appendLog(`permission.url DENIED: ${url}`);
-        return denied("URL fetching is disabled for this Copilot session. Re-run with --allow-url to permit it.");
-      }
-      case "custom-tool": {
-        const { toolName } = request;
-        opts.appendLog(`permission.custom-tool DENIED: ${toolName}`);
-        return denied(`Custom tool ${toolName} requires explicit user approval; not permitted in automated Copilot sessions.`);
-      }
-      default: {
-        opts.appendLog(`permission.${kind} DENIED (unknown kind, conservative default)`);
-        return denied(`Permission kind "${kind}" is not auto-approved by the Claude Code Copilot plugin.`);
-      }
-    }
-  };
-}
-var import_node_fs7, import_node_path7;
-var init_permission = __esm({
-  "src/lib/permission.ts"() {
-    "use strict";
-    import_node_fs7 = require("node:fs");
-    import_node_path7 = require("node:path");
   }
 });
 
@@ -10834,9 +10896,23 @@ var init_copilot = __esm({
     CopilotProvider = class {
       id = "copilot";
       capabilities = {
-        metersQuota: true,
-        reportsUsage: true
+        metersQuota: true
       };
+      /**
+       * The live client for the in-flight run, so {@link forceStop} (called from the
+       * centralized SIGINT/SIGTERM handler in runAgentSession) can force-stop the
+       * Copilot CLI subprocess instead of letting an interrupt orphan it. Set at the
+       * start of {@link run} and cleared on teardown.
+       */
+      activeClient = null;
+      /**
+       * Best-effort immediate teardown of the in-flight Copilot CLI client, for an
+       * interrupt handler. Never throws.
+       */
+      async forceStop() {
+        await this.activeClient?.forceStop().catch(() => {
+        });
+      }
       /**
        * Probe Copilot auth without running a session. Constructs a client, starts
        * it, queries the SDK's richer auth summary, and adapts it down to the
@@ -10859,7 +10935,7 @@ var init_copilot = __esm({
       }
       /**
        * Run a single prompt to completion and return the neutral result. Mirrors
-       * the ask/implement lifecycle: permission handler derived from
+       * the prior inline ask lifecycle: permission handler derived from
        * readOnly/allowShell, session created with the caller's model/effort
        * (passed through as-is — undefined stays undefined), completion awaited via
        * the event stream, usage metrics collected, code changes captured from the
@@ -10869,12 +10945,14 @@ var init_copilot = __esm({
         const { cwd, prompt, appendLog: appendLog2, progress } = opts;
         const stateDir = resolveStateDir(cwd);
         const client = new CopilotClient({ workingDirectory: cwd, env: process.env });
+        this.activeClient = client;
         let stopped = false;
         const stop = async () => {
           if (stopped) return;
           stopped = true;
           await client.forceStop().catch(() => {
           });
+          this.activeClient = null;
         };
         try {
           await client.start();
@@ -10983,12 +11061,88 @@ var import_node_process3 = __toESM(require("node:process"), 1);
 init_dist();
 init_copilot_auth();
 init_auth();
+
+// src/lib/run-agent-session.ts
+init_auth();
+
+// src/lib/provider.ts
+var norm = (v) => typeof v === "string" ? v.trim().toLowerCase() : void 0;
+var isId = (v) => v === "copilot" || v === "codex";
+function resolveExplicit(flags) {
+  const flag = norm(flags.provider);
+  if (isId(flag)) return flag;
+  const setting = norm(process.env.CLAUDE_PLUGIN_OPTION_PROVIDER);
+  if (isId(setting)) return setting;
+  return void 0;
+}
+
+// src/lib/run-agent-session.ts
+async function probeCodexUsable(cwd, env) {
+  try {
+    return (await getCodexAuthStatus(cwd, { env })).loggedIn;
+  } catch {
+    return false;
+  }
+}
+async function resolveActiveProvider(flags, cwd, opts = {}) {
+  const explicit = resolveExplicit(flags);
+  if (explicit) return { id: explicit, explicit: true };
+  const probe = opts.probe ?? ((c) => probeCodexUsable(c, opts.env));
+  return { id: await probe(cwd) ? "codex" : "copilot", explicit: false };
+}
+var INTERRUPT_TEARDOWN_CEILING_MS = 2e3;
+async function runAgentSession(args) {
+  const { id, explicit } = await resolveActiveProvider(args.flags, args.cwd, {
+    probe: args.resolveUsable
+  });
+  args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
+  const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
+  const auth = await provider.checkAuth(args.cwd);
+  if (!auth.ok) {
+    throw new Error(`${id} not authenticated: ${auth.message}`);
+  }
+  if (provider.capabilities.metersQuota && args.enforceQuota) {
+    await args.enforceQuota(provider);
+  }
+  if (args.run.model === void 0 && args.defaultModelFor) {
+    args.run = { ...args.run, model: args.defaultModelFor(id) };
+  }
+  const onInterrupt = () => {
+    args.onInterrupt?.();
+    const exit = () => process.exit(130);
+    const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
+    guard.unref();
+    void Promise.resolve(provider.forceStop?.()).catch(() => {
+    }).finally(exit);
+  };
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onInterrupt);
+  let result;
+  try {
+    await args.beforeRun?.(provider);
+    result = await provider.run(args.run);
+  } finally {
+    process.removeListener("SIGINT", onInterrupt);
+    process.removeListener("SIGTERM", onInterrupt);
+  }
+  return { provider: id, result };
+}
+async function defaultPick(id) {
+  if (id === "codex") {
+    const { CodexProvider: CodexProvider2 } = await Promise.resolve().then(() => (init_codex(), codex_exports));
+    return new CodexProvider2();
+  }
+  const { CopilotProvider: CopilotProvider2 } = await Promise.resolve().then(() => (init_copilot(), copilot_exports));
+  return new CopilotProvider2();
+}
+
+// src/commands/setup.ts
 init_quota();
 
 // src/lib/worktree.ts
 var import_node_child_process4 = require("node:child_process");
-var import_node_fs3 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_fs5 = require("node:fs");
+var import_node_path5 = require("node:path");
 function tryGit(args, cwd) {
   const res = (0, import_node_child_process4.spawnSync)("git", args, { cwd, encoding: "utf-8" });
   return {
@@ -11045,7 +11199,12 @@ async function runSetup(options = {}) {
   const cwd = options.cwd ?? process.cwd();
   const stateDir = resolveStateDir(cwd);
   const isCheck = options.check === true;
-  if (options.provider === "codex" || options.provider === void 0 && getCodexAvailability(cwd).available) {
+  const { id } = await resolveActiveProvider(
+    { provider: options.provider },
+    cwd,
+    isCheck ? { probe: async () => false } : {}
+  );
+  if (id === "codex") {
     await runCodexSetup(cwd, options, isCheck);
     return;
   }
@@ -11094,7 +11253,7 @@ async function runSetup(options = {}) {
     if (!isCheck) console.error(`[copilot] listModels failed: ${err.message}`);
   }
   const modelIds = models.map((m) => m.id);
-  const claudeModels = modelIds.filter((id) => id.toLowerCase().includes("claude"));
+  const claudeModels = modelIds.filter((id2) => id2.toLowerCase().includes("claude"));
   const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
   const pruneReport = pruneOrphans(cwd);
   await fetchQuota(client, stateDir).catch(() => null);
@@ -11150,11 +11309,11 @@ async function runSetup(options = {}) {
   console.log(lines.join("\n"));
 }
 async function runCodexSetup(cwd, options, isCheck) {
-  const availability = getCodexAvailability(cwd);
-  const auth = await getCodexAuthStatus(cwd);
   if (isCheck) {
     return;
   }
+  const availability = getCodexAvailability(cwd);
+  const auth = await getCodexAuthStatus(cwd);
   if (options.json) {
     console.log(JSON.stringify({
       status: auth.loggedIn ? "ok" : "error",
@@ -11202,8 +11361,8 @@ init_quota();
 
 // src/lib/git.ts
 var import_node_child_process5 = require("node:child_process");
-var import_node_fs5 = require("node:fs");
-var import_node_path5 = require("node:path");
+var import_node_fs6 = require("node:fs");
+var import_node_path6 = require("node:path");
 var MAX_UNTRACKED_BYTES = 24 * 1024;
 var DEFAULT_INLINE_DIFF_MAX_FILES = 2;
 var DEFAULT_INLINE_DIFF_MAX_BYTES = 256 * 1024;
@@ -11340,12 +11499,12 @@ function formatSection(title, body) {
   return [`## ${title}`, "", body.trim() ? body.trim() : "(none)", ""].join("\n");
 }
 function formatUntrackedFile(cwd, relativePath) {
-  const absolute = (0, import_node_path5.join)(cwd, relativePath);
-  if (!(0, import_node_fs5.existsSync)(absolute)) return `### ${relativePath}
+  const absolute = (0, import_node_path6.join)(cwd, relativePath);
+  if (!(0, import_node_fs6.existsSync)(absolute)) return `### ${relativePath}
 (skipped: missing)`;
   let stat;
   try {
-    stat = (0, import_node_fs5.statSync)(absolute);
+    stat = (0, import_node_fs6.statSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
@@ -11356,7 +11515,7 @@ function formatUntrackedFile(cwd, relativePath) {
 (skipped: ${stat.size} bytes exceeds ${MAX_UNTRACKED_BYTES} byte limit)`;
   let buffer;
   try {
-    buffer = (0, import_node_fs5.readFileSync)(absolute);
+    buffer = (0, import_node_fs6.readFileSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
@@ -11795,14 +11954,9 @@ Rules:
 `;
 
 // src/lib/system-message.ts
-var import_node_fs6 = require("node:fs");
-var import_node_path6 = require("node:path");
+var import_node_fs7 = require("node:fs");
+var import_node_path7 = require("node:path");
 var FRAMING = {
-  implement: [
-    "You are executing a self-contained coding subtask delegated by Claude Code's orchestrator. You run headless: there is no interactive user at the keyboard for this session.",
-    "Your edits happen in an isolated git worktree, so they cannot disturb the main checkout. Do NOT run `git commit` \u2014 the plugin commits your changes for you after you finish.",
-    "Follow the repository's existing conventions and patterns (its instruction files are already loaded). Stay tightly scoped to the task; avoid unrelated refactors or formatting churn."
-  ].join("\n"),
   fix: [
     "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
     "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
@@ -11826,8 +11980,8 @@ function resolveExtraContext(cwd, opts) {
   if (!raw.startsWith("@")) return raw.trim();
   const ref = raw.slice(1);
   try {
-    const source = ref === "-" ? 0 : (0, import_node_path6.resolve)(cwd, ref);
-    const text = (0, import_node_fs6.readFileSync)(source, "utf-8").trim();
+    const source = ref === "-" ? 0 : (0, import_node_path7.resolve)(cwd, ref);
+    const text = (0, import_node_fs7.readFileSync)(source, "utf-8").trim();
     return text || void 0;
   } catch (err) {
     opts.onWarn?.(
@@ -11838,11 +11992,7 @@ function resolveExtraContext(cwd, opts) {
 }
 function buildSystemMessage(kind, input = {}) {
   const sections = [];
-  let framing = FRAMING[kind];
-  if (kind === "implement" && input.branch) {
-    framing = framing.replace("an isolated git worktree", `an isolated git worktree (branch \`${input.branch}\`)`);
-  }
-  sections.push(framing);
+  sections.push(FRAMING[kind]);
   if (input.extraContext && input.extraContext.trim()) {
     sections.push(`## Additional context from the orchestrator
 The following is context from the Claude Code session that delegated this task. Treat it as authoritative intent:
@@ -11852,55 +12002,33 @@ ${input.extraContext.trim()}`);
   return sections.join("\n\n");
 }
 
-// src/lib/run-agent-session.ts
-init_auth();
-
-// src/lib/provider.ts
-var norm = (v) => typeof v === "string" ? v.trim().toLowerCase() : void 0;
-var isId = (v) => v === "copilot" || v === "codex";
-function resolveExplicit(flags) {
-  const flag = norm(flags.provider);
-  if (isId(flag)) return flag;
-  const setting = norm(process.env.CLAUDE_PLUGIN_OPTION_PROVIDER);
-  if (isId(setting)) return setting;
-  return void 0;
+// src/lib/turn-runtime.ts
+function makeProgress() {
+  return (message) => {
+    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
+    process.stderr.write(`[${time}] ${message}
+`);
+  };
 }
-
-// src/lib/run-agent-session.ts
-async function probeCodexUsable(cwd, env) {
-  try {
-    if (!getCodexAvailability(cwd).available) return false;
-    return (await getCodexAuthStatus(cwd, { env })).loggedIn;
-  } catch {
-    return false;
-  }
+function startTurnTimeout(opts) {
+  const abort = new AbortController();
+  let firedTimeout = false;
+  const handle = setTimeout(() => {
+    firedTimeout = true;
+    opts.progress(`Timeout after ${opts.timeoutMs}ms reached \u2014 requesting abort.`);
+    opts.log(`timeout ${opts.timeoutMs}ms`);
+    abort.abort();
+  }, opts.timeoutMs);
+  return {
+    signal: abort.signal,
+    timedOut: () => firedTimeout,
+    clear: () => clearTimeout(handle)
+  };
 }
-async function runAgentSession(args) {
-  const explicit = resolveExplicit(args.flags);
-  const id = explicit ?? (await (args.resolveUsable ?? probeCodexUsable)(args.cwd) ? "codex" : "copilot");
-  args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
-  const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
-  const auth = await provider.checkAuth(args.cwd);
-  if (!auth.ok) {
-    throw new Error(`${id} not authenticated: ${auth.message}`);
-  }
-  if (provider.capabilities.metersQuota && args.enforceQuota) {
-    await args.enforceQuota(provider);
-  }
-  if (args.run.model === void 0 && args.defaultModelFor) {
-    args.run = { ...args.run, model: args.defaultModelFor(id) };
-  }
-  await args.beforeRun?.(provider);
-  const result = await provider.run(args.run);
-  return { provider: id, result };
-}
-async function defaultPick(id) {
-  if (id === "codex") {
-    const { CodexProvider: CodexProvider2 } = await Promise.resolve().then(() => (init_codex(), codex_exports));
-    return new CodexProvider2();
-  }
-  const { CopilotProvider: CopilotProvider2 } = await Promise.resolve().then(() => (init_copilot(), copilot_exports));
-  return new CopilotProvider2();
+function formatCodexUsage(u) {
+  const pct = u.rateLimits?.primaryUsedPercent;
+  const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
+  return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
 }
 
 // src/commands/review.ts
@@ -11926,18 +12054,11 @@ function defaultEffortFor(kind) {
   if (kind === "simplify") return DEFAULT_EFFORT_SIMPLIFY;
   return DEFAULT_EFFORT_STANDARD;
 }
-function progressFactory() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
 async function runReview(cwd, options = {}) {
-  const progress = progressFactory();
+  const progress = makeProgress();
   const kind = resolveKind(options);
   const reasoning = options.reasoning ?? defaultEffortFor(kind);
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
   const copilotModel = options.model ?? defaultModelFor(kind);
   const stateDir = resolveStateDir(cwd);
@@ -11967,14 +12088,7 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
       log(m);
     }
   });
-  const abort = new AbortController();
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms \u2014 aborting session.`);
-    log(`timeout ${timeout}ms`);
-    abort.abort();
-  }, timeout);
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
   let provider;
   let result;
   try {
@@ -11993,7 +12107,7 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
         systemMessage: buildSystemMessage("review", { extraContext }),
         appendLog: log,
         progress,
-        signal: abort.signal
+        signal: turn.signal
       },
       defaultModelFor: (id) => id === "copilot" ? defaultModelFor(kind) : void 0,
       enforceQuota: () => {
@@ -12011,19 +12125,19 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
       log
     }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
+    turn.clear();
     const msg = err.message;
     process.stderr.write(`Review failed: ${msg}
 `);
     log(`review failed: ${msg}`);
     throw err instanceof Error ? err : new Error(msg);
   } finally {
-    clearTimeout(timeoutHandle);
+    turn.clear();
   }
   const reviewBody = result.lastAssistantMessage?.trim() || result.summary && result.summary.trim() || "_(The model returned an empty review.)_";
-  const success = result.success && !timedOut;
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = timedOut ? `Timed out after ${timeout}ms.` : "Review did not complete successfully.";
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Review did not complete successfully.";
     process.stderr.write(`Review failed: ${reason}
 `);
     process.stdout.write(`# Review Failed
@@ -12060,10 +12174,8 @@ ${reviewBody}
   }
   if (result.usage?.kind === "codex") {
     const u = result.usage;
-    const pct = u.rateLimits?.primaryUsedPercent;
-    const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
     progress(
-      `Review done \u2014 kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`
+      `Review done \u2014 kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`
     );
     log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`);
   } else {
@@ -12084,17 +12196,10 @@ init_quota();
 var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
 var COPILOT_DEFAULT_MODEL = "gpt-5.5";
 var DEFAULT_EFFORT = "high";
-function progressFactory2() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
 async function runAsk(cwd, options) {
-  const progress = progressFactory2();
+  const progress = makeProgress();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS2;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
   const minQuota = options.minQuota ?? 1;
   const copilotModel = options.model ?? COPILOT_DEFAULT_MODEL;
   const prompt = options.prompt.trim();
@@ -12110,14 +12215,7 @@ async function runAsk(cwd, options) {
       log(m);
     }
   });
-  const abort = new AbortController();
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms \u2014 aborting session.`);
-    log(`timeout ${timeout}ms`);
-    abort.abort();
-  }, timeout);
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
   let provider;
   let result;
   try {
@@ -12136,7 +12234,7 @@ async function runAsk(cwd, options) {
         systemMessage: buildSystemMessage("ask", { extraContext }),
         appendLog: log,
         progress,
-        signal: abort.signal
+        signal: turn.signal
       },
       defaultModelFor: (id) => id === "copilot" ? COPILOT_DEFAULT_MODEL : void 0,
       enforceQuota: () => {
@@ -12154,19 +12252,19 @@ async function runAsk(cwd, options) {
       log
     }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
+    turn.clear();
     const msg = err.message;
     process.stderr.write(`Ask failed: ${msg}
 `);
     log(`ask failed: ${msg}`);
     throw err instanceof Error ? err : new Error(msg);
   } finally {
-    clearTimeout(timeoutHandle);
+    turn.clear();
   }
   const body = result.lastAssistantMessage?.trim() || result.summary && result.summary.trim() || "_(The model returned an empty answer.)_";
-  const success = result.success && !timedOut;
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = timedOut ? `Timed out after ${timeout}ms.` : "Ask did not complete successfully.";
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Ask did not complete successfully.";
     process.stdout.write(`${body}
 `);
     log(`ask failed: ${reason}`);
@@ -12180,11 +12278,7 @@ async function runAsk(cwd, options) {
     log(`ask done: provider=${provider} premium=${premium}`);
   } else if (result.usage?.kind === "codex") {
     const u = result.usage;
-    const pct = u.rateLimits?.primaryUsedPercent;
-    const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
-    progress(
-      `Ask done \u2014 provider=${provider} effort=${reasoning} tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`
-    );
+    progress(`Ask done \u2014 provider=${provider} effort=${reasoning} ${formatCodexUsage(u)}`);
     log(`ask done: provider=${provider} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`);
   } else {
     progress(`Ask done \u2014 provider=${provider} effort=${reasoning}`);
@@ -12202,13 +12296,6 @@ init_quota();
 var DEFAULT_MODEL2 = "claude-opus-4.8";
 var DEFAULT_EFFORT2 = "high";
 var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
-function progressFactory3() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
 function tryGit2(args, cwd) {
   const res = (0, import_node_child_process6.spawnSync)("git", args, { cwd, encoding: "utf-8" });
   return { ok: res.status === 0, stdout: (res.stdout ?? "").trim(), stderr: (res.stderr ?? "").trim() };
@@ -12305,11 +12392,11 @@ function computeStagedDiff(cwd, baseline) {
   return { filesModified, linesAdded, linesRemoved };
 }
 async function runFix(cwd, options = {}) {
-  const progress = progressFactory3();
+  const progress = makeProgress();
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS3;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS3;
   const minQuota = options.minQuota ?? 1;
   const copilotModel = options.model ?? DEFAULT_MODEL2;
   const log = (msg) => appendLog(stateDir, jobId, msg);
@@ -12339,26 +12426,15 @@ async function runFix(cwd, options = {}) {
   }
   let preFixSnapshot = false;
   let baselineCommit = "";
-  const abort = new AbortController();
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms \u2014 aborting session.`);
-    log(`timeout ${timeout}ms`);
-    abort.abort();
-  }, timeout);
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
   let envelopeDone = false;
-  const onSignal = () => {
+  const onInterrupt = () => {
     if (envelopeDone) return;
     envelopeDone = true;
-    clearTimeout(timeoutHandle);
+    turn.clear();
     progress("Received interrupt signal; aborting fix session.");
-    abort.abort();
     emit2({ status: "failed", jobId, error: "Interrupted by signal" });
-    process.exit(130);
   };
-  process.on("SIGINT", onSignal);
-  process.on("SIGTERM", onSignal);
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
     onWarn: (m) => {
@@ -12385,8 +12461,9 @@ async function runFix(cwd, options = {}) {
         systemMessage: buildSystemMessage("fix", { extraContext }),
         appendLog: log,
         progress,
-        signal: abort.signal
+        signal: turn.signal
       },
+      onInterrupt,
       defaultModelFor: (id) => id === "copilot" ? DEFAULT_MODEL2 : void 0,
       enforceQuota: () => {
         if (!isPremiumModel(copilotModel)) {
@@ -12397,7 +12474,7 @@ async function runFix(cwd, options = {}) {
         if (!gate.ok) {
           log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
           envelopeDone = true;
-          clearTimeout(timeoutHandle);
+          turn.clear();
           emit2({
             status: "blocked",
             reason: gate.reason,
@@ -12427,7 +12504,7 @@ async function runFix(cwd, options = {}) {
         }
         if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
           envelopeDone = true;
-          clearTimeout(timeoutHandle);
+          turn.clear();
           emit2({
             status: "failed",
             jobId,
@@ -12438,7 +12515,7 @@ async function runFix(cwd, options = {}) {
         baselineCommit = gitHead(repoRoot);
         if (!baselineCommit) {
           envelopeDone = true;
-          clearTimeout(timeoutHandle);
+          turn.clear();
           emit2({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet)." });
           process.exit(1);
         }
@@ -12446,19 +12523,19 @@ async function runFix(cwd, options = {}) {
       log
     }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
+    turn.clear();
     if (!envelopeDone) {
       envelopeDone = true;
       emit2({ status: "failed", jobId, error: err.message });
     }
     process.exit(1);
   }
-  clearTimeout(timeoutHandle);
-  const success = result.success && !timedOut;
+  turn.clear();
+  const success = result.success && !turn.timedOut();
   if (!success) {
     if (!envelopeDone) {
       envelopeDone = true;
-      emit2({ status: "failed", jobId, error: timedOut ? `Timed out after ${timeout}ms` : "Fix session did not complete successfully." });
+      emit2({ status: "failed", jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully." });
     }
     process.exit(0);
   }
@@ -12723,7 +12800,7 @@ function enqueueBackground(command, args, flags, cwd) {
   const job = {
     id: jobId,
     kind: command,
-    title: `Copilot ${command}`,
+    title: `harry ${command}`,
     summary,
     status: "queued",
     phase: "queued",
@@ -12758,8 +12835,12 @@ function flagString(flags, key) {
 function flagNumber(flags, key) {
   const v = flags[key];
   if (typeof v !== "string") return void 0;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : void 0;
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : void 0;
+}
+function flagProvider(flags) {
+  const v = flags["provider"];
+  return v === "copilot" || v === "codex" ? v : void 0;
 }
 async function runWorker(jobId, cwd) {
   const stateDir = resolveStateDir(cwd);
@@ -12809,6 +12890,12 @@ async function runWorker(jobId, cwd) {
       scope: scope && validScopes.includes(scope) ? scope : void 0,
       base: flagString(flags, "base"),
       focusText: extractTask(args, flags),
+      // provider + simplify MUST be threaded here — the foreground dispatcher
+      // (companion.ts) passes them, so dropping them makes a backgrounded
+      // `review --simplify` / `--provider codex` silently run the wrong
+      // lane/backend.
+      provider: flagProvider(flags),
+      simplify: flags["simplify"] === true,
       model: flagString(flags, "model"),
       reasoning: effort,
       timeout: flagNumber(flags, "timeout"),
@@ -12930,8 +13017,9 @@ function flagString2(flags, key) {
 function flagNumber2(flags, key) {
   const v = flags[key];
   if (typeof v !== "string") return void 0;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : void 0;
+  const n = Number(v.trim());
+  if (!Number.isFinite(n) || n <= 0) return void 0;
+  return n;
 }
 function flagEnum(flags, key, allowed) {
   const v = flags[key];
