@@ -15,8 +15,8 @@ import { applyMarkerBlock } from "./lib/markers.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
-// Per project dir: local scratch (specs/plans/ledger), worktree sandboxes, and
-// the user's per-project memo file. All non-versioned.
+// Per project dir: local scratch (specs/plans/ledger, active-work STATUS.md),
+// worktree sandboxes, and the user's per-project specialization rules. All non-versioned.
 const ENTRIES = [".local/", ".worktrees/", "CLAUDE.local.md"];
 
 // Returns the .gitignore content with the harry block applied (or removed).
