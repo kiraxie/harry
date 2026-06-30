@@ -9100,7 +9100,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "harry",
-      version: "0.3.0",
+      version: "0.3.1",
       description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
       type: "module",
       license: "MIT",
