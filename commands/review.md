@@ -84,7 +84,7 @@ no performative claims). Do not use any write tool on this path.
 
 **Foreground:**
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" review $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review $ARGUMENTS
 ```
 Return stdout verbatim (markdown). No paraphrase, summary, or commentary.
 
@@ -93,7 +93,7 @@ Return stdout verbatim (markdown). No paraphrase, summary, or commentary.
 review is done; the harness then notifies). Strip an explicit `--background`.
 ```typescript
 Bash({
-  command: `node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" review <args without --background>`,
+  command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review <args without --background>`,
   description: "Copilot review",
   run_in_background: true
 })
@@ -121,9 +121,9 @@ model-specialized); keep `--base`, `--scope`, `--context`, focus text. In one tu
 
 1. Two background Copilot reviews (each appends `--fix` for the structured envelope):
 ```typescript
-Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" review --adversarial --fix <forwarded>`,
+Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --adversarial --fix <forwarded>`,
        description: "review (adversarial/design)", run_in_background: true })
-Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" review --simplify --fix <forwarded>`,
+Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --simplify --fix <forwarded>`,
        description: "review (simplify/cleanup)", run_in_background: true })
 ```
 2. `/code-review max` via the `SlashCommand` tool, read-only (no `--fix`/`--comment`).
@@ -172,7 +172,7 @@ Forward args verbatim EXCEPT strip the slash-level fix flags (`--fix`, `--harry-
 `--wait`, `--background`); keep the angle (`--adversarial`/`--simplify`) and
 `--base`/`--scope`/`--context`/focus. Append node's `--fix` for structured output:
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" review --fix <forwarded>
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --fix <forwarded>
 ```
 Parse the envelope (see its one definition above; handle the `# Review Failed`
 failure case). If `findings` is empty, tell the user and stop.
@@ -218,7 +218,7 @@ conversation, so carry context explicitly.
    reviewers agreed, design concerns) to a temp markdown and pass `--context @that`.
 3. Run:
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" fix \
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" fix \
   --findings /tmp/harry-fix-findings.json \
   --model gpt-5.5 --reasoning xhigh \
   [--context @/tmp/harry-fix-context.md]

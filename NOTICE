@@ -1,0 +1,38 @@
+harry
+Copyright 2026 Kira Hsieh
+Licensed under the MIT License (see LICENSE), except as noted below.
+
+------------------------------------------------------------------------
+Third-party components — Apache License 2.0
+------------------------------------------------------------------------
+
+The Codex provider is derived from codex-plugin-cc:
+
+    Copyright 2026 OpenAI
+    https://github.com/openai/codex
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use these files except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+Files derived from codex-plugin-cc:
+    src/lib/codex/        (app-server.ts, process.ts, protocol.ts, turn.ts, auth.ts)
+    tests/fake-codex.mjs
+
+Modifications made by harry:
+    - Ported from JavaScript (.mjs) to TypeScript.
+    - Removed the broker transport entirely; Codex runs via the direct
+      spawned `codex app-server` transport only.
+    - Added token_count / rate-limits handling (rate_limits primary/secondary
+      used-percent, plan type, reset time, last token usage) that the source
+      did not surface.
+    - Added a connect/initialize timeout that tears down the spawned child,
+      so a turn cannot hang the host process.
+    - Trimmed to the subset needed by harry's ask/review/fix commands.

@@ -38,7 +38,9 @@ bower_components
 build/Release
 
 # Dependency directories
-node_modules/
+# No trailing slash: in a git worktree `node_modules` is a SYMLINK to the main
+# checkout's modules, and `node_modules/` (directory-only) would not match it.
+node_modules
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
@@ -147,6 +149,6 @@ vite.config.ts.timestamp-*
 .local/
 .worktrees/
 CLAUDE.local.md
-# dist/copilot-companion.cjs is committed (plugin must work without a build step);
+# dist/companion.cjs is committed (plugin must work without a build step);
 # re-include it despite the generic `dist` rule above.
 !dist/

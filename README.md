@@ -23,23 +23,44 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 - Node.js **>= 26**
 - [Claude Code](https://claude.com/claude-code)
-- For the runtime commands (`review`, `ask`, `debate`): a GitHub Copilot subscription, authenticated via `gh auth login`. `npm install` pulls the `@github/copilot` CLI.
+- For the agent commands (`review`, `ask`): a backend **provider** — GitHub Copilot or OpenAI Codex (see [Providers](#providers)). Copilot needs a subscription via `gh auth login` (`pnpm install` pulls the `@github/copilot` CLI); Codex needs the `codex` CLI on `PATH` plus `codex login`. `debate`'s gpt voice runs on Copilot.
 - For `debate`'s Gemini voice: the `agy` (Antigravity) CLI on `PATH`.
 
 ## Install
 
+harry has two layers — install whichever your agent supports:
+
+- **Resident laws** (`HARRY.md`) — work in any agent that loads a global
+  instructions file via an `@`-import: **Claude Code**, **Codex**, **Antigravity** (`agy`).
+- **Commands + skills + hooks** (the plugin proper) — **Claude Code only**.
+
 ```bash
-# 1. Build the Copilot runtime (the committed dist drifts as the Copilot CLI updates)
-npm install
-npm run build
+# Build the runtime once (the committed dist drifts as the provider CLIs update)
+pnpm install
+pnpm run build
+```
 
-# 2. Wire the resident laws into your global ~/.claude/CLAUDE.md (idempotent)
-node scripts/install.mjs          # adds `@<path>/HARRY.md` in a marked block
-                                  # warns about stale entries it supersedes
-# uninstall: node scripts/install.mjs --remove
+### 1. Resident laws — Claude Code, Codex, or Antigravity
 
-# 3. Install as a plugin so commands + skills are discovered
-#    (inside Claude Code)
+`scripts/install.mjs` wires a marker-wrapped `@<path>/HARRY.md` into a global
+instructions file (idempotent; `--remove` strips it; it warns about entries it
+supersedes). The target defaults to Claude Code's file; point `HARRY_GLOBAL` at the
+others:
+
+```bash
+node scripts/install.mjs                              # Claude Code → ~/.claude/CLAUDE.md (default)
+HARRY_GLOBAL=~/.codex/AGENTS.md  node scripts/install.mjs   # Codex
+HARRY_GLOBAL=~/.gemini/GEMINI.md node scripts/install.mjs   # Antigravity (agy)
+# uninstall: re-run the matching line with --remove
+```
+
+If a host does not resolve `@`-imports, paste `HARRY.md`'s contents into that file
+instead.
+
+### 2. Commands + skills — Claude Code only
+
+```bash
+# inside Claude Code
 /plugin marketplace add /path/to/harry
 /plugin install harry@harry-dev
 ```
@@ -52,20 +73,46 @@ Per project, add harry's ignore entries to that project's `.gitignore`:
 
 ## Commands
 
-`review`, `ask`, and `debate` run through the Copilot runtime and **consume Copilot premium quota**. The rest are Claude-native or local scripts and cost **no premium**.
+`review`, `ask`, and `debate` run through a backend [provider](#providers). On **Copilot** they **consume premium quota** (costs below); on **Codex** they run on your Codex subscription at **no Copilot premium**. The rest are Claude-native or local scripts and cost **no premium**.
 
 | Command | What it does | Premium cost |
 |---------|--------------|--------------|
 | `/review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) | **yes** — scales with diff size |
 | `/ask "<prompt>"` | One read-only prompt to a frontier model (gpt-5.5) | **yes** — ~7.5 cost/call |
 | `/debate "<topic>"` | 3 models (opus / gpt-5.5 / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes | **yes** — gpt across 2 rounds (opus on your Claude sub, gemini on your Google sub) |
-| `/status` | Auth + available models + quota snapshot + background jobs | no |
+| `/status` | Quota / Codex rate-limit snapshot + background jobs | no |
 | `/result [job-id]` | Fetch a completed background job's output | no |
 | `/lean [--repo]` | Over-engineering audit — what to delete/simplify (diff, or whole tree with `--repo`) | no |
 | `/debt` | Re-judge deferred decisions (`DEBT:` markers + spec Non-Goals + plan deferrals) into a triaged ledger | no |
 | `/init [--remove]` | Add/remove harry's `.gitignore` block in a project | no |
 
 Cheap-first smoke test: `/status` → `/lean` → `/ask` → `/review`/`/debate`.
+
+## Providers
+
+The agent commands (`ask`, `review`, and `review --fix`) run through one of two
+interchangeable backends:
+
+- **Copilot** — the GitHub Copilot CLI. Consumes Copilot **premium quota**.
+- **Codex** — OpenAI's `codex` CLI (app-server). Runs on your Codex/ChatGPT
+  subscription and consumes **no Copilot premium**; `status` surfaces its
+  rate-limit snapshot instead of a premium count.
+
+**Which one runs** is resolved in this order:
+
+1. An explicit `--provider codex|copilot` flag on the command.
+2. The `provider` plugin setting (exposed as `CLAUDE_PLUGIN_OPTION_PROVIDER`) — set
+   it under `/plugin` → harry → **Backend provider**.
+3. Otherwise **auto**: Codex when its CLI is installed and logged in, else Copilot.
+
+So an empty setting prefers Codex when it's usable and silently falls back to
+Copilot when it isn't. Codex does not inject a default model — leave `--model`
+unset to let `~/.codex/config.toml` decide.
+
+```bash
+# Codex one-time setup: install OpenAI's `codex` CLI (see its docs), then:
+codex login
+```
 
 ## Skills
 
@@ -83,7 +130,7 @@ HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · writing-plans · executing · finishing
 commands/           review · ask · status · result · debate · lean · debt · init
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
-src/ + dist/        copilot runtime (bundled via build.mjs)
+src/ + dist/        agent runtime — Copilot + Codex providers (bundled via build.mjs)
 scripts/            install.mjs · init.mjs · lib/markers.mjs
 upstream.json       tracks the four upstreams by commit (see references/upstream-sync.md)
 ```
@@ -94,4 +141,7 @@ harry is distilled from `superpowers`, `ponytail`, `copilot-plugin-cc`, and `cod
 
 ## License
 
-MIT
+MIT, except the Codex provider. The files under `src/lib/codex/` and the test
+fixture `tests/fake-codex.mjs` are derived from
+[`codex-plugin-cc`](https://github.com/openai/codex) (Copyright 2026 OpenAI) and
+are licensed under Apache-2.0; see [`NOTICE`](NOTICE). All other code is MIT.

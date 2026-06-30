@@ -5,8 +5,8 @@
  *   - a completion signal resolving on `session.task_complete` or timeout
  *   - a shutdown-capture promise resolving on `session.shutdown`
  *
- * The caller (src/commands/implement.ts) awaits these promises to drive the
- * implementation lifecycle, then assembles the final stdout envelope.
+ * The caller (CopilotProvider, via the event stream) awaits these promises to
+ * drive the session lifecycle, then assembles the final stdout envelope.
  */
 
 import type { CopilotSession, SessionEvent } from '@github/copilot-sdk';
@@ -249,14 +249,19 @@ export function attachStream(opts: AttachOptions): AttachedStream {
       case 'permission.requested': {
         const req = event.data.permissionRequest;
         const kind = req.kind;
+        let detail: string | undefined;
         if (kind === 'shell') {
-          appendLog(`permission.requested shell: ${(req as { fullCommandText?: string }).fullCommandText ?? ''}`);
+          detail = (req as { fullCommandText?: string }).fullCommandText;
+          appendLog(`permission.requested shell: ${detail ?? ''}`);
         } else if (kind === 'write') {
-          appendLog(`permission.requested write: ${(req as { fileName?: string }).fileName ?? ''}`);
+          detail = (req as { fileName?: string }).fileName;
+          appendLog(`permission.requested write: ${detail ?? ''}`);
         } else if (kind === 'read') {
-          appendLog(`permission.requested read: ${(req as { path?: string }).path ?? ''}`);
+          detail = (req as { path?: string }).path;
+          appendLog(`permission.requested read: ${detail ?? ''}`);
         } else if (kind === 'url') {
-          appendLog(`permission.requested url: ${(req as { url?: string }).url ?? ''}`);
+          detail = (req as { url?: string }).url;
+          appendLog(`permission.requested url: ${detail ?? ''}`);
         } else {
           appendLog(`permission.requested ${kind}`);
         }

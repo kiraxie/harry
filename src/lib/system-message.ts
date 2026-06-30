@@ -17,21 +17,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-export type SessionKind = 'implement' | 'fix' | 'review' | 'ask';
+export type SessionKind = 'fix' | 'review' | 'ask';
 
 export interface SystemMessageInput {
-  /** Branch the work happens on (implement worktree). */
-  branch?: string;
   /** Caller-supplied extra context/instructions (already resolved to text). */
   extraContext?: string;
 }
 
 const FRAMING: Record<SessionKind, string> = {
-  implement: [
-    "You are executing a self-contained coding subtask delegated by Claude Code's orchestrator. You run headless: there is no interactive user at the keyboard for this session.",
-    'Your edits happen in an isolated git worktree, so they cannot disturb the main checkout. Do NOT run `git commit` — the plugin commits your changes for you after you finish.',
-    "Follow the repository's existing conventions and patterns (its instruction files are already loaded). Stay tightly scoped to the task; avoid unrelated refactors or formatting churn.",
-  ].join('\n'),
   fix: [
     "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
     "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
@@ -85,11 +78,7 @@ export function resolveExtraContext(
 /** Assemble the `systemMessage.content` string for a delegated session. */
 export function buildSystemMessage(kind: SessionKind, input: SystemMessageInput = {}): string {
   const sections: string[] = [];
-  let framing = FRAMING[kind];
-  if (kind === 'implement' && input.branch) {
-    framing = framing.replace('an isolated git worktree', `an isolated git worktree (branch \`${input.branch}\`)`);
-  }
-  sections.push(framing);
+  sections.push(FRAMING[kind]);
   if (input.extraContext && input.extraContext.trim()) {
     sections.push(`## Additional context from the orchestrator\nThe following is context from the Claude Code session that delegated this task. Treat it as authoritative intent:\n\n${input.extraContext.trim()}`);
   }

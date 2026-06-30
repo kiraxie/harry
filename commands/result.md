@@ -7,7 +7,7 @@ allowed-tools: Bash(node:*)
 Get a background job's result. Execute:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" result $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" result $ARGUMENTS
 ```
 
 The stdout is the stored JSON envelope from the background job. Parse it and give the user a short human summary — do NOT paste the raw JSON, it is noisy and the host already shows it collapsed.

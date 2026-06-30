@@ -4,9 +4,8 @@
  * Quota is fetched actively via the SDK's `account.getQuota` RPC (the
  * `assistant.usage` event no longer carries `quotaSnapshots` as of SDK 1.0).
  * Callers fetch a fresh snapshot and hand the loosely-typed `quotaSnapshots`
- * record to `recordSnapshot`; we persist the most recent view so the
- * `implement` command can refuse work before opening a session when quota is
- * exhausted.
+ * record to `recordSnapshot`; we persist the most recent view so a command can
+ * refuse work before opening a session when quota is exhausted.
  *
  * Billing note: premium usage is metered as a *cost* with per-model
  * multipliers, so `usedRequests` / `entitlementRequests` may be fractional.
@@ -337,7 +336,7 @@ export function renderQuotaBar(
   haveSnapshot: boolean,
 ): string[] {
   if (!haveSnapshot) {
-    return ['- No snapshot yet. One will be captured on the next `implement` run.'];
+    return ['- No snapshot yet. One will be captured on the next run.'];
   }
   if (q.allUnlimited && q.pools.length > 0) {
     return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(', ')}).`];
@@ -347,7 +346,6 @@ export function renderQuotaBar(
   }
 
   const metered = q.pools.filter((p) => !p.unlimited);
-  const unlimited = q.pools.filter((p) => p.unlimited);
   const lines: string[] = [];
 
   for (const p of metered) {
@@ -370,11 +368,6 @@ export function renderQuotaBar(
   }
   // Drop trailing blank line introduced by the loop.
   if (lines[lines.length - 1] === '') lines.pop();
-
-  if (unlimited.length > 0) {
-    if (lines.length > 0) lines.push('');
-    lines.push(`Unlimited: ${unlimited.map((p) => p.label).join(', ')}`);
-  }
 
   return lines;
 }

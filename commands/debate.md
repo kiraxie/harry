@@ -23,7 +23,7 @@ proceed with a two-voice debate (opus + gemini) rather than burning the last quo
 | Voice | How you call it |
 |-------|-----------------|
 | `opus` | Dispatch a subagent via the Agent tool, `model: opus`. Prompt it to "ultrathink". |
-| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" ask "<prompt>" --model gpt-5.5 --reasoning high` |
+| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --model gpt-5.5 --reasoning high` |
 | `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with a Bash timeout ≥ 20m (and prefer `run_in_background`) |
 
 `${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when this command runs. The `ask` and

@@ -6,8 +6,9 @@ import { CopilotClient } from '@github/copilot-sdk';
 import type { ModelInfo } from '@github/copilot-sdk';
 
 import { checkAuth } from '../lib/copilot-auth.js';
-import { readSnapshot, summarize, renderQuotaBar, fetchQuota } from '../lib/quota.js';
-import { pruneOrphans } from '../lib/worktree.js';
+import { getCodexAvailability, getCodexAuthStatus } from '../lib/codex/auth.js';
+import { resolveActiveProvider } from '../lib/run-agent-session.ts';
+import { readSnapshot, summarize, fetchQuota } from '../lib/quota.js';
 import { resolveStateDir } from '../lib/state.js';
 import { CLIENT_NAME, PLUGIN_VERSION } from '../lib/version.js';
 
@@ -17,6 +18,7 @@ export interface SetupOptions {
   check?: boolean;
   json?: boolean;
   cwd?: string;
+  provider?: 'copilot' | 'codex';
 }
 
 interface SetupReport {
@@ -36,6 +38,23 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
   const stateDir = resolveStateDir(cwd);
   const isCheck = options.check === true;
+
+  // Provider routing goes through the SAME single authority the run commands use
+  // (resolveActiveProvider), so `setup`/`status` can never show a different
+  // provider than `ask`/`review`/`fix` actually run — an explicit `--provider`
+  // flag or the CLAUDE_PLUGIN_OPTION_PROVIDER setting wins, else codex iff
+  // installed AND logged in. For the SessionStart `setup --check` we suppress the
+  // codex-usable probe (probe → false) so a copilot-default session start does
+  // NOT spawn `codex` subprocesses just to decide routing.
+  const { id } = await resolveActiveProvider(
+    { provider: options.provider },
+    cwd,
+    isCheck ? { probe: async () => false } : {},
+  );
+  if (id === 'codex') {
+    await runCodexSetup(cwd, options, isCheck);
+    return;
+  }
 
   const client = new CopilotClient({ workingDirectory: cwd });
 
@@ -89,8 +108,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const claudeModels = modelIds.filter((id) => id.toLowerCase().includes('claude'));
   const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
 
-  const pruneReport = pruneOrphans(cwd);
-
   // Actively refresh the quota snapshot while the client is live — the SDK no
   // longer pushes quota via events, so this is how `setup` shows real numbers.
   await fetchQuota(client, stateDir).catch(() => null);
@@ -125,30 +142,55 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ''})`);
   if (auth.host) lines.push(`**Host:** ${auth.host}`);
   lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? '(available)' : '(NOT listed — pass --model to override)'}`);
-  if (modelIds.length > 0) {
-    lines.push('');
-    lines.push('### Available models');
-    for (const m of modelIds) lines.push(`- \`${m}\``);
-  }
-  if (!defaultAvailable && claudeModels.length > 0) {
-    lines.push('');
-    lines.push('### Claude models detected');
-    for (const m of claudeModels) lines.push(`- \`${m}\``);
-  }
-  lines.push('');
-  lines.push('### Quota');
-  const haveSnapshot = !!(report.quota && (report.quota.premium !== undefined || report.quota.unlimited));
-  lines.push(...renderQuotaBar(report.quota ?? { pools: [], allUnlimited: false }, haveSnapshot));
-  lines.push('');
-  lines.push('### Housekeeping');
-  lines.push(`- Worktrees pruned: ${pruneReport.worktreesPruned ? 'yes' : 'skipped (not a git repo or prune failed)'}`);
-  lines.push(`- Merged copilot/* branches removed: ${pruneReport.branchesRemoved}`);
-  lines.push('');
-  lines.push('### Next steps');
-  lines.push('- `/copilot:implement "your task"` to delegate');
-  lines.push('- `/copilot:status` to see quota + running jobs');
-  lines.push('- `/copilot:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
+  // Quota is intentionally NOT shown here — it lives in `status` (the runtime
+  // view) to avoid printing it twice in the merged /harry:status. setup still
+  // refreshes the snapshot above (fetchQuota) so status shows fresh numbers.
 
+  console.log(lines.join('\n'));
+}
+
+/**
+ * Codex setup branch — availability + auth status only (no live rate-limit RPC
+ * in v1). Reuses the Task 3 probes; never throws (getCodexAuthStatus is fail-safe).
+ */
+async function runCodexSetup(cwd: string, options: SetupOptions, isCheck: boolean): Promise<void> {
+  if (isCheck) {
+    // SessionStart hook — silent success. Return BEFORE the availability/auth
+    // probe so we do not spawn `codex app-server` (a full connect + account/read
+    // + config/read RPC) on every session start just to discard the result.
+    return;
+  }
+
+  const availability = getCodexAvailability(cwd);
+  const auth = await getCodexAuthStatus(cwd);
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      status: auth.loggedIn ? 'ok' : 'error',
+      provider: 'codex',
+      codex: {
+        available: availability.available,
+        availabilityDetail: availability.detail,
+        loggedIn: auth.loggedIn,
+        authMethod: auth.authMethod,
+        detail: auth.detail,
+      },
+    }, null, 2));
+    return;
+  }
+
+  const lines: string[] = [];
+  lines.push(`## Codex Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push('');
+  lines.push(`**Provider:** Codex`);
+  lines.push(`**Availability:** ${availability.available ? 'available' : 'unavailable'} — ${availability.detail}`);
+  lines.push(`**Status:** ${auth.loggedIn ? 'Authenticated' : 'Not authenticated'}${auth.authMethod ? ` (${auth.authMethod})` : ''}`);
+  lines.push(`**Detail:** ${auth.detail}`);
+  if (!auth.loggedIn) {
+    lines.push('');
+    lines.push('### Next steps');
+    lines.push('- Run `codex login` to authenticate, then re-run setup.');
+  }
   console.log(lines.join('\n'));
 }
 

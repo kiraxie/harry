@@ -1,9 +1,9 @@
 /**
  * fix command — applies a Claude-Code-approved set of review findings to the
- * CURRENT working tree using a write-enabled Copilot session.
+ * CURRENT working tree using a write-enabled agent session (Copilot or Codex).
  *
  * This is stage 3 of the review→fix pipeline:
- *   1. `review --fix`  — Copilot emits structured findings (read-only).
+ *   1. `review --fix`  — the model emits structured findings (read-only).
  *   2. Claude Code     — judges each finding against its conversation context
  *                        (some flagged "issues" are intentional choices only CC
  *                        knows about) and writes the approved subset to a file.
@@ -14,29 +14,31 @@
  * uncommitted changes as a baseline snapshot, then leaves the fix edits staged
  * for the user to inspect and commit.
  *
- * Emits a single JSON envelope on stdout. Best-effort: findings the model could
- * not apply are reported under `skipped` rather than failing the whole run.
+ * The agent lifecycle (provider resolution, auth, run) is delegated to
+ * {@link runAgentSession}; fix only supplies the prompt/options, the
+ * copilot-only quota gate, the provider-aware default model, and its single
+ * JSON-envelope stdout contract. Best-effort: findings the model could not apply
+ * are reported under `skipped` rather than failing the whole run.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { CopilotClient } from '@github/copilot-sdk';
 
-import type { ReasoningEffort } from './implement.js';
+import type { ReasoningEffort } from '../lib/provider.ts';
 import { resolveStateDir, generateJobId, appendLog, jobLogPath } from '../lib/state.js';
-import { readSnapshot, evaluateGate, summarize, fetchQuota } from '../lib/quota.js';
-import { checkAuth } from '../lib/copilot-auth.js';
-import { makePermissionHandler } from '../lib/permission.js';
-import { attachStream } from '../lib/event-stream.js';
+import { readSnapshot, evaluateGate, summarize, isPremiumModel } from '../lib/quota.js';
 import { resolveRepoRoot } from '../lib/worktree.js';
 import { extractJsonBlock, normalizeFindings, type Finding } from '../lib/findings.js';
 import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
-import { CLIENT_NAME, PLUGIN_VERSION } from '../lib/version.js';
+import { runAgentSession } from '../lib/run-agent-session.ts';
+import { makeProgress, startTurnTimeout } from '../lib/turn-runtime.ts';
+import type { ProviderId } from '../lib/provider.ts';
 
 export interface FixOptions {
   /** Path to the approved-findings JSON (array, or a {findings:[...]} object). */
   findingsPath?: string;
+  provider?: ProviderId;
   model?: string;
   reasoning?: ReasoningEffort;
   timeout?: number;
@@ -45,8 +47,8 @@ export interface FixOptions {
   allowUrl?: boolean;
   writePath?: string;
   /**
-   * Extra context appended to Copilot's system message. Literal text, or `@file`
-   * / `@-` (stdin) to read from a source — see `resolveExtraContext`.
+   * Extra context appended to the model's system message. Literal text, or
+   * `@file` / `@-` (stdin) to read from a source — see `resolveExtraContext`.
    */
   context?: string;
   jobId?: string;
@@ -55,13 +57,6 @@ export interface FixOptions {
 const DEFAULT_MODEL = 'claude-opus-4.8';
 const DEFAULT_EFFORT: ReasoningEffort = 'high';
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-
-function progressFactory(): (message: string) => void {
-  return (message: string) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-    process.stderr.write(`[${time}] ${message}\n`);
-  };
-}
 
 function tryGit(args: string[], cwd: string): { ok: boolean; stdout: string; stderr: string } {
   const res = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -100,6 +95,11 @@ interface FailedEnvelope {
   status: 'failed';
   jobId: string;
   error: string;
+  // beforeRun may have already committed the user's uncommitted work as a
+  // baseline before the run failed — report it so they are not surprised by a
+  // `pre-fix snapshot` commit with no machine-readable signal it happened.
+  preFixSnapshot?: boolean;
+  baselineCommit?: string;
 }
 
 interface BlockedEnvelope {
@@ -213,13 +213,16 @@ function computeStagedDiff(cwd: string, baseline: string): { filesModified: stri
 }
 
 export async function runFix(cwd: string, options: FixOptions = {}): Promise<void> {
-  const progress = progressFactory();
+  const progress = makeProgress();
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
-  const model = options.model ?? DEFAULT_MODEL;
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
+  // The model copilot WOULD use (for the copilot-only quota pre-gate and the
+  // envelope metadata). The actual model is filled per-provider by
+  // runAgentSession's defaultModelFor.
+  const copilotModel = options.model ?? DEFAULT_MODEL;
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
 
   // 1. Load + validate findings ----------------------------------------------
@@ -239,25 +242,9 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     emit({ status: 'failed', jobId, error: 'No findings to fix (empty list after parsing).' });
     process.exit(1);
   }
-  log(`fix start: model=${model} findings=${findings.length} source=${findingsAbs}`);
+  log(`fix start: model=${copilotModel} findings=${findings.length} source=${findingsAbs}`);
 
-  // 2. Quota gate ------------------------------------------------------------
-  const snapshot = readSnapshot(stateDir);
-  const gate = evaluateGate(snapshot, { minRemaining: minQuota });
-  if (!gate.ok) {
-    log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-    emit({
-      status: 'blocked',
-      reason: gate.reason,
-      resetAt: gate.resetAt,
-      remaining: gate.remaining,
-      message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || 'unknown'}.`,
-    });
-    return;
-  }
-  if (gate.ok && 'warning' in gate && gate.warning) progress(gate.warning);
-
-  // 3. Repo + pre-fix snapshot -----------------------------------------------
+  // 2. Repo --------------------------------------------------------------------
   let repoRoot: string;
   try {
     repoRoot = resolveRepoRoot(cwd);
@@ -266,159 +253,164 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     process.exit(1);
   }
 
-  // Commit any pre-existing uncommitted changes so the fix diff is isolated.
+  // The pre-fix snapshot is deferred to the `beforeRun` hook below so it runs
+  // ONLY after the quota gate passes — a blocked copilot fix must mutate NO git
+  // history. These outer vars are filled by that hook and read by the envelope.
   let preFixSnapshot = false;
-  const dirty = tryGit(['status', '--porcelain'], repoRoot);
-  if (dirty.ok && dirty.stdout.trim()) {
-    tryGit(['add', '-A'], repoRoot);
-    const c = tryGit(['commit', '-m', 'chore: pre-fix snapshot (copilot fix baseline)'], repoRoot);
-    preFixSnapshot = c.ok;
-    if (c.ok) {
-      progress('Committed pre-existing changes as a baseline snapshot before applying fixes.');
-      log('pre-fix snapshot commit created');
-    } else {
-      log(`pre-fix snapshot commit failed: ${c.stderr}`);
-    }
-  }
-  // If the tree was dirty but the snapshot commit failed, the baseline is
-  // contaminated — proceeding would mix the user's pre-existing changes into
-  // the reported fix diff. Abort instead.
-  if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
-    emit({
-      status: 'failed',
-      jobId,
-      error: 'Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry.',
-    });
-    process.exit(1);
-  }
+  let baselineCommit = '';
+  // Snapshot facts to attach to a `failed` envelope, so a run that fails AFTER
+  // beforeRun committed the baseline still reports that commit.
+  const snapshotInfo = (): Pick<FailedEnvelope, 'preFixSnapshot' | 'baselineCommit'> =>
+    preFixSnapshot ? { preFixSnapshot, ...(baselineCommit ? { baselineCommit } : {}) } : {};
 
-  const baselineCommit = gitHead(repoRoot);
-  // fix diffs the applied changes against this baseline; with no commit to
-  // diff against (unborn HEAD) the diff would silently report nothing.
-  if (!baselineCommit) {
-    emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).' });
-    process.exit(1);
-  }
+  // 3. Timeout → abort signal. -----------------------------------------------
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
 
-  // 4. Copilot client (write-enabled, real working tree) ---------------------
-  const client = new CopilotClient({ workingDirectory: repoRoot, env: process.env });
-  let cleanupDone = false;
-  const finalizeFailure = async (error: string): Promise<void> => {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    await client.forceStop().catch(() => { /* ignore */ });
-    emit({ status: 'failed', jobId, error });
-  };
-  const onSignal = async (): Promise<void> => {
+  // Single-envelope guard: a late interrupt must not emit a second stdout line
+  // once the terminal envelope has been written. The actual SIGINT/SIGTERM
+  // handling (force-stop the live provider subprocess, then exit 130) is owned by
+  // runAgentSession's centralized handler; we only supply `onInterrupt` below to
+  // flush this command's terminal `failed` envelope before that exit.
+  let envelopeDone = false;
+  const onInterrupt = (): void => {
+    if (envelopeDone) return;
+    envelopeDone = true;
+    turn.clear();
     progress('Received interrupt signal; aborting fix session.');
-    await finalizeFailure('Interrupted by signal');
-    process.exit(130);
+    emit({ status: 'failed', jobId, error: 'Interrupted by signal' });
   };
-  process.on('SIGINT', () => void onSignal());
-  process.on('SIGTERM', () => void onSignal());
-
-  try {
-    await client.start();
-  } catch (err) {
-    await finalizeFailure(`Failed to start Copilot CLI: ${(err as Error).message}`);
-    process.exit(1);
-  }
-
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    await finalizeFailure(`Not authenticated: ${auth.message}`);
-    await client.stop().catch(() => { /* ignore */ });
-    process.exit(1);
-  }
-  log(`auth ok: ${auth.authType}${auth.login ? ` as ${auth.login}` : ''}`);
-
-  // 5. Session (writes auto-approved inside the repo) ------------------------
-  const permissionHandler = makePermissionHandler({
-    allowShell: options.allowShell ?? false,
-    allowUrl: options.allowUrl ?? false,
-    worktreePath: repoRoot,
-    appendLog: log,
-  });
 
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
     onWarn: (m) => { progress(m); log(m); },
   });
 
-  const session = await client.createSession({
-    clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
-    model,
-    reasoningEffort: reasoning,
-    workingDirectory: repoRoot,
-    infiniteSessions: { enabled: false },
-    onPermissionRequest: permissionHandler,
-    systemMessage: {
-      mode: 'append',
-      content: buildSystemMessage('fix', { extraContext }),
-    },
-  });
-
-  const stream = attachStream({ session, stateDir, appendLog: log, progress });
-
-  progress(`Applying ${findings.length} approved fix(es) (model=${model})…`);
-  await session.send({ prompt: buildFixPrompt(findings) });
-
-  let completionResult: Awaited<typeof stream.completion> | null = null;
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms — aborting session.`);
-    session.abort().catch((e) => log(`abort error: ${(e as Error).message}`));
-  }, timeout);
-
+  // 4. Run the agent session (write-enabled, real working tree). -------------
+  progress(`Applying ${findings.length} approved fix(es) (model=${copilotModel})…`);
+  let provider: ProviderId;
+  let result;
   try {
-    completionResult = await stream.completion;
+    ({ provider, result } = await runAgentSession({
+      cwd: repoRoot,
+      flags: { provider: options.provider },
+      run: {
+        cwd: repoRoot,
+        prompt: buildFixPrompt(findings),
+        model: options.model, // undefined → defaultModelFor fills it per provider
+        reasoning,
+        readOnly: false,
+        allowShell: options.allowShell ?? false,
+        allowUrl: options.allowUrl ?? false,
+        systemMessage: buildSystemMessage('fix', { extraContext }),
+        appendLog: log,
+        progress,
+        signal: turn.signal,
+      },
+      onInterrupt,
+      defaultModelFor: (id) => (id === 'copilot' ? DEFAULT_MODEL : undefined),
+      enforceQuota: () => {
+        // Copilot-only gate (runAgentSession invokes this only when the provider
+        // meters quota). Block early so the user is told to apply fixes directly
+        // rather than burning the run. Standard-tier models don't consume the
+        // premium pool, so skip the gate for them.
+        if (!isPremiumModel(copilotModel)) {
+          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
+          return;
+        }
+        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
+        if (!gate.ok) {
+          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
+          envelopeDone = true;
+          turn.clear();
+          emit({
+            status: 'blocked',
+            reason: gate.reason,
+            resetAt: gate.resetAt,
+            remaining: gate.remaining,
+            message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || 'unknown'}.`,
+          });
+          process.exit(0);
+        }
+        if ('warning' in gate && gate.warning) progress(gate.warning);
+      },
+      // Post-gate / pre-run: snapshot pre-existing changes so the fix diff is
+      // isolated. Runs ONLY after the quota gate passes, so a blocked copilot
+      // fix leaves git history untouched.
+      beforeRun: () => {
+        // Commit any pre-existing uncommitted changes so the fix diff is isolated.
+        const dirty = tryGit(['status', '--porcelain'], repoRoot);
+        if (dirty.ok && dirty.stdout.trim()) {
+          tryGit(['add', '-A'], repoRoot);
+          const c = tryGit(['commit', '-m', 'chore: pre-fix snapshot (copilot fix baseline)'], repoRoot);
+          preFixSnapshot = c.ok;
+          if (c.ok) {
+            progress('Committed pre-existing changes as a baseline snapshot before applying fixes.');
+            log('pre-fix snapshot commit created');
+          } else {
+            log(`pre-fix snapshot commit failed: ${c.stderr}`);
+          }
+        }
+        // If the tree was dirty but the snapshot commit failed, the baseline is
+        // contaminated — proceeding would mix the user's pre-existing changes
+        // into the reported fix diff. Abort instead.
+        if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
+          envelopeDone = true;
+          turn.clear();
+          emit({
+            status: 'failed',
+            jobId,
+            error: 'Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry.',
+          });
+          process.exit(1);
+        }
+
+        baselineCommit = gitHead(repoRoot);
+        // fix diffs the applied changes against this baseline; with no commit to
+        // diff against (unborn HEAD) the diff would silently report nothing.
+        if (!baselineCommit) {
+          envelopeDone = true;
+          turn.clear();
+          emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).', ...snapshotInfo() });
+          process.exit(1);
+        }
+      },
+      log,
+    }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
-    stream.dispose();
-    await session.disconnect().catch(() => { /* ignore */ });
-    await client.stop().catch(() => { /* ignore */ });
-    await finalizeFailure((err as Error).message);
+    turn.clear();
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit({ status: 'failed', jobId, error: (err as Error).message, ...snapshotInfo() });
+    }
     process.exit(1);
   }
-  clearTimeout(timeoutHandle);
+  turn.clear();
 
-  // 6. Metrics + quota refresh -----------------------------------------------
-  let premiumRequestCost: number | undefined;
-  try {
-    const metrics = await session.rpc.usage.getMetrics();
-    premiumRequestCost = metrics.totalPremiumRequestCost;
-  } catch (e) {
-    log(`usage.getMetrics failed: ${(e as Error).message}`);
-  }
-
-  await session.disconnect().catch((e) => log(`disconnect warn: ${(e as Error).message}`));
-  const shutdownResult = await Promise.race([
-    stream.shutdown,
-    new Promise<null>((res) => setTimeout(() => res(null), 5000)),
-  ]);
-  stream.dispose();
-  await fetchQuota(client, stateDir).catch(() => null);
-  await client.stop().catch(() => { /* ignore */ });
-
-  const success = completionResult?.success !== false && !timedOut;
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    await finalizeFailure(timedOut ? `Timed out after ${timeout}ms` : 'Fix session did not complete successfully.');
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit({ status: 'failed', jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : 'Fix session did not complete successfully.', ...snapshotInfo() });
+    }
     process.exit(0);
   }
 
   // Past the point of no return: claim the single-envelope slot so a late
   // SIGINT/SIGTERM during teardown cannot emit a second (failed) stdout line.
-  cleanupDone = true;
+  envelopeDone = true;
 
-  // 7. Diff stats + apply report ---------------------------------------------
-  const assistant = stream.getLastAssistantMessage() ?? '';
-  const report = parseApplyReport(assistant, findings);
+  // 5. Diff stats + apply report ---------------------------------------------
+  const report = parseApplyReport(result.lastAssistantMessage, findings);
   const diff = computeStagedDiff(repoRoot, baselineCommit);
 
   const summary =
-    (completionResult?.summary && completionResult.summary.trim()) ||
+    (result.summary && result.summary.trim()) ||
     `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
+
+  const premium = result.usage?.kind === 'copilot' ? result.usage.premiumRequestCost ?? 0 : 0;
+  // copilot ran the model it was asked for; codex decides via config, so report
+  // the requested model or a neutral 'codex' label.
+  const usedModel = provider === 'copilot' ? copilotModel : options.model ?? 'codex';
 
   const envelope: FixedEnvelope = {
     status: 'fixed',
@@ -431,8 +423,8 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     linesRemoved: diff.linesRemoved,
     applied: report.applied,
     skipped: report.skipped,
-    premiumRequestCost: premiumRequestCost ?? shutdownResult?.premiumRequestCost ?? 0,
-    model: shutdownResult?.currentModel ?? model,
+    premiumRequestCost: premium,
+    model: usedModel,
     quotaRemaining: summarize(readSnapshot(stateDir)),
   };
 
@@ -445,8 +437,8 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   }
 
   progress(
-    `Fix done — applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`,
+    `Fix done — provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`,
   );
-  log(`fix done: applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
+  log(`fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }

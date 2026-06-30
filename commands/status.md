@@ -1,28 +1,23 @@
 ---
-description: Check Copilot auth + available models + quota snapshot + background-job status. Merges setup and status into one. Optionally pass a job-id for details, or --all for jobs from every session.
+description: Show harry's quota snapshot + background-job status. Optionally pass a job-id for details, or --all for jobs from every session.
 argument-hint: '[job-id] [--all]'
 allowed-tools: Bash(node:*)
 ---
 
-Show the full harry/Copilot health snapshot: authentication, available models, quota, and background jobs. This command merges what upstream split across `setup` and `status`.
+Show harry's runtime snapshot: quota and background jobs.
 
 Raw slash-command arguments:
 `$ARGUMENTS`
 
-Run both runtime subcommands and return their stdout **verbatim** in your text response so the user does not have to expand the collapsed tool-output blocks (HARRY.md §6).
+Run the runtime subcommand and return its stdout **verbatim** in your text response so the user does not have to expand the collapsed tool-output block (HARRY.md §6). A `job-id` shows that job's detail; `--all` shows jobs from every session.
 
-Step 1 — auth + available models + quota (the `setup` check):
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" setup
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status $ARGUMENTS
 ```
 
-Step 2 — quota plus background-job status (forward `$ARGUMENTS`; a `job-id` shows that job's detail, `--all` shows jobs from every session):
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/copilot-companion.cjs" status $ARGUMENTS
-```
+The quota shown is a cached snapshot — refreshed at each session start (the SessionStart hook) and after every ask/review/fix run — with its age labelled in the header.
 
-Return both outputs verbatim, labeled. Then, only if something is worth flagging, append at most one short line:
-- If authentication is missing, tell the user to run `gh auth login` and confirm an active GitHub Copilot subscription.
+Return the output verbatim. Then, only if something is worth flagging, append at most one short line:
 - If premium quota is near exhaustion — harry's fallback threshold is **< 5% remaining** (a percentage of entitlement, not an absolute count) — note that delegation will fall back off Copilot.
 - If there is a failed background job the user may not have noticed, flag it in one line.
 

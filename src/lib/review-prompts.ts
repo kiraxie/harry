@@ -1,5 +1,5 @@
 /**
- * Inline prompt templates for /copilot:review.
+ * Inline prompt templates for /harry:review.
  *
  * Adapted from the codex-plugin-cc adversarial-review template. The structured
  * JSON-schema output contract is dropped — Copilot SDK has no schema enforcement

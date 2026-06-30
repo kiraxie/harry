@@ -9,13 +9,9 @@ import { build } from "esbuild";
 // dependency uses dynamic `require()` against them (same pattern as the
 // sibling gemini plugin's handling of google-auth-library).
 
-// DEBT: ported runtime still bundles the `implement`/`background` subcommands,
-// which harry no longer exposes as commands (implementer = CC subagents). Ceiling:
-// dormant dead code in dist, harmless. Upgrade path: drop src/commands/implement.ts
-// + background.ts and their dispatch in copilot-companion.ts, then rebuild.
 await build({
-  entryPoints: ["src/copilot-companion.ts"],
-  outfile: "dist/copilot-companion.cjs",
+  entryPoints: ["src/companion.ts"],
+  outfile: "dist/companion.cjs",
   bundle: true,
   platform: "node",
   target: "node26",
@@ -25,4 +21,4 @@ await build({
   external: builtinModules.flatMap((m) => [m, `node:${m}`]),
 });
 
-console.log("Built dist/copilot-companion.cjs");
+console.log("Built dist/companion.cjs");

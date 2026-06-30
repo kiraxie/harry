@@ -7,6 +7,7 @@
 
 import {
   resolveStateDir, listJobs, readJobFile, readLogTail, getSessionId,
+  readCodexRateLimits, renderCodexBlock, formatSnapshotAge,
   type JobRecord,
 } from '../lib/state.js';
 import { readSnapshot, summarize, renderQuotaBar } from '../lib/quota.js';
@@ -41,15 +42,20 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
   const jobs = listJobs(stateDir, sessionId);
   const snapshot = readSnapshot(stateDir);
   const quota = summarize(snapshot);
+  const codexRateLimits = readCodexRateLimits(stateDir);
 
   if (options.json) {
-    console.log(JSON.stringify({ quota, jobs }, null, 2));
+    console.log(JSON.stringify(
+      { quota, ...(codexRateLimits ? { codex: codexRateLimits } : {}), jobs },
+      null, 2,
+    ));
     return;
   }
 
   const sections: string[] = [];
 
-  sections.push(renderQuotaBlock(snapshot !== null, quota));
+  sections.push(renderQuotaBlock(snapshot !== null, quota, snapshot?.checkedAt));
+  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits, codexRateLimits.capturedAt));
 
   const running = jobs.filter((j) => j.status === 'queued' || j.status === 'running');
   const finished = jobs.filter((j) => j.status === 'completed' || j.status === 'failed');
@@ -80,8 +86,17 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
   console.log(sections.join('\n\n'));
 }
 
-function renderQuotaBlock(haveSnapshot: boolean, q: ReturnType<typeof summarize>): string {
-  return ['## Copilot Quota', ...renderQuotaBar(q, haveSnapshot)].join('\n');
+function renderQuotaBlock(
+  haveSnapshot: boolean,
+  q: ReturnType<typeof summarize>,
+  checkedAt?: string,
+): string {
+  // The snapshot is a cache (refreshed by each ask/review/fix run), not a live
+  // fetch — surface its age (shared formatter, same as the codex block) so a
+  // stale number is never mistaken for current.
+  const header =
+    haveSnapshot && checkedAt ? `## Quota (snapshot ${formatSnapshotAge(checkedAt)})` : '## Quota';
+  return [header, ...renderQuotaBar(q, haveSnapshot)].join('\n');
 }
 
 interface JobRow {

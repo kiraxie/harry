@@ -6,12 +6,24 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
 var __commonJS = (cb, mod) => function __require() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   } catch (e) {
     throw mod = 0, e;
   }
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
@@ -30,9 +42,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/is.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/is.js
 var require_is = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/is.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/is.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.stringArray = exports2.array = exports2.func = exports2.error = exports2.number = exports2.string = exports2.boolean = void 0;
@@ -67,9 +79,9 @@ var require_is = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messages.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messages.js
 var require_messages = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messages.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messages.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Message = exports2.NotificationType9 = exports2.NotificationType8 = exports2.NotificationType7 = exports2.NotificationType6 = exports2.NotificationType5 = exports2.NotificationType4 = exports2.NotificationType3 = exports2.NotificationType2 = exports2.NotificationType1 = exports2.NotificationType0 = exports2.NotificationType = exports2.RequestType9 = exports2.RequestType8 = exports2.RequestType7 = exports2.RequestType6 = exports2.RequestType5 = exports2.RequestType4 = exports2.RequestType3 = exports2.RequestType2 = exports2.RequestType1 = exports2.RequestType = exports2.RequestType0 = exports2.AbstractMessageSignature = exports2.ParameterStructures = exports2.ResponseError = exports2.ErrorCodes = void 0;
@@ -305,9 +317,9 @@ var require_messages = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/linkedMap.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/linkedMap.js
 var require_linkedMap = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/linkedMap.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/linkedMap.js"(exports2) {
     "use strict";
     var _a;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -675,9 +687,9 @@ var require_linkedMap = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/disposable.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/disposable.js
 var require_disposable = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/disposable.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/disposable.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Disposable = void 0;
@@ -693,9 +705,9 @@ var require_disposable = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/ral.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/ral.js
 var require_ral = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/ral.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/ral.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var _ral;
@@ -718,9 +730,9 @@ var require_ral = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/events.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/events.js
 var require_events = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/events.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/events.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Emitter = exports2.Event = void 0;
@@ -847,9 +859,9 @@ var require_events = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/cancellation.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/cancellation.js
 var require_cancellation = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/cancellation.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/cancellation.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.CancellationTokenSource = exports2.CancellationToken = void 0;
@@ -936,9 +948,9 @@ var require_cancellation = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js
 var require_sharedArrayCancellation = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/sharedArrayCancellation.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.SharedArrayReceiverStrategy = exports2.SharedArraySenderStrategy = void 0;
@@ -1014,9 +1026,9 @@ var require_sharedArrayCancellation = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/semaphore.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/semaphore.js
 var require_semaphore = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/semaphore.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/semaphore.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Semaphore = void 0;
@@ -1031,8 +1043,8 @@ var require_semaphore = __commonJS({
         this._waiting = [];
       }
       lock(thunk) {
-        return new Promise((resolve6, reject) => {
-          this._waiting.push({ thunk, resolve: resolve6, reject });
+        return new Promise((resolve5, reject) => {
+          this._waiting.push({ thunk, resolve: resolve5, reject });
           this.runNext();
         });
       }
@@ -1082,9 +1094,9 @@ var require_semaphore = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messageReader.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageReader.js
 var require_messageReader = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messageReader.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageReader.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ReadableStreamMessageReader = exports2.AbstractMessageReader = exports2.MessageReader = void 0;
@@ -1271,9 +1283,9 @@ ${JSON.stringify(Object.fromEntries(headers))}`));
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messageWriter.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageWriter.js
 var require_messageWriter = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messageWriter.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageWriter.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.WriteableStreamMessageWriter = exports2.AbstractMessageWriter = exports2.MessageWriter = void 0;
@@ -1383,9 +1395,9 @@ var require_messageWriter = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/messageBuffer.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageBuffer.js
 var require_messageBuffer = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/messageBuffer.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/messageBuffer.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AbstractMessageBuffer = void 0;
@@ -1531,9 +1543,9 @@ ${header}`);
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/connection.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/connection.js
 var require_connection = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/connection.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/connection.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.createMessageConnection = exports2.ConnectionOptions = exports2.MessageStrategy = exports2.CancellationStrategy = exports2.CancellationSenderStrategy = exports2.CancellationReceiverStrategy = exports2.RequestCancellationReceiverStrategy = exports2.IdCancellationReceiverStrategy = exports2.ConnectionStrategy = exports2.ConnectionError = exports2.ConnectionErrors = exports2.LogTraceNotification = exports2.SetTraceNotification = exports2.TraceFormat = exports2.TraceValues = exports2.Trace = exports2.NullLogger = exports2.ProgressType = exports2.ProgressToken = void 0;
@@ -2522,9 +2534,9 @@ ${JSON.stringify(message, null, 4)}`);
           if (typeof cancellationStrategy.sender.enableCancellation === "function") {
             cancellationStrategy.sender.enableCancellation(requestMessage);
           }
-          return new Promise(async (resolve6, reject) => {
+          return new Promise(async (resolve5, reject) => {
             const resolveWithCleanup = (r) => {
-              resolve6(r);
+              resolve5(r);
               cancellationStrategy.sender.cleanup(id);
               disposable?.dispose();
             };
@@ -2660,9 +2672,9 @@ ${JSON.stringify(message, null, 4)}`);
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/common/api.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/api.js
 var require_api = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/common/api.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/api.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ProgressType = exports2.ProgressToken = exports2.createMessageConnection = exports2.NullLogger = exports2.ConnectionOptions = exports2.ConnectionStrategy = exports2.AbstractMessageBuffer = exports2.WriteableStreamMessageWriter = exports2.AbstractMessageWriter = exports2.MessageWriter = exports2.ReadableStreamMessageReader = exports2.AbstractMessageReader = exports2.MessageReader = exports2.SharedArrayReceiverStrategy = exports2.SharedArraySenderStrategy = exports2.CancellationToken = exports2.CancellationTokenSource = exports2.Emitter = exports2.Event = exports2.Disposable = exports2.LRUCache = exports2.Touch = exports2.LinkedMap = exports2.ParameterStructures = exports2.NotificationType9 = exports2.NotificationType8 = exports2.NotificationType7 = exports2.NotificationType6 = exports2.NotificationType5 = exports2.NotificationType4 = exports2.NotificationType3 = exports2.NotificationType2 = exports2.NotificationType1 = exports2.NotificationType0 = exports2.NotificationType = exports2.ErrorCodes = exports2.ResponseError = exports2.RequestType9 = exports2.RequestType8 = exports2.RequestType7 = exports2.RequestType6 = exports2.RequestType5 = exports2.RequestType4 = exports2.RequestType3 = exports2.RequestType2 = exports2.RequestType1 = exports2.RequestType0 = exports2.RequestType = exports2.Message = exports2.RAL = void 0;
@@ -2862,9 +2874,9 @@ var require_api = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/node/ril.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/ril.js
 var require_ril = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/node/ril.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/ril.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var util_1 = require("util");
@@ -2936,10 +2948,10 @@ var require_ril = __commonJS({
         return api_1.Disposable.create(() => this.stream.off("end", listener));
       }
       write(data, encoding) {
-        return new Promise((resolve6, reject) => {
+        return new Promise((resolve5, reject) => {
           const callback = (error) => {
             if (error === void 0 || error === null) {
-              resolve6();
+              resolve5();
             } else {
               reject(error);
             }
@@ -3018,9 +3030,9 @@ var require_ril = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/lib/node/main.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/main.js
 var require_main = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/lib/node/main.js"(exports2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/node/main.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -3049,9 +3061,9 @@ var require_main = __commonJS({
     var api_1 = require_api();
     __exportStar(require_api(), exports2);
     var IPCMessageReader = class extends api_1.AbstractMessageReader {
-      constructor(process3) {
+      constructor(process5) {
         super();
-        this.process = process3;
+        this.process = process5;
         let eventEmitter = this.process;
         eventEmitter.on("error", (error) => this.fireError(error));
         eventEmitter.on("close", () => this.fireClose());
@@ -3063,9 +3075,9 @@ var require_main = __commonJS({
     };
     exports2.IPCMessageReader = IPCMessageReader;
     var IPCMessageWriter = class extends api_1.AbstractMessageWriter {
-      constructor(process3) {
+      constructor(process5) {
         super();
-        this.process = process3;
+        this.process = process5;
         this.errorCount = 0;
         const eventEmitter = this.process;
         eventEmitter.on("error", (error) => this.fireError(error));
@@ -3191,10 +3203,10 @@ var require_main = __commonJS({
     exports2.generateRandomPipeName = generateRandomPipeName;
     function createClientPipeTransport(pipeName, encoding = "utf-8") {
       let connectResolve;
-      const connected = new Promise((resolve6, _reject) => {
-        connectResolve = resolve6;
+      const connected = new Promise((resolve5, _reject) => {
+        connectResolve = resolve5;
       });
-      return new Promise((resolve6, reject) => {
+      return new Promise((resolve5, reject) => {
         let server = (0, net_1.createServer)((socket) => {
           server.close();
           connectResolve([
@@ -3205,7 +3217,7 @@ var require_main = __commonJS({
         server.on("error", reject);
         server.listen(pipeName, () => {
           server.removeListener("error", reject);
-          resolve6({
+          resolve5({
             onConnected: () => {
               return connected;
             }
@@ -3224,10 +3236,10 @@ var require_main = __commonJS({
     exports2.createServerPipeTransport = createServerPipeTransport;
     function createClientSocketTransport(port, encoding = "utf-8") {
       let connectResolve;
-      const connected = new Promise((resolve6, _reject) => {
-        connectResolve = resolve6;
+      const connected = new Promise((resolve5, _reject) => {
+        connectResolve = resolve5;
       });
-      return new Promise((resolve6, reject) => {
+      return new Promise((resolve5, reject) => {
         const server = (0, net_1.createServer)((socket) => {
           server.close();
           connectResolve([
@@ -3238,7 +3250,7 @@ var require_main = __commonJS({
         server.on("error", reject);
         server.listen(port, "127.0.0.1", () => {
           server.removeListener("error", reject);
-          resolve6({
+          resolve5({
             onConnected: () => {
               return connected;
             }
@@ -3278,28 +3290,15 @@ var require_main = __commonJS({
   }
 });
 
-// ../../../node_modules/vscode-jsonrpc/node.js
+// node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/node.js
 var require_node = __commonJS({
-  "../../../node_modules/vscode-jsonrpc/node.js"(exports2, module2) {
+  "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/node.js"(exports2, module2) {
     "use strict";
     module2.exports = require_main();
   }
 });
 
-// src/copilot-companion.ts
-var import_node_process = __toESM(require("node:process"), 1);
-
-// ../../../node_modules/@github/copilot-sdk/dist/client.js
-var import_node_child_process = require("node:child_process");
-var import_node_crypto = require("node:crypto");
-var import_node_fs = require("node:fs");
-var import_node_module = require("node:module");
-var import_node_net = require("node:net");
-var import_node_path = require("node:path");
-var import_node_url = require("node:url");
-var import_node2 = __toESM(require_node(), 1);
-
-// ../../../node_modules/@github/copilot-sdk/dist/generated/rpc.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/generated/rpc.js
 function createServerRpc(connection) {
   return {
     /**
@@ -5222,34 +5221,45 @@ function registerClientGlobalApiHandlers(connection, handlers) {
     return handler.httpRequestChunk(params);
   });
 }
+var init_rpc = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/generated/rpc.js"() {
+  }
+});
 
-// ../../../node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js
-var SDK_PROTOCOL_VERSION = 3;
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js
 function getSdkProtocolVersion() {
   return SDK_PROTOCOL_VERSION;
 }
-
-// ../../../node_modules/@github/copilot-sdk/dist/session.js
-var import_node = __toESM(require_node(), 1);
-
-// ../../../node_modules/@github/copilot-sdk/dist/canvas.js
-var CanvasError = class _CanvasError extends Error {
-  constructor(code, message) {
-    super(message);
-    this.code = code;
-    this.name = "CanvasError";
+var SDK_PROTOCOL_VERSION;
+var init_sdkProtocolVersion = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js"() {
+    SDK_PROTOCOL_VERSION = 3;
   }
-  code;
-  /** Default error when an action is declared but no `handler` is wired. */
-  static noHandler() {
-    return new _CanvasError(
-      "canvas_action_no_handler",
-      "No handler implemented for this canvas action"
-    );
-  }
-};
+});
 
-// ../../../node_modules/@github/copilot-sdk/dist/telemetry.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/canvas.js
+var CanvasError;
+var init_canvas = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/canvas.js"() {
+    CanvasError = class _CanvasError extends Error {
+      constructor(code, message) {
+        super(message);
+        this.code = code;
+        this.name = "CanvasError";
+      }
+      code;
+      /** Default error when an action is declared but no `handler` is wired. */
+      static noHandler() {
+        return new _CanvasError(
+          "canvas_action_no_handler",
+          "No handler implemented for this canvas action"
+        );
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/telemetry.js
 async function getTraceContext(provider) {
   if (!provider) return {};
   try {
@@ -5258,8 +5268,12 @@ async function getTraceContext(provider) {
     return {};
   }
 }
+var init_telemetry = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/telemetry.js"() {
+  }
+});
 
-// ../../../node_modules/@github/copilot-sdk/dist/session.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/session.js
 function deserializeHookInput(raw) {
   if (!raw || typeof raw !== "object" || typeof raw.timestamp !== "number") {
     return raw;
@@ -5275,962 +5289,6 @@ function isOpenCanvasInstance(value) {
   const instance = value;
   return typeof instance.instanceId === "string" && instance.instanceId.length > 0 && typeof instance.extensionId === "string" && instance.extensionId.length > 0 && typeof instance.canvasId === "string" && instance.canvasId.length > 0;
 }
-var CopilotSession = class {
-  /**
-   * Creates a new CopilotSession instance.
-   *
-   * @param sessionId - The unique identifier for this session
-   * @param connection - The JSON-RPC message connection to the Copilot CLI
-   * @param workspacePath - Path to the session workspace directory (when infinite sessions enabled)
-   * @param traceContextProvider - Optional callback to get W3C Trace Context for outbound RPCs
-   * @internal This constructor is internal. Use {@link CopilotClient.createSession} to create sessions.
-   */
-  constructor(sessionId, connection, _workspacePath, traceContextProvider) {
-    this.sessionId = sessionId;
-    this.connection = connection;
-    this._workspacePath = _workspacePath;
-    this.traceContextProvider = traceContextProvider;
-  }
-  sessionId;
-  connection;
-  _workspacePath;
-  eventHandlers = /* @__PURE__ */ new Set();
-  typedEventHandlers = /* @__PURE__ */ new Map();
-  toolHandlers = /* @__PURE__ */ new Map();
-  canvases = /* @__PURE__ */ new Map();
-  bearerTokenProviders = /* @__PURE__ */ new Map();
-  commandHandlers = /* @__PURE__ */ new Map();
-  permissionHandler;
-  userInputHandler;
-  elicitationHandler;
-  exitPlanModeHandler;
-  autoModeSwitchHandler;
-  hooks;
-  transformCallbacks;
-  _rpc = null;
-  traceContextProvider;
-  _capabilities = {};
-  openCanvasInstances = [];
-  disconnected = false;
-  /** @internal Client session API handlers, populated by CopilotClient during create/resume. */
-  clientSessionApis = {};
-  /**
-   * Typed session-scoped RPC methods.
-   */
-  get rpc() {
-    if (!this._rpc) {
-      this._rpc = createSessionRpc(this.connection, this.sessionId);
-    }
-    return this._rpc;
-  }
-  /**
-   * Path to the session workspace directory when infinite sessions are enabled.
-   * Contains checkpoints/, plan.md, and files/ subdirectories.
-   * Undefined if infinite sessions are disabled.
-   */
-  get workspacePath() {
-    return this._workspacePath;
-  }
-  /**
-   * Host capabilities reported when the session was created or resumed.
-   * Use this to check feature support before calling capability-gated APIs.
-   */
-  get capabilities() {
-    return this._capabilities;
-  }
-  /**
-   * Interactive UI methods for showing dialogs to the user.
-   * Only available when the CLI host supports elicitation
-   * (`session.capabilities.ui?.elicitation === true`).
-   *
-   * @example
-   * ```typescript
-   * if (session.capabilities.ui?.elicitation) {
-   *   const ok = await session.ui.confirm("Deploy to production?");
-   * }
-   * ```
-   */
-  get ui() {
-    return {
-      elicitation: (params) => this._elicitation(params),
-      confirm: (message) => this._confirm(message),
-      select: (message, options) => this._select(message, options),
-      input: (message, options) => this._input(message, options)
-    };
-  }
-  async send(optionsOrPrompt) {
-    const options = typeof optionsOrPrompt === "string" ? { prompt: optionsOrPrompt } : optionsOrPrompt;
-    const response = await this.connection.sendRequest("session.send", {
-      ...await getTraceContext(this.traceContextProvider),
-      sessionId: this.sessionId,
-      prompt: options.prompt,
-      displayPrompt: options.displayPrompt,
-      attachments: options.attachments,
-      mode: options.mode,
-      agentMode: options.agentMode,
-      requestHeaders: options.requestHeaders
-    });
-    return response.messageId;
-  }
-  async sendAndWait(optionsOrPrompt, timeout) {
-    const options = typeof optionsOrPrompt === "string" ? { prompt: optionsOrPrompt } : optionsOrPrompt;
-    const effectiveTimeout = timeout ?? 6e4;
-    let resolveIdle;
-    let rejectWithError;
-    const idlePromise = new Promise((resolve6, reject) => {
-      resolveIdle = resolve6;
-      rejectWithError = reject;
-    });
-    let lastAssistantMessage;
-    const unsubscribe = this.on((event) => {
-      if (event.type === "assistant.message") {
-        lastAssistantMessage = event;
-      } else if (event.type === "session.idle") {
-        resolveIdle();
-      } else if (event.type === "session.error") {
-        const error = new Error(event.data.message);
-        error.stack = event.data.stack;
-        rejectWithError(error);
-      }
-    });
-    let timeoutId;
-    try {
-      await this.send(options);
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(
-            new Error(
-              `Timeout after ${effectiveTimeout}ms waiting for session.idle`
-            )
-          ),
-          effectiveTimeout
-        );
-      });
-      await Promise.race([idlePromise, timeoutPromise]);
-      return lastAssistantMessage;
-    } finally {
-      if (timeoutId !== void 0) {
-        clearTimeout(timeoutId);
-      }
-      unsubscribe();
-    }
-  }
-  /** @internal */
-  _markDisconnected() {
-    this.disconnected = true;
-    this.eventHandlers.clear();
-    this.typedEventHandlers.clear();
-    this.toolHandlers.clear();
-    this.permissionHandler = void 0;
-    this.userInputHandler = void 0;
-    this.elicitationHandler = void 0;
-    this.exitPlanModeHandler = void 0;
-    this.autoModeSwitchHandler = void 0;
-    this.commandHandlers.clear();
-    this.canvases.clear();
-    this.transformCallbacks?.clear();
-  }
-  on(eventTypeOrHandler, handler) {
-    if (typeof eventTypeOrHandler === "string" && handler) {
-      const eventType = eventTypeOrHandler;
-      if (!this.typedEventHandlers.has(eventType)) {
-        this.typedEventHandlers.set(eventType, /* @__PURE__ */ new Set());
-      }
-      const storedHandler = handler;
-      this.typedEventHandlers.get(eventType).add(storedHandler);
-      return () => {
-        const handlers = this.typedEventHandlers.get(eventType);
-        if (handlers) {
-          handlers.delete(storedHandler);
-        }
-      };
-    }
-    const wildcardHandler = eventTypeOrHandler;
-    this.eventHandlers.add(wildcardHandler);
-    return () => {
-      this.eventHandlers.delete(wildcardHandler);
-    };
-  }
-  /**
-   * Dispatches an event to all registered handlers.
-   * Also handles broadcast request events internally (external tool calls, permissions).
-   *
-   * @param event - The session event to dispatch
-   * @internal This method is for internal use by the SDK.
-   */
-  _dispatchEvent(event) {
-    this._handleBroadcastEvent(event);
-    const typedHandlers = this.typedEventHandlers.get(event.type);
-    if (typedHandlers) {
-      for (const handler of typedHandlers) {
-        try {
-          handler(event);
-        } catch (_error) {
-        }
-      }
-    }
-    for (const handler of this.eventHandlers) {
-      try {
-        handler(event);
-      } catch (_error) {
-      }
-    }
-  }
-  /**
-   * Handles broadcast request events by executing local handlers and responding via RPC.
-   * Handlers are dispatched as fire-and-forget — rejections propagate as unhandled promise
-   * rejections, consistent with standard EventEmitter / event handler semantics.
-   * @internal
-   */
-  _handleBroadcastEvent(event) {
-    if (this.disconnected) {
-      return;
-    }
-    if (event.type === "external_tool.requested") {
-      const { requestId, toolName } = event.data;
-      const args = event.data.arguments;
-      const toolCallId = event.data.toolCallId;
-      const traceparent = event.data.traceparent;
-      const tracestate = event.data.tracestate;
-      const handler = this.toolHandlers.get(toolName);
-      if (handler) {
-        void this._executeToolAndRespond(
-          requestId,
-          toolName,
-          toolCallId,
-          args,
-          handler,
-          traceparent,
-          tracestate
-        );
-      }
-    } else if (event.type === "permission.requested") {
-      const { requestId, permissionRequest, resolvedByHook } = event.data;
-      if (resolvedByHook) {
-        return;
-      }
-      if (this.permissionHandler) {
-        void this._executePermissionAndRespond(requestId, permissionRequest);
-      }
-    } else if (event.type === "command.execute") {
-      const { requestId, commandName, command, args } = event.data;
-      void this._executeCommandAndRespond(requestId, commandName, command, args);
-    } else if (event.type === "elicitation.requested") {
-      if (this.elicitationHandler) {
-        const { message, requestedSchema, mode, elicitationSource, url, requestId } = event.data;
-        void this._handleElicitationRequest(
-          {
-            sessionId: this.sessionId,
-            message,
-            requestedSchema,
-            mode,
-            elicitationSource,
-            url
-          },
-          requestId
-        );
-      }
-    } else if (event.type === "capabilities.changed") {
-      this._capabilities = { ...this._capabilities, ...event.data };
-    } else if (event.type === "session.canvas.opened") {
-      this.upsertOpenCanvasFromEvent(event.data);
-    } else if (event.type === "session.canvas.closed") {
-      this.removeOpenCanvasFromEvent(event.data);
-    }
-  }
-  upsertOpenCanvasFromEvent(data) {
-    if (!isOpenCanvasInstance(data)) {
-      console.warn("failed to deserialize session.canvas.opened payload");
-      return;
-    }
-    this.upsertOpenCanvas(data);
-  }
-  removeOpenCanvasFromEvent(data) {
-    if (!data || typeof data !== "object" || typeof data.instanceId !== "string" || data.instanceId.length === 0) {
-      console.warn("failed to deserialize session.canvas.closed payload");
-      return;
-    }
-    this.removeOpenCanvas(data.instanceId);
-  }
-  removeOpenCanvas(instanceId) {
-    this.openCanvasInstances = this.openCanvasInstances.filter(
-      (open) => open.instanceId !== instanceId
-    );
-  }
-  upsertOpenCanvas(instance) {
-    const index = this.openCanvasInstances.findIndex(
-      (open) => open.instanceId === instance.instanceId
-    );
-    if (index >= 0) {
-      this.openCanvasInstances[index] = instance;
-    } else {
-      this.openCanvasInstances.push(instance);
-    }
-  }
-  /**
-   * Executes a tool handler and sends the result back via RPC.
-   * @internal
-   */
-  async _executeToolAndRespond(requestId, toolName, toolCallId, args, handler, traceparent, tracestate) {
-    try {
-      const rawResult = await handler(args, {
-        sessionId: this.sessionId,
-        toolCallId,
-        toolName,
-        arguments: args,
-        traceparent,
-        tracestate
-      });
-      let result;
-      if (rawResult == null) {
-        result = "";
-      } else if (typeof rawResult === "string") {
-        result = rawResult;
-      } else if (isToolResultObject(rawResult)) {
-        result = rawResult;
-      } else {
-        result = JSON.stringify(rawResult);
-      }
-      if (this.disconnected) {
-        return;
-      }
-      await this.rpc.tools.handlePendingToolCall({ requestId, result });
-    } catch (error) {
-      if (this.disconnected) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      try {
-        await this.rpc.tools.handlePendingToolCall({ requestId, error: message });
-      } catch (rpcError) {
-        if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
-          throw rpcError;
-        }
-      }
-    }
-  }
-  /**
-   * Executes a permission handler and sends the result back via RPC.
-   * @internal
-   */
-  async _executePermissionAndRespond(requestId, permissionRequest) {
-    try {
-      const result = await this.permissionHandler(permissionRequest, {
-        sessionId: this.sessionId
-      });
-      if (result.kind === "no-result") {
-        return;
-      }
-      if (this.disconnected) {
-        return;
-      }
-      await this.rpc.permissions.handlePendingPermissionRequest({ requestId, result });
-    } catch (_error) {
-      if (this.disconnected) {
-        return;
-      }
-      try {
-        await this.rpc.permissions.handlePendingPermissionRequest({
-          requestId,
-          result: {
-            kind: "user-not-available"
-          }
-        });
-      } catch (rpcError) {
-        if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
-          throw rpcError;
-        }
-      }
-    }
-  }
-  /**
-   * Executes a command handler and sends the result back via RPC.
-   * @internal
-   */
-  async _executeCommandAndRespond(requestId, commandName, command, args) {
-    const handler = this.commandHandlers.get(commandName);
-    if (!handler) {
-      try {
-        await this.rpc.commands.handlePendingCommand({
-          requestId,
-          error: `Unknown command: ${commandName}`
-        });
-      } catch (rpcError) {
-        if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
-          throw rpcError;
-        }
-      }
-      return;
-    }
-    try {
-      await handler({ sessionId: this.sessionId, command, commandName, args });
-      if (this.disconnected) {
-        return;
-      }
-      await this.rpc.commands.handlePendingCommand({ requestId });
-    } catch (error) {
-      if (this.disconnected) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      try {
-        await this.rpc.commands.handlePendingCommand({ requestId, error: message });
-      } catch (rpcError) {
-        if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
-          throw rpcError;
-        }
-      }
-    }
-  }
-  /**
-   * Registers custom tool handlers for this session.
-   *
-   * Tools with handlers allow the assistant to execute custom functions automatically.
-   * Declaration-only tools are surfaced as events and left pending for the consumer.
-   *
-   * @param tools - An array of tool definitions with their handlers, or undefined to clear all tools
-   * @internal This method is typically called internally when creating a session with tools.
-   */
-  registerTools(tools) {
-    this.toolHandlers.clear();
-    if (!tools) {
-      return;
-    }
-    for (const tool of tools) {
-      if (tool.handler) {
-        this.toolHandlers.set(tool.name, tool.handler);
-      }
-    }
-  }
-  /**
-   * Retrieves a registered tool handler by name.
-   *
-   * @param name - The name of the tool to retrieve
-   * @returns The tool handler if found, or undefined
-   * @internal This method is for internal use by the SDK.
-   */
-  getToolHandler(name) {
-    return this.toolHandlers.get(name);
-  }
-  /**
-   * Registers canvas declarations and handlers for this session.
-   *
-   * @param canvases - Canvases created via `createCanvas`, or undefined to clear all canvases
-   * @internal Called by the SDK when creating/resuming a session with `canvases`.
-   */
-  registerCanvases(canvases) {
-    this.canvases.clear();
-    if (!canvases || canvases.length === 0) {
-      delete this.clientSessionApis.canvas;
-      return;
-    }
-    for (const canvas of canvases) {
-      this.canvases.set(canvas.declaration.id, canvas);
-    }
-    const self = this;
-    this.clientSessionApis.canvas = {
-      async open(params) {
-        const canvas = self.canvases.get(params.canvasId);
-        if (!canvas) throw new Error(`No canvas registered with id "${params.canvasId}"`);
-        try {
-          return await canvas.open(params) ?? {};
-        } catch (error) {
-          throw toCanvasRpcError(error);
-        }
-      },
-      async close(params) {
-        const canvas = self.canvases.get(params.canvasId);
-        if (!canvas) throw new Error(`No canvas registered with id "${params.canvasId}"`);
-        try {
-          if (canvas.onClose) {
-            await canvas.onClose(params);
-          }
-        } catch (error) {
-          throw toCanvasRpcError(error);
-        }
-      },
-      async invoke(params) {
-        const canvas = self.canvases.get(params.canvasId);
-        if (!canvas) throw new Error(`No canvas registered with id "${params.canvasId}"`);
-        const handler = canvas.actionHandlers.get(params.actionName);
-        if (!handler) {
-          throw new CanvasError(
-            "canvas_action_no_handler",
-            "No handler implemented for this canvas action"
-          );
-        }
-        try {
-          return await handler(params);
-        } catch (error) {
-          throw toCanvasRpcError(error);
-        }
-      }
-    };
-  }
-  /**
-   * Registers per-provider {@link GetBearerToken} callbacks for BYOK providers
-   * configured with managed-identity / on-demand bearer-token auth.
-   *
-   * The runtime never receives the callback itself; the SDK strips it from the
-   * provider config and instead sends `hasBearerTokenProvider: true`. When the
-   * runtime needs a token it issues a session-scoped `providerToken.getToken`
-   * request, which this handler routes to the matching per-provider callback.
-   *
-   * @param providers - Map of provider name → callback, or undefined/empty to clear.
-   * @internal This method is called internally when creating/resuming a session.
-   */
-  registerBearerTokenProviders(providers) {
-    this.bearerTokenProviders.clear();
-    if (!providers || providers.size === 0) {
-      delete this.clientSessionApis.providerToken;
-      return;
-    }
-    for (const [name, callback] of providers) {
-      this.bearerTokenProviders.set(name, callback);
-    }
-    const self = this;
-    this.clientSessionApis.providerToken = {
-      async getToken(params) {
-        const callback = self.bearerTokenProviders.get(params.providerName);
-        if (!callback) {
-          throw new Error(
-            `No bearer-token provider registered for provider "${params.providerName}"`
-          );
-        }
-        const token = await callback({
-          providerName: params.providerName
-        });
-        return { token };
-      }
-    };
-  }
-  /**
-   * Registers command handlers for this session.
-   *
-   * @param commands - An array of command definitions with handlers, or undefined to clear
-   * @internal This method is typically called internally when creating/resuming a session.
-   */
-  registerCommands(commands) {
-    this.commandHandlers.clear();
-    if (!commands) {
-      return;
-    }
-    for (const cmd of commands) {
-      this.commandHandlers.set(cmd.name, cmd.handler);
-    }
-  }
-  /**
-   * Registers the elicitation handler for this session.
-   *
-   * @param handler - The handler to invoke when the server dispatches an elicitation request
-   * @internal This method is typically called internally when creating/resuming a session.
-   */
-  registerElicitationHandler(handler) {
-    this.elicitationHandler = handler;
-  }
-  /**
-   * Registers the exit-plan-mode handler for this session.
-   *
-   * @param handler - The handler to invoke when the server dispatches an exit-plan-mode request
-   * @internal This method is typically called internally when creating/resuming a session.
-   */
-  registerExitPlanModeHandler(handler) {
-    this.exitPlanModeHandler = handler;
-  }
-  /**
-   * Registers the auto-mode-switch handler for this session.
-   *
-   * @param handler - The handler to invoke when the server dispatches an auto-mode-switch request
-   * @internal This method is typically called internally when creating/resuming a session.
-   */
-  registerAutoModeSwitchHandler(handler) {
-    this.autoModeSwitchHandler = handler;
-  }
-  /**
-   * Handles an elicitation.requested broadcast event.
-   * Invokes the registered handler and responds via handlePendingElicitation RPC.
-   * @internal
-   */
-  async _handleElicitationRequest(context, requestId) {
-    if (!this.elicitationHandler) {
-      return;
-    }
-    try {
-      const result = await this.elicitationHandler(context);
-      await this.rpc.ui.handlePendingElicitation({ requestId, result });
-    } catch {
-      try {
-        await this.rpc.ui.handlePendingElicitation({
-          requestId,
-          result: { action: "cancel" }
-        });
-      } catch (rpcError) {
-        if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
-          throw rpcError;
-        }
-      }
-    }
-  }
-  /**
-   * Handles an exitPlanMode.request callback from the runtime.
-   * @internal
-   */
-  async _handleExitPlanModeRequest(request) {
-    if (!this.exitPlanModeHandler) {
-      return { approved: true };
-    }
-    return await this.exitPlanModeHandler(request, { sessionId: this.sessionId });
-  }
-  /**
-   * Handles an autoModeSwitch.request callback from the runtime.
-   * @internal
-   */
-  async _handleAutoModeSwitchRequest(request) {
-    if (!this.autoModeSwitchHandler) {
-      return "no";
-    }
-    return await this.autoModeSwitchHandler(request, { sessionId: this.sessionId });
-  }
-  /**
-   * Sets the host capabilities for this session.
-   *
-   * @param capabilities - The capabilities object from the create/resume response
-   * @internal This method is typically called internally when creating/resuming a session.
-   */
-  setCapabilities(capabilities) {
-    this._capabilities = capabilities ?? {};
-  }
-  /**
-   * Snapshot of canvas instances currently known to be open for this session.
-   * Populated from the `session.resume` response and live `session.canvas.opened`
-   * and `session.canvas.closed` events. Returns a defensive copy — mutating the
-   * returned array has no effect on the session.
-   */
-  get openCanvases() {
-    return [...this.openCanvasInstances];
-  }
-  /**
-   * Sets the open-canvas snapshot for this session.
-   *
-   * @param instances - The `openCanvases` array from the `session.resume` response.
-   * @internal This method is typically called internally when resuming a session.
-   */
-  setOpenCanvases(instances) {
-    this.openCanvasInstances = [...instances];
-  }
-  assertElicitation() {
-    if (!this._capabilities.ui?.elicitation) {
-      throw new Error(
-        "Elicitation is not supported by the host. Check session.capabilities.ui?.elicitation before calling UI methods."
-      );
-    }
-  }
-  async _elicitation(params) {
-    this.assertElicitation();
-    return this.rpc.ui.elicitation({
-      message: params.message,
-      requestedSchema: params.requestedSchema
-    });
-  }
-  async _confirm(message) {
-    this.assertElicitation();
-    const result = await this.rpc.ui.elicitation({
-      message,
-      requestedSchema: {
-        type: "object",
-        properties: {
-          confirmed: { type: "boolean", default: true }
-        },
-        required: ["confirmed"]
-      }
-    });
-    return result.action === "accept" && result.content?.confirmed === true;
-  }
-  async _select(message, options) {
-    this.assertElicitation();
-    const result = await this.rpc.ui.elicitation({
-      message,
-      requestedSchema: {
-        type: "object",
-        properties: {
-          selection: { type: "string", enum: options }
-        },
-        required: ["selection"]
-      }
-    });
-    if (result.action === "accept" && result.content?.selection != null) {
-      return result.content.selection;
-    }
-    return null;
-  }
-  async _input(message, options) {
-    this.assertElicitation();
-    const field = { type: "string" };
-    if (options?.title) field.title = options.title;
-    if (options?.description) field.description = options.description;
-    if (options?.minLength != null) field.minLength = options.minLength;
-    if (options?.maxLength != null) field.maxLength = options.maxLength;
-    if (options?.format) field.format = options.format;
-    if (options?.default != null) field.default = options.default;
-    const result = await this.rpc.ui.elicitation({
-      message,
-      requestedSchema: {
-        type: "object",
-        properties: {
-          value: field
-        },
-        required: ["value"]
-      }
-    });
-    if (result.action === "accept" && result.content?.value != null) {
-      return result.content.value;
-    }
-    return null;
-  }
-  /**
-   * Registers a handler for permission requests.
-   *
-   * When the assistant needs permission to perform certain actions (e.g., file operations),
-   * this handler is called to approve or deny the request.
-   *
-   * @param handler - The permission handler function, or undefined to remove the handler
-   * @internal This method is typically called internally when creating a session.
-   */
-  registerPermissionHandler(handler) {
-    this.permissionHandler = handler;
-  }
-  /**
-   * Registers a user input handler for ask_user requests.
-   *
-   * When the agent needs input from the user (via ask_user tool),
-   * this handler is called to provide the response.
-   *
-   * @param handler - The user input handler function, or undefined to remove the handler
-   * @internal This method is typically called internally when creating a session.
-   */
-  registerUserInputHandler(handler) {
-    this.userInputHandler = handler;
-  }
-  /**
-   * Registers hook handlers for session lifecycle events.
-   *
-   * Hooks allow custom logic to be executed at various points during
-   * the session lifecycle (before/after tool use, session start/end, etc.).
-   *
-   * @param hooks - The hook handlers object, or undefined to remove all hooks
-   * @internal This method is typically called internally when creating a session.
-   */
-  registerHooks(hooks) {
-    this.hooks = hooks;
-  }
-  /**
-   * Registers transform callbacks for system message sections.
-   *
-   * @param callbacks - Map of section ID to transform callback, or undefined to clear
-   * @internal This method is typically called internally when creating a session.
-   */
-  registerTransformCallbacks(callbacks) {
-    this.transformCallbacks = callbacks;
-  }
-  /**
-   * Handles a systemMessage.transform request from the runtime.
-   * Dispatches each section to its registered transform callback.
-   *
-   * @param sections - Map of section IDs to their current rendered content
-   * @returns A promise that resolves with the transformed sections
-   * @internal This method is for internal use by the SDK.
-   */
-  async _handleSystemMessageTransform(sections) {
-    const result = {};
-    for (const [sectionId, { content }] of Object.entries(sections)) {
-      const callback = this.transformCallbacks?.get(sectionId);
-      if (callback) {
-        try {
-          const transformed = await callback(content);
-          result[sectionId] = { content: transformed };
-        } catch (_error) {
-          result[sectionId] = { content };
-        }
-      } else {
-        result[sectionId] = { content };
-      }
-    }
-    return { sections: result };
-  }
-  /**
-   * Handles a user input request from the Copilot CLI.
-   *
-   * @param request - The user input request data from the CLI
-   * @returns A promise that resolves with the user's response
-   * @internal This method is for internal use by the SDK.
-   */
-  async _handleUserInputRequest(request) {
-    if (!this.userInputHandler) {
-      throw new Error("User input requested but no handler registered");
-    }
-    try {
-      const result = await this.userInputHandler(request, {
-        sessionId: this.sessionId
-      });
-      return result;
-    } catch (error) {
-      throw error;
-    }
-  }
-  /**
-   * Handles a hooks invocation from the Copilot CLI.
-   *
-   * @param hookType - The type of hook being invoked
-   * @param input - The input data for the hook
-   * @returns A promise that resolves with the hook output, or undefined
-   * @internal This method is for internal use by the SDK.
-   */
-  async _handleHooksInvoke(hookType, input) {
-    if (!this.hooks) {
-      return void 0;
-    }
-    const normalized = deserializeHookInput(input);
-    const handlerMap = {
-      preToolUse: this.hooks.onPreToolUse,
-      preMcpToolCall: this.hooks.onPreMcpToolCall,
-      postToolUse: this.hooks.onPostToolUse,
-      postToolUseFailure: this.hooks.onPostToolUseFailure,
-      userPromptSubmitted: this.hooks.onUserPromptSubmitted,
-      sessionStart: this.hooks.onSessionStart,
-      sessionEnd: this.hooks.onSessionEnd,
-      errorOccurred: this.hooks.onErrorOccurred
-    };
-    const handler = handlerMap[hookType];
-    if (!handler) {
-      return void 0;
-    }
-    try {
-      const result = await handler(normalized, { sessionId: this.sessionId });
-      return result;
-    } catch (_error) {
-      return void 0;
-    }
-  }
-  /**
-   * Retrieves all events and messages from this session's history.
-   *
-   * This returns the complete conversation history including user messages,
-   * assistant responses, tool executions, and other session events.
-   *
-   * @returns A promise that resolves with an array of all session events
-   * @throws Error if the session has been disconnected or the connection fails
-   *
-   * @example
-   * ```typescript
-   * const events = await session.getEvents();
-   * for (const event of events) {
-   *   if (event.type === "assistant.message") {
-   *     console.log("Assistant:", event.data.content);
-   *   }
-   * }
-   * ```
-   */
-  async getEvents() {
-    const response = await this.connection.sendRequest("session.getMessages", {
-      sessionId: this.sessionId
-    });
-    return response.events;
-  }
-  /**
-   * Disconnects this session and releases all in-memory resources (event handlers,
-   * tool handlers, permission handlers).
-   *
-   * Session state on disk (conversation history, planning state, artifacts) is
-   * preserved, so the conversation can be resumed later by calling
-   * {@link CopilotClient.resumeSession} with the session ID. To permanently
-   * remove all session data including files on disk, use
-   * {@link CopilotClient.deleteSession} instead.
-   *
-   * After calling this method, the session object can no longer be used.
-   *
-   * @returns A promise that resolves when the session is disconnected
-   * @throws Error if the connection fails
-   *
-   * @example
-   * ```typescript
-   * // Clean up when done — session can still be resumed later
-   * await session.disconnect();
-   * ```
-   */
-  async disconnect() {
-    if (this.disconnected) {
-      return;
-    }
-    await this.connection.sendRequest("session.destroy", {
-      sessionId: this.sessionId
-    });
-    this._markDisconnected();
-  }
-  /** Enables `await using session = ...` syntax for automatic cleanup. */
-  async [Symbol.asyncDispose]() {
-    return this.disconnect();
-  }
-  /**
-   * Aborts the currently processing message in this session.
-   *
-   * Use this to cancel a long-running request. The session remains valid
-   * and can continue to be used for new messages.
-   *
-   * @returns A promise that resolves when the abort request is acknowledged
-   * @throws Error if the session has been disconnected or the connection fails
-   *
-   * @example
-   * ```typescript
-   * // Start a long-running request
-   * const messagePromise = session.send({ prompt: "Write a very long story..." });
-   *
-   * // Abort after 5 seconds
-   * setTimeout(async () => {
-   *   await session.abort();
-   * }, 5000);
-   * ```
-   */
-  async abort() {
-    await this.connection.sendRequest("session.abort", {
-      sessionId: this.sessionId
-    });
-  }
-  /**
-   * Change the model for this session.
-   * The new model takes effect for the next message. Conversation history is preserved.
-   *
-   * @param model - Model ID to switch to
-   * @param options - Optional settings for the new model
-   *
-   * @example
-   * ```typescript
-   * await session.setModel("gpt-4.1");
-   * await session.setModel("claude-sonnet-4.6", { reasoningEffort: "high" });
-   * ```
-   */
-  async setModel(model, options) {
-    await this.rpc.model.switchTo({ modelId: model, ...options });
-  }
-  /**
-   * Log a message to the session timeline.
-   * The message appears in the session event stream and is visible to SDK consumers
-   * and (for non-ephemeral messages) persisted to the session event log on disk.
-   *
-   * @param message - Human-readable message text
-   * @param options - Optional log level and ephemeral flag
-   *
-   * @example
-   * ```typescript
-   * await session.log("Processing started");
-   * await session.log("Disk usage high", { level: "warning" });
-   * await session.log("Connection failed", { level: "error" });
-   * await session.log("Debug info", { ephemeral: true });
-   * ```
-   */
-  async log(message, options) {
-    await this.rpc.log({ message, ...options });
-  }
-};
 function isToolResultObject(value) {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -6256,8 +5314,973 @@ function toCanvasRpcError(error) {
   const message = error instanceof Error ? error.message : String(error);
   return new import_node.ResponseError(import_node.ErrorCodes.InternalError, message, { code, message });
 }
+var import_node, CopilotSession;
+var init_session = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/session.js"() {
+    import_node = __toESM(require_node(), 1);
+    init_rpc();
+    init_canvas();
+    init_telemetry();
+    CopilotSession = class {
+      /**
+       * Creates a new CopilotSession instance.
+       *
+       * @param sessionId - The unique identifier for this session
+       * @param connection - The JSON-RPC message connection to the Copilot CLI
+       * @param workspacePath - Path to the session workspace directory (when infinite sessions enabled)
+       * @param traceContextProvider - Optional callback to get W3C Trace Context for outbound RPCs
+       * @internal This constructor is internal. Use {@link CopilotClient.createSession} to create sessions.
+       */
+      constructor(sessionId, connection, _workspacePath, traceContextProvider) {
+        this.sessionId = sessionId;
+        this.connection = connection;
+        this._workspacePath = _workspacePath;
+        this.traceContextProvider = traceContextProvider;
+      }
+      sessionId;
+      connection;
+      _workspacePath;
+      eventHandlers = /* @__PURE__ */ new Set();
+      typedEventHandlers = /* @__PURE__ */ new Map();
+      toolHandlers = /* @__PURE__ */ new Map();
+      canvases = /* @__PURE__ */ new Map();
+      bearerTokenProviders = /* @__PURE__ */ new Map();
+      commandHandlers = /* @__PURE__ */ new Map();
+      permissionHandler;
+      userInputHandler;
+      elicitationHandler;
+      exitPlanModeHandler;
+      autoModeSwitchHandler;
+      hooks;
+      transformCallbacks;
+      _rpc = null;
+      traceContextProvider;
+      _capabilities = {};
+      openCanvasInstances = [];
+      disconnected = false;
+      /** @internal Client session API handlers, populated by CopilotClient during create/resume. */
+      clientSessionApis = {};
+      /**
+       * Typed session-scoped RPC methods.
+       */
+      get rpc() {
+        if (!this._rpc) {
+          this._rpc = createSessionRpc(this.connection, this.sessionId);
+        }
+        return this._rpc;
+      }
+      /**
+       * Path to the session workspace directory when infinite sessions are enabled.
+       * Contains checkpoints/, plan.md, and files/ subdirectories.
+       * Undefined if infinite sessions are disabled.
+       */
+      get workspacePath() {
+        return this._workspacePath;
+      }
+      /**
+       * Host capabilities reported when the session was created or resumed.
+       * Use this to check feature support before calling capability-gated APIs.
+       */
+      get capabilities() {
+        return this._capabilities;
+      }
+      /**
+       * Interactive UI methods for showing dialogs to the user.
+       * Only available when the CLI host supports elicitation
+       * (`session.capabilities.ui?.elicitation === true`).
+       *
+       * @example
+       * ```typescript
+       * if (session.capabilities.ui?.elicitation) {
+       *   const ok = await session.ui.confirm("Deploy to production?");
+       * }
+       * ```
+       */
+      get ui() {
+        return {
+          elicitation: (params) => this._elicitation(params),
+          confirm: (message) => this._confirm(message),
+          select: (message, options) => this._select(message, options),
+          input: (message, options) => this._input(message, options)
+        };
+      }
+      async send(optionsOrPrompt) {
+        const options = typeof optionsOrPrompt === "string" ? { prompt: optionsOrPrompt } : optionsOrPrompt;
+        const response = await this.connection.sendRequest("session.send", {
+          ...await getTraceContext(this.traceContextProvider),
+          sessionId: this.sessionId,
+          prompt: options.prompt,
+          displayPrompt: options.displayPrompt,
+          attachments: options.attachments,
+          mode: options.mode,
+          agentMode: options.agentMode,
+          requestHeaders: options.requestHeaders
+        });
+        return response.messageId;
+      }
+      async sendAndWait(optionsOrPrompt, timeout) {
+        const options = typeof optionsOrPrompt === "string" ? { prompt: optionsOrPrompt } : optionsOrPrompt;
+        const effectiveTimeout = timeout ?? 6e4;
+        let resolveIdle;
+        let rejectWithError;
+        const idlePromise = new Promise((resolve5, reject) => {
+          resolveIdle = resolve5;
+          rejectWithError = reject;
+        });
+        let lastAssistantMessage;
+        const unsubscribe = this.on((event) => {
+          if (event.type === "assistant.message") {
+            lastAssistantMessage = event;
+          } else if (event.type === "session.idle") {
+            resolveIdle();
+          } else if (event.type === "session.error") {
+            const error = new Error(event.data.message);
+            error.stack = event.data.stack;
+            rejectWithError(error);
+          }
+        });
+        let timeoutId;
+        try {
+          await this.send(options);
+          const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(
+                new Error(
+                  `Timeout after ${effectiveTimeout}ms waiting for session.idle`
+                )
+              ),
+              effectiveTimeout
+            );
+          });
+          await Promise.race([idlePromise, timeoutPromise]);
+          return lastAssistantMessage;
+        } finally {
+          if (timeoutId !== void 0) {
+            clearTimeout(timeoutId);
+          }
+          unsubscribe();
+        }
+      }
+      /** @internal */
+      _markDisconnected() {
+        this.disconnected = true;
+        this.eventHandlers.clear();
+        this.typedEventHandlers.clear();
+        this.toolHandlers.clear();
+        this.permissionHandler = void 0;
+        this.userInputHandler = void 0;
+        this.elicitationHandler = void 0;
+        this.exitPlanModeHandler = void 0;
+        this.autoModeSwitchHandler = void 0;
+        this.commandHandlers.clear();
+        this.canvases.clear();
+        this.transformCallbacks?.clear();
+      }
+      on(eventTypeOrHandler, handler) {
+        if (typeof eventTypeOrHandler === "string" && handler) {
+          const eventType = eventTypeOrHandler;
+          if (!this.typedEventHandlers.has(eventType)) {
+            this.typedEventHandlers.set(eventType, /* @__PURE__ */ new Set());
+          }
+          const storedHandler = handler;
+          this.typedEventHandlers.get(eventType).add(storedHandler);
+          return () => {
+            const handlers = this.typedEventHandlers.get(eventType);
+            if (handlers) {
+              handlers.delete(storedHandler);
+            }
+          };
+        }
+        const wildcardHandler = eventTypeOrHandler;
+        this.eventHandlers.add(wildcardHandler);
+        return () => {
+          this.eventHandlers.delete(wildcardHandler);
+        };
+      }
+      /**
+       * Dispatches an event to all registered handlers.
+       * Also handles broadcast request events internally (external tool calls, permissions).
+       *
+       * @param event - The session event to dispatch
+       * @internal This method is for internal use by the SDK.
+       */
+      _dispatchEvent(event) {
+        this._handleBroadcastEvent(event);
+        const typedHandlers = this.typedEventHandlers.get(event.type);
+        if (typedHandlers) {
+          for (const handler of typedHandlers) {
+            try {
+              handler(event);
+            } catch (_error) {
+            }
+          }
+        }
+        for (const handler of this.eventHandlers) {
+          try {
+            handler(event);
+          } catch (_error) {
+          }
+        }
+      }
+      /**
+       * Handles broadcast request events by executing local handlers and responding via RPC.
+       * Handlers are dispatched as fire-and-forget — rejections propagate as unhandled promise
+       * rejections, consistent with standard EventEmitter / event handler semantics.
+       * @internal
+       */
+      _handleBroadcastEvent(event) {
+        if (this.disconnected) {
+          return;
+        }
+        if (event.type === "external_tool.requested") {
+          const { requestId, toolName } = event.data;
+          const args = event.data.arguments;
+          const toolCallId = event.data.toolCallId;
+          const traceparent = event.data.traceparent;
+          const tracestate = event.data.tracestate;
+          const handler = this.toolHandlers.get(toolName);
+          if (handler) {
+            void this._executeToolAndRespond(
+              requestId,
+              toolName,
+              toolCallId,
+              args,
+              handler,
+              traceparent,
+              tracestate
+            );
+          }
+        } else if (event.type === "permission.requested") {
+          const { requestId, permissionRequest, resolvedByHook } = event.data;
+          if (resolvedByHook) {
+            return;
+          }
+          if (this.permissionHandler) {
+            void this._executePermissionAndRespond(requestId, permissionRequest);
+          }
+        } else if (event.type === "command.execute") {
+          const { requestId, commandName, command, args } = event.data;
+          void this._executeCommandAndRespond(requestId, commandName, command, args);
+        } else if (event.type === "elicitation.requested") {
+          if (this.elicitationHandler) {
+            const { message, requestedSchema, mode, elicitationSource, url, requestId } = event.data;
+            void this._handleElicitationRequest(
+              {
+                sessionId: this.sessionId,
+                message,
+                requestedSchema,
+                mode,
+                elicitationSource,
+                url
+              },
+              requestId
+            );
+          }
+        } else if (event.type === "capabilities.changed") {
+          this._capabilities = { ...this._capabilities, ...event.data };
+        } else if (event.type === "session.canvas.opened") {
+          this.upsertOpenCanvasFromEvent(event.data);
+        } else if (event.type === "session.canvas.closed") {
+          this.removeOpenCanvasFromEvent(event.data);
+        }
+      }
+      upsertOpenCanvasFromEvent(data) {
+        if (!isOpenCanvasInstance(data)) {
+          console.warn("failed to deserialize session.canvas.opened payload");
+          return;
+        }
+        this.upsertOpenCanvas(data);
+      }
+      removeOpenCanvasFromEvent(data) {
+        if (!data || typeof data !== "object" || typeof data.instanceId !== "string" || data.instanceId.length === 0) {
+          console.warn("failed to deserialize session.canvas.closed payload");
+          return;
+        }
+        this.removeOpenCanvas(data.instanceId);
+      }
+      removeOpenCanvas(instanceId) {
+        this.openCanvasInstances = this.openCanvasInstances.filter(
+          (open) => open.instanceId !== instanceId
+        );
+      }
+      upsertOpenCanvas(instance) {
+        const index = this.openCanvasInstances.findIndex(
+          (open) => open.instanceId === instance.instanceId
+        );
+        if (index >= 0) {
+          this.openCanvasInstances[index] = instance;
+        } else {
+          this.openCanvasInstances.push(instance);
+        }
+      }
+      /**
+       * Executes a tool handler and sends the result back via RPC.
+       * @internal
+       */
+      async _executeToolAndRespond(requestId, toolName, toolCallId, args, handler, traceparent, tracestate) {
+        try {
+          const rawResult = await handler(args, {
+            sessionId: this.sessionId,
+            toolCallId,
+            toolName,
+            arguments: args,
+            traceparent,
+            tracestate
+          });
+          let result;
+          if (rawResult == null) {
+            result = "";
+          } else if (typeof rawResult === "string") {
+            result = rawResult;
+          } else if (isToolResultObject(rawResult)) {
+            result = rawResult;
+          } else {
+            result = JSON.stringify(rawResult);
+          }
+          if (this.disconnected) {
+            return;
+          }
+          await this.rpc.tools.handlePendingToolCall({ requestId, result });
+        } catch (error) {
+          if (this.disconnected) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          try {
+            await this.rpc.tools.handlePendingToolCall({ requestId, error: message });
+          } catch (rpcError) {
+            if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
+              throw rpcError;
+            }
+          }
+        }
+      }
+      /**
+       * Executes a permission handler and sends the result back via RPC.
+       * @internal
+       */
+      async _executePermissionAndRespond(requestId, permissionRequest) {
+        try {
+          const result = await this.permissionHandler(permissionRequest, {
+            sessionId: this.sessionId
+          });
+          if (result.kind === "no-result") {
+            return;
+          }
+          if (this.disconnected) {
+            return;
+          }
+          await this.rpc.permissions.handlePendingPermissionRequest({ requestId, result });
+        } catch (_error) {
+          if (this.disconnected) {
+            return;
+          }
+          try {
+            await this.rpc.permissions.handlePendingPermissionRequest({
+              requestId,
+              result: {
+                kind: "user-not-available"
+              }
+            });
+          } catch (rpcError) {
+            if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
+              throw rpcError;
+            }
+          }
+        }
+      }
+      /**
+       * Executes a command handler and sends the result back via RPC.
+       * @internal
+       */
+      async _executeCommandAndRespond(requestId, commandName, command, args) {
+        const handler = this.commandHandlers.get(commandName);
+        if (!handler) {
+          try {
+            await this.rpc.commands.handlePendingCommand({
+              requestId,
+              error: `Unknown command: ${commandName}`
+            });
+          } catch (rpcError) {
+            if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
+              throw rpcError;
+            }
+          }
+          return;
+        }
+        try {
+          await handler({ sessionId: this.sessionId, command, commandName, args });
+          if (this.disconnected) {
+            return;
+          }
+          await this.rpc.commands.handlePendingCommand({ requestId });
+        } catch (error) {
+          if (this.disconnected) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          try {
+            await this.rpc.commands.handlePendingCommand({ requestId, error: message });
+          } catch (rpcError) {
+            if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
+              throw rpcError;
+            }
+          }
+        }
+      }
+      /**
+       * Registers custom tool handlers for this session.
+       *
+       * Tools with handlers allow the assistant to execute custom functions automatically.
+       * Declaration-only tools are surfaced as events and left pending for the consumer.
+       *
+       * @param tools - An array of tool definitions with their handlers, or undefined to clear all tools
+       * @internal This method is typically called internally when creating a session with tools.
+       */
+      registerTools(tools) {
+        this.toolHandlers.clear();
+        if (!tools) {
+          return;
+        }
+        for (const tool of tools) {
+          if (tool.handler) {
+            this.toolHandlers.set(tool.name, tool.handler);
+          }
+        }
+      }
+      /**
+       * Retrieves a registered tool handler by name.
+       *
+       * @param name - The name of the tool to retrieve
+       * @returns The tool handler if found, or undefined
+       * @internal This method is for internal use by the SDK.
+       */
+      getToolHandler(name) {
+        return this.toolHandlers.get(name);
+      }
+      /**
+       * Registers canvas declarations and handlers for this session.
+       *
+       * @param canvases - Canvases created via `createCanvas`, or undefined to clear all canvases
+       * @internal Called by the SDK when creating/resuming a session with `canvases`.
+       */
+      registerCanvases(canvases) {
+        this.canvases.clear();
+        if (!canvases || canvases.length === 0) {
+          delete this.clientSessionApis.canvas;
+          return;
+        }
+        for (const canvas of canvases) {
+          this.canvases.set(canvas.declaration.id, canvas);
+        }
+        const self = this;
+        this.clientSessionApis.canvas = {
+          async open(params) {
+            const canvas = self.canvases.get(params.canvasId);
+            if (!canvas) throw new Error(`No canvas registered with id "${params.canvasId}"`);
+            try {
+              return await canvas.open(params) ?? {};
+            } catch (error) {
+              throw toCanvasRpcError(error);
+            }
+          },
+          async close(params) {
+            const canvas = self.canvases.get(params.canvasId);
+            if (!canvas) throw new Error(`No canvas registered with id "${params.canvasId}"`);
+            try {
+              if (canvas.onClose) {
+                await canvas.onClose(params);
+              }
+            } catch (error) {
+              throw toCanvasRpcError(error);
+            }
+          },
+          async invoke(params) {
+            const canvas = self.canvases.get(params.canvasId);
+            if (!canvas) throw new Error(`No canvas registered with id "${params.canvasId}"`);
+            const handler = canvas.actionHandlers.get(params.actionName);
+            if (!handler) {
+              throw new CanvasError(
+                "canvas_action_no_handler",
+                "No handler implemented for this canvas action"
+              );
+            }
+            try {
+              return await handler(params);
+            } catch (error) {
+              throw toCanvasRpcError(error);
+            }
+          }
+        };
+      }
+      /**
+       * Registers per-provider {@link GetBearerToken} callbacks for BYOK providers
+       * configured with managed-identity / on-demand bearer-token auth.
+       *
+       * The runtime never receives the callback itself; the SDK strips it from the
+       * provider config and instead sends `hasBearerTokenProvider: true`. When the
+       * runtime needs a token it issues a session-scoped `providerToken.getToken`
+       * request, which this handler routes to the matching per-provider callback.
+       *
+       * @param providers - Map of provider name → callback, or undefined/empty to clear.
+       * @internal This method is called internally when creating/resuming a session.
+       */
+      registerBearerTokenProviders(providers) {
+        this.bearerTokenProviders.clear();
+        if (!providers || providers.size === 0) {
+          delete this.clientSessionApis.providerToken;
+          return;
+        }
+        for (const [name, callback] of providers) {
+          this.bearerTokenProviders.set(name, callback);
+        }
+        const self = this;
+        this.clientSessionApis.providerToken = {
+          async getToken(params) {
+            const callback = self.bearerTokenProviders.get(params.providerName);
+            if (!callback) {
+              throw new Error(
+                `No bearer-token provider registered for provider "${params.providerName}"`
+              );
+            }
+            const token = await callback({
+              providerName: params.providerName
+            });
+            return { token };
+          }
+        };
+      }
+      /**
+       * Registers command handlers for this session.
+       *
+       * @param commands - An array of command definitions with handlers, or undefined to clear
+       * @internal This method is typically called internally when creating/resuming a session.
+       */
+      registerCommands(commands) {
+        this.commandHandlers.clear();
+        if (!commands) {
+          return;
+        }
+        for (const cmd of commands) {
+          this.commandHandlers.set(cmd.name, cmd.handler);
+        }
+      }
+      /**
+       * Registers the elicitation handler for this session.
+       *
+       * @param handler - The handler to invoke when the server dispatches an elicitation request
+       * @internal This method is typically called internally when creating/resuming a session.
+       */
+      registerElicitationHandler(handler) {
+        this.elicitationHandler = handler;
+      }
+      /**
+       * Registers the exit-plan-mode handler for this session.
+       *
+       * @param handler - The handler to invoke when the server dispatches an exit-plan-mode request
+       * @internal This method is typically called internally when creating/resuming a session.
+       */
+      registerExitPlanModeHandler(handler) {
+        this.exitPlanModeHandler = handler;
+      }
+      /**
+       * Registers the auto-mode-switch handler for this session.
+       *
+       * @param handler - The handler to invoke when the server dispatches an auto-mode-switch request
+       * @internal This method is typically called internally when creating/resuming a session.
+       */
+      registerAutoModeSwitchHandler(handler) {
+        this.autoModeSwitchHandler = handler;
+      }
+      /**
+       * Handles an elicitation.requested broadcast event.
+       * Invokes the registered handler and responds via handlePendingElicitation RPC.
+       * @internal
+       */
+      async _handleElicitationRequest(context, requestId) {
+        if (!this.elicitationHandler) {
+          return;
+        }
+        try {
+          const result = await this.elicitationHandler(context);
+          await this.rpc.ui.handlePendingElicitation({ requestId, result });
+        } catch {
+          try {
+            await this.rpc.ui.handlePendingElicitation({
+              requestId,
+              result: { action: "cancel" }
+            });
+          } catch (rpcError) {
+            if (!(rpcError instanceof import_node.ConnectionError || rpcError instanceof import_node.ResponseError)) {
+              throw rpcError;
+            }
+          }
+        }
+      }
+      /**
+       * Handles an exitPlanMode.request callback from the runtime.
+       * @internal
+       */
+      async _handleExitPlanModeRequest(request) {
+        if (!this.exitPlanModeHandler) {
+          return { approved: true };
+        }
+        return await this.exitPlanModeHandler(request, { sessionId: this.sessionId });
+      }
+      /**
+       * Handles an autoModeSwitch.request callback from the runtime.
+       * @internal
+       */
+      async _handleAutoModeSwitchRequest(request) {
+        if (!this.autoModeSwitchHandler) {
+          return "no";
+        }
+        return await this.autoModeSwitchHandler(request, { sessionId: this.sessionId });
+      }
+      /**
+       * Sets the host capabilities for this session.
+       *
+       * @param capabilities - The capabilities object from the create/resume response
+       * @internal This method is typically called internally when creating/resuming a session.
+       */
+      setCapabilities(capabilities) {
+        this._capabilities = capabilities ?? {};
+      }
+      /**
+       * Snapshot of canvas instances currently known to be open for this session.
+       * Populated from the `session.resume` response and live `session.canvas.opened`
+       * and `session.canvas.closed` events. Returns a defensive copy — mutating the
+       * returned array has no effect on the session.
+       */
+      get openCanvases() {
+        return [...this.openCanvasInstances];
+      }
+      /**
+       * Sets the open-canvas snapshot for this session.
+       *
+       * @param instances - The `openCanvases` array from the `session.resume` response.
+       * @internal This method is typically called internally when resuming a session.
+       */
+      setOpenCanvases(instances) {
+        this.openCanvasInstances = [...instances];
+      }
+      assertElicitation() {
+        if (!this._capabilities.ui?.elicitation) {
+          throw new Error(
+            "Elicitation is not supported by the host. Check session.capabilities.ui?.elicitation before calling UI methods."
+          );
+        }
+      }
+      async _elicitation(params) {
+        this.assertElicitation();
+        return this.rpc.ui.elicitation({
+          message: params.message,
+          requestedSchema: params.requestedSchema
+        });
+      }
+      async _confirm(message) {
+        this.assertElicitation();
+        const result = await this.rpc.ui.elicitation({
+          message,
+          requestedSchema: {
+            type: "object",
+            properties: {
+              confirmed: { type: "boolean", default: true }
+            },
+            required: ["confirmed"]
+          }
+        });
+        return result.action === "accept" && result.content?.confirmed === true;
+      }
+      async _select(message, options) {
+        this.assertElicitation();
+        const result = await this.rpc.ui.elicitation({
+          message,
+          requestedSchema: {
+            type: "object",
+            properties: {
+              selection: { type: "string", enum: options }
+            },
+            required: ["selection"]
+          }
+        });
+        if (result.action === "accept" && result.content?.selection != null) {
+          return result.content.selection;
+        }
+        return null;
+      }
+      async _input(message, options) {
+        this.assertElicitation();
+        const field = { type: "string" };
+        if (options?.title) field.title = options.title;
+        if (options?.description) field.description = options.description;
+        if (options?.minLength != null) field.minLength = options.minLength;
+        if (options?.maxLength != null) field.maxLength = options.maxLength;
+        if (options?.format) field.format = options.format;
+        if (options?.default != null) field.default = options.default;
+        const result = await this.rpc.ui.elicitation({
+          message,
+          requestedSchema: {
+            type: "object",
+            properties: {
+              value: field
+            },
+            required: ["value"]
+          }
+        });
+        if (result.action === "accept" && result.content?.value != null) {
+          return result.content.value;
+        }
+        return null;
+      }
+      /**
+       * Registers a handler for permission requests.
+       *
+       * When the assistant needs permission to perform certain actions (e.g., file operations),
+       * this handler is called to approve or deny the request.
+       *
+       * @param handler - The permission handler function, or undefined to remove the handler
+       * @internal This method is typically called internally when creating a session.
+       */
+      registerPermissionHandler(handler) {
+        this.permissionHandler = handler;
+      }
+      /**
+       * Registers a user input handler for ask_user requests.
+       *
+       * When the agent needs input from the user (via ask_user tool),
+       * this handler is called to provide the response.
+       *
+       * @param handler - The user input handler function, or undefined to remove the handler
+       * @internal This method is typically called internally when creating a session.
+       */
+      registerUserInputHandler(handler) {
+        this.userInputHandler = handler;
+      }
+      /**
+       * Registers hook handlers for session lifecycle events.
+       *
+       * Hooks allow custom logic to be executed at various points during
+       * the session lifecycle (before/after tool use, session start/end, etc.).
+       *
+       * @param hooks - The hook handlers object, or undefined to remove all hooks
+       * @internal This method is typically called internally when creating a session.
+       */
+      registerHooks(hooks) {
+        this.hooks = hooks;
+      }
+      /**
+       * Registers transform callbacks for system message sections.
+       *
+       * @param callbacks - Map of section ID to transform callback, or undefined to clear
+       * @internal This method is typically called internally when creating a session.
+       */
+      registerTransformCallbacks(callbacks) {
+        this.transformCallbacks = callbacks;
+      }
+      /**
+       * Handles a systemMessage.transform request from the runtime.
+       * Dispatches each section to its registered transform callback.
+       *
+       * @param sections - Map of section IDs to their current rendered content
+       * @returns A promise that resolves with the transformed sections
+       * @internal This method is for internal use by the SDK.
+       */
+      async _handleSystemMessageTransform(sections) {
+        const result = {};
+        for (const [sectionId, { content }] of Object.entries(sections)) {
+          const callback = this.transformCallbacks?.get(sectionId);
+          if (callback) {
+            try {
+              const transformed = await callback(content);
+              result[sectionId] = { content: transformed };
+            } catch (_error) {
+              result[sectionId] = { content };
+            }
+          } else {
+            result[sectionId] = { content };
+          }
+        }
+        return { sections: result };
+      }
+      /**
+       * Handles a user input request from the Copilot CLI.
+       *
+       * @param request - The user input request data from the CLI
+       * @returns A promise that resolves with the user's response
+       * @internal This method is for internal use by the SDK.
+       */
+      async _handleUserInputRequest(request) {
+        if (!this.userInputHandler) {
+          throw new Error("User input requested but no handler registered");
+        }
+        try {
+          const result = await this.userInputHandler(request, {
+            sessionId: this.sessionId
+          });
+          return result;
+        } catch (error) {
+          throw error;
+        }
+      }
+      /**
+       * Handles a hooks invocation from the Copilot CLI.
+       *
+       * @param hookType - The type of hook being invoked
+       * @param input - The input data for the hook
+       * @returns A promise that resolves with the hook output, or undefined
+       * @internal This method is for internal use by the SDK.
+       */
+      async _handleHooksInvoke(hookType, input) {
+        if (!this.hooks) {
+          return void 0;
+        }
+        const normalized = deserializeHookInput(input);
+        const handlerMap = {
+          preToolUse: this.hooks.onPreToolUse,
+          preMcpToolCall: this.hooks.onPreMcpToolCall,
+          postToolUse: this.hooks.onPostToolUse,
+          postToolUseFailure: this.hooks.onPostToolUseFailure,
+          userPromptSubmitted: this.hooks.onUserPromptSubmitted,
+          sessionStart: this.hooks.onSessionStart,
+          sessionEnd: this.hooks.onSessionEnd,
+          errorOccurred: this.hooks.onErrorOccurred
+        };
+        const handler = handlerMap[hookType];
+        if (!handler) {
+          return void 0;
+        }
+        try {
+          const result = await handler(normalized, { sessionId: this.sessionId });
+          return result;
+        } catch (_error) {
+          return void 0;
+        }
+      }
+      /**
+       * Retrieves all events and messages from this session's history.
+       *
+       * This returns the complete conversation history including user messages,
+       * assistant responses, tool executions, and other session events.
+       *
+       * @returns A promise that resolves with an array of all session events
+       * @throws Error if the session has been disconnected or the connection fails
+       *
+       * @example
+       * ```typescript
+       * const events = await session.getEvents();
+       * for (const event of events) {
+       *   if (event.type === "assistant.message") {
+       *     console.log("Assistant:", event.data.content);
+       *   }
+       * }
+       * ```
+       */
+      async getEvents() {
+        const response = await this.connection.sendRequest("session.getMessages", {
+          sessionId: this.sessionId
+        });
+        return response.events;
+      }
+      /**
+       * Disconnects this session and releases all in-memory resources (event handlers,
+       * tool handlers, permission handlers).
+       *
+       * Session state on disk (conversation history, planning state, artifacts) is
+       * preserved, so the conversation can be resumed later by calling
+       * {@link CopilotClient.resumeSession} with the session ID. To permanently
+       * remove all session data including files on disk, use
+       * {@link CopilotClient.deleteSession} instead.
+       *
+       * After calling this method, the session object can no longer be used.
+       *
+       * @returns A promise that resolves when the session is disconnected
+       * @throws Error if the connection fails
+       *
+       * @example
+       * ```typescript
+       * // Clean up when done — session can still be resumed later
+       * await session.disconnect();
+       * ```
+       */
+      async disconnect() {
+        if (this.disconnected) {
+          return;
+        }
+        await this.connection.sendRequest("session.destroy", {
+          sessionId: this.sessionId
+        });
+        this._markDisconnected();
+      }
+      /** Enables `await using session = ...` syntax for automatic cleanup. */
+      async [Symbol.asyncDispose]() {
+        return this.disconnect();
+      }
+      /**
+       * Aborts the currently processing message in this session.
+       *
+       * Use this to cancel a long-running request. The session remains valid
+       * and can continue to be used for new messages.
+       *
+       * @returns A promise that resolves when the abort request is acknowledged
+       * @throws Error if the session has been disconnected or the connection fails
+       *
+       * @example
+       * ```typescript
+       * // Start a long-running request
+       * const messagePromise = session.send({ prompt: "Write a very long story..." });
+       *
+       * // Abort after 5 seconds
+       * setTimeout(async () => {
+       *   await session.abort();
+       * }, 5000);
+       * ```
+       */
+      async abort() {
+        await this.connection.sendRequest("session.abort", {
+          sessionId: this.sessionId
+        });
+      }
+      /**
+       * Change the model for this session.
+       * The new model takes effect for the next message. Conversation history is preserved.
+       *
+       * @param model - Model ID to switch to
+       * @param options - Optional settings for the new model
+       *
+       * @example
+       * ```typescript
+       * await session.setModel("gpt-4.1");
+       * await session.setModel("claude-sonnet-4.6", { reasoningEffort: "high" });
+       * ```
+       */
+      async setModel(model, options) {
+        await this.rpc.model.switchTo({ modelId: model, ...options });
+      }
+      /**
+       * Log a message to the session timeline.
+       * The message appears in the session event stream and is visible to SDK consumers
+       * and (for non-ephemeral messages) persisted to the session event log on disk.
+       *
+       * @param message - Human-readable message text
+       * @param options - Optional log level and ephemeral flag
+       *
+       * @example
+       * ```typescript
+       * await session.log("Processing started");
+       * await session.log("Disk usage high", { level: "warning" });
+       * await session.log("Connection failed", { level: "error" });
+       * await session.log("Debug info", { ephemeral: true });
+       * ```
+       */
+      async log(message, options) {
+        await this.rpc.log({ message, ...options });
+      }
+    };
+  }
+});
 
-// ../../../node_modules/@github/copilot-sdk/dist/sessionFsProvider.js
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sessionFsProvider.js
 function normalizeSqliteParams(params) {
   if (!params) {
     return void 0;
@@ -6386,217 +6409,12 @@ function toSessionFsError(err) {
   const code = e.code === "ENOENT" ? "ENOENT" : "UNKNOWN";
   return { code, message: e.message ?? String(err) };
 }
+var init_sessionFsProvider = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/sessionFsProvider.js"() {
+  }
+});
 
-// ../../../node_modules/@github/copilot-sdk/dist/copilotRequestHandler.js
-var sharedTextDecoder = new TextDecoder("utf-8", { fatal: false });
-var sharedTextEncoder = new TextEncoder();
-var kBridge = /* @__PURE__ */ Symbol("copilotWebSocketResponseBridge");
-var kCompletion = /* @__PURE__ */ Symbol("copilotWebSocketCompletion");
-var kOpen = /* @__PURE__ */ Symbol("copilotWebSocketOpen");
-var kSuppressCloseOnDispose = /* @__PURE__ */ Symbol("copilotWebSocketSuppressCloseOnDispose");
-var kHandle = /* @__PURE__ */ Symbol("copilotRequestHandle");
-var CopilotWebSocketCloseStatus = class _CopilotWebSocketCloseStatus {
-  constructor(description, errorCode, error) {
-    this.description = description;
-    this.errorCode = errorCode;
-    this.error = error;
-  }
-  description;
-  errorCode;
-  error;
-  static normalClosure = new _CopilotWebSocketCloseStatus();
-};
-var CopilotWebSocketHandler = class {
-  #response;
-  #completion;
-  #resolveCompletion;
-  #closed = false;
-  [kSuppressCloseOnDispose] = false;
-  context;
-  constructor(context) {
-    this.context = context;
-    const bridge = context[kBridge];
-    if (!bridge) {
-      throw new Error("WebSocket response bridge is not attached");
-    }
-    this.#response = bridge;
-    this.#completion = new Promise((resolve6) => {
-      this.#resolveCompletion = resolve6;
-    });
-  }
-  async sendResponseMessage(data) {
-    await this.#response.write(data);
-  }
-  async close(status = CopilotWebSocketCloseStatus.normalClosure) {
-    if (this.#closed) {
-      return;
-    }
-    this.#closed = true;
-    if (status.error) {
-      await this.#response.error({
-        message: status.description ?? status.error.message,
-        code: status.errorCode
-      });
-    } else {
-      await this.#response.end();
-    }
-    this.#resolveCompletion(status);
-  }
-  async [Symbol.asyncDispose]() {
-    if (!this[kSuppressCloseOnDispose] && !this.#closed) {
-      await this.close(CopilotWebSocketCloseStatus.normalClosure);
-    }
-  }
-  /** @internal */
-  get [kCompletion]() {
-    return this.#completion;
-  }
-  /** @internal */
-  async [kOpen]() {
-  }
-};
-var CopilotWebSocketForwarder = class extends CopilotWebSocketHandler {
-  #upstream = null;
-  constructor(context) {
-    super(context);
-  }
-  sendRequestMessage(data) {
-    if (this.#upstream?.readyState !== WebSocket.OPEN) {
-      return;
-    }
-    this.#upstream.send(data);
-  }
-  /** @internal */
-  async [kOpen]() {
-    if (this.#upstream) {
-      return;
-    }
-    const upstream = new WebSocket(this.context.url);
-    upstream.binaryType = "arraybuffer";
-    this.#upstream = upstream;
-    upstream.addEventListener("message", (event) => {
-      void this.sendResponseMessage(normalizeWsData(event.data)).catch(
-        async (err) => {
-          await this.close(
-            new CopilotWebSocketCloseStatus(
-              err instanceof Error ? err.message : String(err),
-              void 0,
-              err instanceof Error ? err : new Error(String(err))
-            )
-          );
-        }
-      );
-    });
-    upstream.addEventListener("close", () => {
-      void this.close(CopilotWebSocketCloseStatus.normalClosure);
-    });
-    upstream.addEventListener("error", () => {
-      void this.close(
-        new CopilotWebSocketCloseStatus(
-          "WebSocket error",
-          void 0,
-          new Error("WebSocket error")
-        )
-      );
-    });
-    await new Promise((resolve6, reject) => {
-      if (upstream.readyState === WebSocket.OPEN) {
-        resolve6();
-        return;
-      }
-      upstream.addEventListener("open", () => resolve6(), { once: true });
-      upstream.addEventListener("error", () => reject(new Error("WebSocket error")), {
-        once: true
-      });
-    });
-  }
-  async close(status = CopilotWebSocketCloseStatus.normalClosure) {
-    try {
-      if (this.#upstream?.readyState === WebSocket.OPEN || this.#upstream?.readyState === WebSocket.CONNECTING) {
-        this.#upstream?.close();
-      }
-    } catch {
-    }
-    await super.close(status);
-  }
-  async [Symbol.asyncDispose]() {
-    try {
-      await super[Symbol.asyncDispose]();
-    } finally {
-      try {
-        this.#upstream?.close();
-      } catch {
-      }
-    }
-  }
-};
-var CopilotRequestHandler = class {
-  sendRequest(request, ctx) {
-    return fetch(request, { signal: ctx.signal });
-  }
-  openWebSocket(ctx) {
-    return Promise.resolve(new CopilotWebSocketForwarder(ctx));
-  }
-  /** @internal */
-  async [kHandle](exchange) {
-    const bridge = new CopilotWebSocketResponseBridge(exchange);
-    const ctx = {
-      requestId: exchange.requestId,
-      sessionId: exchange.sessionId,
-      transport: exchange.transport,
-      url: exchange.url,
-      headers: exchange.headers,
-      signal: exchange.signal,
-      [kBridge]: bridge
-    };
-    if (exchange.transport === "websocket") {
-      await this.#handleWebSocket(exchange, ctx);
-    } else {
-      await this.#handleHttp(exchange, ctx);
-    }
-  }
-  async #handleHttp(exchange, ctx) {
-    const request = await buildFetchRequest(exchange);
-    const response = await this.sendRequest(request, ctx);
-    await streamResponse(response, exchange);
-  }
-  async #handleWebSocket(exchange, ctx) {
-    const handler = await this.openWebSocket(ctx);
-    try {
-      await handler[kOpen]();
-      await ctx[kBridge].start();
-      let cancelled;
-      const clientSettled = (async () => {
-        for await (const chunk of exchange.requestBody) {
-          await handler.sendRequestMessage(decodeFrame(chunk));
-        }
-        return "client-complete";
-      })().catch((err) => {
-        cancelled = err;
-        return "client-error";
-      });
-      const first = await Promise.race([
-        clientSettled,
-        handler[kCompletion].then(() => "server-done")
-      ]);
-      if (first === "client-error") {
-        handler[kSuppressCloseOnDispose] = true;
-        throw cancelled instanceof Error ? cancelled : new Error(String(cancelled));
-      }
-      if (first === "client-complete") {
-        await handler.close(CopilotWebSocketCloseStatus.normalClosure);
-        await handler[kCompletion];
-        return;
-      }
-      const status = await handler[kCompletion];
-      if (status.error) {
-        throw status.error;
-      }
-    } finally {
-      await handler[Symbol.asyncDispose]();
-    }
-  }
-};
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/copilotRequestHandler.js
 function createCopilotRequestAdapter(handler, getServerRpc) {
   const pending = /* @__PURE__ */ new Map();
   function getOrCreate(requestId) {
@@ -6665,173 +6483,6 @@ function routeChunk(exchange, params) {
     exchange.pushEnd();
   }
 }
-var CopilotRequestExchange = class {
-  requestId;
-  sessionId;
-  method = "GET";
-  url = "";
-  headers = {};
-  transport = "http";
-  #getServerRpc;
-  #abort = new AbortController();
-  #buffer = [];
-  #waker = null;
-  #drained = false;
-  #started = false;
-  #finished = false;
-  #cancelled = false;
-  constructor(requestId, getServerRpc) {
-    this.requestId = requestId;
-    this.#getServerRpc = getServerRpc;
-  }
-  /** Fill in the request context once the matching start frame arrives. */
-  setContext(params) {
-    this.sessionId = params.sessionId;
-    this.method = params.method;
-    this.url = params.url;
-    this.headers = params.headers;
-    this.transport = params.transport ?? "http";
-  }
-  get signal() {
-    return this.#abort.signal;
-  }
-  get started() {
-    return this.#started;
-  }
-  get finished() {
-    return this.#finished;
-  }
-  get cancelled() {
-    return this.#cancelled;
-  }
-  // --- Request body feed (driven by the adapter as chunk frames arrive) ---
-  pushChunk(chunk) {
-    this.#push({ chunk });
-  }
-  pushEnd() {
-    this.#push({ end: true });
-  }
-  pushCancel(reason) {
-    this.#cancelled = true;
-    this.#abort.abort();
-    this.#push({ cancel: { reason } });
-  }
-  #push(item) {
-    this.#buffer.push(item);
-    const w = this.#waker;
-    this.#waker = null;
-    w?.();
-  }
-  /**
-   * Request body bytes, yielded as they arrive. A cancel frame surfaces as a
-   * thrown error so the handler's upstream call is torn down.
-   */
-  get requestBody() {
-    return {
-      [Symbol.asyncIterator]: () => ({
-        next: async () => {
-          if (this.#drained) {
-            return { value: void 0, done: true };
-          }
-          while (this.#buffer.length === 0) {
-            await new Promise((resolve6) => {
-              this.#waker = resolve6;
-            });
-          }
-          const item = this.#buffer.shift();
-          if (item.cancel) {
-            this.#drained = true;
-            throw new Error(
-              item.cancel.reason ? `Request cancelled by runtime: ${item.cancel.reason}` : "Request cancelled by runtime"
-            );
-          }
-          if (item.end) {
-            this.#drained = true;
-            return { value: void 0, done: true };
-          }
-          return { value: item.chunk ?? new Uint8Array(), done: false };
-        }
-      })
-    };
-  }
-  // --- Response emit (driven by the handler). Strict state machine: ---
-  // startResponse once -> 0..N writeResponse -> exactly one of
-  // endResponse / errorResponse.
-  async startResponse(init) {
-    if (this.#started) {
-      throw new Error("Copilot request response start() called twice.");
-    }
-    if (this.#finished) {
-      throw new Error("Copilot request response already finished.");
-    }
-    this.#started = true;
-    await this.#rpc().llmInference.httpResponseStart({
-      requestId: this.requestId,
-      status: init.status,
-      statusText: init.statusText,
-      headers: init.headers ?? {}
-    });
-  }
-  async writeResponse(data) {
-    if (this.#cancelled) {
-      throw new Error("Copilot request was cancelled by the runtime.");
-    }
-    if (!this.#started) {
-      throw new Error("Copilot request response write() called before start().");
-    }
-    if (this.#finished) {
-      throw new Error("Copilot request response write() called after end()/error().");
-    }
-    const isString = typeof data === "string";
-    await this.#rpc().llmInference.httpResponseChunk({
-      requestId: this.requestId,
-      data: isString ? data : Buffer.from(data).toString("base64"),
-      binary: !isString,
-      end: false
-    });
-  }
-  async endResponse() {
-    if (this.#finished) {
-      return;
-    }
-    this.#finished = true;
-    await this.#rpc().llmInference.httpResponseChunk({
-      requestId: this.requestId,
-      data: "",
-      end: true
-    });
-  }
-  async errorResponse(error) {
-    if (this.#finished) {
-      return;
-    }
-    this.#finished = true;
-    await this.#rpc().llmInference.httpResponseChunk({
-      requestId: this.requestId,
-      data: "",
-      end: true,
-      error: { message: error.message, code: error.code }
-    });
-  }
-  #rpc() {
-    const r = this.#getServerRpc();
-    if (!r) {
-      throw new Error("Copilot request response used after RPC connection closed.");
-    }
-    return r;
-  }
-};
-var FORBIDDEN_REQUEST_HEADERS = /* @__PURE__ */ new Set([
-  "host",
-  "connection",
-  "content-length",
-  "transfer-encoding",
-  "keep-alive",
-  "upgrade",
-  "proxy-connection",
-  "te",
-  "trailer"
-]);
 async function buildFetchRequest(exchange) {
   const headers = new Headers();
   for (const [name, values] of Object.entries(exchange.headers)) {
@@ -6942,49 +6593,429 @@ function normalizeWsData(data) {
   }
   return new Uint8Array();
 }
-var CopilotWebSocketResponseBridge = class {
-  #exchange;
-  #started = false;
-  #completed = false;
-  #serial = Promise.resolve();
-  constructor(exchange) {
-    this.#exchange = exchange;
-  }
-  /** Emit the 101 upgrade head now, acknowledging the WebSocket connect. */
-  start() {
-    return this.#run(false, () => Promise.resolve());
-  }
-  write(data) {
-    return this.#run(false, () => this.#exchange.writeResponse(data));
-  }
-  end() {
-    return this.#run(true, () => this.#exchange.endResponse());
-  }
-  error(error) {
-    return this.#run(true, () => this.#exchange.errorResponse(error));
-  }
-  #run(terminal, action) {
-    const task = this.#serial.then(async () => {
-      if (this.#completed) {
-        return;
+var sharedTextDecoder, sharedTextEncoder, kBridge, kCompletion, kOpen, kSuppressCloseOnDispose, kHandle, CopilotWebSocketCloseStatus, CopilotWebSocketHandler, CopilotWebSocketForwarder, CopilotRequestHandler, CopilotRequestExchange, FORBIDDEN_REQUEST_HEADERS, CopilotWebSocketResponseBridge;
+var init_copilotRequestHandler = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/copilotRequestHandler.js"() {
+    sharedTextDecoder = new TextDecoder("utf-8", { fatal: false });
+    sharedTextEncoder = new TextEncoder();
+    kBridge = /* @__PURE__ */ Symbol("copilotWebSocketResponseBridge");
+    kCompletion = /* @__PURE__ */ Symbol("copilotWebSocketCompletion");
+    kOpen = /* @__PURE__ */ Symbol("copilotWebSocketOpen");
+    kSuppressCloseOnDispose = /* @__PURE__ */ Symbol("copilotWebSocketSuppressCloseOnDispose");
+    kHandle = /* @__PURE__ */ Symbol("copilotRequestHandle");
+    CopilotWebSocketCloseStatus = class _CopilotWebSocketCloseStatus {
+      constructor(description, errorCode, error) {
+        this.description = description;
+        this.errorCode = errorCode;
+        this.error = error;
       }
-      if (!this.#started) {
+      description;
+      errorCode;
+      error;
+      static normalClosure = new _CopilotWebSocketCloseStatus();
+    };
+    CopilotWebSocketHandler = class {
+      #response;
+      #completion;
+      #resolveCompletion;
+      #closed = false;
+      [kSuppressCloseOnDispose] = false;
+      context;
+      constructor(context) {
+        this.context = context;
+        const bridge = context[kBridge];
+        if (!bridge) {
+          throw new Error("WebSocket response bridge is not attached");
+        }
+        this.#response = bridge;
+        this.#completion = new Promise((resolve5) => {
+          this.#resolveCompletion = resolve5;
+        });
+      }
+      async sendResponseMessage(data) {
+        await this.#response.write(data);
+      }
+      async close(status = CopilotWebSocketCloseStatus.normalClosure) {
+        if (this.#closed) {
+          return;
+        }
+        this.#closed = true;
+        if (status.error) {
+          await this.#response.error({
+            message: status.description ?? status.error.message,
+            code: status.errorCode
+          });
+        } else {
+          await this.#response.end();
+        }
+        this.#resolveCompletion(status);
+      }
+      async [Symbol.asyncDispose]() {
+        if (!this[kSuppressCloseOnDispose] && !this.#closed) {
+          await this.close(CopilotWebSocketCloseStatus.normalClosure);
+        }
+      }
+      /** @internal */
+      get [kCompletion]() {
+        return this.#completion;
+      }
+      /** @internal */
+      async [kOpen]() {
+      }
+    };
+    CopilotWebSocketForwarder = class extends CopilotWebSocketHandler {
+      #upstream = null;
+      constructor(context) {
+        super(context);
+      }
+      sendRequestMessage(data) {
+        if (this.#upstream?.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        this.#upstream.send(data);
+      }
+      /** @internal */
+      async [kOpen]() {
+        if (this.#upstream) {
+          return;
+        }
+        const upstream = new WebSocket(this.context.url);
+        upstream.binaryType = "arraybuffer";
+        this.#upstream = upstream;
+        upstream.addEventListener("message", (event) => {
+          void this.sendResponseMessage(normalizeWsData(event.data)).catch(
+            async (err) => {
+              await this.close(
+                new CopilotWebSocketCloseStatus(
+                  err instanceof Error ? err.message : String(err),
+                  void 0,
+                  err instanceof Error ? err : new Error(String(err))
+                )
+              );
+            }
+          );
+        });
+        upstream.addEventListener("close", () => {
+          void this.close(CopilotWebSocketCloseStatus.normalClosure);
+        });
+        upstream.addEventListener("error", () => {
+          void this.close(
+            new CopilotWebSocketCloseStatus(
+              "WebSocket error",
+              void 0,
+              new Error("WebSocket error")
+            )
+          );
+        });
+        await new Promise((resolve5, reject) => {
+          if (upstream.readyState === WebSocket.OPEN) {
+            resolve5();
+            return;
+          }
+          upstream.addEventListener("open", () => resolve5(), { once: true });
+          upstream.addEventListener("error", () => reject(new Error("WebSocket error")), {
+            once: true
+          });
+        });
+      }
+      async close(status = CopilotWebSocketCloseStatus.normalClosure) {
+        try {
+          if (this.#upstream?.readyState === WebSocket.OPEN || this.#upstream?.readyState === WebSocket.CONNECTING) {
+            this.#upstream?.close();
+          }
+        } catch {
+        }
+        await super.close(status);
+      }
+      async [Symbol.asyncDispose]() {
+        try {
+          await super[Symbol.asyncDispose]();
+        } finally {
+          try {
+            this.#upstream?.close();
+          } catch {
+          }
+        }
+      }
+    };
+    CopilotRequestHandler = class {
+      sendRequest(request, ctx) {
+        return fetch(request, { signal: ctx.signal });
+      }
+      openWebSocket(ctx) {
+        return Promise.resolve(new CopilotWebSocketForwarder(ctx));
+      }
+      /** @internal */
+      async [kHandle](exchange) {
+        const bridge = new CopilotWebSocketResponseBridge(exchange);
+        const ctx = {
+          requestId: exchange.requestId,
+          sessionId: exchange.sessionId,
+          transport: exchange.transport,
+          url: exchange.url,
+          headers: exchange.headers,
+          signal: exchange.signal,
+          [kBridge]: bridge
+        };
+        if (exchange.transport === "websocket") {
+          await this.#handleWebSocket(exchange, ctx);
+        } else {
+          await this.#handleHttp(exchange, ctx);
+        }
+      }
+      async #handleHttp(exchange, ctx) {
+        const request = await buildFetchRequest(exchange);
+        const response = await this.sendRequest(request, ctx);
+        await streamResponse(response, exchange);
+      }
+      async #handleWebSocket(exchange, ctx) {
+        const handler = await this.openWebSocket(ctx);
+        try {
+          await handler[kOpen]();
+          await ctx[kBridge].start();
+          let cancelled;
+          const clientSettled = (async () => {
+            for await (const chunk of exchange.requestBody) {
+              await handler.sendRequestMessage(decodeFrame(chunk));
+            }
+            return "client-complete";
+          })().catch((err) => {
+            cancelled = err;
+            return "client-error";
+          });
+          const first = await Promise.race([
+            clientSettled,
+            handler[kCompletion].then(() => "server-done")
+          ]);
+          if (first === "client-error") {
+            handler[kSuppressCloseOnDispose] = true;
+            throw cancelled instanceof Error ? cancelled : new Error(String(cancelled));
+          }
+          if (first === "client-complete") {
+            await handler.close(CopilotWebSocketCloseStatus.normalClosure);
+            await handler[kCompletion];
+            return;
+          }
+          const status = await handler[kCompletion];
+          if (status.error) {
+            throw status.error;
+          }
+        } finally {
+          await handler[Symbol.asyncDispose]();
+        }
+      }
+    };
+    CopilotRequestExchange = class {
+      requestId;
+      sessionId;
+      method = "GET";
+      url = "";
+      headers = {};
+      transport = "http";
+      #getServerRpc;
+      #abort = new AbortController();
+      #buffer = [];
+      #waker = null;
+      #drained = false;
+      #started = false;
+      #finished = false;
+      #cancelled = false;
+      constructor(requestId, getServerRpc) {
+        this.requestId = requestId;
+        this.#getServerRpc = getServerRpc;
+      }
+      /** Fill in the request context once the matching start frame arrives. */
+      setContext(params) {
+        this.sessionId = params.sessionId;
+        this.method = params.method;
+        this.url = params.url;
+        this.headers = params.headers;
+        this.transport = params.transport ?? "http";
+      }
+      get signal() {
+        return this.#abort.signal;
+      }
+      get started() {
+        return this.#started;
+      }
+      get finished() {
+        return this.#finished;
+      }
+      get cancelled() {
+        return this.#cancelled;
+      }
+      // --- Request body feed (driven by the adapter as chunk frames arrive) ---
+      pushChunk(chunk) {
+        this.#push({ chunk });
+      }
+      pushEnd() {
+        this.#push({ end: true });
+      }
+      pushCancel(reason) {
+        this.#cancelled = true;
+        this.#abort.abort();
+        this.#push({ cancel: { reason } });
+      }
+      #push(item) {
+        this.#buffer.push(item);
+        const w = this.#waker;
+        this.#waker = null;
+        w?.();
+      }
+      /**
+       * Request body bytes, yielded as they arrive. A cancel frame surfaces as a
+       * thrown error so the handler's upstream call is torn down.
+       */
+      get requestBody() {
+        return {
+          [Symbol.asyncIterator]: () => ({
+            next: async () => {
+              if (this.#drained) {
+                return { value: void 0, done: true };
+              }
+              while (this.#buffer.length === 0) {
+                await new Promise((resolve5) => {
+                  this.#waker = resolve5;
+                });
+              }
+              const item = this.#buffer.shift();
+              if (item.cancel) {
+                this.#drained = true;
+                throw new Error(
+                  item.cancel.reason ? `Request cancelled by runtime: ${item.cancel.reason}` : "Request cancelled by runtime"
+                );
+              }
+              if (item.end) {
+                this.#drained = true;
+                return { value: void 0, done: true };
+              }
+              return { value: item.chunk ?? new Uint8Array(), done: false };
+            }
+          })
+        };
+      }
+      // --- Response emit (driven by the handler). Strict state machine: ---
+      // startResponse once -> 0..N writeResponse -> exactly one of
+      // endResponse / errorResponse.
+      async startResponse(init) {
+        if (this.#started) {
+          throw new Error("Copilot request response start() called twice.");
+        }
+        if (this.#finished) {
+          throw new Error("Copilot request response already finished.");
+        }
         this.#started = true;
-        await this.#exchange.startResponse({ status: 101, headers: {} });
+        await this.#rpc().llmInference.httpResponseStart({
+          requestId: this.requestId,
+          status: init.status,
+          statusText: init.statusText,
+          headers: init.headers ?? {}
+        });
       }
-      if (terminal) {
-        this.#completed = true;
+      async writeResponse(data) {
+        if (this.#cancelled) {
+          throw new Error("Copilot request was cancelled by the runtime.");
+        }
+        if (!this.#started) {
+          throw new Error("Copilot request response write() called before start().");
+        }
+        if (this.#finished) {
+          throw new Error("Copilot request response write() called after end()/error().");
+        }
+        const isString = typeof data === "string";
+        await this.#rpc().llmInference.httpResponseChunk({
+          requestId: this.requestId,
+          data: isString ? data : Buffer.from(data).toString("base64"),
+          binary: !isString,
+          end: false
+        });
       }
-      await action();
-    });
-    this.#serial = task.catch(() => {
-    });
-    return task;
+      async endResponse() {
+        if (this.#finished) {
+          return;
+        }
+        this.#finished = true;
+        await this.#rpc().llmInference.httpResponseChunk({
+          requestId: this.requestId,
+          data: "",
+          end: true
+        });
+      }
+      async errorResponse(error) {
+        if (this.#finished) {
+          return;
+        }
+        this.#finished = true;
+        await this.#rpc().llmInference.httpResponseChunk({
+          requestId: this.requestId,
+          data: "",
+          end: true,
+          error: { message: error.message, code: error.code }
+        });
+      }
+      #rpc() {
+        const r = this.#getServerRpc();
+        if (!r) {
+          throw new Error("Copilot request response used after RPC connection closed.");
+        }
+        return r;
+      }
+    };
+    FORBIDDEN_REQUEST_HEADERS = /* @__PURE__ */ new Set([
+      "host",
+      "connection",
+      "content-length",
+      "transfer-encoding",
+      "keep-alive",
+      "upgrade",
+      "proxy-connection",
+      "te",
+      "trailer"
+    ]);
+    CopilotWebSocketResponseBridge = class {
+      #exchange;
+      #started = false;
+      #completed = false;
+      #serial = Promise.resolve();
+      constructor(exchange) {
+        this.#exchange = exchange;
+      }
+      /** Emit the 101 upgrade head now, acknowledging the WebSocket connect. */
+      start() {
+        return this.#run(false, () => Promise.resolve());
+      }
+      write(data) {
+        return this.#run(false, () => this.#exchange.writeResponse(data));
+      }
+      end() {
+        return this.#run(true, () => this.#exchange.endResponse());
+      }
+      error(error) {
+        return this.#run(true, () => this.#exchange.errorResponse(error));
+      }
+      #run(terminal, action) {
+        const task = this.#serial.then(async () => {
+          if (this.#completed) {
+            return;
+          }
+          if (!this.#started) {
+            this.#started = true;
+            await this.#exchange.startResponse({ status: 101, headers: {} });
+          }
+          if (terminal) {
+            this.#completed = true;
+          }
+          await action();
+        });
+        this.#serial = task.catch(() => {
+        });
+        return task;
+      }
+    };
   }
-};
+});
 
-// ../../../node_modules/@github/copilot-sdk/dist/toolSet.js
-var VALID_TOOL_NAME = /^[a-zA-Z0-9_-]+$/;
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/toolSet.js
 function validateName(kind, name) {
   if (name === "*") {
     return;
@@ -6995,58 +7026,68 @@ function validateName(kind, name) {
     );
   }
 }
-var ToolSet = class {
-  items = [];
-  addBuiltIn(nameOrNames) {
-    const names = typeof nameOrNames === "string" ? [nameOrNames] : nameOrNames;
-    for (const name of names) {
-      validateName("builtin", name);
-      this.items.push(`builtin:${name}`);
-    }
-    return this;
+var VALID_TOOL_NAME, ToolSet;
+var init_toolSet = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/toolSet.js"() {
+    VALID_TOOL_NAME = /^[a-zA-Z0-9_-]+$/;
+    ToolSet = class {
+      items = [];
+      addBuiltIn(nameOrNames) {
+        const names = typeof nameOrNames === "string" ? [nameOrNames] : nameOrNames;
+        for (const name of names) {
+          validateName("builtin", name);
+          this.items.push(`builtin:${name}`);
+        }
+        return this;
+      }
+      /**
+       * Adds a custom tool pattern. Matches tools registered via the SDK's
+       * `tools` option or via custom agents.
+       *
+       * @param name A specific custom tool name or `"*"` to match all custom tools.
+       */
+      addCustom(name) {
+        validateName("custom", name);
+        this.items.push(`custom:${name}`);
+        return this;
+      }
+      /**
+       * Adds an MCP tool pattern. Matches tools advertised by any configured
+       * MCP server.
+       *
+       * @param toolName The runtime's canonical wire name for the MCP tool
+       *   (e.g. `"github-list_issues"`), or `"*"` to match all MCP tools from
+       *   any server.
+       */
+      addMcp(toolName) {
+        validateName("mcp", toolName);
+        this.items.push(`mcp:${toolName}`);
+        return this;
+      }
+      /**
+       * Returns a defensive copy of the accumulated filter strings, suitable for
+       * passing as {@link SessionConfigBase.availableTools}.
+       */
+      toArray() {
+        return [...this.items];
+      }
+    };
   }
-  /**
-   * Adds a custom tool pattern. Matches tools registered via the SDK's
-   * `tools` option or via custom agents.
-   *
-   * @param name A specific custom tool name or `"*"` to match all custom tools.
-   */
-  addCustom(name) {
-    validateName("custom", name);
-    this.items.push(`custom:${name}`);
-    return this;
-  }
-  /**
-   * Adds an MCP tool pattern. Matches tools advertised by any configured
-   * MCP server.
-   *
-   * @param toolName The runtime's canonical wire name for the MCP tool
-   *   (e.g. `"github-list_issues"`), or `"*"` to match all MCP tools from
-   *   any server.
-   */
-  addMcp(toolName) {
-    validateName("mcp", toolName);
-    this.items.push(`mcp:${toolName}`);
-    return this;
-  }
-  /**
-   * Returns a defensive copy of the accumulated filter strings, suitable for
-   * passing as {@link SessionConfigBase.availableTools}.
-   */
-  toArray() {
-    return [...this.items];
-  }
-};
-
-// ../../../node_modules/@github/copilot-sdk/dist/types.js
-var defaultJoinSessionPermissionHandler = () => ({
-  kind: "no-result"
 });
 
-// ../../../node_modules/@github/copilot-sdk/dist/client.js
-var import_meta = {};
-var MIN_PROTOCOL_VERSION = 3;
-var RUNTIME_SHUTDOWN_TIMEOUT_MS = 1e4;
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/types.js
+var defaultJoinSessionPermissionHandler;
+var init_types = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/types.js"() {
+    init_sessionFsProvider();
+    init_copilotRequestHandler();
+    defaultJoinSessionPermissionHandler = () => ({
+      kind: "no-result"
+    });
+  }
+});
+
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/client.js
 function isZodSchema(value) {
   return value != null && typeof value === "object" && "toJSONSchema" in value && typeof value.toJSONSchema === "function";
 }
@@ -7069,7 +7110,7 @@ async function waitForChildExit(child, timeoutMs) {
   if (child.exitCode != null || child.signalCode != null) {
     return true;
   }
-  return new Promise((resolve6) => {
+  return new Promise((resolve5) => {
     let timeout;
     let settled = false;
     const onExit = () => {
@@ -7078,7 +7119,7 @@ async function waitForChildExit(child, timeoutMs) {
       }
       settled = true;
       clearTimeout(timeout);
-      resolve6(true);
+      resolve5(true);
     };
     timeout = setTimeout(() => {
       if (settled) {
@@ -7086,7 +7127,7 @@ async function waitForChildExit(child, timeoutMs) {
       }
       settled = true;
       child.off("exit", onExit);
-      resolve6(false);
+      resolve5(false);
     }, timeoutMs);
     child.once("exit", onExit);
     if (child.exitCode != null || child.signalCode != null) {
@@ -7101,7 +7142,6 @@ function toJsonSchema(parameters) {
   }
   return parameters;
 }
-var DEFAULT_PROVIDER_NAME = "default";
 function extractBearerTokenProviders(provider, providers) {
   const callbacks = /* @__PURE__ */ new Map();
   let wireProvider = provider;
@@ -7238,1751 +7278,1788 @@ function getBundledCliPath() {
     `Could not find a @github/copilot platform package (tried ${packageNames.join(", ")}). Searched ${searchPaths.length} paths. Ensure @github/copilot is installed, or pass cliPath/cliUrl to CopilotClient.`
   );
 }
-var TeardownResilientStreamMessageWriter = class extends import_node2.StreamMessageWriter {
-  suppressWriteErrors = false;
-  async write(msg) {
-    try {
-      await super.write(msg);
-    } catch (error) {
-      if (!this.suppressWriteErrors) {
-        throw error;
-      }
-    }
-  }
-};
-var CopilotClient = class _CopilotClient {
-  cliStartTimeout = null;
-  cliProcess = null;
-  connection = null;
-  messageWriter = null;
-  socket = null;
-  runtimePort = null;
-  actualHost = "localhost";
-  state = "disconnected";
-  sessions = /* @__PURE__ */ new Map();
-  stderrBuffer = "";
-  // Captures CLI stderr for error messages
-  /** Resolved connection mode chosen in the constructor. */
-  connectionConfig;
-  /** Resolved path to the runtime executable (only used for child-process kinds). */
-  resolvedCliPath;
-  /** Resolved environment passed to the spawned runtime. */
-  resolvedEnv;
-  options;
-  isExternalServer = false;
-  forceStopping = false;
-  /** Token sent in `connect`; auto-generated when the SDK spawns its own CLI in TCP mode. */
-  effectiveConnectionToken;
-  onListModels;
-  onGetTraceContext;
-  modelsCache = null;
-  modelsCacheLock = Promise.resolve();
-  sessionLifecycleHandlers = /* @__PURE__ */ new Set();
-  typedLifecycleHandlers = /* @__PURE__ */ new Map();
-  _rpc = null;
-  _internalRpc = null;
-  processExitPromise = null;
-  // Rejects when CLI process exits
-  negotiatedProtocolVersion = null;
-  /** Connection-level session filesystem config, set via constructor option. */
-  sessionFsConfig = null;
-  requestHandler = null;
-  llmInferenceHandlers = {};
-  /**
-   * Typed server-scoped RPC methods.
-   * @throws Error if the client is not connected
-   */
-  get rpc() {
-    if (!this.connection) {
-      throw new Error("Client is not connected. Call start() first.");
-    }
-    if (!this._rpc) {
-      this._rpc = createServerRpc(this.connection);
-    }
-    return this._rpc;
-  }
-  /**
-   * Internal RPC surface (e.g. handshake helpers). Not part of the public API.
-   * @internal
-   */
-  get internalRpc() {
-    if (!this.connection) {
-      throw new Error("Client is not connected. Call start() first.");
-    }
-    if (!this._internalRpc) {
-      this._internalRpc = createInternalServerRpc(this.connection);
-    }
-    return this._internalRpc;
-  }
-  logDebugTiming(message, startMs) {
-    const level = this.options.logLevel?.toLowerCase();
-    if (level === "debug" || level === "all") {
-      process.stderr.write(`[copilot-sdk] ${message}. Elapsed=${Date.now() - startMs}ms
-`);
-    }
-  }
-  logDebug(message) {
-    const level = this.options.logLevel?.toLowerCase();
-    if (level === "debug" || level === "all") {
-      process.stderr.write(`[copilot-sdk] ${message}
-`);
-    }
-  }
-  /**
-   * Creates a new CopilotClient instance.
-   *
-   * @param options - Configuration options for the client
-   *
-   * @example
-   * ```typescript
-   * // Default: spawns the bundled runtime over stdio
-   * const client = new CopilotClient();
-   *
-   * // Connect to an existing runtime
-   * const client = new CopilotClient({
-   *   connection: RuntimeConnection.forUri("localhost:3000"),
-   * });
-   *
-   * // Spawn the runtime over TCP on a chosen port
-   * const client = new CopilotClient({
-   *   connection: RuntimeConnection.forTcp({ port: 9001 }),
-   * });
-   *
-   * // Use a custom runtime binary
-   * const client = new CopilotClient({
-   *   connection: RuntimeConnection.forStdio({ path: "/usr/local/bin/copilot" }),
-   *   logLevel: "debug",
-   * });
-   * ```
-   */
-  constructor(options = {}) {
-    const conn = options._internalConnection ?? options.connection ?? { kind: "stdio" };
-    if (conn.kind === "uri" && (options.gitHubToken !== void 0 || options.useLoggedInUser !== void 0)) {
-      throw new Error(
-        "gitHubToken and useLoggedInUser cannot be used with RuntimeConnection.forUri (external server manages its own auth)"
-      );
-    }
-    if (conn.kind === "tcp" && conn.connectionToken !== void 0) {
-      if (typeof conn.connectionToken !== "string" || conn.connectionToken.length === 0) {
-        throw new Error("connectionToken must be a non-empty string");
-      }
-    }
-    this.connectionConfig = conn;
-    if (options.sessionFs) {
-      this.validateSessionFsConfig(options.sessionFs);
-    }
-    if (conn.kind === "uri") {
-      const { host, port } = this.parseCliUrl(conn.url);
-      this.actualHost = host;
-      this.runtimePort = port;
-      this.isExternalServer = true;
-    } else if (conn.kind === "parent-process") {
-      this.isExternalServer = true;
-    }
-    if (conn.kind === "tcp") {
-      this.effectiveConnectionToken = conn.connectionToken ?? (0, import_node_crypto.randomUUID)();
-    } else if (conn.kind === "uri") {
-      this.effectiveConnectionToken = conn.connectionToken;
-    }
-    this.onListModels = options.onListModels;
-    this.onGetTraceContext = options.onGetTraceContext;
-    this.sessionFsConfig = options.sessionFs ?? null;
-    this.requestHandler = options.requestHandler ?? null;
-    this.setupLlmInference();
-    const effectiveEnv = options.env ?? process.env;
-    this.resolvedEnv = effectiveEnv;
-    this.resolvedCliPath = conn.kind === "stdio" || conn.kind === "tcp" ? conn.path ?? effectiveEnv.COPILOT_CLI_PATH ?? getBundledCliPath() : void 0;
-    const connArgs = conn.kind === "stdio" || conn.kind === "tcp" ? conn.args ?? [] : [];
-    this.connectionExtraArgs = [...connArgs];
-    this.options = {
-      workingDirectory: options.workingDirectory ?? process.cwd(),
-      logLevel: options.logLevel,
-      gitHubToken: options.gitHubToken,
-      // Default useLoggedInUser to false when gitHubToken is provided, otherwise true.
-      useLoggedInUser: options.useLoggedInUser ?? (options.gitHubToken ? false : true),
-      telemetry: options.telemetry,
-      baseDirectory: options.baseDirectory,
-      sessionIdleTimeoutSeconds: options.sessionIdleTimeoutSeconds ?? 0,
-      enableRemoteSessions: options.enableRemoteSessions ?? false,
-      mode: options.mode ?? "copilot-cli"
-    };
-    if (this.options.mode === "empty") {
-      const hasPersistence = this.options.baseDirectory !== void 0 || this.sessionFsConfig !== null || // External runtimes manage their own persistence layer; the SDK
-      // can't enforce it from here.
-      conn.kind === "uri" || conn.kind === "parent-process";
-      if (!hasPersistence) {
-        throw new Error(
-          "CopilotClient was created with mode: 'empty' but neither 'baseDirectory' nor 'sessionFs' was set. Empty mode requires an explicit per-session persistence location; pick one."
-        );
-      }
-    }
-  }
-  connectionExtraArgs = [];
-  /**
-   * Parse CLI URL into host and port
-   * Supports formats: "host:port", "http://host:port", "https://host:port", or just "port"
-   */
-  parseCliUrl(url) {
-    let cleanUrl = url.replace(/^https?:\/\//, "");
-    if (/^\d+$/.test(cleanUrl)) {
-      return { host: "localhost", port: parseInt(cleanUrl, 10) };
-    }
-    const parts = cleanUrl.split(":");
-    if (parts.length !== 2) {
-      throw new Error(
-        `Invalid cliUrl format: ${url}. Expected "host:port", "http://host:port", or "port"`
-      );
-    }
-    const host = parts[0] || "localhost";
-    const port = parseInt(parts[1], 10);
-    if (isNaN(port) || port <= 0 || port > 65535) {
-      throw new Error(`Invalid port in cliUrl: ${url}`);
-    }
-    return { host, port };
-  }
-  validateSessionFsConfig(config) {
-    if (!config.initialCwd) {
-      throw new Error("sessionFs.initialCwd is required");
-    }
-    if (!config.sessionStatePath) {
-      throw new Error("sessionFs.sessionStatePath is required");
-    }
-    if (config.conventions !== "windows" && config.conventions !== "posix") {
-      throw new Error("sessionFs.conventions must be either 'windows' or 'posix'");
-    }
-  }
-  setupSessionFs(session, config) {
-    if (!this.sessionFsConfig) {
-      return;
-    }
-    if (!config.createSessionFsProvider) {
-      throw new Error(
-        "createSessionFsProvider is required in session config when sessionFs is enabled in client options."
-      );
-    }
-    const provider = config.createSessionFsProvider(session);
-    if (this.sessionFsConfig.capabilities?.sqlite && !provider.sqlite) {
-      throw new Error(
-        "SessionFsConfig declares capabilities.sqlite but the provider does not implement sqlite."
-      );
-    }
-    session.clientSessionApis.sessionFs = createSessionFsAdapter(provider);
-  }
-  setupLlmInference() {
-    if (!this.requestHandler) {
-      return;
-    }
-    this.llmInferenceHandlers = {
-      llmInference: createCopilotRequestAdapter(this.requestHandler, () => {
-        if (!this.connection) {
-          return void 0;
-        }
-        this._rpc ??= createServerRpc(this.connection);
-        return this._rpc;
-      })
-    };
-  }
-  /**
-   * Starts the CLI server and establishes a connection.
-   *
-   * If connecting to an external server (via cliUrl), only establishes the connection.
-   * Otherwise, spawns the CLI server process and then connects.
-   *
-   * This method is called automatically the first time you create or resume a session.
-   *
-   * @returns A promise that resolves when the connection is established
-   * @throws Error if the server fails to start or the connection fails
-   *
-   * @example
-   * ```typescript
-   * const client = new CopilotClient();
-   * await client.start();
-   * // Now ready to create sessions
-   * ```
-   */
-  async start() {
-    if (this.state === "connected") {
-      return;
-    }
-    this.state = "connecting";
-    try {
-      if (!this.isExternalServer) {
-        await this.startCLIServer();
-      }
-      await this.connectToServer();
-      await this.verifyProtocolVersion();
-      if (this.sessionFsConfig) {
-        await this.connection.sendRequest("sessionFs.setProvider", {
-          initialCwd: this.sessionFsConfig.initialCwd,
-          sessionStatePath: this.sessionFsConfig.sessionStatePath,
-          conventions: this.sessionFsConfig.conventions,
-          capabilities: this.sessionFsConfig.capabilities
-        });
-      }
-      if (this.requestHandler) {
-        await this.connection.sendRequest("llmInference.setProvider", {});
-      }
-      this.state = "connected";
-    } catch (error) {
-      this.state = "error";
-      throw error;
-    }
-  }
-  /**
-   * Stops the CLI server and closes all active sessions.
-   *
-   * This method performs graceful cleanup:
-   * 1. Closes all active sessions (releases in-memory resources)
-   * 2. Requests runtime shutdown for SDK-owned CLI processes
-   * 3. Closes the JSON-RPC connection
-   * 4. Terminates the CLI server process (if spawned by this client)
-   *
-   * Note: session data on disk is preserved, so sessions can be resumed later.
-   * To permanently remove session data before stopping, call
-   * {@link deleteSession} for each session first.
-   *
-   * @returns A promise that resolves with an array of errors encountered during cleanup.
-   *          An empty array indicates all cleanup succeeded.
-   *
-   * @example
-   * ```typescript
-   * const errors = await client.stop();
-   * if (errors.length > 0) {
-   *   console.error("Cleanup errors:", errors);
-   * }
-   * ```
-   */
-  async stop() {
-    const errors = [];
-    const activeSessions = [...this.sessions.values()];
-    for (const session of activeSessions) {
-      const sessionId = session.sessionId;
-      let lastError = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
+var import_node_child_process, import_node_crypto, import_node_fs, import_node_module, import_node_net, import_node_path, import_node_url, import_node2, import_meta, MIN_PROTOCOL_VERSION, RUNTIME_SHUTDOWN_TIMEOUT_MS, DEFAULT_PROVIDER_NAME, TeardownResilientStreamMessageWriter, CopilotClient;
+var init_client = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/client.js"() {
+    import_node_child_process = require("node:child_process");
+    import_node_crypto = require("node:crypto");
+    import_node_fs = require("node:fs");
+    import_node_module = require("node:module");
+    import_node_net = require("node:net");
+    import_node_path = require("node:path");
+    import_node_url = require("node:url");
+    import_node2 = __toESM(require_node(), 1);
+    init_rpc();
+    init_sdkProtocolVersion();
+    init_session();
+    init_sessionFsProvider();
+    init_copilotRequestHandler();
+    init_telemetry();
+    init_toolSet();
+    init_types();
+    import_meta = {};
+    MIN_PROTOCOL_VERSION = 3;
+    RUNTIME_SHUTDOWN_TIMEOUT_MS = 1e4;
+    DEFAULT_PROVIDER_NAME = "default";
+    TeardownResilientStreamMessageWriter = class extends import_node2.StreamMessageWriter {
+      suppressWriteErrors = false;
+      async write(msg) {
         try {
-          await session.disconnect();
-          lastError = null;
-          break;
+          await super.write(msg);
         } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error));
-          if (attempt < 3) {
-            const delay = 100 * Math.pow(2, attempt - 1);
-            await new Promise((resolve6) => setTimeout(resolve6, delay));
+          if (!this.suppressWriteErrors) {
+            throw error;
           }
         }
       }
-      if (lastError) {
-        errors.push(
-          new Error(
-            `Failed to disconnect session ${sessionId} after 3 attempts: ${lastError.message}`
-          )
-        );
-      }
-    }
-    for (const session of activeSessions) {
-      session._markDisconnected();
-    }
-    this.sessions.clear();
-    if (this.connection && this.cliProcess && !this.isExternalServer) {
-      const runtimeShutdownStart = Date.now();
-      const shutdownPromise = this.rpc.runtime.shutdown();
-      void shutdownPromise.catch(() => void 0);
-      try {
-        await withTimeout(
-          shutdownPromise,
-          RUNTIME_SHUTDOWN_TIMEOUT_MS,
-          `runtime.shutdown timed out after ${RUNTIME_SHUTDOWN_TIMEOUT_MS}ms`
-        );
-        this.logDebugTiming(
-          "CopilotClient.stop runtime shutdown complete",
-          runtimeShutdownStart
-        );
-      } catch (error) {
-        this.logDebugTiming(
-          "CopilotClient.stop runtime shutdown failed",
-          runtimeShutdownStart
-        );
-        errors.push(
-          new Error(
-            `Failed to gracefully shut down runtime: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
-      }
-    }
-    if (this.messageWriter) {
-      this.messageWriter.suppressWriteErrors = true;
-    }
-    if (this.connection) {
-      try {
-        this.connection.dispose();
-      } catch (error) {
-        errors.push(
-          new Error(
-            `Failed to dispose connection: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
-      }
-      this.connection = null;
-      this.messageWriter = null;
-      this._rpc = null;
-      this._internalRpc = null;
-    }
-    this.modelsCache = null;
-    if (this.socket) {
-      const socket = this.socket;
-      this.socket = null;
-      try {
-        if (!socket.destroyed) {
-          await new Promise((resolve6) => {
-            socket.once("close", () => resolve6());
-            socket.end();
-          });
+    };
+    CopilotClient = class _CopilotClient {
+      cliStartTimeout = null;
+      cliProcess = null;
+      connection = null;
+      messageWriter = null;
+      socket = null;
+      runtimePort = null;
+      actualHost = "localhost";
+      state = "disconnected";
+      sessions = /* @__PURE__ */ new Map();
+      stderrBuffer = "";
+      // Captures CLI stderr for error messages
+      /** Resolved connection mode chosen in the constructor. */
+      connectionConfig;
+      /** Resolved path to the runtime executable (only used for child-process kinds). */
+      resolvedCliPath;
+      /** Resolved environment passed to the spawned runtime. */
+      resolvedEnv;
+      options;
+      isExternalServer = false;
+      forceStopping = false;
+      /** Token sent in `connect`; auto-generated when the SDK spawns its own CLI in TCP mode. */
+      effectiveConnectionToken;
+      onListModels;
+      onGetTraceContext;
+      modelsCache = null;
+      modelsCacheLock = Promise.resolve();
+      sessionLifecycleHandlers = /* @__PURE__ */ new Set();
+      typedLifecycleHandlers = /* @__PURE__ */ new Map();
+      _rpc = null;
+      _internalRpc = null;
+      processExitPromise = null;
+      // Rejects when CLI process exits
+      negotiatedProtocolVersion = null;
+      /** Connection-level session filesystem config, set via constructor option. */
+      sessionFsConfig = null;
+      requestHandler = null;
+      llmInferenceHandlers = {};
+      /**
+       * Typed server-scoped RPC methods.
+       * @throws Error if the client is not connected
+       */
+      get rpc() {
+        if (!this.connection) {
+          throw new Error("Client is not connected. Call start() first.");
         }
-      } catch (error) {
-        errors.push(
-          new Error(
-            `Failed to close socket: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
+        if (!this._rpc) {
+          this._rpc = createServerRpc(this.connection);
+        }
+        return this._rpc;
       }
-    }
-    if (this.cliProcess && !this.isExternalServer) {
-      const child = this.cliProcess;
-      this.cliProcess = null;
-      try {
-        if (child.exitCode == null && child.signalCode == null) {
-          child.kill();
-          if (!await waitForChildExit(child, RUNTIME_SHUTDOWN_TIMEOUT_MS)) {
+      /**
+       * Internal RPC surface (e.g. handshake helpers). Not part of the public API.
+       * @internal
+       */
+      get internalRpc() {
+        if (!this.connection) {
+          throw new Error("Client is not connected. Call start() first.");
+        }
+        if (!this._internalRpc) {
+          this._internalRpc = createInternalServerRpc(this.connection);
+        }
+        return this._internalRpc;
+      }
+      logDebugTiming(message, startMs) {
+        const level = this.options.logLevel?.toLowerCase();
+        if (level === "debug" || level === "all") {
+          process.stderr.write(`[copilot-sdk] ${message}. Elapsed=${Date.now() - startMs}ms
+`);
+        }
+      }
+      logDebug(message) {
+        const level = this.options.logLevel?.toLowerCase();
+        if (level === "debug" || level === "all") {
+          process.stderr.write(`[copilot-sdk] ${message}
+`);
+        }
+      }
+      /**
+       * Creates a new CopilotClient instance.
+       *
+       * @param options - Configuration options for the client
+       *
+       * @example
+       * ```typescript
+       * // Default: spawns the bundled runtime over stdio
+       * const client = new CopilotClient();
+       *
+       * // Connect to an existing runtime
+       * const client = new CopilotClient({
+       *   connection: RuntimeConnection.forUri("localhost:3000"),
+       * });
+       *
+       * // Spawn the runtime over TCP on a chosen port
+       * const client = new CopilotClient({
+       *   connection: RuntimeConnection.forTcp({ port: 9001 }),
+       * });
+       *
+       * // Use a custom runtime binary
+       * const client = new CopilotClient({
+       *   connection: RuntimeConnection.forStdio({ path: "/usr/local/bin/copilot" }),
+       *   logLevel: "debug",
+       * });
+       * ```
+       */
+      constructor(options = {}) {
+        const conn = options._internalConnection ?? options.connection ?? { kind: "stdio" };
+        if (conn.kind === "uri" && (options.gitHubToken !== void 0 || options.useLoggedInUser !== void 0)) {
+          throw new Error(
+            "gitHubToken and useLoggedInUser cannot be used with RuntimeConnection.forUri (external server manages its own auth)"
+          );
+        }
+        if (conn.kind === "tcp" && conn.connectionToken !== void 0) {
+          if (typeof conn.connectionToken !== "string" || conn.connectionToken.length === 0) {
+            throw new Error("connectionToken must be a non-empty string");
+          }
+        }
+        this.connectionConfig = conn;
+        if (options.sessionFs) {
+          this.validateSessionFsConfig(options.sessionFs);
+        }
+        if (conn.kind === "uri") {
+          const { host, port } = this.parseCliUrl(conn.url);
+          this.actualHost = host;
+          this.runtimePort = port;
+          this.isExternalServer = true;
+        } else if (conn.kind === "parent-process") {
+          this.isExternalServer = true;
+        }
+        if (conn.kind === "tcp") {
+          this.effectiveConnectionToken = conn.connectionToken ?? (0, import_node_crypto.randomUUID)();
+        } else if (conn.kind === "uri") {
+          this.effectiveConnectionToken = conn.connectionToken;
+        }
+        this.onListModels = options.onListModels;
+        this.onGetTraceContext = options.onGetTraceContext;
+        this.sessionFsConfig = options.sessionFs ?? null;
+        this.requestHandler = options.requestHandler ?? null;
+        this.setupLlmInference();
+        const effectiveEnv = options.env ?? process.env;
+        this.resolvedEnv = effectiveEnv;
+        this.resolvedCliPath = conn.kind === "stdio" || conn.kind === "tcp" ? conn.path ?? effectiveEnv.COPILOT_CLI_PATH ?? getBundledCliPath() : void 0;
+        const connArgs = conn.kind === "stdio" || conn.kind === "tcp" ? conn.args ?? [] : [];
+        this.connectionExtraArgs = [...connArgs];
+        this.options = {
+          workingDirectory: options.workingDirectory ?? process.cwd(),
+          logLevel: options.logLevel,
+          gitHubToken: options.gitHubToken,
+          // Default useLoggedInUser to false when gitHubToken is provided, otherwise true.
+          useLoggedInUser: options.useLoggedInUser ?? (options.gitHubToken ? false : true),
+          telemetry: options.telemetry,
+          baseDirectory: options.baseDirectory,
+          sessionIdleTimeoutSeconds: options.sessionIdleTimeoutSeconds ?? 0,
+          enableRemoteSessions: options.enableRemoteSessions ?? false,
+          mode: options.mode ?? "copilot-cli"
+        };
+        if (this.options.mode === "empty") {
+          const hasPersistence = this.options.baseDirectory !== void 0 || this.sessionFsConfig !== null || // External runtimes manage their own persistence layer; the SDK
+          // can't enforce it from here.
+          conn.kind === "uri" || conn.kind === "parent-process";
+          if (!hasPersistence) {
+            throw new Error(
+              "CopilotClient was created with mode: 'empty' but neither 'baseDirectory' nor 'sessionFs' was set. Empty mode requires an explicit per-session persistence location; pick one."
+            );
+          }
+        }
+      }
+      connectionExtraArgs = [];
+      /**
+       * Parse CLI URL into host and port
+       * Supports formats: "host:port", "http://host:port", "https://host:port", or just "port"
+       */
+      parseCliUrl(url) {
+        let cleanUrl = url.replace(/^https?:\/\//, "");
+        if (/^\d+$/.test(cleanUrl)) {
+          return { host: "localhost", port: parseInt(cleanUrl, 10) };
+        }
+        const parts = cleanUrl.split(":");
+        if (parts.length !== 2) {
+          throw new Error(
+            `Invalid cliUrl format: ${url}. Expected "host:port", "http://host:port", or "port"`
+          );
+        }
+        const host = parts[0] || "localhost";
+        const port = parseInt(parts[1], 10);
+        if (isNaN(port) || port <= 0 || port > 65535) {
+          throw new Error(`Invalid port in cliUrl: ${url}`);
+        }
+        return { host, port };
+      }
+      validateSessionFsConfig(config) {
+        if (!config.initialCwd) {
+          throw new Error("sessionFs.initialCwd is required");
+        }
+        if (!config.sessionStatePath) {
+          throw new Error("sessionFs.sessionStatePath is required");
+        }
+        if (config.conventions !== "windows" && config.conventions !== "posix") {
+          throw new Error("sessionFs.conventions must be either 'windows' or 'posix'");
+        }
+      }
+      setupSessionFs(session, config) {
+        if (!this.sessionFsConfig) {
+          return;
+        }
+        if (!config.createSessionFsProvider) {
+          throw new Error(
+            "createSessionFsProvider is required in session config when sessionFs is enabled in client options."
+          );
+        }
+        const provider = config.createSessionFsProvider(session);
+        if (this.sessionFsConfig.capabilities?.sqlite && !provider.sqlite) {
+          throw new Error(
+            "SessionFsConfig declares capabilities.sqlite but the provider does not implement sqlite."
+          );
+        }
+        session.clientSessionApis.sessionFs = createSessionFsAdapter(provider);
+      }
+      setupLlmInference() {
+        if (!this.requestHandler) {
+          return;
+        }
+        this.llmInferenceHandlers = {
+          llmInference: createCopilotRequestAdapter(this.requestHandler, () => {
+            if (!this.connection) {
+              return void 0;
+            }
+            this._rpc ??= createServerRpc(this.connection);
+            return this._rpc;
+          })
+        };
+      }
+      /**
+       * Starts the CLI server and establishes a connection.
+       *
+       * If connecting to an external server (via cliUrl), only establishes the connection.
+       * Otherwise, spawns the CLI server process and then connects.
+       *
+       * This method is called automatically the first time you create or resume a session.
+       *
+       * @returns A promise that resolves when the connection is established
+       * @throws Error if the server fails to start or the connection fails
+       *
+       * @example
+       * ```typescript
+       * const client = new CopilotClient();
+       * await client.start();
+       * // Now ready to create sessions
+       * ```
+       */
+      async start() {
+        if (this.state === "connected") {
+          return;
+        }
+        this.state = "connecting";
+        try {
+          if (!this.isExternalServer) {
+            await this.startCLIServer();
+          }
+          await this.connectToServer();
+          await this.verifyProtocolVersion();
+          if (this.sessionFsConfig) {
+            await this.connection.sendRequest("sessionFs.setProvider", {
+              initialCwd: this.sessionFsConfig.initialCwd,
+              sessionStatePath: this.sessionFsConfig.sessionStatePath,
+              conventions: this.sessionFsConfig.conventions,
+              capabilities: this.sessionFsConfig.capabilities
+            });
+          }
+          if (this.requestHandler) {
+            await this.connection.sendRequest("llmInference.setProvider", {});
+          }
+          this.state = "connected";
+        } catch (error) {
+          this.state = "error";
+          throw error;
+        }
+      }
+      /**
+       * Stops the CLI server and closes all active sessions.
+       *
+       * This method performs graceful cleanup:
+       * 1. Closes all active sessions (releases in-memory resources)
+       * 2. Requests runtime shutdown for SDK-owned CLI processes
+       * 3. Closes the JSON-RPC connection
+       * 4. Terminates the CLI server process (if spawned by this client)
+       *
+       * Note: session data on disk is preserved, so sessions can be resumed later.
+       * To permanently remove session data before stopping, call
+       * {@link deleteSession} for each session first.
+       *
+       * @returns A promise that resolves with an array of errors encountered during cleanup.
+       *          An empty array indicates all cleanup succeeded.
+       *
+       * @example
+       * ```typescript
+       * const errors = await client.stop();
+       * if (errors.length > 0) {
+       *   console.error("Cleanup errors:", errors);
+       * }
+       * ```
+       */
+      async stop() {
+        const errors = [];
+        const activeSessions = [...this.sessions.values()];
+        for (const session of activeSessions) {
+          const sessionId = session.sessionId;
+          let lastError = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              await session.disconnect();
+              lastError = null;
+              break;
+            } catch (error) {
+              lastError = error instanceof Error ? error : new Error(String(error));
+              if (attempt < 3) {
+                const delay = 100 * Math.pow(2, attempt - 1);
+                await new Promise((resolve5) => setTimeout(resolve5, delay));
+              }
+            }
+          }
+          if (lastError) {
             errors.push(
               new Error(
-                `Timed out waiting for CLI process to exit after kill: ${RUNTIME_SHUTDOWN_TIMEOUT_MS}ms`
+                `Failed to disconnect session ${sessionId} after 3 attempts: ${lastError.message}`
               )
             );
           }
         }
-      } catch (error) {
-        errors.push(
-          new Error(
-            `Failed to kill CLI process: ${error instanceof Error ? error.message : String(error)}`
-          )
-        );
-      }
-    }
-    if (this.cliStartTimeout) {
-      clearTimeout(this.cliStartTimeout);
-      this.cliStartTimeout = null;
-    }
-    this.state = "disconnected";
-    this.runtimePort = null;
-    this.stderrBuffer = "";
-    this.processExitPromise = null;
-    return errors;
-  }
-  /**
-   * Alias for {@link stop} that lets `CopilotClient` participate in `await using`
-   * blocks for automatic cleanup.
-   *
-   * @example
-   * ```typescript
-   * await using client = new CopilotClient();
-   * const session = await client.createSession({ onPermissionRequest: approveAll });
-   * await session.sendAndWait("Hello");
-   * // client.stop() is called automatically when the block exits.
-   * ```
-   */
-  async [Symbol.asyncDispose]() {
-    await this.stop();
-  }
-  /**
-   * Forcefully stops the CLI server without graceful cleanup.
-   *
-   * Use this when {@link stop} fails or takes too long. This method:
-   * - Clears all sessions immediately without destroying them
-   * - Force closes the connection
-   * - Sends SIGKILL to the CLI process (if spawned by this client)
-   *
-   * @returns A promise that resolves when the force stop is complete
-   *
-   * @example
-   * ```typescript
-   * // If normal stop hangs, force stop
-   * const stopPromise = client.stop();
-   * const timeout = new Promise((_, reject) =>
-   *   setTimeout(() => reject(new Error("Timeout")), 5000)
-   * );
-   *
-   * try {
-   *   await Promise.race([stopPromise, timeout]);
-   * } catch {
-   *   await client.forceStop();
-   * }
-   * ```
-   */
-  async forceStop() {
-    this.forceStopping = true;
-    for (const session of this.sessions.values()) {
-      session._markDisconnected();
-    }
-    this.sessions.clear();
-    if (this.messageWriter) {
-      this.messageWriter.suppressWriteErrors = true;
-    }
-    if (this.connection) {
-      try {
-        this.connection.dispose();
-      } catch {
-      }
-      this.connection = null;
-      this.messageWriter = null;
-      this._rpc = null;
-      this._internalRpc = null;
-    }
-    this.modelsCache = null;
-    if (this.socket) {
-      try {
-        this.socket.destroy();
-      } catch {
-      }
-      this.socket = null;
-    }
-    if (this.cliProcess && !this.isExternalServer) {
-      try {
-        this.cliProcess.kill("SIGKILL");
-      } catch {
-      }
-      this.cliProcess = null;
-    }
-    if (this.cliStartTimeout) {
-      clearTimeout(this.cliStartTimeout);
-      this.cliStartTimeout = null;
-    }
-    this.state = "disconnected";
-    this.runtimePort = null;
-    this.stderrBuffer = "";
-    this.processExitPromise = null;
-  }
-  /**
-   * Creates a new conversation session with the Copilot CLI.
-   *
-   * Sessions maintain conversation state, handle events, and manage tool execution.
-   * If the client is not connected, this method automatically starts the connection.
-   *
-   * @param config - Optional configuration for the session
-   * @returns A promise that resolves with the created session
-   * @throws Error if the client fails to start
-   *
-   * @example
-   * ```typescript
-   * // Basic session
-   * const session = await client.createSession({ onPermissionRequest: approveAll });
-   *
-   * // Session with model and tools
-   * const session = await client.createSession({
-   *   onPermissionRequest: approveAll,
-   *   model: "gpt-4",
-   *   tools: [{
-   *     name: "get_weather",
-   *     description: "Get weather for a location",
-   *     parameters: { type: "object", properties: { location: { type: "string" } } },
-   *     handler: async (args) => ({ temperature: 72 })
-   *   }]
-   * });
-   * ```
-   */
-  /**
-   * Normalizes session-level tool filter options. Converts {@link ToolSet}
-   * instances to plain string arrays, rejects misuse (bare `"*"`) and the
-   * missing-availableTools case in `mode = "empty"`.
-   *
-   * The SDK always sends `toolFilterPrecedence: "excluded"` so callers can
-   * compose include + exclude lists naturally (e.g. "everything matching X
-   * except Y") regardless of mode. Allowlist-precedence is intentionally not
-   * exposed — it's available on the runtime side as a CLI-only concession to
-   * legacy behavior, but SDK consumers always get the composable semantics.
-   *
-   * @internal
-   */
-  resolveToolFilterOptions(config) {
-    const availableTools = toolFilterListToArray(config.availableTools);
-    const excludedTools = toolFilterListToArray(config.excludedTools);
-    validateToolFilterList("availableTools", availableTools);
-    validateToolFilterList("excludedTools", excludedTools);
-    if (this.options.mode === "empty") {
-      if (availableTools === void 0) {
-        throw new Error(
-          "CopilotClient is in mode: 'empty' but the session config did not specify 'availableTools'. Empty mode requires every session to explicitly opt into the tools it wants \u2014 e.g. `new ToolSet().addBuiltIn(BuiltInTools.Isolated)`."
-        );
-      }
-    }
-    return { availableTools, excludedTools, toolFilterPrecedence: "excluded" };
-  }
-  /** Mode-specific defaults spread under the caller's config (app values win). */
-  configDefaultsForMode() {
-    if (this.options.mode === "empty") {
-      return {
-        enableSessionTelemetry: false,
-        mcpOAuthTokenStorage: "in-memory",
-        skipEmbeddingRetrieval: true,
-        embeddingCacheStorage: "in-memory",
-        enableOnDemandInstructionDiscovery: false,
-        enableFileHooks: false,
-        enableHostGitOperations: false,
-        enableSessionStore: false,
-        enableSkills: false,
-        memory: { enabled: false }
-      };
-    }
-    return {};
-  }
-  /**
-   * Returns the systemMessage config to use, adjusted for the current mode.
-   * In empty mode we ensure the environment_context section is removed
-   * unless the app has already taken control of it. `append` (and
-   * unspecified) mode is promoted to `customize` so we can also strip
-   * environment_context; the caller's `content` is preserved verbatim
-   * because the runtime appends it as additional instructions in both
-   * customize and append modes.
-   */
-  getSystemMessageConfigForMode(supplied) {
-    if (this.options.mode !== "empty") return supplied;
-    if (!supplied) {
-      return {
-        mode: "customize",
-        sections: { environment_context: { action: "remove" } }
-      };
-    }
-    switch (supplied.mode) {
-      case "replace":
-        return supplied;
-      case "customize":
-        if (supplied.sections?.environment_context) return supplied;
-        return {
-          ...supplied,
-          sections: {
-            ...supplied.sections,
-            environment_context: { action: "remove" }
+        for (const session of activeSessions) {
+          session._markDisconnected();
+        }
+        this.sessions.clear();
+        if (this.connection && this.cliProcess && !this.isExternalServer) {
+          const runtimeShutdownStart = Date.now();
+          const shutdownPromise = this.rpc.runtime.shutdown();
+          void shutdownPromise.catch(() => void 0);
+          try {
+            await withTimeout(
+              shutdownPromise,
+              RUNTIME_SHUTDOWN_TIMEOUT_MS,
+              `runtime.shutdown timed out after ${RUNTIME_SHUTDOWN_TIMEOUT_MS}ms`
+            );
+            this.logDebugTiming(
+              "CopilotClient.stop runtime shutdown complete",
+              runtimeShutdownStart
+            );
+          } catch (error) {
+            this.logDebugTiming(
+              "CopilotClient.stop runtime shutdown failed",
+              runtimeShutdownStart
+            );
+            errors.push(
+              new Error(
+                `Failed to gracefully shut down runtime: ${error instanceof Error ? error.message : String(error)}`
+              )
+            );
           }
-        };
-      case "append":
-      case void 0:
-        return {
-          mode: "customize",
-          content: supplied.content,
-          sections: { environment_context: { action: "remove" } }
-        };
-    }
-  }
-  /**
-   * Mode-specific options applied via session.options.update after create/resume.
-   *
-   * In empty mode, defaults the four overridable feature flags to safe values
-   * (caller values from `config` win). `installedPlugins=[]` is unconditional
-   * in empty mode — apps that need custom plugins should switch modes.
-   */
-  async updateSessionOptionsForMode(session, config) {
-    const patch = {};
-    if (this.options.mode === "empty") {
-      patch.skipCustomInstructions = config.skipCustomInstructions ?? true;
-      patch.customAgentsLocalOnly = config.customAgentsLocalOnly ?? true;
-      patch.coauthorEnabled = config.coauthorEnabled ?? false;
-      patch.manageScheduleEnabled = config.manageScheduleEnabled ?? false;
-      patch.installedPlugins = [];
-    } else {
-      if (config.skipCustomInstructions !== void 0)
-        patch.skipCustomInstructions = config.skipCustomInstructions;
-      if (config.customAgentsLocalOnly !== void 0)
-        patch.customAgentsLocalOnly = config.customAgentsLocalOnly;
-      if (config.coauthorEnabled !== void 0)
-        patch.coauthorEnabled = config.coauthorEnabled;
-      if (config.manageScheduleEnabled !== void 0)
-        patch.manageScheduleEnabled = config.manageScheduleEnabled;
-    }
-    if (Object.keys(patch).length === 0) {
-      return;
-    }
-    try {
-      await session.rpc.options.update(patch);
-    } catch (e) {
-      try {
-        await session.disconnect();
-      } catch {
+        }
+        if (this.messageWriter) {
+          this.messageWriter.suppressWriteErrors = true;
+        }
+        if (this.connection) {
+          try {
+            this.connection.dispose();
+          } catch (error) {
+            errors.push(
+              new Error(
+                `Failed to dispose connection: ${error instanceof Error ? error.message : String(error)}`
+              )
+            );
+          }
+          this.connection = null;
+          this.messageWriter = null;
+          this._rpc = null;
+          this._internalRpc = null;
+        }
+        this.modelsCache = null;
+        if (this.socket) {
+          const socket = this.socket;
+          this.socket = null;
+          try {
+            if (!socket.destroyed) {
+              await new Promise((resolve5) => {
+                socket.once("close", () => resolve5());
+                socket.end();
+              });
+            }
+          } catch (error) {
+            errors.push(
+              new Error(
+                `Failed to close socket: ${error instanceof Error ? error.message : String(error)}`
+              )
+            );
+          }
+        }
+        if (this.cliProcess && !this.isExternalServer) {
+          const child = this.cliProcess;
+          this.cliProcess = null;
+          try {
+            if (child.exitCode == null && child.signalCode == null) {
+              child.kill();
+              if (!await waitForChildExit(child, RUNTIME_SHUTDOWN_TIMEOUT_MS)) {
+                errors.push(
+                  new Error(
+                    `Timed out waiting for CLI process to exit after kill: ${RUNTIME_SHUTDOWN_TIMEOUT_MS}ms`
+                  )
+                );
+              }
+            }
+          } catch (error) {
+            errors.push(
+              new Error(
+                `Failed to kill CLI process: ${error instanceof Error ? error.message : String(error)}`
+              )
+            );
+          }
+        }
+        if (this.cliStartTimeout) {
+          clearTimeout(this.cliStartTimeout);
+          this.cliStartTimeout = null;
+        }
+        this.state = "disconnected";
+        this.runtimePort = null;
+        this.stderrBuffer = "";
+        this.processExitPromise = null;
+        return errors;
       }
-      throw e;
-    }
-  }
-  async createSession(config) {
-    if (!this.connection) {
-      await this.start();
-    }
-    config = { ...this.configDefaultsForMode(), ...config };
-    config.systemMessage = this.getSystemMessageConfigForMode(config.systemMessage);
-    const callerSessionId = config.sessionId;
-    const useServerGeneratedId = config.cloud != null && callerSessionId == null;
-    const localSessionId = useServerGeneratedId ? void 0 : callerSessionId ?? (0, import_node_crypto.randomUUID)();
-    const {
-      wireProvider: bearerWireProvider,
-      wireProviders: bearerWireProviders,
-      callbacks: bearerTokenCallbacks
-    } = extractBearerTokenProviders(config.provider, config.providers);
-    const { wirePayload: wireSystemMessage, transformCallbacks } = extractTransformCallbacks(
-      config.systemMessage
-    );
-    const initializeSession = (sessionId) => {
-      const s = new CopilotSession(
-        sessionId,
-        this.connection,
-        void 0,
-        this.onGetTraceContext
-      );
-      s.registerTools(config.tools);
-      s.registerCanvases(config.canvases);
-      s.registerCommands(config.commands);
-      if (bearerTokenCallbacks.size > 0) {
-        s.registerBearerTokenProviders(bearerTokenCallbacks);
+      /**
+       * Alias for {@link stop} that lets `CopilotClient` participate in `await using`
+       * blocks for automatic cleanup.
+       *
+       * @example
+       * ```typescript
+       * await using client = new CopilotClient();
+       * const session = await client.createSession({ onPermissionRequest: approveAll });
+       * await session.sendAndWait("Hello");
+       * // client.stop() is called automatically when the block exits.
+       * ```
+       */
+      async [Symbol.asyncDispose]() {
+        await this.stop();
       }
-      s.registerPermissionHandler(config.onPermissionRequest);
-      if (config.onUserInputRequest) {
-        s.registerUserInputHandler(config.onUserInputRequest);
+      /**
+       * Forcefully stops the CLI server without graceful cleanup.
+       *
+       * Use this when {@link stop} fails or takes too long. This method:
+       * - Clears all sessions immediately without destroying them
+       * - Force closes the connection
+       * - Sends SIGKILL to the CLI process (if spawned by this client)
+       *
+       * @returns A promise that resolves when the force stop is complete
+       *
+       * @example
+       * ```typescript
+       * // If normal stop hangs, force stop
+       * const stopPromise = client.stop();
+       * const timeout = new Promise((_, reject) =>
+       *   setTimeout(() => reject(new Error("Timeout")), 5000)
+       * );
+       *
+       * try {
+       *   await Promise.race([stopPromise, timeout]);
+       * } catch {
+       *   await client.forceStop();
+       * }
+       * ```
+       */
+      async forceStop() {
+        this.forceStopping = true;
+        for (const session of this.sessions.values()) {
+          session._markDisconnected();
+        }
+        this.sessions.clear();
+        if (this.messageWriter) {
+          this.messageWriter.suppressWriteErrors = true;
+        }
+        if (this.connection) {
+          try {
+            this.connection.dispose();
+          } catch {
+          }
+          this.connection = null;
+          this.messageWriter = null;
+          this._rpc = null;
+          this._internalRpc = null;
+        }
+        this.modelsCache = null;
+        if (this.socket) {
+          try {
+            this.socket.destroy();
+          } catch {
+          }
+          this.socket = null;
+        }
+        if (this.cliProcess && !this.isExternalServer) {
+          try {
+            this.cliProcess.kill("SIGKILL");
+          } catch {
+          }
+          this.cliProcess = null;
+        }
+        if (this.cliStartTimeout) {
+          clearTimeout(this.cliStartTimeout);
+          this.cliStartTimeout = null;
+        }
+        this.state = "disconnected";
+        this.runtimePort = null;
+        this.stderrBuffer = "";
+        this.processExitPromise = null;
       }
-      if (config.onElicitationRequest) {
-        s.registerElicitationHandler(config.onElicitationRequest);
+      /**
+       * Creates a new conversation session with the Copilot CLI.
+       *
+       * Sessions maintain conversation state, handle events, and manage tool execution.
+       * If the client is not connected, this method automatically starts the connection.
+       *
+       * @param config - Optional configuration for the session
+       * @returns A promise that resolves with the created session
+       * @throws Error if the client fails to start
+       *
+       * @example
+       * ```typescript
+       * // Basic session
+       * const session = await client.createSession({ onPermissionRequest: approveAll });
+       *
+       * // Session with model and tools
+       * const session = await client.createSession({
+       *   onPermissionRequest: approveAll,
+       *   model: "gpt-4",
+       *   tools: [{
+       *     name: "get_weather",
+       *     description: "Get weather for a location",
+       *     parameters: { type: "object", properties: { location: { type: "string" } } },
+       *     handler: async (args) => ({ temperature: 72 })
+       *   }]
+       * });
+       * ```
+       */
+      /**
+       * Normalizes session-level tool filter options. Converts {@link ToolSet}
+       * instances to plain string arrays, rejects misuse (bare `"*"`) and the
+       * missing-availableTools case in `mode = "empty"`.
+       *
+       * The SDK always sends `toolFilterPrecedence: "excluded"` so callers can
+       * compose include + exclude lists naturally (e.g. "everything matching X
+       * except Y") regardless of mode. Allowlist-precedence is intentionally not
+       * exposed — it's available on the runtime side as a CLI-only concession to
+       * legacy behavior, but SDK consumers always get the composable semantics.
+       *
+       * @internal
+       */
+      resolveToolFilterOptions(config) {
+        const availableTools = toolFilterListToArray(config.availableTools);
+        const excludedTools = toolFilterListToArray(config.excludedTools);
+        validateToolFilterList("availableTools", availableTools);
+        validateToolFilterList("excludedTools", excludedTools);
+        if (this.options.mode === "empty") {
+          if (availableTools === void 0) {
+            throw new Error(
+              "CopilotClient is in mode: 'empty' but the session config did not specify 'availableTools'. Empty mode requires every session to explicitly opt into the tools it wants \u2014 e.g. `new ToolSet().addBuiltIn(BuiltInTools.Isolated)`."
+            );
+          }
+        }
+        return { availableTools, excludedTools, toolFilterPrecedence: "excluded" };
       }
-      if (config.onExitPlanModeRequest) {
-        s.registerExitPlanModeHandler(config.onExitPlanModeRequest);
+      /** Mode-specific defaults spread under the caller's config (app values win). */
+      configDefaultsForMode() {
+        if (this.options.mode === "empty") {
+          return {
+            enableSessionTelemetry: false,
+            mcpOAuthTokenStorage: "in-memory",
+            skipEmbeddingRetrieval: true,
+            embeddingCacheStorage: "in-memory",
+            enableOnDemandInstructionDiscovery: false,
+            enableFileHooks: false,
+            enableHostGitOperations: false,
+            enableSessionStore: false,
+            enableSkills: false,
+            memory: { enabled: false }
+          };
+        }
+        return {};
       }
-      if (config.onAutoModeSwitchRequest) {
-        s.registerAutoModeSwitchHandler(config.onAutoModeSwitchRequest);
+      /**
+       * Returns the systemMessage config to use, adjusted for the current mode.
+       * In empty mode we ensure the environment_context section is removed
+       * unless the app has already taken control of it. `append` (and
+       * unspecified) mode is promoted to `customize` so we can also strip
+       * environment_context; the caller's `content` is preserved verbatim
+       * because the runtime appends it as additional instructions in both
+       * customize and append modes.
+       */
+      getSystemMessageConfigForMode(supplied) {
+        if (this.options.mode !== "empty") return supplied;
+        if (!supplied) {
+          return {
+            mode: "customize",
+            sections: { environment_context: { action: "remove" } }
+          };
+        }
+        switch (supplied.mode) {
+          case "replace":
+            return supplied;
+          case "customize":
+            if (supplied.sections?.environment_context) return supplied;
+            return {
+              ...supplied,
+              sections: {
+                ...supplied.sections,
+                environment_context: { action: "remove" }
+              }
+            };
+          case "append":
+          case void 0:
+            return {
+              mode: "customize",
+              content: supplied.content,
+              sections: { environment_context: { action: "remove" } }
+            };
+        }
       }
-      if (config.hooks) {
-        s.registerHooks(config.hooks);
+      /**
+       * Mode-specific options applied via session.options.update after create/resume.
+       *
+       * In empty mode, defaults the four overridable feature flags to safe values
+       * (caller values from `config` win). `installedPlugins=[]` is unconditional
+       * in empty mode — apps that need custom plugins should switch modes.
+       */
+      async updateSessionOptionsForMode(session, config) {
+        const patch = {};
+        if (this.options.mode === "empty") {
+          patch.skipCustomInstructions = config.skipCustomInstructions ?? true;
+          patch.customAgentsLocalOnly = config.customAgentsLocalOnly ?? true;
+          patch.coauthorEnabled = config.coauthorEnabled ?? false;
+          patch.manageScheduleEnabled = config.manageScheduleEnabled ?? false;
+          patch.installedPlugins = [];
+        } else {
+          if (config.skipCustomInstructions !== void 0)
+            patch.skipCustomInstructions = config.skipCustomInstructions;
+          if (config.customAgentsLocalOnly !== void 0)
+            patch.customAgentsLocalOnly = config.customAgentsLocalOnly;
+          if (config.coauthorEnabled !== void 0)
+            patch.coauthorEnabled = config.coauthorEnabled;
+          if (config.manageScheduleEnabled !== void 0)
+            patch.manageScheduleEnabled = config.manageScheduleEnabled;
+        }
+        if (Object.keys(patch).length === 0) {
+          return;
+        }
+        try {
+          await session.rpc.options.update(patch);
+        } catch (e) {
+          try {
+            await session.disconnect();
+          } catch {
+          }
+          throw e;
+        }
       }
-      if (transformCallbacks) {
-        s.registerTransformCallbacks(transformCallbacks);
-      }
-      if (config.onEvent) {
-        s.on(config.onEvent);
-      }
-      this.sessions.set(sessionId, s);
-      this.setupSessionFs(s, config);
-      return s;
-    };
-    let session;
-    let registeredId;
-    if (localSessionId !== void 0) {
-      session = initializeSession(localSessionId);
-      registeredId = localSessionId;
-    }
-    const toolFilterOptions = this.resolveToolFilterOptions(config);
-    try {
-      const response = await this.connection.sendRequest("session.create", {
-        ...await getTraceContext(this.onGetTraceContext),
-        model: config.model,
-        sessionId: localSessionId,
-        clientName: config.clientName,
-        reasoningEffort: config.reasoningEffort,
-        reasoningSummary: config.reasoningSummary,
-        contextTier: config.contextTier,
-        tools: config.tools?.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          parameters: toJsonSchema(tool.parameters),
-          overridesBuiltInTool: tool.overridesBuiltInTool,
-          skipPermission: tool.skipPermission,
-          defer: tool.defer
-        })),
-        canvases: config.canvases?.map((canvas) => canvas.declaration),
-        requestCanvasRenderer: config.requestCanvasRenderer,
-        requestExtensions: config.requestExtensions,
-        extensionSdkPath: config.extensionSdkPath,
-        extensionInfo: config.extensionInfo,
-        commands: config.commands?.map((cmd) => ({
-          name: cmd.name,
-          description: cmd.description
-        })),
-        systemMessage: wireSystemMessage,
-        availableTools: toolFilterOptions.availableTools,
-        excludedTools: toolFilterOptions.excludedTools,
-        toolFilterPrecedence: toolFilterOptions.toolFilterPrecedence,
-        provider: bearerWireProvider,
-        capi: config.capi,
-        providers: bearerWireProviders,
-        models: config.models,
-        enableSessionTelemetry: config.enableSessionTelemetry,
-        modelCapabilities: config.modelCapabilities,
-        largeOutput: toWireLargeOutput(config.largeOutput),
-        requestPermission: !!config.onPermissionRequest,
-        requestUserInput: !!config.onUserInputRequest,
-        requestElicitation: !!config.onElicitationRequest,
-        ...config.enableMcpApps ? { requestMcpApps: true } : {},
-        requestExitPlanMode: !!config.onExitPlanModeRequest,
-        requestAutoModeSwitch: !!config.onAutoModeSwitchRequest,
-        hooks: !!(config.hooks && Object.values(config.hooks).some(Boolean)),
-        workingDirectory: config.workingDirectory,
-        streaming: config.streaming,
-        includeSubAgentStreamingEvents: config.includeSubAgentStreamingEvents ?? true,
-        mcpServers: toWireMcpServers(config.mcpServers),
-        mcpOAuthTokenStorage: config.mcpOAuthTokenStorage,
-        envValueMode: "direct",
-        customAgents: toWireCustomAgents(config.customAgents),
-        defaultAgent: config.defaultAgent,
-        agent: config.agent,
-        configDir: config.configDirectory,
-        enableConfigDiscovery: config.enableConfigDiscovery,
-        skipEmbeddingRetrieval: config.skipEmbeddingRetrieval,
-        embeddingCacheStorage: config.embeddingCacheStorage,
-        organizationCustomInstructions: config.organizationCustomInstructions,
-        enableOnDemandInstructionDiscovery: config.enableOnDemandInstructionDiscovery,
-        enableFileHooks: config.enableFileHooks,
-        enableHostGitOperations: config.enableHostGitOperations,
-        enableSessionStore: config.enableSessionStore,
-        enableSkills: config.enableSkills,
-        skillDirectories: config.skillDirectories,
-        pluginDirectories: config.pluginDirectories,
-        instructionDirectories: config.instructionDirectories,
-        disabledSkills: config.disabledSkills,
-        infiniteSessions: config.infiniteSessions,
-        memory: config.memory,
-        gitHubToken: config.gitHubToken,
-        remoteSession: config.remoteSession,
-        cloud: config.cloud,
-        expAssignments: config.expAssignments
-      });
-      const {
-        sessionId: returnedSessionId,
-        workspacePath,
-        capabilities
-      } = response;
-      if (!returnedSessionId) {
-        throw new Error("session.create response did not include a sessionId");
-      }
-      if (localSessionId !== void 0 && localSessionId !== returnedSessionId) {
-        throw new Error(
-          `session.create returned sessionId ${returnedSessionId} but the caller requested ${localSessionId}`
+      async createSession(config) {
+        if (!this.connection) {
+          await this.start();
+        }
+        config = { ...this.configDefaultsForMode(), ...config };
+        config.systemMessage = this.getSystemMessageConfigForMode(config.systemMessage);
+        const callerSessionId = config.sessionId;
+        const useServerGeneratedId = config.cloud != null && callerSessionId == null;
+        const localSessionId = useServerGeneratedId ? void 0 : callerSessionId ?? (0, import_node_crypto.randomUUID)();
+        const {
+          wireProvider: bearerWireProvider,
+          wireProviders: bearerWireProviders,
+          callbacks: bearerTokenCallbacks
+        } = extractBearerTokenProviders(config.provider, config.providers);
+        const { wirePayload: wireSystemMessage, transformCallbacks } = extractTransformCallbacks(
+          config.systemMessage
         );
+        const initializeSession = (sessionId) => {
+          const s = new CopilotSession(
+            sessionId,
+            this.connection,
+            void 0,
+            this.onGetTraceContext
+          );
+          s.registerTools(config.tools);
+          s.registerCanvases(config.canvases);
+          s.registerCommands(config.commands);
+          if (bearerTokenCallbacks.size > 0) {
+            s.registerBearerTokenProviders(bearerTokenCallbacks);
+          }
+          s.registerPermissionHandler(config.onPermissionRequest);
+          if (config.onUserInputRequest) {
+            s.registerUserInputHandler(config.onUserInputRequest);
+          }
+          if (config.onElicitationRequest) {
+            s.registerElicitationHandler(config.onElicitationRequest);
+          }
+          if (config.onExitPlanModeRequest) {
+            s.registerExitPlanModeHandler(config.onExitPlanModeRequest);
+          }
+          if (config.onAutoModeSwitchRequest) {
+            s.registerAutoModeSwitchHandler(config.onAutoModeSwitchRequest);
+          }
+          if (config.hooks) {
+            s.registerHooks(config.hooks);
+          }
+          if (transformCallbacks) {
+            s.registerTransformCallbacks(transformCallbacks);
+          }
+          if (config.onEvent) {
+            s.on(config.onEvent);
+          }
+          this.sessions.set(sessionId, s);
+          this.setupSessionFs(s, config);
+          return s;
+        };
+        let session;
+        let registeredId;
+        if (localSessionId !== void 0) {
+          session = initializeSession(localSessionId);
+          registeredId = localSessionId;
+        }
+        const toolFilterOptions = this.resolveToolFilterOptions(config);
+        try {
+          const response = await this.connection.sendRequest("session.create", {
+            ...await getTraceContext(this.onGetTraceContext),
+            model: config.model,
+            sessionId: localSessionId,
+            clientName: config.clientName,
+            reasoningEffort: config.reasoningEffort,
+            reasoningSummary: config.reasoningSummary,
+            contextTier: config.contextTier,
+            tools: config.tools?.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              parameters: toJsonSchema(tool.parameters),
+              overridesBuiltInTool: tool.overridesBuiltInTool,
+              skipPermission: tool.skipPermission,
+              defer: tool.defer
+            })),
+            canvases: config.canvases?.map((canvas) => canvas.declaration),
+            requestCanvasRenderer: config.requestCanvasRenderer,
+            requestExtensions: config.requestExtensions,
+            extensionSdkPath: config.extensionSdkPath,
+            extensionInfo: config.extensionInfo,
+            commands: config.commands?.map((cmd) => ({
+              name: cmd.name,
+              description: cmd.description
+            })),
+            systemMessage: wireSystemMessage,
+            availableTools: toolFilterOptions.availableTools,
+            excludedTools: toolFilterOptions.excludedTools,
+            toolFilterPrecedence: toolFilterOptions.toolFilterPrecedence,
+            provider: bearerWireProvider,
+            capi: config.capi,
+            providers: bearerWireProviders,
+            models: config.models,
+            enableSessionTelemetry: config.enableSessionTelemetry,
+            modelCapabilities: config.modelCapabilities,
+            largeOutput: toWireLargeOutput(config.largeOutput),
+            requestPermission: !!config.onPermissionRequest,
+            requestUserInput: !!config.onUserInputRequest,
+            requestElicitation: !!config.onElicitationRequest,
+            ...config.enableMcpApps ? { requestMcpApps: true } : {},
+            requestExitPlanMode: !!config.onExitPlanModeRequest,
+            requestAutoModeSwitch: !!config.onAutoModeSwitchRequest,
+            hooks: !!(config.hooks && Object.values(config.hooks).some(Boolean)),
+            workingDirectory: config.workingDirectory,
+            streaming: config.streaming,
+            includeSubAgentStreamingEvents: config.includeSubAgentStreamingEvents ?? true,
+            mcpServers: toWireMcpServers(config.mcpServers),
+            mcpOAuthTokenStorage: config.mcpOAuthTokenStorage,
+            envValueMode: "direct",
+            customAgents: toWireCustomAgents(config.customAgents),
+            defaultAgent: config.defaultAgent,
+            agent: config.agent,
+            configDir: config.configDirectory,
+            enableConfigDiscovery: config.enableConfigDiscovery,
+            skipEmbeddingRetrieval: config.skipEmbeddingRetrieval,
+            embeddingCacheStorage: config.embeddingCacheStorage,
+            organizationCustomInstructions: config.organizationCustomInstructions,
+            enableOnDemandInstructionDiscovery: config.enableOnDemandInstructionDiscovery,
+            enableFileHooks: config.enableFileHooks,
+            enableHostGitOperations: config.enableHostGitOperations,
+            enableSessionStore: config.enableSessionStore,
+            enableSkills: config.enableSkills,
+            skillDirectories: config.skillDirectories,
+            pluginDirectories: config.pluginDirectories,
+            instructionDirectories: config.instructionDirectories,
+            disabledSkills: config.disabledSkills,
+            infiniteSessions: config.infiniteSessions,
+            memory: config.memory,
+            gitHubToken: config.gitHubToken,
+            remoteSession: config.remoteSession,
+            cloud: config.cloud,
+            expAssignments: config.expAssignments
+          });
+          const {
+            sessionId: returnedSessionId,
+            workspacePath,
+            capabilities
+          } = response;
+          if (!returnedSessionId) {
+            throw new Error("session.create response did not include a sessionId");
+          }
+          if (localSessionId !== void 0 && localSessionId !== returnedSessionId) {
+            throw new Error(
+              `session.create returned sessionId ${returnedSessionId} but the caller requested ${localSessionId}`
+            );
+          }
+          if (session === void 0) {
+            session = initializeSession(returnedSessionId);
+            registeredId = returnedSessionId;
+          }
+          session["_workspacePath"] = workspacePath;
+          session.setCapabilities(capabilities);
+          await this.updateSessionOptionsForMode(session, config);
+        } catch (e) {
+          if (registeredId !== void 0) {
+            this.sessions.delete(registeredId);
+          }
+          throw e;
+        }
+        return session;
       }
-      if (session === void 0) {
-        session = initializeSession(returnedSessionId);
-        registeredId = returnedSessionId;
+      /**
+       * Resumes an existing conversation session by its ID.
+       *
+       * This allows you to continue a previous conversation, maintaining all
+       * conversation history. The session must have been previously created
+       * and not deleted.
+       *
+       * @param sessionId - The ID of the session to resume
+       * @param config - Optional configuration for the resumed session
+       * @returns A promise that resolves with the resumed session
+       * @throws Error if the session does not exist or the client is not connected
+       *
+       * @example
+       * ```typescript
+       * // Resume a previous session
+       * const session = await client.resumeSession("session-123", { onPermissionRequest: approveAll });
+       *
+       * // Resume with new tools
+       * const session = await client.resumeSession("session-123", {
+       *   onPermissionRequest: approveAll,
+       *   tools: [myNewTool]
+       * });
+       * ```
+       */
+      async resumeSession(sessionId, config) {
+        if (!this.connection) {
+          await this.start();
+        }
+        const session = new CopilotSession(
+          sessionId,
+          this.connection,
+          void 0,
+          this.onGetTraceContext
+        );
+        session.registerTools(config.tools);
+        session.registerCanvases(config.canvases);
+        session.registerCommands(config.commands);
+        const {
+          wireProvider: bearerWireProvider,
+          wireProviders: bearerWireProviders,
+          callbacks: bearerTokenCallbacks
+        } = extractBearerTokenProviders(config.provider, config.providers);
+        if (bearerTokenCallbacks.size > 0) {
+          session.registerBearerTokenProviders(bearerTokenCallbacks);
+        }
+        session.registerPermissionHandler(config.onPermissionRequest);
+        if (config.onUserInputRequest) {
+          session.registerUserInputHandler(config.onUserInputRequest);
+        }
+        if (config.onElicitationRequest) {
+          session.registerElicitationHandler(config.onElicitationRequest);
+        }
+        if (config.onExitPlanModeRequest) {
+          session.registerExitPlanModeHandler(config.onExitPlanModeRequest);
+        }
+        if (config.onAutoModeSwitchRequest) {
+          session.registerAutoModeSwitchHandler(config.onAutoModeSwitchRequest);
+        }
+        if (config.hooks) {
+          session.registerHooks(config.hooks);
+        }
+        config = { ...this.configDefaultsForMode(), ...config };
+        config.systemMessage = this.getSystemMessageConfigForMode(config.systemMessage);
+        const { wirePayload: wireSystemMessage, transformCallbacks } = extractTransformCallbacks(
+          config.systemMessage
+        );
+        if (transformCallbacks) {
+          session.registerTransformCallbacks(transformCallbacks);
+        }
+        if (config.onEvent) {
+          session.on(config.onEvent);
+        }
+        this.sessions.set(sessionId, session);
+        this.setupSessionFs(session, config);
+        const toolFilterOptions = this.resolveToolFilterOptions(config);
+        try {
+          const response = await this.connection.sendRequest("session.resume", {
+            ...await getTraceContext(this.onGetTraceContext),
+            sessionId,
+            clientName: config.clientName,
+            model: config.model,
+            reasoningEffort: config.reasoningEffort,
+            reasoningSummary: config.reasoningSummary,
+            contextTier: config.contextTier,
+            systemMessage: wireSystemMessage,
+            availableTools: toolFilterOptions.availableTools,
+            excludedTools: toolFilterOptions.excludedTools,
+            toolFilterPrecedence: toolFilterOptions.toolFilterPrecedence,
+            enableSessionTelemetry: config.enableSessionTelemetry,
+            tools: config.tools?.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              parameters: toJsonSchema(tool.parameters),
+              overridesBuiltInTool: tool.overridesBuiltInTool,
+              skipPermission: tool.skipPermission,
+              defer: tool.defer
+            })),
+            canvases: config.canvases?.map((canvas) => canvas.declaration),
+            requestCanvasRenderer: config.requestCanvasRenderer,
+            requestExtensions: config.requestExtensions,
+            extensionSdkPath: config.extensionSdkPath,
+            extensionInfo: config.extensionInfo,
+            commands: config.commands?.map((cmd) => ({
+              name: cmd.name,
+              description: cmd.description
+            })),
+            provider: bearerWireProvider,
+            capi: config.capi,
+            providers: bearerWireProviders,
+            models: config.models,
+            modelCapabilities: config.modelCapabilities,
+            largeOutput: toWireLargeOutput(config.largeOutput),
+            requestPermission: config.onPermissionRequest !== defaultJoinSessionPermissionHandler,
+            requestUserInput: !!config.onUserInputRequest,
+            requestElicitation: !!config.onElicitationRequest,
+            ...config.enableMcpApps ? { requestMcpApps: true } : {},
+            requestExitPlanMode: !!config.onExitPlanModeRequest,
+            requestAutoModeSwitch: !!config.onAutoModeSwitchRequest,
+            hooks: !!(config.hooks && Object.values(config.hooks).some(Boolean)),
+            workingDirectory: config.workingDirectory,
+            configDir: config.configDirectory,
+            enableConfigDiscovery: config.enableConfigDiscovery,
+            skipEmbeddingRetrieval: config.skipEmbeddingRetrieval,
+            embeddingCacheStorage: config.embeddingCacheStorage,
+            organizationCustomInstructions: config.organizationCustomInstructions,
+            enableOnDemandInstructionDiscovery: config.enableOnDemandInstructionDiscovery,
+            enableFileHooks: config.enableFileHooks,
+            enableHostGitOperations: config.enableHostGitOperations,
+            enableSessionStore: config.enableSessionStore,
+            enableSkills: config.enableSkills,
+            streaming: config.streaming,
+            includeSubAgentStreamingEvents: config.includeSubAgentStreamingEvents ?? true,
+            mcpServers: toWireMcpServers(config.mcpServers),
+            mcpOAuthTokenStorage: config.mcpOAuthTokenStorage,
+            envValueMode: "direct",
+            customAgents: toWireCustomAgents(config.customAgents),
+            defaultAgent: config.defaultAgent,
+            agent: config.agent,
+            skillDirectories: config.skillDirectories,
+            pluginDirectories: config.pluginDirectories,
+            instructionDirectories: config.instructionDirectories,
+            disabledSkills: config.disabledSkills,
+            infiniteSessions: config.infiniteSessions,
+            memory: config.memory,
+            disableResume: config.suppressResumeEvent,
+            continuePendingWork: config.continuePendingWork,
+            gitHubToken: config.gitHubToken,
+            remoteSession: config.remoteSession,
+            openCanvases: config.openCanvases,
+            expAssignments: config.expAssignments
+          });
+          const { workspacePath, capabilities, openCanvases } = response;
+          session["_workspacePath"] = workspacePath;
+          session.setCapabilities(capabilities);
+          session.setOpenCanvases(openCanvases ?? []);
+          await this.updateSessionOptionsForMode(session, config);
+        } catch (e) {
+          this.sessions.delete(sessionId);
+          throw e;
+        }
+        return session;
       }
-      session["_workspacePath"] = workspacePath;
-      session.setCapabilities(capabilities);
-      await this.updateSessionOptionsForMode(session, config);
-    } catch (e) {
-      if (registeredId !== void 0) {
-        this.sessions.delete(registeredId);
-      }
-      throw e;
-    }
-    return session;
-  }
-  /**
-   * Resumes an existing conversation session by its ID.
-   *
-   * This allows you to continue a previous conversation, maintaining all
-   * conversation history. The session must have been previously created
-   * and not deleted.
-   *
-   * @param sessionId - The ID of the session to resume
-   * @param config - Optional configuration for the resumed session
-   * @returns A promise that resolves with the resumed session
-   * @throws Error if the session does not exist or the client is not connected
-   *
-   * @example
-   * ```typescript
-   * // Resume a previous session
-   * const session = await client.resumeSession("session-123", { onPermissionRequest: approveAll });
-   *
-   * // Resume with new tools
-   * const session = await client.resumeSession("session-123", {
-   *   onPermissionRequest: approveAll,
-   *   tools: [myNewTool]
-   * });
-   * ```
-   */
-  async resumeSession(sessionId, config) {
-    if (!this.connection) {
-      await this.start();
-    }
-    const session = new CopilotSession(
-      sessionId,
-      this.connection,
-      void 0,
-      this.onGetTraceContext
-    );
-    session.registerTools(config.tools);
-    session.registerCanvases(config.canvases);
-    session.registerCommands(config.commands);
-    const {
-      wireProvider: bearerWireProvider,
-      wireProviders: bearerWireProviders,
-      callbacks: bearerTokenCallbacks
-    } = extractBearerTokenProviders(config.provider, config.providers);
-    if (bearerTokenCallbacks.size > 0) {
-      session.registerBearerTokenProviders(bearerTokenCallbacks);
-    }
-    session.registerPermissionHandler(config.onPermissionRequest);
-    if (config.onUserInputRequest) {
-      session.registerUserInputHandler(config.onUserInputRequest);
-    }
-    if (config.onElicitationRequest) {
-      session.registerElicitationHandler(config.onElicitationRequest);
-    }
-    if (config.onExitPlanModeRequest) {
-      session.registerExitPlanModeHandler(config.onExitPlanModeRequest);
-    }
-    if (config.onAutoModeSwitchRequest) {
-      session.registerAutoModeSwitchHandler(config.onAutoModeSwitchRequest);
-    }
-    if (config.hooks) {
-      session.registerHooks(config.hooks);
-    }
-    config = { ...this.configDefaultsForMode(), ...config };
-    config.systemMessage = this.getSystemMessageConfigForMode(config.systemMessage);
-    const { wirePayload: wireSystemMessage, transformCallbacks } = extractTransformCallbacks(
-      config.systemMessage
-    );
-    if (transformCallbacks) {
-      session.registerTransformCallbacks(transformCallbacks);
-    }
-    if (config.onEvent) {
-      session.on(config.onEvent);
-    }
-    this.sessions.set(sessionId, session);
-    this.setupSessionFs(session, config);
-    const toolFilterOptions = this.resolveToolFilterOptions(config);
-    try {
-      const response = await this.connection.sendRequest("session.resume", {
-        ...await getTraceContext(this.onGetTraceContext),
-        sessionId,
-        clientName: config.clientName,
-        model: config.model,
-        reasoningEffort: config.reasoningEffort,
-        reasoningSummary: config.reasoningSummary,
-        contextTier: config.contextTier,
-        systemMessage: wireSystemMessage,
-        availableTools: toolFilterOptions.availableTools,
-        excludedTools: toolFilterOptions.excludedTools,
-        toolFilterPrecedence: toolFilterOptions.toolFilterPrecedence,
-        enableSessionTelemetry: config.enableSessionTelemetry,
-        tools: config.tools?.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          parameters: toJsonSchema(tool.parameters),
-          overridesBuiltInTool: tool.overridesBuiltInTool,
-          skipPermission: tool.skipPermission,
-          defer: tool.defer
-        })),
-        canvases: config.canvases?.map((canvas) => canvas.declaration),
-        requestCanvasRenderer: config.requestCanvasRenderer,
-        requestExtensions: config.requestExtensions,
-        extensionSdkPath: config.extensionSdkPath,
-        extensionInfo: config.extensionInfo,
-        commands: config.commands?.map((cmd) => ({
-          name: cmd.name,
-          description: cmd.description
-        })),
-        provider: bearerWireProvider,
-        capi: config.capi,
-        providers: bearerWireProviders,
-        models: config.models,
-        modelCapabilities: config.modelCapabilities,
-        largeOutput: toWireLargeOutput(config.largeOutput),
-        requestPermission: config.onPermissionRequest !== defaultJoinSessionPermissionHandler,
-        requestUserInput: !!config.onUserInputRequest,
-        requestElicitation: !!config.onElicitationRequest,
-        ...config.enableMcpApps ? { requestMcpApps: true } : {},
-        requestExitPlanMode: !!config.onExitPlanModeRequest,
-        requestAutoModeSwitch: !!config.onAutoModeSwitchRequest,
-        hooks: !!(config.hooks && Object.values(config.hooks).some(Boolean)),
-        workingDirectory: config.workingDirectory,
-        configDir: config.configDirectory,
-        enableConfigDiscovery: config.enableConfigDiscovery,
-        skipEmbeddingRetrieval: config.skipEmbeddingRetrieval,
-        embeddingCacheStorage: config.embeddingCacheStorage,
-        organizationCustomInstructions: config.organizationCustomInstructions,
-        enableOnDemandInstructionDiscovery: config.enableOnDemandInstructionDiscovery,
-        enableFileHooks: config.enableFileHooks,
-        enableHostGitOperations: config.enableHostGitOperations,
-        enableSessionStore: config.enableSessionStore,
-        enableSkills: config.enableSkills,
-        streaming: config.streaming,
-        includeSubAgentStreamingEvents: config.includeSubAgentStreamingEvents ?? true,
-        mcpServers: toWireMcpServers(config.mcpServers),
-        mcpOAuthTokenStorage: config.mcpOAuthTokenStorage,
-        envValueMode: "direct",
-        customAgents: toWireCustomAgents(config.customAgents),
-        defaultAgent: config.defaultAgent,
-        agent: config.agent,
-        skillDirectories: config.skillDirectories,
-        pluginDirectories: config.pluginDirectories,
-        instructionDirectories: config.instructionDirectories,
-        disabledSkills: config.disabledSkills,
-        infiniteSessions: config.infiniteSessions,
-        memory: config.memory,
-        disableResume: config.suppressResumeEvent,
-        continuePendingWork: config.continuePendingWork,
-        gitHubToken: config.gitHubToken,
-        remoteSession: config.remoteSession,
-        openCanvases: config.openCanvases,
-        expAssignments: config.expAssignments
-      });
-      const { workspacePath, capabilities, openCanvases } = response;
-      session["_workspacePath"] = workspacePath;
-      session.setCapabilities(capabilities);
-      session.setOpenCanvases(openCanvases ?? []);
-      await this.updateSessionOptionsForMode(session, config);
-    } catch (e) {
-      this.sessions.delete(sessionId);
-      throw e;
-    }
-    return session;
-  }
-  /**
-   * Sends a ping request to the server to verify connectivity.
-   *
-   * @param message - Optional message to include in the ping
-   * @returns A promise that resolves with the ping response containing the message and timestamp
-   * @throws Error if the client is not connected
-   *
-   * @example
-   * ```typescript
-   * const response = await client.ping("health check");
-   * console.log(`Server responded at ${new Date(response.timestamp)}`);
-   * ```
-   */
-  async ping(message) {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const result = await this.connection.sendRequest("ping", { message });
-    return result;
-  }
-  /**
-   * Get CLI status including version and protocol information
-   */
-  async getStatus() {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const result = await this.connection.sendRequest("status.get", {});
-    return result;
-  }
-  /**
-   * Get current authentication status
-   */
-  async getAuthStatus() {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const result = await this.connection.sendRequest("auth.getStatus", {});
-    return result;
-  }
-  /**
-   * List available models with their metadata.
-   *
-   * If an `onListModels` handler was provided in the client options,
-   * it is called instead of querying the CLI server.
-   *
-   * Results are cached after the first successful call to avoid rate limiting.
-   * The cache is cleared when the client disconnects.
-   *
-   * @throws Error if not connected (when no custom handler is set)
-   */
-  async listModels() {
-    await this.modelsCacheLock;
-    let resolveLock;
-    this.modelsCacheLock = new Promise((resolve6) => {
-      resolveLock = resolve6;
-    });
-    try {
-      if (this.modelsCache !== null) {
-        return [...this.modelsCache];
-      }
-      let models;
-      if (this.onListModels) {
-        models = await this.onListModels();
-      } else {
+      /**
+       * Sends a ping request to the server to verify connectivity.
+       *
+       * @param message - Optional message to include in the ping
+       * @returns A promise that resolves with the ping response containing the message and timestamp
+       * @throws Error if the client is not connected
+       *
+       * @example
+       * ```typescript
+       * const response = await client.ping("health check");
+       * console.log(`Server responded at ${new Date(response.timestamp)}`);
+       * ```
+       */
+      async ping(message) {
         if (!this.connection) {
           throw new Error("Client not connected");
         }
-        const result = await this.connection.sendRequest("models.list", {});
-        const response = result;
-        models = response.models;
-        for (const model of models) {
-          const m = model;
-          if (!m.capabilities) {
-            m.capabilities = {
-              supports: {},
-              limits: { max_context_window_tokens: 0 }
-            };
+        const result = await this.connection.sendRequest("ping", { message });
+        return result;
+      }
+      /**
+       * Get CLI status including version and protocol information
+       */
+      async getStatus() {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        const result = await this.connection.sendRequest("status.get", {});
+        return result;
+      }
+      /**
+       * Get current authentication status
+       */
+      async getAuthStatus() {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        const result = await this.connection.sendRequest("auth.getStatus", {});
+        return result;
+      }
+      /**
+       * List available models with their metadata.
+       *
+       * If an `onListModels` handler was provided in the client options,
+       * it is called instead of querying the CLI server.
+       *
+       * Results are cached after the first successful call to avoid rate limiting.
+       * The cache is cleared when the client disconnects.
+       *
+       * @throws Error if not connected (when no custom handler is set)
+       */
+      async listModels() {
+        await this.modelsCacheLock;
+        let resolveLock;
+        this.modelsCacheLock = new Promise((resolve5) => {
+          resolveLock = resolve5;
+        });
+        try {
+          if (this.modelsCache !== null) {
+            return [...this.modelsCache];
+          }
+          let models;
+          if (this.onListModels) {
+            models = await this.onListModels();
           } else {
-            if (!m.capabilities.supports) m.capabilities.supports = {};
-            if (!m.capabilities.limits) {
-              m.capabilities.limits = { max_context_window_tokens: 0 };
-            } else if (m.capabilities.limits.max_context_window_tokens === void 0) {
-              m.capabilities.limits.max_context_window_tokens = 0;
+            if (!this.connection) {
+              throw new Error("Client not connected");
+            }
+            const result = await this.connection.sendRequest("models.list", {});
+            const response = result;
+            models = response.models;
+            for (const model of models) {
+              const m = model;
+              if (!m.capabilities) {
+                m.capabilities = {
+                  supports: {},
+                  limits: { max_context_window_tokens: 0 }
+                };
+              } else {
+                if (!m.capabilities.supports) m.capabilities.supports = {};
+                if (!m.capabilities.limits) {
+                  m.capabilities.limits = { max_context_window_tokens: 0 };
+                } else if (m.capabilities.limits.max_context_window_tokens === void 0) {
+                  m.capabilities.limits.max_context_window_tokens = 0;
+                }
+              }
             }
           }
+          this.modelsCache = [...models];
+          return [...models];
+        } finally {
+          resolveLock();
         }
       }
-      this.modelsCache = [...models];
-      return [...models];
-    } finally {
-      resolveLock();
-    }
-  }
-  /**
-   * Send the `connect` handshake (carrying the optional token) and verify the
-   * server's protocol version. Falls back to `ping` against legacy servers
-   * that don't implement `connect`.
-   */
-  async verifyProtocolVersion() {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const maxVersion = getSdkProtocolVersion();
-    const raceAgainstExit = (p) => this.processExitPromise ? Promise.race([p, this.processExitPromise]) : p;
-    let serverVersion;
-    try {
-      const result = await raceAgainstExit(
-        this.internalRpc.connect({ token: this.effectiveConnectionToken })
-      );
-      serverVersion = result.protocolVersion;
-    } catch (err) {
-      if (err instanceof import_node2.ResponseError && (err.code === import_node2.ErrorCodes.MethodNotFound || err.message === "Unhandled method connect")) {
-        serverVersion = (await raceAgainstExit(this.ping())).protocolVersion;
-      } else {
-        throw err;
-      }
-    }
-    if (serverVersion === void 0) {
-      throw new Error(
-        `SDK protocol version mismatch: SDK supports versions ${MIN_PROTOCOL_VERSION}-${maxVersion}, but server does not report a protocol version. Please update your server to ensure compatibility.`
-      );
-    }
-    if (serverVersion < MIN_PROTOCOL_VERSION || serverVersion > maxVersion) {
-      throw new Error(
-        `SDK protocol version mismatch: SDK supports versions ${MIN_PROTOCOL_VERSION}-${maxVersion}, but server reports version ${serverVersion}. Please update your SDK or server to ensure compatibility.`
-      );
-    }
-    this.negotiatedProtocolVersion = serverVersion;
-  }
-  /**
-   * Gets the ID of the most recently updated session.
-   *
-   * This is useful for resuming the last conversation when the session ID
-   * was not stored.
-   *
-   * @returns A promise that resolves with the session ID, or undefined if no sessions exist
-   * @throws Error if the client is not connected
-   *
-   * @example
-   * ```typescript
-   * const lastId = await client.getLastSessionId();
-   * if (lastId) {
-   *   const session = await client.resumeSession(lastId, { onPermissionRequest: approveAll });
-   * }
-   * ```
-   */
-  async getLastSessionId() {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const response = await this.connection.sendRequest("session.getLastId", {});
-    return response.sessionId;
-  }
-  /**
-   * Permanently deletes a session and all its data from disk, including
-   * conversation history, planning state, and artifacts.
-   *
-   * Unlike {@link CopilotSession.disconnect}, which only releases in-memory
-   * resources and preserves session data for later resumption, this method
-   * is irreversible. The session cannot be resumed after deletion.
-   *
-   * @param sessionId - The ID of the session to delete
-   * @returns A promise that resolves when the session is deleted
-   * @throws Error if the session does not exist or deletion fails
-   *
-   * @example
-   * ```typescript
-   * await client.deleteSession("session-123");
-   * ```
-   */
-  async deleteSession(sessionId) {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const response = await this.connection.sendRequest("session.delete", {
-      sessionId
-    });
-    const { success, error } = response;
-    if (!success) {
-      throw new Error(`Failed to delete session ${sessionId}: ${error || "Unknown error"}`);
-    }
-    this.sessions.delete(sessionId);
-  }
-  /**
-   * List all available sessions.
-   *
-   * @param filter - Optional filter to limit returned sessions by context fields
-   *
-   * @example
-   * // List all sessions
-   * const sessions = await client.listSessions();
-   *
-   * @example
-   * // List sessions for a specific repository
-   * const sessions = await client.listSessions({ repository: "owner/repo" });
-   */
-  async listSessions(filter) {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    let wireFilter;
-    if (filter) {
-      const { workingDirectory, ...rest } = filter;
-      wireFilter = { ...rest, cwd: workingDirectory };
-    }
-    const response = await this.connection.sendRequest("session.list", {
-      filter: wireFilter
-    });
-    const { sessions } = response;
-    return sessions.map(_CopilotClient.toSessionMetadata);
-  }
-  /**
-   * Gets metadata for a specific session by ID.
-   *
-   * This provides an efficient O(1) lookup of a single session's metadata
-   * instead of listing all sessions. Returns undefined if the session is not found.
-   *
-   * @param sessionId - The ID of the session to look up
-   * @returns A promise that resolves with the session metadata, or undefined if not found
-   * @throws Error if the client is not connected
-   *
-   * @example
-   * ```typescript
-   * const metadata = await client.getSessionMetadata("session-123");
-   * if (metadata) {
-   *   console.log(`Session started at: ${metadata.startTime}`);
-   * }
-   * ```
-   */
-  async getSessionMetadata(sessionId) {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const response = await this.connection.sendRequest("session.getMetadata", { sessionId });
-    const { session } = response;
-    if (!session) {
-      return void 0;
-    }
-    return _CopilotClient.toSessionMetadata(session);
-  }
-  static toSessionMetadata(raw) {
-    const { context } = raw;
-    return {
-      sessionId: raw.sessionId,
-      startTime: new Date(raw.startTime),
-      modifiedTime: new Date(raw.modifiedTime),
-      summary: raw.summary,
-      isRemote: raw.isRemote,
-      context: context ? {
-        workingDirectory: context.cwd,
-        gitRoot: context.gitRoot,
-        repository: context.repository,
-        branch: context.branch
-      } : void 0
-    };
-  }
-  /**
-   * Gets the foreground session ID in TUI+server mode.
-   *
-   * This returns the ID of the session currently displayed in the TUI.
-   * Only available when connecting to a server running in TUI+server mode (--ui-server).
-   *
-   * @returns A promise that resolves with the foreground session ID, or undefined if none
-   * @throws Error if the client is not connected
-   *
-   * @example
-   * ```typescript
-   * const sessionId = await client.getForegroundSessionId();
-   * if (sessionId) {
-   *   console.log(`TUI is displaying session: ${sessionId}`);
-   * }
-   * ```
-   */
-  async getForegroundSessionId() {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const response = await this.connection.sendRequest("session.getForeground", {});
-    return response.sessionId;
-  }
-  /**
-   * Sets the foreground session in TUI+server mode.
-   *
-   * This requests the TUI to switch to displaying the specified session.
-   * Only available when connecting to a server running in TUI+server mode (--ui-server).
-   *
-   * @param sessionId - The ID of the session to display in the TUI
-   * @returns A promise that resolves when the session is switched
-   * @throws Error if the client is not connected or if the operation fails
-   *
-   * @example
-   * ```typescript
-   * // Switch the TUI to display a specific session
-   * await client.setForegroundSessionId("session-123");
-   * ```
-   */
-  async setForegroundSessionId(sessionId) {
-    if (!this.connection) {
-      throw new Error("Client not connected");
-    }
-    const response = await this.connection.sendRequest("session.setForeground", { sessionId });
-    const result = response;
-    if (!result.success) {
-      throw new Error(result.error || "Failed to set foreground session");
-    }
-  }
-  onLifecycle(eventTypeOrHandler, handler) {
-    if (typeof eventTypeOrHandler === "string" && handler) {
-      const eventType = eventTypeOrHandler;
-      if (!this.typedLifecycleHandlers.has(eventType)) {
-        this.typedLifecycleHandlers.set(eventType, /* @__PURE__ */ new Set());
-      }
-      const storedHandler = handler;
-      this.typedLifecycleHandlers.get(eventType).add(storedHandler);
-      return () => {
-        const handlers = this.typedLifecycleHandlers.get(eventType);
-        if (handlers) {
-          handlers.delete(storedHandler);
+      /**
+       * Send the `connect` handshake (carrying the optional token) and verify the
+       * server's protocol version. Falls back to `ping` against legacy servers
+       * that don't implement `connect`.
+       */
+      async verifyProtocolVersion() {
+        if (!this.connection) {
+          throw new Error("Client not connected");
         }
-      };
-    }
-    const wildcardHandler = eventTypeOrHandler;
-    this.sessionLifecycleHandlers.add(wildcardHandler);
-    return () => {
-      this.sessionLifecycleHandlers.delete(wildcardHandler);
-    };
-  }
-  /**
-   * Start the CLI server process
-   */
-  async startCLIServer() {
-    return new Promise((resolve6, reject) => {
-      this.stderrBuffer = "";
-      const args = [...this.connectionExtraArgs, "--headless", "--no-auto-update"];
-      if (this.options.logLevel) {
-        args.push("--log-level", this.options.logLevel);
-      }
-      if (this.connectionConfig.kind === "stdio") {
-        args.push("--stdio");
-      } else if (this.connectionConfig.kind === "tcp") {
-        const requestedPort = this.connectionConfig.port ?? 0;
-        if (requestedPort > 0) {
-          args.push("--port", requestedPort.toString());
-        }
-      }
-      if (this.options.gitHubToken) {
-        args.push("--auth-token-env", "COPILOT_SDK_AUTH_TOKEN");
-      }
-      if (!this.options.useLoggedInUser) {
-        args.push("--no-auto-login");
-      }
-      if (this.options.sessionIdleTimeoutSeconds !== void 0 && this.options.sessionIdleTimeoutSeconds > 0) {
-        args.push(
-          "--session-idle-timeout",
-          this.options.sessionIdleTimeoutSeconds.toString()
-        );
-      }
-      if (this.options.enableRemoteSessions) {
-        args.push("--remote");
-      }
-      const envWithoutNodeDebug = { ...this.resolvedEnv };
-      delete envWithoutNodeDebug.NODE_DEBUG;
-      if (this.options.gitHubToken) {
-        envWithoutNodeDebug.COPILOT_SDK_AUTH_TOKEN = this.options.gitHubToken;
-      }
-      if (this.effectiveConnectionToken) {
-        envWithoutNodeDebug.COPILOT_CONNECTION_TOKEN = this.effectiveConnectionToken;
-      }
-      if (this.options.baseDirectory) {
-        envWithoutNodeDebug.COPILOT_HOME = this.options.baseDirectory;
-      }
-      if (this.options.mode === "empty") {
-        envWithoutNodeDebug.COPILOT_DISABLE_KEYTAR = "1";
-      }
-      if (!this.resolvedCliPath) {
-        throw new Error(
-          "Path to Copilot CLI is required. Please supply it via `RuntimeConnection.forStdio({ path })` or `RuntimeConnection.forTcp({ path })`, set the COPILOT_CLI_PATH environment variable, or use `RuntimeConnection.forUri(...)` to connect to an already-running runtime."
-        );
-      }
-      if (this.options.telemetry) {
-        const t = this.options.telemetry;
-        envWithoutNodeDebug.COPILOT_OTEL_ENABLED = "true";
-        if (t.otlpEndpoint !== void 0)
-          envWithoutNodeDebug.OTEL_EXPORTER_OTLP_ENDPOINT = t.otlpEndpoint;
-        if (t.otlpProtocol !== void 0)
-          envWithoutNodeDebug.OTEL_EXPORTER_OTLP_PROTOCOL = t.otlpProtocol;
-        if (t.filePath !== void 0)
-          envWithoutNodeDebug.COPILOT_OTEL_FILE_EXPORTER_PATH = t.filePath;
-        if (t.exporterType !== void 0)
-          envWithoutNodeDebug.COPILOT_OTEL_EXPORTER_TYPE = t.exporterType;
-        if (t.sourceName !== void 0)
-          envWithoutNodeDebug.COPILOT_OTEL_SOURCE_NAME = t.sourceName;
-        if (t.captureContent !== void 0)
-          envWithoutNodeDebug.OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = String(
-            t.captureContent
+        const maxVersion = getSdkProtocolVersion();
+        const raceAgainstExit = (p) => this.processExitPromise ? Promise.race([p, this.processExitPromise]) : p;
+        let serverVersion;
+        try {
+          const result = await raceAgainstExit(
+            this.internalRpc.connect({ token: this.effectiveConnectionToken })
           );
-      }
-      if (!(0, import_node_fs.existsSync)(this.resolvedCliPath)) {
-        throw new Error(
-          `Copilot CLI not found at ${this.resolvedCliPath}. Ensure @github/copilot is installed.`
-        );
-      }
-      const stdioConfig = this.connectionConfig.kind === "stdio" ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"];
-      const isJsFile = this.resolvedCliPath.endsWith(".js");
-      if (isJsFile) {
-        this.cliProcess = (0, import_node_child_process.spawn)(getNodeExecPath(), [this.resolvedCliPath, ...args], {
-          stdio: stdioConfig,
-          cwd: this.options.workingDirectory,
-          env: envWithoutNodeDebug,
-          windowsHide: true
-        });
-      } else {
-        this.cliProcess = (0, import_node_child_process.spawn)(this.resolvedCliPath, args, {
-          stdio: stdioConfig,
-          cwd: this.options.workingDirectory,
-          env: envWithoutNodeDebug,
-          windowsHide: true
-        });
-      }
-      let stdout = "";
-      let resolved = false;
-      if (this.connectionConfig.kind === "stdio") {
-        resolved = true;
-        resolve6();
-      } else {
-        this.cliProcess.stdout?.on("data", (data) => {
-          stdout += data.toString();
-          const match = stdout.match(/listening on port (\d+)/i);
-          if (match && !resolved) {
-            this.runtimePort = parseInt(match[1], 10);
-            resolved = true;
-            resolve6();
-          }
-        });
-      }
-      this.cliProcess.stderr?.on("data", (data) => {
-        this.stderrBuffer += data.toString();
-        const lines = data.toString().split("\n");
-        for (const line of lines) {
-          if (line.trim()) {
-            process.stderr.write(`[CLI subprocess] ${line}
-`);
-          }
-        }
-      });
-      this.cliProcess.on("error", (error) => {
-        if (!resolved) {
-          resolved = true;
-          const stderrOutput = this.stderrBuffer.trim();
-          if (stderrOutput) {
-            reject(
-              new Error(
-                `Failed to start CLI server: ${error.message}
-stderr: ${stderrOutput}`
-              )
-            );
+          serverVersion = result.protocolVersion;
+        } catch (err) {
+          if (err instanceof import_node2.ResponseError && (err.code === import_node2.ErrorCodes.MethodNotFound || err.message === "Unhandled method connect")) {
+            serverVersion = (await raceAgainstExit(this.ping())).protocolVersion;
           } else {
-            reject(new Error(`Failed to start CLI server: ${error.message}`));
+            throw err;
           }
         }
-      });
-      this.processExitPromise = new Promise((_, rejectProcessExit) => {
-        this.cliProcess.on("exit", (code) => {
-          setTimeout(() => {
-            const stderrOutput = this.stderrBuffer.trim();
-            if (stderrOutput) {
-              rejectProcessExit(
-                new Error(
-                  `CLI server exited with code ${code}
-stderr: ${stderrOutput}`
-                )
-              );
-            } else {
-              rejectProcessExit(
-                new Error(`CLI server exited unexpectedly with code ${code}`)
-              );
+        if (serverVersion === void 0) {
+          throw new Error(
+            `SDK protocol version mismatch: SDK supports versions ${MIN_PROTOCOL_VERSION}-${maxVersion}, but server does not report a protocol version. Please update your server to ensure compatibility.`
+          );
+        }
+        if (serverVersion < MIN_PROTOCOL_VERSION || serverVersion > maxVersion) {
+          throw new Error(
+            `SDK protocol version mismatch: SDK supports versions ${MIN_PROTOCOL_VERSION}-${maxVersion}, but server reports version ${serverVersion}. Please update your SDK or server to ensure compatibility.`
+          );
+        }
+        this.negotiatedProtocolVersion = serverVersion;
+      }
+      /**
+       * Gets the ID of the most recently updated session.
+       *
+       * This is useful for resuming the last conversation when the session ID
+       * was not stored.
+       *
+       * @returns A promise that resolves with the session ID, or undefined if no sessions exist
+       * @throws Error if the client is not connected
+       *
+       * @example
+       * ```typescript
+       * const lastId = await client.getLastSessionId();
+       * if (lastId) {
+       *   const session = await client.resumeSession(lastId, { onPermissionRequest: approveAll });
+       * }
+       * ```
+       */
+      async getLastSessionId() {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        const response = await this.connection.sendRequest("session.getLastId", {});
+        return response.sessionId;
+      }
+      /**
+       * Permanently deletes a session and all its data from disk, including
+       * conversation history, planning state, and artifacts.
+       *
+       * Unlike {@link CopilotSession.disconnect}, which only releases in-memory
+       * resources and preserves session data for later resumption, this method
+       * is irreversible. The session cannot be resumed after deletion.
+       *
+       * @param sessionId - The ID of the session to delete
+       * @returns A promise that resolves when the session is deleted
+       * @throws Error if the session does not exist or deletion fails
+       *
+       * @example
+       * ```typescript
+       * await client.deleteSession("session-123");
+       * ```
+       */
+      async deleteSession(sessionId) {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        const response = await this.connection.sendRequest("session.delete", {
+          sessionId
+        });
+        const { success, error } = response;
+        if (!success) {
+          throw new Error(`Failed to delete session ${sessionId}: ${error || "Unknown error"}`);
+        }
+        this.sessions.delete(sessionId);
+      }
+      /**
+       * List all available sessions.
+       *
+       * @param filter - Optional filter to limit returned sessions by context fields
+       *
+       * @example
+       * // List all sessions
+       * const sessions = await client.listSessions();
+       *
+       * @example
+       * // List sessions for a specific repository
+       * const sessions = await client.listSessions({ repository: "owner/repo" });
+       */
+      async listSessions(filter) {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        let wireFilter;
+        if (filter) {
+          const { workingDirectory, ...rest } = filter;
+          wireFilter = { ...rest, cwd: workingDirectory };
+        }
+        const response = await this.connection.sendRequest("session.list", {
+          filter: wireFilter
+        });
+        const { sessions } = response;
+        return sessions.map(_CopilotClient.toSessionMetadata);
+      }
+      /**
+       * Gets metadata for a specific session by ID.
+       *
+       * This provides an efficient O(1) lookup of a single session's metadata
+       * instead of listing all sessions. Returns undefined if the session is not found.
+       *
+       * @param sessionId - The ID of the session to look up
+       * @returns A promise that resolves with the session metadata, or undefined if not found
+       * @throws Error if the client is not connected
+       *
+       * @example
+       * ```typescript
+       * const metadata = await client.getSessionMetadata("session-123");
+       * if (metadata) {
+       *   console.log(`Session started at: ${metadata.startTime}`);
+       * }
+       * ```
+       */
+      async getSessionMetadata(sessionId) {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        const response = await this.connection.sendRequest("session.getMetadata", { sessionId });
+        const { session } = response;
+        if (!session) {
+          return void 0;
+        }
+        return _CopilotClient.toSessionMetadata(session);
+      }
+      static toSessionMetadata(raw) {
+        const { context } = raw;
+        return {
+          sessionId: raw.sessionId,
+          startTime: new Date(raw.startTime),
+          modifiedTime: new Date(raw.modifiedTime),
+          summary: raw.summary,
+          isRemote: raw.isRemote,
+          context: context ? {
+            workingDirectory: context.cwd,
+            gitRoot: context.gitRoot,
+            repository: context.repository,
+            branch: context.branch
+          } : void 0
+        };
+      }
+      /**
+       * Gets the foreground session ID in TUI+server mode.
+       *
+       * This returns the ID of the session currently displayed in the TUI.
+       * Only available when connecting to a server running in TUI+server mode (--ui-server).
+       *
+       * @returns A promise that resolves with the foreground session ID, or undefined if none
+       * @throws Error if the client is not connected
+       *
+       * @example
+       * ```typescript
+       * const sessionId = await client.getForegroundSessionId();
+       * if (sessionId) {
+       *   console.log(`TUI is displaying session: ${sessionId}`);
+       * }
+       * ```
+       */
+      async getForegroundSessionId() {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        const response = await this.connection.sendRequest("session.getForeground", {});
+        return response.sessionId;
+      }
+      /**
+       * Sets the foreground session in TUI+server mode.
+       *
+       * This requests the TUI to switch to displaying the specified session.
+       * Only available when connecting to a server running in TUI+server mode (--ui-server).
+       *
+       * @param sessionId - The ID of the session to display in the TUI
+       * @returns A promise that resolves when the session is switched
+       * @throws Error if the client is not connected or if the operation fails
+       *
+       * @example
+       * ```typescript
+       * // Switch the TUI to display a specific session
+       * await client.setForegroundSessionId("session-123");
+       * ```
+       */
+      async setForegroundSessionId(sessionId) {
+        if (!this.connection) {
+          throw new Error("Client not connected");
+        }
+        const response = await this.connection.sendRequest("session.setForeground", { sessionId });
+        const result = response;
+        if (!result.success) {
+          throw new Error(result.error || "Failed to set foreground session");
+        }
+      }
+      onLifecycle(eventTypeOrHandler, handler) {
+        if (typeof eventTypeOrHandler === "string" && handler) {
+          const eventType = eventTypeOrHandler;
+          if (!this.typedLifecycleHandlers.has(eventType)) {
+            this.typedLifecycleHandlers.set(eventType, /* @__PURE__ */ new Set());
+          }
+          const storedHandler = handler;
+          this.typedLifecycleHandlers.get(eventType).add(storedHandler);
+          return () => {
+            const handlers = this.typedLifecycleHandlers.get(eventType);
+            if (handlers) {
+              handlers.delete(storedHandler);
             }
-          }, 50);
-        });
-      });
-      this.processExitPromise.catch(() => {
-      });
-      this.cliProcess.on("exit", (code) => {
-        if (!resolved) {
-          resolved = true;
-          const stderrOutput = this.stderrBuffer.trim();
-          if (stderrOutput) {
-            reject(
-              new Error(
-                `CLI server exited with code ${code}
-stderr: ${stderrOutput}`
-              )
-            );
-          } else {
-            reject(new Error(`CLI server exited with code ${code}`));
+          };
+        }
+        const wildcardHandler = eventTypeOrHandler;
+        this.sessionLifecycleHandlers.add(wildcardHandler);
+        return () => {
+          this.sessionLifecycleHandlers.delete(wildcardHandler);
+        };
+      }
+      /**
+       * Start the CLI server process
+       */
+      async startCLIServer() {
+        return new Promise((resolve5, reject) => {
+          this.stderrBuffer = "";
+          const args = [...this.connectionExtraArgs, "--headless", "--no-auto-update"];
+          if (this.options.logLevel) {
+            args.push("--log-level", this.options.logLevel);
           }
-        }
-      });
-      this.cliStartTimeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error("Timeout waiting for CLI server to start"));
-        }
-      }, 3e4);
-    });
-  }
-  /**
-   * Connect to the CLI server (via socket or stdio)
-   */
-  async connectToServer() {
-    switch (this.connectionConfig.kind) {
-      case "parent-process":
-        return this.connectToParentProcessViaStdio();
-      case "stdio":
-        return this.connectToChildProcessViaStdio();
-      case "tcp":
-      case "uri":
-        return this.connectViaTcp();
-    }
-  }
-  /**
-   * Connect to child via stdio pipes
-   */
-  async connectToChildProcessViaStdio() {
-    if (!this.cliProcess) {
-      throw new Error("CLI process not started");
-    }
-    this.cliProcess.stdin?.on("error", (err) => {
-      if (this.forceStopping) {
-        return;
+          if (this.connectionConfig.kind === "stdio") {
+            args.push("--stdio");
+          } else if (this.connectionConfig.kind === "tcp") {
+            const requestedPort = this.connectionConfig.port ?? 0;
+            if (requestedPort > 0) {
+              args.push("--port", requestedPort.toString());
+            }
+          }
+          if (this.options.gitHubToken) {
+            args.push("--auth-token-env", "COPILOT_SDK_AUTH_TOKEN");
+          }
+          if (!this.options.useLoggedInUser) {
+            args.push("--no-auto-login");
+          }
+          if (this.options.sessionIdleTimeoutSeconds !== void 0 && this.options.sessionIdleTimeoutSeconds > 0) {
+            args.push(
+              "--session-idle-timeout",
+              this.options.sessionIdleTimeoutSeconds.toString()
+            );
+          }
+          if (this.options.enableRemoteSessions) {
+            args.push("--remote");
+          }
+          const envWithoutNodeDebug = { ...this.resolvedEnv };
+          delete envWithoutNodeDebug.NODE_DEBUG;
+          if (this.options.gitHubToken) {
+            envWithoutNodeDebug.COPILOT_SDK_AUTH_TOKEN = this.options.gitHubToken;
+          }
+          if (this.effectiveConnectionToken) {
+            envWithoutNodeDebug.COPILOT_CONNECTION_TOKEN = this.effectiveConnectionToken;
+          }
+          if (this.options.baseDirectory) {
+            envWithoutNodeDebug.COPILOT_HOME = this.options.baseDirectory;
+          }
+          if (this.options.mode === "empty") {
+            envWithoutNodeDebug.COPILOT_DISABLE_KEYTAR = "1";
+          }
+          if (!this.resolvedCliPath) {
+            throw new Error(
+              "Path to Copilot CLI is required. Please supply it via `RuntimeConnection.forStdio({ path })` or `RuntimeConnection.forTcp({ path })`, set the COPILOT_CLI_PATH environment variable, or use `RuntimeConnection.forUri(...)` to connect to an already-running runtime."
+            );
+          }
+          if (this.options.telemetry) {
+            const t = this.options.telemetry;
+            envWithoutNodeDebug.COPILOT_OTEL_ENABLED = "true";
+            if (t.otlpEndpoint !== void 0)
+              envWithoutNodeDebug.OTEL_EXPORTER_OTLP_ENDPOINT = t.otlpEndpoint;
+            if (t.otlpProtocol !== void 0)
+              envWithoutNodeDebug.OTEL_EXPORTER_OTLP_PROTOCOL = t.otlpProtocol;
+            if (t.filePath !== void 0)
+              envWithoutNodeDebug.COPILOT_OTEL_FILE_EXPORTER_PATH = t.filePath;
+            if (t.exporterType !== void 0)
+              envWithoutNodeDebug.COPILOT_OTEL_EXPORTER_TYPE = t.exporterType;
+            if (t.sourceName !== void 0)
+              envWithoutNodeDebug.COPILOT_OTEL_SOURCE_NAME = t.sourceName;
+            if (t.captureContent !== void 0)
+              envWithoutNodeDebug.OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = String(
+                t.captureContent
+              );
+          }
+          if (!(0, import_node_fs.existsSync)(this.resolvedCliPath)) {
+            throw new Error(
+              `Copilot CLI not found at ${this.resolvedCliPath}. Ensure @github/copilot is installed.`
+            );
+          }
+          const stdioConfig = this.connectionConfig.kind === "stdio" ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"];
+          const isJsFile = this.resolvedCliPath.endsWith(".js");
+          if (isJsFile) {
+            this.cliProcess = (0, import_node_child_process.spawn)(getNodeExecPath(), [this.resolvedCliPath, ...args], {
+              stdio: stdioConfig,
+              cwd: this.options.workingDirectory,
+              env: envWithoutNodeDebug,
+              windowsHide: true
+            });
+          } else {
+            this.cliProcess = (0, import_node_child_process.spawn)(this.resolvedCliPath, args, {
+              stdio: stdioConfig,
+              cwd: this.options.workingDirectory,
+              env: envWithoutNodeDebug,
+              windowsHide: true
+            });
+          }
+          let stdout = "";
+          let resolved = false;
+          if (this.connectionConfig.kind === "stdio") {
+            resolved = true;
+            resolve5();
+          } else {
+            this.cliProcess.stdout?.on("data", (data) => {
+              stdout += data.toString();
+              const match = stdout.match(/listening on port (\d+)/i);
+              if (match && !resolved) {
+                this.runtimePort = parseInt(match[1], 10);
+                resolved = true;
+                resolve5();
+              }
+            });
+          }
+          this.cliProcess.stderr?.on("data", (data) => {
+            this.stderrBuffer += data.toString();
+            const lines = data.toString().split("\n");
+            for (const line of lines) {
+              if (line.trim()) {
+                process.stderr.write(`[CLI subprocess] ${line}
+`);
+              }
+            }
+          });
+          this.cliProcess.on("error", (error) => {
+            if (!resolved) {
+              resolved = true;
+              const stderrOutput = this.stderrBuffer.trim();
+              if (stderrOutput) {
+                reject(
+                  new Error(
+                    `Failed to start CLI server: ${error.message}
+stderr: ${stderrOutput}`
+                  )
+                );
+              } else {
+                reject(new Error(`Failed to start CLI server: ${error.message}`));
+              }
+            }
+          });
+          this.processExitPromise = new Promise((_, rejectProcessExit) => {
+            this.cliProcess.on("exit", (code) => {
+              setTimeout(() => {
+                const stderrOutput = this.stderrBuffer.trim();
+                if (stderrOutput) {
+                  rejectProcessExit(
+                    new Error(
+                      `CLI server exited with code ${code}
+stderr: ${stderrOutput}`
+                    )
+                  );
+                } else {
+                  rejectProcessExit(
+                    new Error(`CLI server exited unexpectedly with code ${code}`)
+                  );
+                }
+              }, 50);
+            });
+          });
+          this.processExitPromise.catch(() => {
+          });
+          this.cliProcess.on("exit", (code) => {
+            if (!resolved) {
+              resolved = true;
+              const stderrOutput = this.stderrBuffer.trim();
+              if (stderrOutput) {
+                reject(
+                  new Error(
+                    `CLI server exited with code ${code}
+stderr: ${stderrOutput}`
+                  )
+                );
+              } else {
+                reject(new Error(`CLI server exited with code ${code}`));
+              }
+            }
+          });
+          this.cliStartTimeout = setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              reject(new Error("Timeout waiting for CLI server to start"));
+            }
+          }, 3e4);
+        });
       }
-      this.state = "error";
-      const reason = err instanceof Error ? err.stack ?? err.message : String(err);
-      this.logDebug(`stdin pipe error: ${reason}`);
-      try {
-        this.connection?.dispose();
-      } catch {
+      /**
+       * Connect to the CLI server (via socket or stdio)
+       */
+      async connectToServer() {
+        switch (this.connectionConfig.kind) {
+          case "parent-process":
+            return this.connectToParentProcessViaStdio();
+          case "stdio":
+            return this.connectToChildProcessViaStdio();
+          case "tcp":
+          case "uri":
+            return this.connectViaTcp();
+        }
       }
-    });
-    this.messageWriter = new TeardownResilientStreamMessageWriter(this.cliProcess.stdin);
-    this.connection = (0, import_node2.createMessageConnection)(
-      new import_node2.StreamMessageReader(this.cliProcess.stdout),
-      this.messageWriter
-    );
-    this.attachConnectionHandlers();
-    this.connection.listen();
-  }
-  /**
-   * Connect to parent via stdio pipes
-   */
-  async connectToParentProcessViaStdio() {
-    if (this.cliProcess) {
-      throw new Error("CLI child process was unexpectedly started in parent process mode");
-    }
-    this.messageWriter = new TeardownResilientStreamMessageWriter(process.stdout);
-    this.connection = (0, import_node2.createMessageConnection)(
-      new import_node2.StreamMessageReader(process.stdin),
-      this.messageWriter
-    );
-    this.attachConnectionHandlers();
-    this.connection.listen();
-  }
-  /**
-   * Connect to the CLI server via TCP socket
-   */
-  async connectViaTcp() {
-    if (!this.runtimePort) {
-      throw new Error("Server port not available");
-    }
-    return new Promise((resolve6, reject) => {
-      this.socket = new import_node_net.Socket();
-      const connectionTimeout = setTimeout(() => {
-        this.socket?.destroy();
-        reject(new Error("Timeout connecting to CLI server"));
-      }, 1e4);
-      this.socket.connect(this.runtimePort, this.actualHost, () => {
-        clearTimeout(connectionTimeout);
-        this.messageWriter = new TeardownResilientStreamMessageWriter(this.socket);
+      /**
+       * Connect to child via stdio pipes
+       */
+      async connectToChildProcessViaStdio() {
+        if (!this.cliProcess) {
+          throw new Error("CLI process not started");
+        }
+        this.cliProcess.stdin?.on("error", (err) => {
+          if (this.forceStopping) {
+            return;
+          }
+          this.state = "error";
+          const reason = err instanceof Error ? err.stack ?? err.message : String(err);
+          this.logDebug(`stdin pipe error: ${reason}`);
+          try {
+            this.connection?.dispose();
+          } catch {
+          }
+        });
+        this.messageWriter = new TeardownResilientStreamMessageWriter(this.cliProcess.stdin);
         this.connection = (0, import_node2.createMessageConnection)(
-          new import_node2.StreamMessageReader(this.socket),
+          new import_node2.StreamMessageReader(this.cliProcess.stdout),
           this.messageWriter
         );
         this.attachConnectionHandlers();
         this.connection.listen();
-        resolve6();
-      });
-      this.socket.on("error", (error) => {
-        clearTimeout(connectionTimeout);
-        reject(new Error(`Failed to connect to CLI server: ${error.message}`));
-      });
-    });
-  }
-  attachConnectionHandlers() {
-    if (!this.connection) {
-      return;
-    }
-    this.connection.onNotification("session.event", (notification) => {
-      this.handleSessionEventNotification(notification);
-    });
-    this.connection.onNotification("session.lifecycle", (notification) => {
-      this.handleSessionLifecycleNotification(notification);
-    });
-    this.connection.onRequest(
-      "userInput.request",
-      async (params) => await this.handleUserInputRequest(params)
-    );
-    this.connection.onRequest(
-      "exitPlanMode.request",
-      async (params) => await this.handleExitPlanModeRequest(params)
-    );
-    this.connection.onRequest(
-      "autoModeSwitch.request",
-      async (params) => await this.handleAutoModeSwitchRequest(params)
-    );
-    this.connection.onRequest(
-      "hooks.invoke",
-      async (params) => await this.handleHooksInvoke(params)
-    );
-    this.connection.onRequest(
-      "systemMessage.transform",
-      async (params) => await this.handleSystemMessageTransform(params)
-    );
-    const sessions = this.sessions;
-    registerClientSessionApiHandlers(this.connection, (sessionId) => {
-      const session = sessions.get(sessionId);
-      if (!session) throw new Error(`No session found for sessionId: ${sessionId}`);
-      return session.clientSessionApis;
-    });
-    registerClientGlobalApiHandlers(this.connection, this.llmInferenceHandlers);
-    this.connection.onClose(() => {
-      this.state = "disconnected";
-    });
-    this.connection.onError((_error) => {
-      this.state = "disconnected";
-    });
-  }
-  handleSessionEventNotification(notification) {
-    if (typeof notification !== "object" || !notification || !("sessionId" in notification) || typeof notification.sessionId !== "string" || !("event" in notification)) {
-      return;
-    }
-    const session = this.sessions.get(notification.sessionId);
-    if (session) {
-      session._dispatchEvent(notification.event);
-    }
-  }
-  handleSessionLifecycleNotification(notification) {
-    if (typeof notification !== "object" || !notification || !("type" in notification) || typeof notification.type !== "string" || !("sessionId" in notification) || typeof notification.sessionId !== "string") {
-      return;
-    }
-    const raw = notification;
-    let metadata;
-    if (raw.metadata && raw.metadata.startTime && raw.metadata.modifiedTime) {
-      metadata = {
-        startTime: new Date(raw.metadata.startTime),
-        modifiedTime: new Date(raw.metadata.modifiedTime),
-        summary: raw.metadata.summary
-      };
-    }
-    const event = {
-      type: raw.type,
-      sessionId: raw.sessionId,
-      metadata
-    };
-    const typedHandlers = this.typedLifecycleHandlers.get(event.type);
-    if (typedHandlers) {
-      for (const handler of typedHandlers) {
-        try {
-          handler(event);
-        } catch {
+      }
+      /**
+       * Connect to parent via stdio pipes
+       */
+      async connectToParentProcessViaStdio() {
+        if (this.cliProcess) {
+          throw new Error("CLI child process was unexpectedly started in parent process mode");
+        }
+        this.messageWriter = new TeardownResilientStreamMessageWriter(process.stdout);
+        this.connection = (0, import_node2.createMessageConnection)(
+          new import_node2.StreamMessageReader(process.stdin),
+          this.messageWriter
+        );
+        this.attachConnectionHandlers();
+        this.connection.listen();
+      }
+      /**
+       * Connect to the CLI server via TCP socket
+       */
+      async connectViaTcp() {
+        if (!this.runtimePort) {
+          throw new Error("Server port not available");
+        }
+        return new Promise((resolve5, reject) => {
+          this.socket = new import_node_net.Socket();
+          const connectionTimeout = setTimeout(() => {
+            this.socket?.destroy();
+            reject(new Error("Timeout connecting to CLI server"));
+          }, 1e4);
+          this.socket.connect(this.runtimePort, this.actualHost, () => {
+            clearTimeout(connectionTimeout);
+            this.messageWriter = new TeardownResilientStreamMessageWriter(this.socket);
+            this.connection = (0, import_node2.createMessageConnection)(
+              new import_node2.StreamMessageReader(this.socket),
+              this.messageWriter
+            );
+            this.attachConnectionHandlers();
+            this.connection.listen();
+            resolve5();
+          });
+          this.socket.on("error", (error) => {
+            clearTimeout(connectionTimeout);
+            reject(new Error(`Failed to connect to CLI server: ${error.message}`));
+          });
+        });
+      }
+      attachConnectionHandlers() {
+        if (!this.connection) {
+          return;
+        }
+        this.connection.onNotification("session.event", (notification) => {
+          this.handleSessionEventNotification(notification);
+        });
+        this.connection.onNotification("session.lifecycle", (notification) => {
+          this.handleSessionLifecycleNotification(notification);
+        });
+        this.connection.onRequest(
+          "userInput.request",
+          async (params) => await this.handleUserInputRequest(params)
+        );
+        this.connection.onRequest(
+          "exitPlanMode.request",
+          async (params) => await this.handleExitPlanModeRequest(params)
+        );
+        this.connection.onRequest(
+          "autoModeSwitch.request",
+          async (params) => await this.handleAutoModeSwitchRequest(params)
+        );
+        this.connection.onRequest(
+          "hooks.invoke",
+          async (params) => await this.handleHooksInvoke(params)
+        );
+        this.connection.onRequest(
+          "systemMessage.transform",
+          async (params) => await this.handleSystemMessageTransform(params)
+        );
+        const sessions = this.sessions;
+        registerClientSessionApiHandlers(this.connection, (sessionId) => {
+          const session = sessions.get(sessionId);
+          if (!session) throw new Error(`No session found for sessionId: ${sessionId}`);
+          return session.clientSessionApis;
+        });
+        registerClientGlobalApiHandlers(this.connection, this.llmInferenceHandlers);
+        this.connection.onClose(() => {
+          this.state = "disconnected";
+        });
+        this.connection.onError((_error) => {
+          this.state = "disconnected";
+        });
+      }
+      handleSessionEventNotification(notification) {
+        if (typeof notification !== "object" || !notification || !("sessionId" in notification) || typeof notification.sessionId !== "string" || !("event" in notification)) {
+          return;
+        }
+        const session = this.sessions.get(notification.sessionId);
+        if (session) {
+          session._dispatchEvent(notification.event);
         }
       }
-    }
-    for (const handler of this.sessionLifecycleHandlers) {
-      try {
-        handler(event);
-      } catch {
+      handleSessionLifecycleNotification(notification) {
+        if (typeof notification !== "object" || !notification || !("type" in notification) || typeof notification.type !== "string" || !("sessionId" in notification) || typeof notification.sessionId !== "string") {
+          return;
+        }
+        const raw = notification;
+        let metadata;
+        if (raw.metadata && raw.metadata.startTime && raw.metadata.modifiedTime) {
+          metadata = {
+            startTime: new Date(raw.metadata.startTime),
+            modifiedTime: new Date(raw.metadata.modifiedTime),
+            summary: raw.metadata.summary
+          };
+        }
+        const event = {
+          type: raw.type,
+          sessionId: raw.sessionId,
+          metadata
+        };
+        const typedHandlers = this.typedLifecycleHandlers.get(event.type);
+        if (typedHandlers) {
+          for (const handler of typedHandlers) {
+            try {
+              handler(event);
+            } catch {
+            }
+          }
+        }
+        for (const handler of this.sessionLifecycleHandlers) {
+          try {
+            handler(event);
+          } catch {
+          }
+        }
       }
-    }
+      async handleUserInputRequest(params) {
+        if (!params || typeof params.sessionId !== "string" || typeof params.question !== "string") {
+          throw new Error("Invalid user input request payload");
+        }
+        const session = this.sessions.get(params.sessionId);
+        if (!session) {
+          throw new Error(`Session not found: ${params.sessionId}`);
+        }
+        const result = await session._handleUserInputRequest({
+          question: params.question,
+          choices: params.choices,
+          allowFreeform: params.allowFreeform
+        });
+        return result;
+      }
+      async handleExitPlanModeRequest(params) {
+        if (!params || typeof params.sessionId !== "string" || typeof params.summary !== "string" || !Array.isArray(params.actions) || typeof params.recommendedAction !== "string") {
+          throw new Error("Invalid exit plan mode request payload");
+        }
+        const session = this.sessions.get(params.sessionId);
+        if (!session) {
+          throw new Error(`Session not found: ${params.sessionId}`);
+        }
+        return await session._handleExitPlanModeRequest({
+          summary: params.summary,
+          planContent: params.planContent,
+          actions: params.actions,
+          recommendedAction: params.recommendedAction
+        });
+      }
+      async handleAutoModeSwitchRequest(params) {
+        if (!params || typeof params.sessionId !== "string") {
+          throw new Error("Invalid auto mode switch request payload");
+        }
+        const session = this.sessions.get(params.sessionId);
+        if (!session) {
+          throw new Error(`Session not found: ${params.sessionId}`);
+        }
+        const response = await session._handleAutoModeSwitchRequest({
+          errorCode: params.errorCode,
+          retryAfterSeconds: params.retryAfterSeconds
+        });
+        return { response };
+      }
+      async handleHooksInvoke(params) {
+        if (!params || typeof params.sessionId !== "string" || typeof params.hookType !== "string") {
+          throw new Error("Invalid hooks invoke payload");
+        }
+        const session = this.sessions.get(params.sessionId);
+        if (!session) {
+          throw new Error(`Session not found: ${params.sessionId}`);
+        }
+        const output = await session._handleHooksInvoke(params.hookType, params.input);
+        return { output };
+      }
+      async handleSystemMessageTransform(params) {
+        if (!params || typeof params.sessionId !== "string" || !params.sections || typeof params.sections !== "object") {
+          throw new Error("Invalid systemMessage.transform payload");
+        }
+        const session = this.sessions.get(params.sessionId);
+        if (!session) {
+          throw new Error(`Session not found: ${params.sessionId}`);
+        }
+        return await session._handleSystemMessageTransform(params.sections);
+      }
+    };
   }
-  async handleUserInputRequest(params) {
-    if (!params || typeof params.sessionId !== "string" || typeof params.question !== "string") {
-      throw new Error("Invalid user input request payload");
-    }
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${params.sessionId}`);
-    }
-    const result = await session._handleUserInputRequest({
-      question: params.question,
-      choices: params.choices,
-      allowFreeform: params.allowFreeform
-    });
-    return result;
+});
+
+// node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/index.js
+var init_dist = __esm({
+  "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/index.js"() {
+    init_client();
+    init_types();
+    init_toolSet();
+    init_session();
+    init_canvas();
+    init_types();
   }
-  async handleExitPlanModeRequest(params) {
-    if (!params || typeof params.sessionId !== "string" || typeof params.summary !== "string" || !Array.isArray(params.actions) || typeof params.recommendedAction !== "string") {
-      throw new Error("Invalid exit plan mode request payload");
-    }
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${params.sessionId}`);
-    }
-    return await session._handleExitPlanModeRequest({
-      summary: params.summary,
-      planContent: params.planContent,
-      actions: params.actions,
-      recommendedAction: params.recommendedAction
-    });
-  }
-  async handleAutoModeSwitchRequest(params) {
-    if (!params || typeof params.sessionId !== "string") {
-      throw new Error("Invalid auto mode switch request payload");
-    }
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${params.sessionId}`);
-    }
-    const response = await session._handleAutoModeSwitchRequest({
-      errorCode: params.errorCode,
-      retryAfterSeconds: params.retryAfterSeconds
-    });
-    return { response };
-  }
-  async handleHooksInvoke(params) {
-    if (!params || typeof params.sessionId !== "string" || typeof params.hookType !== "string") {
-      throw new Error("Invalid hooks invoke payload");
-    }
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${params.sessionId}`);
-    }
-    const output = await session._handleHooksInvoke(params.hookType, params.input);
-    return { output };
-  }
-  async handleSystemMessageTransform(params) {
-    if (!params || typeof params.sessionId !== "string" || !params.sections || typeof params.sections !== "object") {
-      throw new Error("Invalid systemMessage.transform payload");
-    }
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${params.sessionId}`);
-    }
-    return await session._handleSystemMessageTransform(params.sections);
-  }
-};
+});
 
 // src/lib/copilot-auth.ts
 async function checkAuth(client) {
@@ -9011,383 +9088,625 @@ async function checkAuth(client) {
     message: status.statusMessage ?? `Authenticated via ${status.authType ?? "unknown method"}`
   };
 }
+var init_copilot_auth = __esm({
+  "src/lib/copilot-auth.ts"() {
+    "use strict";
+  }
+});
 
-// src/lib/quota.ts
-var import_node_fs2 = require("node:fs");
-var import_node_path2 = require("node:path");
-function snapshotPath(stateDir) {
-  return (0, import_node_path2.join)(stateDir, "quota.json");
-}
-function readSnapshot(stateDir) {
-  const path = snapshotPath(stateDir);
-  if (!(0, import_node_fs2.existsSync)(path)) return null;
-  try {
-    return JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-function recordSnapshot(stateDir, quotas) {
-  const existing = readSnapshot(stateDir);
-  const merged = {
-    checkedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    quotas: { ...existing?.quotas ?? {} }
-  };
-  for (const [id, entry] of Object.entries(quotas)) {
-    if (!entry) continue;
-    merged.quotas[id] = {
-      entitlementRequests: entry.entitlementRequests ?? 0,
-      usedRequests: entry.usedRequests ?? 0,
-      remainingPercentage: entry.remainingPercentage ?? 100,
-      resetDate: entry.resetDate ?? "",
-      isUnlimitedEntitlement: entry.isUnlimitedEntitlement ?? false,
-      usageAllowedWithExhaustedQuota: entry.usageAllowedWithExhaustedQuota ?? false,
-      overage: entry.overage ?? 0,
-      overageAllowedWithExhaustedQuota: entry.overageAllowedWithExhaustedQuota ?? false
+// package.json
+var package_default;
+var init_package = __esm({
+  "package.json"() {
+    package_default = {
+      name: "harry",
+      version: "0.2.0",
+      description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
+      type: "module",
+      license: "MIT",
+      author: "kiraxie <kiraxie11287@gmail.com>",
+      homepage: "https://github.com/kiraxie/harry",
+      repository: "https://github.com/kiraxie/harry",
+      engines: {
+        node: ">=26.0.0"
+      },
+      packageManager: "pnpm@10.33.0",
+      scripts: {
+        build: "node build.mjs",
+        test: "node --test",
+        typecheck: "tsc -p tsconfig.json --noEmit",
+        lint: "biome check .",
+        format: "biome format --write .",
+        "install-laws": "node scripts/install.mjs",
+        "init-ignore": "node scripts/init.mjs"
+      },
+      dependencies: {
+        "@github/copilot-sdk": "^1.0.4"
+      },
+      devDependencies: {
+        "@biomejs/biome": "^2.5.1",
+        "@types/node": "^26.0.1",
+        esbuild: "^0.28.1",
+        typescript: "7.0.1-rc"
+      },
+      pnpm: {
+        onlyBuiltDependencies: [
+          "@biomejs/biome",
+          "esbuild"
+        ]
+      }
     };
   }
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(snapshotPath(stateDir)), { recursive: true });
-  (0, import_node_fs2.writeFileSync)(snapshotPath(stateDir), JSON.stringify(merged, null, 2), "utf-8");
-  return merged;
-}
-async function fetchQuota(client, stateDir) {
-  try {
-    const result = await client.rpc.account.getQuota({});
-    return recordSnapshot(stateDir, result.quotaSnapshots ?? {});
-  } catch {
-    return null;
+});
+
+// src/lib/version.ts
+var PLUGIN_VERSION, CLIENT_NAME;
+var init_version = __esm({
+  "src/lib/version.ts"() {
+    "use strict";
+    init_package();
+    PLUGIN_VERSION = package_default.version;
+    CLIENT_NAME = "harry";
   }
-}
-function isPremiumModel(modelId) {
-  if (!modelId) return true;
-  const id = modelId.toLowerCase();
-  if (id.startsWith("claude-sonnet-")) return false;
-  if (id.startsWith("claude-haiku-")) return false;
-  if (id.endsWith("-mini") || id.startsWith("gpt-4.1")) return false;
-  return true;
-}
-function evaluateGate(snapshot, opts) {
-  if (!snapshot || Object.keys(snapshot.quotas).length === 0) {
-    return { ok: true, reason: "no_cache" };
-  }
-  const entries = Object.values(snapshot.quotas);
-  const metered = entries.filter(
-    (q) => !q.isUnlimitedEntitlement && q.entitlementRequests > 0
-  );
-  if (metered.length === 0) {
-    return { ok: true, reason: "unlimited" };
-  }
-  if (metered.every((q) => q.remainingPercentage <= 0) && metered.some((q) => q.usageAllowedWithExhaustedQuota || q.overageAllowedWithExhaustedQuota)) {
-    return { ok: true, reason: "overage_allowed" };
-  }
-  let minRemainingAbs = Number.POSITIVE_INFINITY;
-  let tightestReset = "";
-  for (const q of metered) {
-    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
-    if (remaining < minRemainingAbs) {
-      minRemainingAbs = remaining;
-      tightestReset = q.resetDate;
-    }
-  }
-  if (minRemainingAbs <= opts.minRemaining) {
-    return {
-      ok: false,
-      reason: "quota_exhausted",
-      remaining: minRemainingAbs === Number.POSITIVE_INFINITY ? 0 : minRemainingAbs,
-      resetAt: tightestReset
-    };
-  }
-  const staleMs = opts.staleAfterMs ?? 2 * 60 * 1e3;
-  const ageMs = Date.now() - new Date(snapshot.checkedAt).getTime();
-  const warning = ageMs > staleMs ? `Quota snapshot is ${Math.round(ageMs / 1e3)}s old; may be out of date.` : void 0;
-  return warning ? { ok: true, reason: "available", warning } : { ok: true, reason: "available" };
-}
-var POOL_LABELS = {
-  premium_interactions: "Premium requests",
-  chat: "Chat",
-  completions: "Completions"
-};
-function labelFor(id) {
-  if (POOL_LABELS[id]) return POOL_LABELS[id];
-  return id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-function summarize(snapshot) {
-  if (!snapshot) return { pools: [], allUnlimited: false };
-  const entries = Object.entries(snapshot.quotas);
-  if (entries.length === 0) return { pools: [], allUnlimited: false };
-  const pools = entries.map(([id, q]) => {
-    const isMetered = !q.isUnlimitedEntitlement && q.entitlementRequests > 0;
-    if (!isMetered) {
-      return { id, label: labelFor(id), unlimited: true };
-    }
-    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
-    return {
-      id,
-      label: labelFor(id),
-      unlimited: false,
-      used: q.usedRequests,
-      total: q.entitlementRequests,
-      remaining,
-      remainingPercentage: q.remainingPercentage,
-      overage: q.overage || void 0,
-      resetAt: q.resetDate || void 0
-    };
+});
+
+// src/lib/codex/process.ts
+function runCommand(command, args = [], options = {}) {
+  const result = (0, import_node_child_process2.spawnSync)(command, args, {
+    cwd: options.cwd,
+    env: options.env,
+    encoding: "utf8",
+    stdio: "pipe",
+    shell: import_node_process.default.platform === "win32" ? import_node_process.default.env.SHELL || true : false,
+    windowsHide: true
   });
-  const metered = pools.filter((p) => !p.unlimited);
-  if (metered.length === 0) {
-    return { pools, allUnlimited: true, unlimited: true };
-  }
-  let minRemaining = Number.POSITIVE_INFINITY;
-  let minPct = 100;
-  let tightestReset = "";
-  let tightestEntitlement = 0;
-  for (const p of metered) {
-    if (p.remaining !== void 0 && p.remaining < minRemaining) {
-      minRemaining = p.remaining;
-      tightestReset = p.resetAt ?? "";
-      tightestEntitlement = p.total ?? 0;
-    }
-    if (p.remainingPercentage !== void 0 && p.remainingPercentage < minPct) {
-      minPct = p.remainingPercentage;
-    }
-  }
   return {
-    pools,
-    allUnlimited: false,
-    premium: minRemaining === Number.POSITIVE_INFINITY ? void 0 : minRemaining,
-    entitlement: tightestEntitlement || void 0,
-    percentage: minPct,
-    resetAt: tightestReset || void 0
+    command,
+    args,
+    status: result.status ?? 0,
+    signal: result.signal ?? null,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    error: result.error ?? null
   };
 }
-function fmtNum(n) {
-  return Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(2)).toString();
-}
-var BAR_WIDTH = 30;
-function renderBar(usedPct) {
-  const clamped = Math.max(0, Math.min(100, usedPct));
-  const filled = Math.round(clamped / 100 * BAR_WIDTH);
-  return "\u2588".repeat(filled) + "\u2591".repeat(BAR_WIDTH - filled);
-}
-function daysUntil(iso) {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  const diffMs = t - Date.now();
-  if (diffMs <= 0) return 0;
-  return Math.ceil(diffMs / (24 * 60 * 60 * 1e3));
-}
-function renderQuotaBar(q, haveSnapshot) {
-  if (!haveSnapshot) {
-    return ["- No snapshot yet. One will be captured on the next `implement` run."];
+function binaryAvailable(bin, args = ["--version"], opts = {}) {
+  const result = runCommand(bin, args, opts);
+  if (result.error && result.error.code === "ENOENT") {
+    return { available: false, detail: "not found" };
   }
-  if (q.allUnlimited && q.pools.length > 0) {
-    return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(", ")}).`];
+  if (result.error) {
+    return { available: false, detail: result.error.message };
   }
-  if (q.pools.length === 0) {
-    return ["- No quota information reported by Copilot yet."];
+  if (result.status !== 0) {
+    const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.status}`;
+    return { available: false, detail };
   }
-  const metered = q.pools.filter((p) => !p.unlimited);
-  const unlimited = q.pools.filter((p) => p.unlimited);
-  const lines = [];
-  for (const p of metered) {
-    const remainingPct = p.remainingPercentage ?? 0;
-    const usedPct = 100 - remainingPct;
-    const total = p.total === void 0 ? "?" : fmtNum(p.total);
-    const remaining = fmtNum(p.remaining ?? 0);
-    lines.push(`${p.label}`);
-    lines.push(`  Usage      ${renderBar(usedPct)}  ${usedPct.toFixed(1)}%`);
-    lines.push(`  Remaining  ${remaining} / ${total}`);
-    if (p.overage && p.overage > 0) {
-      lines.push(`  Overage    ${fmtNum(p.overage)} (billed beyond entitlement)`);
+  return { available: true, detail: result.stdout.trim() || result.stderr.trim() || "ok" };
+}
+function looksLikeMissingProcessMessage(text) {
+  return /not found|no running instance|cannot find|does not exist|no such process/i.test(text);
+}
+function terminateProcessTree(pid) {
+  if (!Number.isFinite(pid)) {
+    return;
+  }
+  if (import_node_process.default.platform === "win32") {
+    const result = runCommand("taskkill", ["/PID", String(pid), "/T", "/F"]);
+    if (!result.error && result.status === 0) {
+      return;
     }
-    if (p.resetAt) {
-      const days = daysUntil(p.resetAt);
-      const suffix = days === null ? "" : days === 0 ? "  (resets today)" : `  (in ~${days} days)`;
-      lines.push(`  Resets     ${p.resetAt}${suffix}`);
+    const combinedOutput = `${result.stderr}
+${result.stdout}`.trim();
+    if (!result.error && looksLikeMissingProcessMessage(combinedOutput)) {
+      return;
     }
-    lines.push("");
-  }
-  if (lines[lines.length - 1] === "") lines.pop();
-  if (unlimited.length > 0) {
-    if (lines.length > 0) lines.push("");
-    lines.push(`Unlimited: ${unlimited.map((p) => p.label).join(", ")}`);
-  }
-  return lines;
-}
-
-// src/lib/worktree.ts
-var import_node_child_process2 = require("node:child_process");
-var import_node_fs3 = require("node:fs");
-var import_node_path3 = require("node:path");
-function runGit(args, cwd) {
-  return (0, import_node_child_process2.execFileSync)("git", args, {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["ignore", "pipe", "pipe"]
-  }).trim();
-}
-function tryGit(args, cwd) {
-  const res = (0, import_node_child_process2.spawnSync)("git", args, { cwd, encoding: "utf-8" });
-  return {
-    ok: res.status === 0,
-    stdout: (res.stdout ?? "").trim(),
-    stderr: (res.stderr ?? "").trim()
-  };
-}
-function sameDevice(a, b) {
-  try {
-    let probe = a;
-    while (!(0, import_node_fs3.existsSync)(probe) && (0, import_node_path3.dirname)(probe) !== probe) {
-      probe = (0, import_node_path3.dirname)(probe);
+    if (result.error?.code === "ENOENT") {
+      try {
+        import_node_process.default.kill(pid);
+      } catch (error) {
+        if (error?.code === "ESRCH") {
+          return;
+        }
+        throw error;
+      }
+      return;
     }
-    return (0, import_node_fs3.statSync)(probe).dev === (0, import_node_fs3.statSync)(b).dev;
-  } catch {
-    return false;
-  }
-}
-function resolveRepoRoot(cwd) {
-  const res = tryGit(["rev-parse", "--show-toplevel"], cwd);
-  if (!res.ok) {
-    throw new Error(`Not a git repository: ${cwd}${res.stderr ? `
-${res.stderr}` : ""}`);
-  }
-  return res.stdout;
-}
-function createWorktree(jobId, cwd, opts) {
-  const repoRoot = resolveRepoRoot(cwd);
-  const baseCommit = runGit(["rev-parse", "HEAD"], repoRoot);
-  const branch = `copilot/${jobId}`;
-  const dirty = tryGit(["status", "--porcelain"], repoRoot);
-  if (dirty.ok && dirty.stdout.length > 0) {
-    opts.onWarn?.(
-      `Main working tree has uncommitted changes; Copilot worktree starts from HEAD (${baseCommit.slice(0, 8)}) \u2014 your changes are not visible to the Copilot session.`
-    );
-  }
-  let worktreePath = opts.preferredPath;
-  if (!sameDevice(worktreePath, repoRoot)) {
-    worktreePath = (0, import_node_path3.join)(repoRoot, ".git", "copilot-worktrees", jobId);
-    opts.onWarn?.(`State dir is on a different filesystem; using ${worktreePath} instead.`);
-  }
-  (0, import_node_fs3.mkdirSync)((0, import_node_path3.dirname)(worktreePath), { recursive: true });
-  const add = tryGit(["worktree", "add", "-b", branch, worktreePath, baseCommit], repoRoot);
-  if (!add.ok) {
-    throw new Error(`git worktree add failed: ${add.stderr || add.stdout}`);
-  }
-  const gitmodulesPath = (0, import_node_path3.join)(repoRoot, ".gitmodules");
-  if ((0, import_node_fs3.existsSync)(gitmodulesPath)) {
-    const sub = tryGit(["submodule", "update", "--init", "--recursive"], worktreePath);
-    if (!sub.ok) {
-      opts.onWarn?.(`Submodule init failed in worktree (continuing anyway): ${sub.stderr}`);
-    }
-  }
-  return { path: worktreePath, branch, baseCommit, repoRoot };
-}
-function commitWorktreeChanges(handle, message) {
-  const dirty = tryGit(["status", "--porcelain"], handle.path);
-  if (!dirty.ok || !dirty.stdout.trim()) return false;
-  tryGit(["add", "-A"], handle.path);
-  const commit = tryGit(["commit", "-m", message], handle.path);
-  return commit.ok;
-}
-function cleanupWorktree(handle, opts) {
-  if (opts.success) {
-    tryGit(["clean", "-fdX"], handle.path);
-    const rem = tryGit(["worktree", "remove", handle.path], handle.repoRoot);
-    if (!rem.ok) {
-      tryGit(["worktree", "remove", "--force", handle.path], handle.repoRoot);
+    if (result.error) {
+      throw result.error;
     }
     return;
   }
-  tryGit(["worktree", "remove", "--force", handle.path], handle.repoRoot);
-  const tip = tryGit(["rev-parse", handle.branch], handle.repoRoot);
-  if (tip.ok && tip.stdout === handle.baseCommit) {
-    const del = tryGit(["branch", "-D", handle.branch], handle.repoRoot);
-    if (!del.ok) opts.onWarn?.(`Could not delete branch ${handle.branch}: ${del.stderr}`);
-  } else if (tip.ok) {
-    opts.onWarn?.(
-      `Branch ${handle.branch} has commits beyond baseline; retaining for inspection.`
-    );
-  }
-}
-function computeDiffStats(handle) {
-  const names = tryGit(["diff", "--name-only", `${handle.baseCommit}..HEAD`], handle.path);
-  const filesModified = names.ok && names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
-  let linesAdded = 0;
-  let linesRemoved = 0;
-  const numstat = tryGit(["diff", "--numstat", `${handle.baseCommit}..HEAD`], handle.path);
-  if (numstat.ok && numstat.stdout) {
-    for (const line of numstat.stdout.split("\n")) {
-      const [addStr, delStr] = line.split("	");
-      const add = Number.parseInt(addStr ?? "0", 10);
-      const del = Number.parseInt(delStr ?? "0", 10);
-      if (Number.isFinite(add)) linesAdded += add;
-      if (Number.isFinite(del)) linesRemoved += del;
-    }
-  }
-  return { filesModified, linesAdded, linesRemoved };
-}
-function pruneOrphans(cwd, maxAgeDays = 7) {
-  let repoRoot;
   try {
-    repoRoot = resolveRepoRoot(cwd);
+    import_node_process.default.kill(-pid, "SIGTERM");
   } catch {
-    return { worktreesPruned: false, branchesRemoved: 0 };
-  }
-  const prune = tryGit(["worktree", "prune"], repoRoot);
-  const worktreesPruned = prune.ok;
-  const branches = tryGit(
-    ["for-each-ref", "--format=%(refname:short) %(committerdate:unix) %(objectname)", "refs/heads/copilot/"],
-    repoRoot
-  );
-  let branchesRemoved = 0;
-  if (branches.ok && branches.stdout) {
-    const now = Math.floor(Date.now() / 1e3);
-    const cutoff = now - maxAgeDays * 86400;
-    for (const line of branches.stdout.split("\n")) {
-      const [branch, tsStr, tip] = line.split(" ");
-      if (!branch || !tsStr || !tip) continue;
-      const ts = Number.parseInt(tsStr, 10);
-      if (!Number.isFinite(ts) || ts > cutoff) continue;
-      const merged = tryGit(["merge-base", "--is-ancestor", tip, "HEAD"], repoRoot);
-      if (merged.ok) {
-        const del = tryGit(["branch", "-D", branch], repoRoot);
-        if (del.ok) branchesRemoved++;
+    try {
+      import_node_process.default.kill(pid, "SIGTERM");
+    } catch (innerError) {
+      if (innerError?.code !== "ESRCH") {
+        throw innerError;
       }
     }
   }
-  return { worktreesPruned, branchesRemoved };
 }
+var import_node_child_process2, import_node_process;
+var init_process = __esm({
+  "src/lib/codex/process.ts"() {
+    "use strict";
+    import_node_child_process2 = require("node:child_process");
+    import_node_process = __toESM(require("node:process"), 1);
+  }
+});
+
+// src/lib/codex/app-server.ts
+function buildJsonRpcError(code, message, data) {
+  return data === void 0 ? { code, message } : { code, message, data };
+}
+function createProtocolError(message, data) {
+  const error = new Error(message);
+  error.data = data;
+  if (data && typeof data === "object" && data.code !== void 0) {
+    error.rpcCode = data.code;
+  }
+  return error;
+}
+var import_node_child_process3, import_node_process2, import_node_readline, DEFAULT_CONNECT_TIMEOUT_MS, CLOSE_SIGTERM_DELAY_MS, CLOSE_SIGKILL_GRACE_MS, CLOSE_EXIT_WAIT_MS, DEFAULT_CLIENT_INFO, DEFAULT_CAPABILITIES, CodexAppServerClient;
+var init_app_server = __esm({
+  "src/lib/codex/app-server.ts"() {
+    "use strict";
+    import_node_child_process3 = require("node:child_process");
+    import_node_process2 = __toESM(require("node:process"), 1);
+    import_node_readline = __toESM(require("node:readline"), 1);
+    init_version();
+    init_process();
+    DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1e3;
+    CLOSE_SIGTERM_DELAY_MS = 50;
+    CLOSE_SIGKILL_GRACE_MS = 500;
+    CLOSE_EXIT_WAIT_MS = 3e3;
+    DEFAULT_CLIENT_INFO = {
+      title: "harry",
+      name: "harry",
+      version: PLUGIN_VERSION
+    };
+    DEFAULT_CAPABILITIES = {
+      experimentalApi: false,
+      requestAttestation: false,
+      optOutNotificationMethods: [
+        "item/agentMessage/delta",
+        "item/reasoning/summaryTextDelta",
+        "item/reasoning/summaryPartAdded",
+        "item/reasoning/textDelta"
+      ]
+    };
+    CodexAppServerClient = class _CodexAppServerClient {
+      cwd;
+      options;
+      pending = /* @__PURE__ */ new Map();
+      nextId = 1;
+      stderrBuffer = "";
+      closed = false;
+      exitResolved = false;
+      exitError = null;
+      notificationHandler = null;
+      proc = null;
+      readline = null;
+      exitPromise;
+      resolveExit;
+      constructor(cwd, options) {
+        this.cwd = cwd;
+        this.options = options;
+        this.exitPromise = new Promise((resolve5) => {
+          this.resolveExit = resolve5;
+        });
+      }
+      static async connect(cwd, opts = {}) {
+        const client = new _CodexAppServerClient(cwd, opts);
+        await client.initialize(opts.connectTimeoutMs);
+        return client;
+      }
+      setNotificationHandler(handler) {
+        this.notificationHandler = handler;
+      }
+      get stderr() {
+        return this.stderrBuffer;
+      }
+      request(method, params) {
+        if (this.closed) {
+          return Promise.reject(new Error("codex app-server client is closed."));
+        }
+        const id = this.nextId;
+        this.nextId += 1;
+        return new Promise((resolve5, reject) => {
+          this.pending.set(id, { resolve: resolve5, reject, method });
+          this.sendMessage({ id, method, params });
+        });
+      }
+      notify(method, params = {}) {
+        if (this.closed) {
+          return;
+        }
+        this.sendMessage({ method, params });
+      }
+      handleLine(line) {
+        if (!line.trim()) {
+          return;
+        }
+        let message;
+        try {
+          message = JSON.parse(line);
+        } catch (error) {
+          this.handleExit(
+            createProtocolError(
+              `Failed to parse codex app-server JSONL: ${error.message}`,
+              { line }
+            )
+          );
+          return;
+        }
+        if (message.id !== void 0 && message.method) {
+          this.handleServerRequest(message);
+          return;
+        }
+        if (message.id !== void 0) {
+          const pending = this.pending.get(message.id);
+          if (!pending) {
+            return;
+          }
+          this.pending.delete(message.id);
+          if (message.error) {
+            pending.reject(
+              createProtocolError(
+                message.error.message ?? `codex app-server ${pending.method} failed.`,
+                message.error
+              )
+            );
+          } else {
+            pending.resolve(message.result ?? {});
+          }
+          return;
+        }
+        if (message.method && this.notificationHandler) {
+          this.notificationHandler(message);
+        }
+      }
+      handleServerRequest(message) {
+        this.sendMessage({
+          id: message.id,
+          error: buildJsonRpcError(-32601, `Unsupported server request: ${message.method}`)
+        });
+      }
+      handleExit(error) {
+        if (this.exitResolved) {
+          return;
+        }
+        this.exitResolved = true;
+        this.exitError = error ?? null;
+        for (const pending of this.pending.values()) {
+          pending.reject(this.exitError ?? new Error("codex app-server connection closed."));
+        }
+        this.pending.clear();
+        this.resolveExit();
+      }
+      async initialize(connectTimeoutMs) {
+        this.proc = (0, import_node_child_process3.spawn)("codex", ["app-server"], {
+          cwd: this.cwd,
+          env: this.options.env ?? import_node_process2.default.env,
+          stdio: ["pipe", "pipe", "pipe"],
+          shell: import_node_process2.default.platform === "win32" ? import_node_process2.default.env.SHELL || true : false,
+          windowsHide: true
+        });
+        this.proc.stdout.setEncoding("utf8");
+        this.proc.stderr.setEncoding("utf8");
+        this.proc.stderr.on("data", (chunk) => {
+          this.stderrBuffer += chunk;
+        });
+        this.proc.stdin.on("error", () => {
+        });
+        this.proc.stdout.on("error", () => {
+        });
+        this.proc.on("error", (error) => {
+          this.handleExit(error);
+        });
+        this.proc.on("exit", (code, signal) => {
+          const stderr = this.stderrBuffer.trim();
+          const detail = code === 0 ? null : createProtocolError(
+            `codex app-server exited unexpectedly (${signal ? `signal ${signal}` : `exit ${code}`}).${stderr ? `
+${stderr}` : ""}`
+          );
+          this.handleExit(detail);
+        });
+        this.readline = import_node_readline.default.createInterface({ input: this.proc.stdout });
+        this.readline.on("line", (line) => {
+          this.handleLine(line);
+        });
+        const initRequest = this.request("initialize", {
+          clientInfo: this.options.clientInfo ?? DEFAULT_CLIENT_INFO,
+          capabilities: this.options.capabilities ?? DEFAULT_CAPABILITIES
+        });
+        if (connectTimeoutMs !== void 0 && connectTimeoutMs > 0) {
+          let timer = null;
+          const timeout = new Promise((_, reject) => {
+            timer = setTimeout(() => {
+              const stderr = this.stderrBuffer.trim();
+              reject(
+                createProtocolError(
+                  `codex app-server did not answer initialize within ${connectTimeoutMs}ms.${stderr ? `
+${stderr}` : ""}`
+                )
+              );
+            }, connectTimeoutMs);
+            timer.unref?.();
+          });
+          initRequest.catch(() => {
+          });
+          try {
+            await Promise.race([initRequest, timeout]);
+          } catch (error) {
+            if (timer) {
+              clearTimeout(timer);
+            }
+            await this.close();
+            throw error;
+          }
+          if (timer) {
+            clearTimeout(timer);
+          }
+        } else {
+          try {
+            await initRequest;
+          } catch (error) {
+            await this.close();
+            throw error;
+          }
+        }
+        this.notify("initialized", {});
+      }
+      async close() {
+        if (this.closed) {
+          await this.waitForExit();
+          return;
+        }
+        this.closed = true;
+        if (this.readline) {
+          this.readline.close();
+        }
+        if (this.proc && !this.proc.killed) {
+          this.proc.stdin.end();
+          const proc = this.proc;
+          const termTimer = setTimeout(() => {
+            if (proc.killed || proc.exitCode !== null) {
+              return;
+            }
+            if (import_node_process2.default.platform === "win32") {
+              try {
+                if (proc.pid !== void 0) {
+                  terminateProcessTree(proc.pid);
+                }
+              } catch {
+              }
+              return;
+            }
+            proc.kill("SIGTERM");
+            const killTimer = setTimeout(() => {
+              if (!proc.killed && proc.exitCode === null) {
+                proc.kill("SIGKILL");
+              }
+            }, CLOSE_SIGKILL_GRACE_MS);
+            killTimer.unref?.();
+          }, CLOSE_SIGTERM_DELAY_MS);
+          termTimer.unref?.();
+        }
+        await this.waitForExit();
+      }
+      /**
+       * Wait for the child to exit, but never longer than CLOSE_EXIT_WAIT_MS. Even
+       * with SIGKILL escalation a grandchild can keep stdio open or 'exit' can be
+       * delayed; this bound guarantees close() always resolves so a caller's
+       * `await client.close()` in a finally block can't hang the host.
+       */
+      async waitForExit() {
+        let timer = null;
+        const bound = new Promise((resolve5) => {
+          timer = setTimeout(resolve5, CLOSE_EXIT_WAIT_MS);
+          timer.unref?.();
+        });
+        try {
+          await Promise.race([this.exitPromise, bound]);
+        } finally {
+          if (timer) {
+            clearTimeout(timer);
+          }
+        }
+      }
+      sendMessage(message) {
+        const line = `${JSON.stringify(message)}
+`;
+        const stdin = this.proc?.stdin;
+        if (!stdin) {
+          throw new Error("codex app-server stdin is not available.");
+        }
+        stdin.write(line);
+      }
+    };
+  }
+});
+
+// src/lib/codex/auth.ts
+function normalizeProviderId(value) {
+  const providerId = typeof value === "string" ? value.trim() : "";
+  return providerId || null;
+}
+function resolveProviderConfig(configResponse) {
+  const config = configResponse?.config;
+  if (!config || typeof config !== "object") {
+    return { providerId: null, providerConfig: null };
+  }
+  const providerId = normalizeProviderId(config.model_provider);
+  const providers = config.model_providers && typeof config.model_providers === "object" && !Array.isArray(config.model_providers) ? config.model_providers : null;
+  const candidate = providerId && providers ? providers[providerId] : null;
+  const providerConfig = candidate && typeof candidate === "object" ? candidate : null;
+  return { providerId, providerConfig };
+}
+function formatProviderLabel(providerId, providerConfig) {
+  const configuredName = typeof providerConfig?.name === "string" ? providerConfig.name.trim() : "";
+  if (configuredName) {
+    return configuredName;
+  }
+  if (!providerId) {
+    return "The active provider";
+  }
+  return BUILTIN_PROVIDER_LABELS.get(providerId) ?? providerId;
+}
+function notLoggedIn(detail) {
+  return { available: true, loggedIn: false, detail, authMethod: null, verified: null };
+}
+function buildAppServerAuthStatus(accountResponse, configResponse) {
+  const account = accountResponse?.account ?? null;
+  const requiresOpenaiAuth = typeof accountResponse?.requiresOpenaiAuth === "boolean" ? accountResponse.requiresOpenaiAuth : null;
+  const { providerId, providerConfig } = resolveProviderConfig(configResponse);
+  const providerLabel = formatProviderLabel(providerId, providerConfig);
+  if (account?.type === "chatgpt") {
+    const email = typeof account.email === "string" && account.email.trim() ? account.email.trim() : null;
+    return {
+      available: true,
+      loggedIn: true,
+      detail: email ? `ChatGPT login active for ${email}` : "ChatGPT login active",
+      authMethod: "chatgpt",
+      verified: true
+    };
+  }
+  if (account?.type === "apiKey") {
+    return {
+      available: true,
+      loggedIn: true,
+      detail: "API key configured (unverified)",
+      authMethod: "apiKey",
+      verified: false
+    };
+  }
+  if (requiresOpenaiAuth === false) {
+    return {
+      available: true,
+      loggedIn: true,
+      detail: `${providerLabel} is configured and does not require OpenAI authentication`,
+      authMethod: providerId,
+      verified: null
+    };
+  }
+  return notLoggedIn(`${providerLabel} requires OpenAI authentication`);
+}
+function getCodexAvailability(cwd) {
+  const versionStatus = binaryAvailable("codex", ["--version"], { cwd });
+  if (!versionStatus.available) {
+    return versionStatus;
+  }
+  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], { cwd });
+  if (!appServerStatus.available) {
+    return {
+      available: false,
+      detail: `${versionStatus.detail}; advanced runtime unavailable: ${appServerStatus.detail}`
+    };
+  }
+  return {
+    available: true,
+    detail: `${versionStatus.detail}; advanced runtime available`
+  };
+}
+async function getCodexAuthStatus(cwd, opts = {}) {
+  const availability = getCodexAvailability(cwd);
+  if (!availability.available) {
+    return {
+      available: false,
+      loggedIn: false,
+      detail: availability.detail,
+      authMethod: null,
+      verified: null
+    };
+  }
+  let client = null;
+  try {
+    client = await CodexAppServerClient.connect(cwd, {
+      env: opts.env,
+      // Anti-hang: this probe runs on the default provider-resolution path of
+      // every auto ask/review/fix and in SessionStart setup. Without a ceiling,
+      // a child that spawns but blocks before answering `initialize` (broken
+      // install, interactive/auth prompt) makes connect() await forever — a
+      // hang no try/catch can rescue.
+      connectTimeoutMs: opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
+    });
+    const accountResponse = await client.request("account/read", {
+      refreshToken: false
+    });
+    const configResponse = await client.request("config/read", {
+      includeLayers: false,
+      cwd
+    });
+    return buildAppServerAuthStatus(accountResponse, configResponse);
+  } catch (error) {
+    return notLoggedIn(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (client) {
+      await client.close().catch(() => {
+      });
+    }
+  }
+}
+var BUILTIN_PROVIDER_LABELS;
+var init_auth = __esm({
+  "src/lib/codex/auth.ts"() {
+    "use strict";
+    init_app_server();
+    init_process();
+    BUILTIN_PROVIDER_LABELS = /* @__PURE__ */ new Map([
+      ["openai", "OpenAI"],
+      ["ollama", "Ollama"],
+      ["lmstudio", "LM Studio"]
+    ]);
+  }
+});
 
 // src/lib/state.ts
-var import_node_crypto2 = require("node:crypto");
-var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
-var import_node_os = require("node:os");
-var MAX_JOBS = 50;
-var PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
-var SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
-var FALLBACK_STATE_ROOT = (0, import_node_path4.join)((0, import_node_os.tmpdir)(), "copilot-companion");
+function repoRootOf(cwd) {
+  try {
+    const root = (0, import_node_child_process4.execFileSync)("git", ["rev-parse", "--show-toplevel"], {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return root || (0, import_node_path2.resolve)(cwd);
+  } catch {
+    return (0, import_node_path2.resolve)(cwd);
+  }
+}
 function resolveStateDir(cwd) {
-  const workspaceRoot = (0, import_node_path4.resolve)(cwd);
-  const slug = (0, import_node_path4.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
+  const workspaceRoot = repoRootOf(cwd);
+  const slug = (0, import_node_path2.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
   const hash = (0, import_node_crypto2.createHash)("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
+  const dirName = `${slug}-${hash}`;
   const pluginDataDir = process.env[PLUGIN_DATA_ENV];
-  const stateRoot = pluginDataDir ? (0, import_node_path4.join)(pluginDataDir, "state") : FALLBACK_STATE_ROOT;
-  return (0, import_node_path4.join)(stateRoot, `${slug}-${hash}`);
+  if (pluginDataDir) {
+    return (0, import_node_path2.join)(pluginDataDir, "state", dirName);
+  }
+  const fallbackDir = (0, import_node_path2.join)(FALLBACK_STATE_ROOT, dirName);
+  if (!(0, import_node_fs2.existsSync)(fallbackDir)) {
+    const legacyDir = (0, import_node_path2.join)(LEGACY_FALLBACK_STATE_ROOT, dirName);
+    if ((0, import_node_fs2.existsSync)(legacyDir)) return legacyDir;
+  }
+  return fallbackDir;
 }
 function ensureDir(dir) {
-  (0, import_node_fs4.mkdirSync)(dir, { recursive: true });
+  (0, import_node_fs2.mkdirSync)(dir, { recursive: true });
 }
 function stateFilePath(stateDir) {
-  return (0, import_node_path4.join)(stateDir, "state.json");
+  return (0, import_node_path2.join)(stateDir, "state.json");
 }
 function loadState(stateDir) {
   const filePath = stateFilePath(stateDir);
-  if (!(0, import_node_fs4.existsSync)(filePath)) {
+  if (!(0, import_node_fs2.existsSync)(filePath)) {
     return { version: 1, jobs: [] };
   }
   try {
-    return JSON.parse((0, import_node_fs4.readFileSync)(filePath, "utf-8"));
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
   } catch {
     return { version: 1, jobs: [] };
   }
@@ -9397,27 +9716,27 @@ function saveState(stateDir, state) {
   if (state.jobs.length > MAX_JOBS) {
     state.jobs = state.jobs.slice(0, MAX_JOBS);
   }
-  (0, import_node_fs4.writeFileSync)(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
+  (0, import_node_fs2.writeFileSync)(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
 }
 function jobsDir(stateDir) {
-  return (0, import_node_path4.join)(stateDir, "jobs");
+  return (0, import_node_path2.join)(stateDir, "jobs");
 }
 function jobFilePath(stateDir, jobId) {
-  return (0, import_node_path4.join)(jobsDir(stateDir), `${jobId}.json`);
+  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.json`);
 }
 function jobLogPath(stateDir, jobId) {
-  return (0, import_node_path4.join)(jobsDir(stateDir), `${jobId}.log`);
+  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.log`);
 }
 function writeJobFile(stateDir, job) {
   const dir = jobsDir(stateDir);
   ensureDir(dir);
-  (0, import_node_fs4.writeFileSync)(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
+  (0, import_node_fs2.writeFileSync)(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
 }
 function readJobFile(stateDir, jobId) {
   const filePath = jobFilePath(stateDir, jobId);
-  if (!(0, import_node_fs4.existsSync)(filePath)) return null;
+  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
   try {
-    return JSON.parse((0, import_node_fs4.readFileSync)(filePath, "utf-8"));
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
   } catch {
     return null;
   }
@@ -9426,14 +9745,14 @@ function appendLog(stateDir, jobId, message) {
   const logFile = jobLogPath(stateDir, jobId);
   ensureDir(jobsDir(stateDir));
   const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-  (0, import_node_fs4.writeFileSync)(logFile, `[${time}] ${message}
+  (0, import_node_fs2.writeFileSync)(logFile, `[${time}] ${message}
 `, { flag: "a" });
 }
 function readLogTail(stateDir, jobId, maxLines = 10) {
   const logFile = jobLogPath(stateDir, jobId);
-  if (!(0, import_node_fs4.existsSync)(logFile)) return [];
+  if (!(0, import_node_fs2.existsSync)(logFile)) return [];
   try {
-    const content = (0, import_node_fs4.readFileSync)(logFile, "utf-8");
+    const content = (0, import_node_fs2.readFileSync)(logFile, "utf-8");
     const lines = content.trim().split("\n");
     return lines.slice(-maxLines);
   } catch {
@@ -9446,7 +9765,7 @@ function generateJobId() {
   return `job-${ts}-${rand}`;
 }
 function getSessionId() {
-  return process.env[SESSION_ID_ENV] || void 0;
+  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || void 0;
 }
 function createJob(stateDir, job) {
   const state = loadState(stateDir);
@@ -9484,245 +9803,727 @@ function listJobs(stateDir, sessionId) {
   }
   return state.jobs;
 }
-
-// src/lib/version.ts
-var PLUGIN_VERSION = "0.4.2";
-var CLIENT_NAME = "copilot-plugin-cc";
-
-// src/commands/setup.ts
-var DEFAULT_MODEL = "claude-opus-4.8";
-async function runSetup(options = {}) {
-  const cwd = options.cwd ?? process.cwd();
-  const stateDir = resolveStateDir(cwd);
-  const isCheck = options.check === true;
-  const client = new CopilotClient({ workingDirectory: cwd });
+function codexRateLimitsPath(stateDir) {
+  return (0, import_node_path2.join)(stateDir, CODEX_RATE_LIMITS_FILE);
+}
+function writeCodexRateLimits(stateDir, rateLimits) {
   try {
-    await client.start();
-  } catch (err) {
-    const msg = `Failed to start Copilot CLI: ${err.message}`;
-    if (isCheck) {
-      console.error(`[copilot] ${msg} \u2014 run \`gh auth login\` and ensure @github/copilot is installed.`);
-      return;
-    }
-    emit(options, {
-      status: "error",
-      defaultModel: DEFAULT_MODEL,
-      defaultModelAvailable: false,
-      models: [],
-      claudeModels: [],
-      message: msg
-    });
-    return;
-  }
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    await client.stop().catch(() => {
-    });
-    if (isCheck) {
-      console.error(`[copilot] ${auth.message}`);
-      return;
-    }
-    emit(options, {
-      status: "error",
-      authType: auth.authType,
-      defaultModel: DEFAULT_MODEL,
-      defaultModelAvailable: false,
-      models: [],
-      claudeModels: [],
-      message: auth.message
-    });
-    return;
-  }
-  let models = [];
-  try {
-    models = await client.listModels();
-  } catch (err) {
-    if (!isCheck) console.error(`[copilot] listModels failed: ${err.message}`);
-  }
-  const modelIds = models.map((m) => m.id);
-  const claudeModels = modelIds.filter((id) => id.toLowerCase().includes("claude"));
-  const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
-  const pruneReport = pruneOrphans(cwd);
-  await fetchQuota(client, stateDir).catch(() => null);
-  await client.stop().catch(() => {
-  });
-  if (isCheck) {
-    return;
-  }
-  const report = {
-    status: "ok",
-    authType: auth.authType,
-    login: auth.login,
-    host: auth.host,
-    defaultModel: DEFAULT_MODEL,
-    defaultModelAvailable: defaultAvailable,
-    models: modelIds,
-    claudeModels,
-    quota: summarize(readSnapshot(stateDir))
-  };
-  if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
-    return;
-  }
-  const lines = [];
-  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push("");
-  lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ""})`);
-  if (auth.host) lines.push(`**Host:** ${auth.host}`);
-  lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? "(available)" : "(NOT listed \u2014 pass --model to override)"}`);
-  if (modelIds.length > 0) {
-    lines.push("");
-    lines.push("### Available models");
-    for (const m of modelIds) lines.push(`- \`${m}\``);
-  }
-  if (!defaultAvailable && claudeModels.length > 0) {
-    lines.push("");
-    lines.push("### Claude models detected");
-    for (const m of claudeModels) lines.push(`- \`${m}\``);
-  }
-  lines.push("");
-  lines.push("### Quota");
-  const haveSnapshot = !!(report.quota && (report.quota.premium !== void 0 || report.quota.unlimited));
-  lines.push(...renderQuotaBar(report.quota ?? { pools: [], allUnlimited: false }, haveSnapshot));
-  lines.push("");
-  lines.push("### Housekeeping");
-  lines.push(`- Worktrees pruned: ${pruneReport.worktreesPruned ? "yes" : "skipped (not a git repo or prune failed)"}`);
-  lines.push(`- Merged copilot/* branches removed: ${pruneReport.branchesRemoved}`);
-  lines.push("");
-  lines.push("### Next steps");
-  lines.push('- `/copilot:implement "your task"` to delegate');
-  lines.push("- `/copilot:status` to see quota + running jobs");
-  lines.push('- `/copilot:debate "<topic>"` for a three-model debate (needs the `agy` CLI for the Gemini voice)');
-  console.log(lines.join("\n"));
-}
-function emit(options, report) {
-  if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
-    return;
-  }
-  const lines = [];
-  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push("");
-  lines.push(`**Status:** ${report.status === "ok" ? "Authenticated" : "Not authenticated"}`);
-  if (report.message) lines.push(`**Message:** ${report.message}`);
-  console.log(lines.join("\n"));
-}
-
-// src/commands/implement.ts
-var import_node_fs7 = require("node:fs");
-var import_node_path7 = require("node:path");
-
-// src/lib/permission.ts
-var import_node_fs5 = require("node:fs");
-var import_node_path5 = require("node:path");
-function approved() {
-  return { kind: "approve-once" };
-}
-function denied(feedback) {
-  return { kind: "reject", feedback };
-}
-function canonicalize(p) {
-  try {
-    return (0, import_node_fs5.realpathSync)(p);
+    ensureDir(stateDir);
+    const snapshot = { ...rateLimits, capturedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    (0, import_node_fs2.writeFileSync)(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
   } catch {
-    const parent = (0, import_node_path5.dirname)(p);
-    if (parent === p) return (0, import_node_path5.resolve)(p);
-    return (0, import_node_path5.resolve)(canonicalize(parent), p.slice(parent.length).replace(/^[\\/]+/, ""));
   }
 }
-function isPathInside(child, parent) {
-  const c = canonicalize((0, import_node_path5.resolve)(child));
-  const p = canonicalize((0, import_node_path5.resolve)(parent));
-  if (c === p) return true;
-  const rel = (0, import_node_path5.relative)(p, c);
-  return rel !== "" && !rel.startsWith("..") && !(0, import_node_path5.isAbsolute)(rel);
+function readCodexRateLimits(stateDir) {
+  const filePath = codexRateLimitsPath(stateDir);
+  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
+  try {
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
 }
-function makePermissionHandler(opts) {
-  return (request) => {
-    const kind = request.kind;
-    switch (kind) {
-      case "read": {
-        const path = request.path ?? "";
-        if (opts.isolated) {
-          opts.appendLog(`permission.read DENIED (isolated mode): ${path}`);
-          return denied("This Copilot session is isolated (reasoning only); filesystem reads are not permitted.");
-        }
-        if (opts.readOnly) {
-          if (!path) {
-            opts.appendLog("permission.read DENIED (read-only mode): empty path");
-            return denied("Permission request missing path.");
-          }
-          const absolute = path.startsWith("/") ? path : (0, import_node_path5.resolve)(opts.worktreePath, path);
-          if (!isPathInside(absolute, opts.worktreePath)) {
-            opts.appendLog(`permission.read DENIED (outside worktree): ${absolute}`);
-            return denied(`Reads outside the review target (${opts.worktreePath}) are not permitted.`);
-          }
-        }
-        opts.appendLog(`permission.read approved: ${path}`);
-        return approved();
-      }
-      case "write": {
-        const fileName = request.fileName ?? "";
-        if (opts.readOnly) {
-          opts.appendLog(`permission.write DENIED (read-only mode): ${fileName}`);
-          return denied("This Copilot session is read-only (review mode). File writes are not permitted.");
-        }
-        if (!fileName) {
-          opts.appendLog("permission.write denied: no fileName provided");
-          return denied("Permission request missing fileName.");
-        }
-        const absolute = fileName.startsWith("/") ? fileName : (0, import_node_path5.resolve)(opts.worktreePath, fileName);
-        if (isPathInside(absolute, opts.worktreePath)) {
-          opts.appendLog(`permission.write approved: ${fileName}`);
-          return approved();
-        }
-        opts.appendLog(`permission.write denied (outside worktree): ${absolute}`);
-        return denied(`Writes outside the worktree (${opts.worktreePath}) are not permitted by the Claude Code Copilot plugin.`);
-      }
-      case "mcp": {
-        const { serverName, toolName, readOnly } = request;
-        if (opts.isolated) {
-          opts.appendLog(`permission.mcp DENIED (isolated mode): ${serverName}/${toolName}`);
-          return denied(`This Copilot session is isolated (reasoning only); MCP tool ${serverName}/${toolName} is not permitted.`);
-        }
-        if (opts.readOnly && readOnly !== true) {
-          opts.appendLog(`permission.mcp DENIED (read-only mode): ${serverName}/${toolName} (readOnly=${readOnly ?? "unknown"})`);
-          return denied(`MCP tool ${serverName}/${toolName} is not marked read-only; not permitted in this Copilot review session.`);
-        }
-        opts.appendLog(`permission.mcp approved: ${serverName}/${toolName} (readOnly=${readOnly ?? false})`);
-        return approved();
-      }
-      case "shell": {
-        const { fullCommandText, intention } = request;
-        const preview = (fullCommandText ?? "").slice(0, 160);
-        if (opts.allowShell) {
-          opts.appendLog(`permission.shell approved: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
-          return approved();
-        }
-        opts.appendLog(`permission.shell DENIED: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
-        return denied("Shell execution is disabled for this Copilot session. Re-run the implement command with --allow-shell if you want to permit shell commands.");
-      }
-      case "url": {
-        const { url } = request;
-        if (opts.allowUrl) {
-          opts.appendLog(`permission.url approved: ${url}`);
-          return approved();
-        }
-        opts.appendLog(`permission.url DENIED: ${url}`);
-        return denied("URL fetching is disabled for this Copilot session. Re-run with --allow-url to permit it.");
-      }
-      case "custom-tool": {
-        const { toolName } = request;
-        opts.appendLog(`permission.custom-tool DENIED: ${toolName}`);
-        return denied(`Custom tool ${toolName} requires explicit user approval; not permitted in automated Copilot sessions.`);
-      }
-      default: {
-        opts.appendLog(`permission.${kind} DENIED (unknown kind, conservative default)`);
-        return denied(`Permission kind "${kind}" is not auto-approved by the Claude Code Copilot plugin.`);
-      }
+function formatCodexRateLimits(rl) {
+  const parts = [];
+  const used = [];
+  if (rl.primaryUsedPercent !== void 0) used.push(`primary ${rl.primaryUsedPercent}%`);
+  if (rl.secondaryUsedPercent !== void 0) used.push(`secondary ${rl.secondaryUsedPercent}%`);
+  if (used.length > 0) parts.push(`${used.join(" / ")} used`);
+  if (rl.planType) parts.push(`plan ${rl.planType}`);
+  if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
+  return parts.join(" \xB7 ");
+}
+function formatSnapshotAge(iso) {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1e3));
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+function renderCodexBlock(rl, capturedAt) {
+  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : "## Codex";
+  return [header, formatCodexRateLimits(rl)].join("\n");
+}
+var import_node_child_process4, import_node_crypto2, import_node_fs2, import_node_path2, import_node_os, MAX_JOBS, PLUGIN_DATA_ENV, SESSION_ID_ENV, LEGACY_SESSION_ID_ENV, FALLBACK_STATE_ROOT, LEGACY_FALLBACK_STATE_ROOT, CODEX_RATE_LIMITS_FILE;
+var init_state = __esm({
+  "src/lib/state.ts"() {
+    "use strict";
+    import_node_child_process4 = require("node:child_process");
+    import_node_crypto2 = require("node:crypto");
+    import_node_fs2 = require("node:fs");
+    import_node_path2 = require("node:path");
+    import_node_os = require("node:os");
+    MAX_JOBS = 50;
+    PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
+    SESSION_ID_ENV = "HARRY_SESSION_ID";
+    LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
+    FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "harry");
+    LEGACY_FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "copilot-companion");
+    CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
+  }
+});
+
+// src/lib/codex/turn.ts
+function buildTurnInput(prompt, instructions) {
+  const items = [];
+  const trimmed = instructions?.trim();
+  if (trimmed) {
+    items.push({ type: "text", text: trimmed, text_elements: [] });
+  }
+  items.push({ type: "text", text: prompt, text_elements: [] });
+  return items;
+}
+function shorten(text, limit = 96) {
+  const normalized = String(text ?? "").trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 3)}...`;
+}
+function extractThreadId(message) {
+  return message?.params?.threadId ?? null;
+}
+function extractTurnId(message) {
+  if (message?.params?.turnId) {
+    return message.params.turnId;
+  }
+  if (message?.params?.turn?.id) {
+    return message.params.turn.id;
+  }
+  return null;
+}
+function normalizeReasoningText(text) {
+  return String(text ?? "").replace(/\s+/g, " ").trim();
+}
+function extractReasoningSections(value) {
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string") {
+    const normalized = normalizeReasoningText(value);
+    return normalized ? [normalized] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractReasoningSections(entry));
+  }
+  if (typeof value === "object") {
+    const obj = value;
+    if (typeof obj.text === "string") {
+      return extractReasoningSections(obj.text);
     }
+    if ("summary" in obj) {
+      return extractReasoningSections(obj.summary);
+    }
+    if ("content" in obj) {
+      return extractReasoningSections(obj.content);
+    }
+    if ("parts" in obj) {
+      return extractReasoningSections(obj.parts);
+    }
+  }
+  return [];
+}
+function mergeReasoningSections(existing, next) {
+  const merged = [];
+  for (const section of [...existing, ...next]) {
+    const normalized = normalizeReasoningText(section);
+    if (!normalized || merged.includes(normalized)) {
+      continue;
+    }
+    merged.push(normalized);
+  }
+  return merged;
+}
+function toFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function parseTokenCount(params) {
+  const usage = {};
+  const lastUsage = params?.last_token_usage;
+  if (lastUsage && typeof lastUsage === "object") {
+    usage.inputTokens = toFiniteNumber(lastUsage.input_tokens);
+    usage.outputTokens = toFiniteNumber(lastUsage.output_tokens);
+  }
+  const rateLimits = params?.rate_limits;
+  if (rateLimits && typeof rateLimits === "object") {
+    const parsed = {};
+    const primary = toFiniteNumber(rateLimits.primary?.used_percent);
+    if (primary !== void 0) {
+      parsed.primaryUsedPercent = primary;
+    }
+    const secondary = toFiniteNumber(rateLimits.secondary?.used_percent);
+    if (secondary !== void 0) {
+      parsed.secondaryUsedPercent = secondary;
+    }
+    if (typeof rateLimits.plan_type === "string") {
+      parsed.planType = rateLimits.plan_type;
+    }
+    if (typeof rateLimits.resets_at === "string") {
+      parsed.resetsAt = rateLimits.resets_at;
+    }
+    if (Object.keys(parsed).length > 0) {
+      usage.rateLimits = parsed;
+    }
+  }
+  return usage;
+}
+function foldRateLimits(prev, next) {
+  if (!prev) {
+    return next;
+  }
+  if (!next) {
+    return prev;
+  }
+  return {
+    primaryUsedPercent: next.primaryUsedPercent ?? prev.primaryUsedPercent,
+    secondaryUsedPercent: next.secondaryUsedPercent ?? prev.secondaryUsedPercent,
+    planType: next.planType ?? prev.planType,
+    resetsAt: next.resetsAt ?? prev.resetsAt
   };
 }
+function createTurnCaptureState(threadId, onItem) {
+  let resolveCompletion;
+  const completion = new Promise((resolve5) => {
+    resolveCompletion = resolve5;
+  });
+  return {
+    threadId,
+    threadIds: /* @__PURE__ */ new Set([threadId]),
+    threadTurnIds: /* @__PURE__ */ new Map(),
+    turnId: null,
+    turnStarted: false,
+    bufferedNotifications: [],
+    completion,
+    resolveCompletion,
+    finalTurn: null,
+    completed: false,
+    finalAnswerSeen: false,
+    pendingCollaborations: /* @__PURE__ */ new Set(),
+    activeSubagentTurns: /* @__PURE__ */ new Set(),
+    completionTimer: null,
+    lastAgentMessage: "",
+    reasoningSummary: [],
+    error: null,
+    usage: null,
+    onItem
+  };
+}
+function registerThread(state, threadId) {
+  if (threadId) {
+    state.threadIds.add(threadId);
+  }
+}
+function belongsToTurn(state, message) {
+  const messageThreadId = extractThreadId(message);
+  if (!messageThreadId || !state.threadIds.has(messageThreadId)) {
+    return false;
+  }
+  const trackedTurnId = state.threadTurnIds.get(messageThreadId) ?? null;
+  const messageTurnId = extractTurnId(message);
+  return trackedTurnId === null || messageTurnId === null || messageTurnId === trackedTurnId;
+}
+function shouldApplyNotification(state, message) {
+  if (message.method === "thread/started") {
+    return true;
+  }
+  if (message.method === "token_count" || message.method === "error") {
+    return true;
+  }
+  return belongsToTurn(state, message);
+}
+function clearCompletionTimer(state) {
+  if (state.completionTimer) {
+    clearTimeout(state.completionTimer);
+    state.completionTimer = null;
+  }
+}
+function completeTurn(state, turn = null) {
+  if (state.completed) {
+    return;
+  }
+  clearCompletionTimer(state);
+  state.completed = true;
+  if (turn) {
+    state.finalTurn = turn;
+    if (!state.turnId && turn.id) {
+      state.turnId = turn.id;
+    }
+  } else if (!state.finalTurn) {
+    state.finalTurn = { id: state.turnId ?? "inferred-turn", status: "completed" };
+  }
+  state.resolveCompletion();
+}
+function scheduleInferredCompletion(state) {
+  if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
+    return;
+  }
+  if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
+    return;
+  }
+  clearCompletionTimer(state);
+  state.completionTimer = setTimeout(() => {
+    state.completionTimer = null;
+    if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
+      return;
+    }
+    if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
+      return;
+    }
+    completeTurn(state, null);
+  }, 250);
+  state.completionTimer.unref?.();
+}
+function toolLabel(item) {
+  switch (item.type) {
+    case "commandExecution":
+      return `Running command: ${shorten(item.command)}`;
+    case "fileChange":
+      return `Applying ${item.changes?.length ?? 0} file change(s).`;
+    case "mcpToolCall":
+      return `Calling ${item.server}/${item.tool}.`;
+    case "dynamicToolCall":
+      return `Running tool: ${item.tool}.`;
+    case "webSearch":
+      return `Searching: ${shorten(item.query)}`;
+    default:
+      return null;
+  }
+}
+function recordItem(state, item, lifecycle, threadId = null) {
+  if (item.type === "collabAgentToolCall") {
+    if (!threadId || threadId === state.threadId) {
+      if (lifecycle === "started" || item.status === "inProgress") {
+        state.pendingCollaborations.add(item.id);
+      } else if (lifecycle === "completed") {
+        state.pendingCollaborations.delete(item.id);
+        scheduleInferredCompletion(state);
+      }
+    }
+    for (const receiverThreadId of item.receiverThreadIds ?? []) {
+      registerThread(state, receiverThreadId);
+    }
+  }
+  if (item.type === "agentMessage") {
+    if (item.text && (!threadId || threadId === state.threadId)) {
+      state.lastAgentMessage = item.text;
+      const final = lifecycle === "completed" && item.phase === "final_answer";
+      if (final) {
+        state.finalAnswerSeen = true;
+        scheduleInferredCompletion(state);
+      }
+      if (lifecycle === "completed") {
+        state.onItem?.({ kind: "assistant", text: item.text, final });
+      }
+    }
+    return;
+  }
+  if (item.type === "reasoning" && lifecycle === "completed") {
+    const nextSections = extractReasoningSections(item.summary);
+    state.reasoningSummary = mergeReasoningSections(state.reasoningSummary, nextSections);
+    for (const section of nextSections) {
+      state.onItem?.({ kind: "reasoning", text: section });
+    }
+    return;
+  }
+  if (lifecycle === "started") {
+    const label = toolLabel(item);
+    if (label) {
+      state.onItem?.({ kind: "tool", label });
+    }
+  }
+}
+function applyTurnNotification(state, message) {
+  switch (message.method) {
+    case "thread/started":
+      registerThread(state, message.params?.thread?.id);
+      break;
+    case "turn/started":
+      registerThread(state, message.params?.threadId);
+      state.threadTurnIds.set(message.params?.threadId, message.params?.turn?.id ?? null);
+      if ((message.params?.threadId ?? null) !== state.threadId) {
+        state.activeSubagentTurns.add(message.params?.threadId);
+      }
+      break;
+    case "item/started": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "started", message.params?.threadId ?? null);
+      }
+      break;
+    }
+    case "item/completed": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "completed", message.params?.threadId ?? null);
+      }
+      break;
+    }
+    case "token_count": {
+      const next = parseTokenCount(message.params);
+      const prev = state.usage ?? {};
+      const folded = {
+        inputTokens: next.inputTokens ?? prev.inputTokens,
+        outputTokens: next.outputTokens ?? prev.outputTokens,
+        rateLimits: foldRateLimits(prev.rateLimits, next.rateLimits)
+      };
+      const hasContent = folded.inputTokens !== void 0 || folded.outputTokens !== void 0 || folded.rateLimits !== void 0;
+      if (hasContent) {
+        state.usage = folded;
+        state.onItem?.({ kind: "usage", ...folded });
+      }
+      break;
+    }
+    case "error":
+      state.error = message.params?.error ?? { message: "Unknown codex error." };
+      state.onItem?.({
+        kind: "error",
+        message: state.error?.message ?? "Unknown codex error."
+      });
+      break;
+    case "turn/completed":
+      if ((message.params?.threadId ?? null) !== state.threadId) {
+        state.activeSubagentTurns.delete(message.params?.threadId);
+        scheduleInferredCompletion(state);
+        break;
+      }
+      completeTurn(state, message.params?.turn ?? null);
+      break;
+    default:
+      break;
+  }
+}
+async function runCodexTurn(opts) {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
+  const connectTimeoutMs = opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
+  let client;
+  try {
+    client = await CodexAppServerClient.connect(opts.cwd, {
+      env: opts.env,
+      connectTimeoutMs
+    });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    return {
+      success: false,
+      finalMessage: "",
+      reasoningSummary: [],
+      error: message,
+      stderr: ""
+    };
+  }
+  let timer = null;
+  let timedOut = false;
+  const timeout = new Promise((resolve5) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      resolve5();
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  let aborted = false;
+  let resolveAbort = () => {
+  };
+  const abortGate = new Promise((resolve5) => {
+    resolveAbort = resolve5;
+  });
+  const onAbort = () => {
+    aborted = true;
+    resolveAbort();
+    void client.close().catch(() => {
+    });
+  };
+  if (opts.signal) {
+    if (opts.signal.aborted) onAbort();
+    else opts.signal.addEventListener("abort", onAbort, { once: true });
+  }
+  let state = null;
+  try {
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    const started = await Promise.race([
+      client.request("thread/start", {
+        cwd: opts.cwd,
+        model: opts.model ?? null,
+        approvalPolicy: "never",
+        sandbox: opts.readOnly ? "read-only" : "workspace-write",
+        ephemeral: opts.readOnly ?? false
+      }),
+      timeout.then(() => null),
+      abortGate.then(() => null)
+    ]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    if (timedOut || !started) {
+      return failure(client, "Codex turn timed out before the thread started.");
+    }
+    const threadId = started.thread.id;
+    state = createTurnCaptureState(threadId, opts.onItem);
+    const capture = state;
+    client.setNotificationHandler((message) => {
+      if (!capture.turnStarted) {
+        capture.bufferedNotifications.push(message);
+        return;
+      }
+      if (shouldApplyNotification(capture, message)) {
+        applyTurnNotification(capture, message);
+      }
+    });
+    const turnStartParams = {
+      threadId,
+      input: buildTurnInput(opts.prompt, opts.instructions)
+    };
+    if (opts.model) {
+      turnStartParams.model = opts.model;
+    }
+    if (opts.effort) {
+      turnStartParams.effort = opts.effort;
+    }
+    const turnResponse = await Promise.race([
+      client.request("turn/start", turnStartParams),
+      timeout.then(() => null),
+      abortGate.then(() => null)
+    ]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    if (timedOut || !turnResponse) {
+      return failure(client, "Codex turn timed out before the turn started.");
+    }
+    capture.turnId = turnResponse.turn?.id ?? null;
+    if (capture.turnId) {
+      capture.threadTurnIds.set(threadId, capture.turnId);
+    }
+    for (const message of capture.bufferedNotifications) {
+      if (shouldApplyNotification(capture, message)) {
+        applyTurnNotification(capture, message);
+      }
+    }
+    capture.bufferedNotifications.length = 0;
+    capture.turnStarted = true;
+    if (turnResponse.turn?.status && turnResponse.turn.status !== "inProgress") {
+      completeTurn(capture, turnResponse.turn);
+    }
+    await Promise.race([capture.completion, timeout, abortGate]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    if (timedOut && !capture.completed) {
+      return failure(client, "Codex turn timed out while awaiting completion.");
+    }
+    return buildResult(capture, client.stderr);
+  } catch (error) {
+    const stderr = client.stderr;
+    const message = aborted ? "Codex turn aborted." : error?.message ?? String(error);
+    return {
+      success: false,
+      finalMessage: state?.lastAgentMessage ?? "",
+      reasoningSummary: state?.reasoningSummary ?? [],
+      error: stderr ? `${message}
+${stderr}` : message,
+      stderr,
+      usage: state?.usage ?? void 0
+    };
+  } finally {
+    opts.signal?.removeEventListener("abort", onAbort);
+    if (timer) {
+      clearTimeout(timer);
+    }
+    if (state) {
+      clearCompletionTimer(state);
+    }
+    await client.close();
+  }
+}
+function buildResult(state, stderr) {
+  const success = !state.error && (state.finalTurn?.status === "completed" || state.completed);
+  const result = {
+    success,
+    finalMessage: state.lastAgentMessage,
+    reasoningSummary: state.reasoningSummary,
+    stderr
+  };
+  if (state.error?.message) {
+    result.error = state.error.message;
+  }
+  if (state.usage) {
+    result.usage = state.usage;
+  }
+  return result;
+}
+function failure(client, reason) {
+  const stderr = client.stderr;
+  return {
+    success: false,
+    finalMessage: "",
+    reasoningSummary: [],
+    error: stderr ? `${reason}
+${stderr}` : reason,
+    stderr
+  };
+}
+var DEFAULT_TURN_TIMEOUT_MS;
+var init_turn = __esm({
+  "src/lib/codex/turn.ts"() {
+    "use strict";
+    init_app_server();
+    DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1e3;
+  }
+});
+
+// src/lib/providers/codex.ts
+var codex_exports = {};
+__export(codex_exports, {
+  CodexProvider: () => CodexProvider,
+  toCodexEffort: () => toCodexEffort
+});
+function toCodexEffort(reasoning) {
+  if (reasoning === void 0) return void 0;
+  return reasoning === "xhigh" ? "high" : reasoning;
+}
+var CodexProvider;
+var init_codex = __esm({
+  "src/lib/providers/codex.ts"() {
+    "use strict";
+    init_auth();
+    init_state();
+    init_turn();
+    CodexProvider = class {
+      id = "codex";
+      capabilities = {
+        metersQuota: false
+      };
+      /**
+       * Abort handle for the in-flight turn, so {@link forceStop} (driven by the
+       * session's centralized SIGINT/SIGTERM handler) can tear the codex child down
+       * immediately rather than orphaning it on `process.exit`. Null when idle.
+       */
+      activeController = null;
+      /** The in-flight turn promise, awaited by {@link forceStop} so teardown completes. */
+      activeRun = null;
+      /**
+       * Best-effort immediate teardown from an interrupt — abort the live turn AND
+       * await it so the codex child is actually reaped before this resolves.
+       * Returning early (abort only) would let the session's interrupt handler
+       * `process.exit` before close() kills the child, orphaning it; CopilotProvider
+       * awaits its teardown the same way.
+       */
+      async forceStop() {
+        this.activeController?.abort();
+        await this.activeRun?.catch(() => {
+        });
+      }
+      /**
+       * Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
+       * turn is `workspace-write` + approvalPolicy:"never", which lets codex run
+       * shell commands autonomously. It has no "write files but no shell" mode, so a
+       * caller that grants writes while withholding shell (`fix` defaults to
+       * allowShell:false) CANNOT be honored. Refuse rather than silently run MORE
+       * permissively than asked. Runs via the precheckRun seam BEFORE fix's snapshot.
+       */
+      precheckRun(opts) {
+        if (!opts.readOnly && !opts.allowShell) {
+          throw new Error(
+            "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with --provider copilot, or explicitly allow shell."
+          );
+        }
+      }
+      /**
+       * Probe codex auth without running a turn. Codex has no login/host concept in
+       * the neutral summary, so those stay undefined; `message` carries the codex
+       * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
+       */
+      async checkAuth(cwd) {
+        const s = await getCodexAuthStatus(cwd);
+        return { ok: s.loggedIn, message: s.detail };
+      }
+      /**
+       * Run a single prompt to completion. Streams turn events to progress/appendLog
+       * for visibility (never throwing on a stream event), then maps the
+       * {@link CodexTurnResult} onto the neutral {@link RunResult}.
+       *
+       * `opts.reasoning` is mapped to codex's effort enum via {@link toCodexEffort}
+       * (xhigh→high, since codex has no xhigh). `opts.model` is passed through as-is;
+       * undefined stays undefined so ~/.codex config picks the model.
+       */
+      async run(opts) {
+        const { appendLog: appendLog2, progress } = opts;
+        this.precheckRun(opts);
+        const onItem = (ev) => {
+          switch (ev.kind) {
+            case "assistant":
+              if (ev.text) progress(ev.text);
+              break;
+            case "tool":
+              progress(ev.label);
+              break;
+            case "reasoning":
+              if (ev.text) appendLog2(`reasoning: ${ev.text}`);
+              break;
+            case "usage":
+              appendLog2(
+                `usage: in=${ev.inputTokens ?? "?"} out=${ev.outputTokens ?? "?"}` + (ev.rateLimits?.primaryUsedPercent !== void 0 ? ` primary=${ev.rateLimits.primaryUsedPercent}%` : "")
+              );
+              break;
+            case "error":
+              appendLog2(`codex error: ${ev.message}`);
+              break;
+            default:
+              break;
+          }
+        };
+        progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}\u2026`);
+        const controller = new AbortController();
+        if (opts.signal) {
+          if (opts.signal.aborted) controller.abort();
+          else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
+        }
+        this.activeController = controller;
+        let result;
+        const turnPromise = runCodexTurn({
+          cwd: opts.cwd,
+          prompt: opts.prompt,
+          // Carry guardrails + injected --context into the turn (codex has no
+          // separate system slot; turn.ts rides them as a leading input block).
+          instructions: opts.systemMessage,
+          model: opts.model,
+          effort: toCodexEffort(opts.reasoning),
+          readOnly: opts.readOnly,
+          env: process.env,
+          onItem,
+          signal: controller.signal
+        });
+        this.activeRun = turnPromise;
+        try {
+          result = await turnPromise;
+        } finally {
+          this.activeController = null;
+          this.activeRun = null;
+        }
+        if (result.error) appendLog2(`turn error: ${result.error}`);
+        if (result.usage?.rateLimits) {
+          writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);
+        }
+        return {
+          lastAssistantMessage: result.finalMessage,
+          success: result.success,
+          summary: result.finalMessage || void 0,
+          usage: {
+            kind: "codex",
+            inputTokens: result.usage?.inputTokens,
+            outputTokens: result.usage?.outputTokens,
+            rateLimits: result.usage?.rateLimits
+          }
+        };
+      }
+    };
+  }
+});
 
 // src/lib/event-stream.ts
 function truncate(text, max) {
@@ -9875,14 +10676,19 @@ function attachStream(opts) {
       case "permission.requested": {
         const req = event.data.permissionRequest;
         const kind = req.kind;
+        let detail;
         if (kind === "shell") {
-          appendLog2(`permission.requested shell: ${req.fullCommandText ?? ""}`);
+          detail = req.fullCommandText;
+          appendLog2(`permission.requested shell: ${detail ?? ""}`);
         } else if (kind === "write") {
-          appendLog2(`permission.requested write: ${req.fileName ?? ""}`);
+          detail = req.fileName;
+          appendLog2(`permission.requested write: ${detail ?? ""}`);
         } else if (kind === "read") {
-          appendLog2(`permission.requested read: ${req.path ?? ""}`);
+          detail = req.path;
+          appendLog2(`permission.requested read: ${detail ?? ""}`);
         } else if (kind === "url") {
-          appendLog2(`permission.requested url: ${req.url ?? ""}`);
+          detail = req.url;
+          appendLog2(`permission.requested url: ${detail ?? ""}`);
         } else {
           appendLog2(`permission.requested ${kind}`);
         }
@@ -9903,337 +10709,753 @@ function attachStream(opts) {
     }
   };
 }
+var init_event_stream = __esm({
+  "src/lib/event-stream.ts"() {
+    "use strict";
+  }
+});
 
-// src/lib/system-message.ts
-var import_node_fs6 = require("node:fs");
-var import_node_path6 = require("node:path");
-var FRAMING = {
-  implement: [
-    "You are executing a self-contained coding subtask delegated by Claude Code's orchestrator. You run headless: there is no interactive user at the keyboard for this session.",
-    "Your edits happen in an isolated git worktree, so they cannot disturb the main checkout. Do NOT run `git commit` \u2014 the plugin commits your changes for you after you finish.",
-    "Follow the repository's existing conventions and patterns (its instruction files are already loaded). Stay tightly scoped to the task; avoid unrelated refactors or formatting churn."
-  ].join("\n"),
-  fix: [
-    "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
-    "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
-    "If a finding cannot be safely applied, skip it and report why rather than forcing a change."
-  ].join("\n"),
-  review: [
-    "You are performing a code review delegated by Claude Code's orchestrator. You run headless.",
-    "This session is read-only: do not attempt to modify files. Report findings; another stage applies any fixes."
-  ].join("\n"),
-  ask: [
-    "You are one independent voice being consulted on a question or topic.",
-    "Reason carefully and state your own honest conclusion. Use only the context",
-    "provided in the prompt \u2014 do not explore the filesystem or run tools.",
-    "Be concrete and decisive; surface key assumptions and the strongest",
-    "counter-argument to your own position."
-  ].join(" ")
-};
-function resolveExtraContext(cwd, opts) {
-  const raw = opts.context;
-  if (!raw || !raw.trim()) return void 0;
-  if (!raw.startsWith("@")) return raw.trim();
-  const ref = raw.slice(1);
+// src/lib/permission.ts
+function approved() {
+  return { kind: "approve-once" };
+}
+function denied(feedback) {
+  return { kind: "reject", feedback };
+}
+function canonicalize(p) {
   try {
-    const source = ref === "-" ? 0 : (0, import_node_path6.resolve)(cwd, ref);
-    const text = (0, import_node_fs6.readFileSync)(source, "utf-8").trim();
-    return text || void 0;
-  } catch (err) {
-    opts.onWarn?.(
-      `Could not read --context ${ref === "-" ? "from stdin" : `file ${ref}`}: ${err.message}`
-    );
-    return void 0;
+    return (0, import_node_fs3.realpathSync)(p);
+  } catch {
+    const parent = (0, import_node_path3.dirname)(p);
+    if (parent === p) return (0, import_node_path3.resolve)(p);
+    return (0, import_node_path3.resolve)(canonicalize(parent), p.slice(parent.length).replace(/^[\\/]+/, ""));
   }
 }
-function buildSystemMessage(kind, input = {}) {
-  const sections = [];
-  let framing = FRAMING[kind];
-  if (kind === "implement" && input.branch) {
-    framing = framing.replace("an isolated git worktree", `an isolated git worktree (branch \`${input.branch}\`)`);
-  }
-  sections.push(framing);
-  if (input.extraContext && input.extraContext.trim()) {
-    sections.push(`## Additional context from the orchestrator
-The following is context from the Claude Code session that delegated this task. Treat it as authoritative intent:
-
-${input.extraContext.trim()}`);
-  }
-  return sections.join("\n\n");
+function isPathInside(child, parent) {
+  const c = canonicalize((0, import_node_path3.resolve)(child));
+  const p = canonicalize((0, import_node_path3.resolve)(parent));
+  if (c === p) return true;
+  const rel = (0, import_node_path3.relative)(p, c);
+  return rel !== "" && !rel.startsWith("..") && !(0, import_node_path3.isAbsolute)(rel);
 }
-
-// src/commands/implement.ts
-var DEFAULT_MODEL2 = "claude-opus-4.8";
-var DEFAULT_EFFORT = "medium";
-var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
-function progressFactory() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
-function buildPrompt(task) {
-  return [
-    "Implement the following task inside this repository.",
-    "When you are done, produce a concise summary covering:",
-    "  - what you changed (at a glance)",
-    "  - any assumptions you made",
-    "  - any TODOs or follow-up work you chose not to do",
-    "",
-    "TASK:",
-    task
-  ].join("\n");
-}
-function emit2(env) {
-  const json = JSON.stringify(env);
-  process.stdout.write(json + "\n");
-  return json;
-}
-async function runImplement(task, cwd, options = {}) {
-  const progress = progressFactory();
-  if (!task.trim()) {
-    emit2({ status: "failed", jobId: options.jobId ?? "unassigned", error: "Empty task; provide an implementation objective." });
-    process.exit(1);
-  }
-  const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
-  const model = options.model ?? DEFAULT_MODEL2;
-  const reasoning = options.reasoning ?? DEFAULT_EFFORT;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  const useWorktree = options.worktree !== false;
-  const minQuota = options.minQuota ?? 1;
-  const log = (msg) => appendLog(stateDir, jobId, msg);
-  log(`implement start: model=${model} worktree=${useWorktree} allowShell=${options.allowShell ?? false} allowUrl=${options.allowUrl ?? false}`);
-  const snapshot = readSnapshot(stateDir);
-  const gate = evaluateGate(snapshot, { minRemaining: minQuota });
-  if (!gate.ok) {
-    log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-    progress(`Quota exhausted \u2014 not opening a Copilot session. Resets at ${gate.resetAt || "unknown"}.`);
-    const blocked = {
-      status: "blocked",
-      reason: gate.reason,
-      resetAt: gate.resetAt,
-      remaining: gate.remaining,
-      message: `Copilot quota exhausted; handle this task directly. Resets at ${gate.resetAt || "unknown"}.`
-    };
-    emit2(blocked);
-    return;
-  }
-  if (gate.ok && "warning" in gate && gate.warning) {
-    progress(gate.warning);
-  }
-  let handle;
-  let sessionCwd = cwd;
-  if (useWorktree) {
-    try {
-      const repoRoot = resolveRepoRoot(cwd);
-      const preferredPath = (0, import_node_path7.join)(stateDir, "worktrees", jobId);
-      handle = createWorktree(jobId, repoRoot, {
-        preferredPath,
-        onWarn: (m) => {
-          progress(m);
-          log(`worktree warn: ${m}`);
+function makePermissionHandler(opts) {
+  return (request) => {
+    const kind = request.kind;
+    switch (kind) {
+      case "read": {
+        const path = request.path ?? "";
+        if (opts.isolated) {
+          opts.appendLog(`permission.read DENIED (isolated mode): ${path}`);
+          return denied("This Copilot session is isolated (reasoning only); filesystem reads are not permitted.");
         }
-      });
-      sessionCwd = handle.path;
-      log(`worktree created: ${handle.branch} at ${handle.path} (base=${handle.baseCommit})`);
-      progress(`Worktree: ${handle.branch} at ${handle.path}`);
-    } catch (err) {
-      const msg = err.message;
-      log(`worktree creation failed: ${msg}`);
-      emit2({ status: "failed", jobId, error: `Worktree creation failed: ${msg}` });
-      process.exit(1);
-    }
-  }
-  const client = new CopilotClient({
-    workingDirectory: sessionCwd,
-    env: process.env
-  });
-  let sessionAborted = false;
-  let cleanupDone = false;
-  const finalizeFailure = async (error) => {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    if (handle) {
-      try {
-        cleanupWorktree(handle, { success: false, onWarn: (m) => log(`cleanup warn: ${m}`) });
-      } catch (err) {
-        log(`cleanup error: ${err.message}`);
+        if (opts.readOnly) {
+          if (!path) {
+            opts.appendLog("permission.read DENIED (read-only mode): empty path");
+            return denied("Permission request missing path.");
+          }
+          const absolute = path.startsWith("/") ? path : (0, import_node_path3.resolve)(opts.worktreePath, path);
+          if (!isPathInside(absolute, opts.worktreePath)) {
+            opts.appendLog(`permission.read DENIED (outside worktree): ${absolute}`);
+            return denied(`Reads outside the review target (${opts.worktreePath}) are not permitted.`);
+          }
+        }
+        opts.appendLog(`permission.read approved: ${path}`);
+        return approved();
+      }
+      case "write": {
+        const fileName = request.fileName ?? "";
+        if (opts.readOnly) {
+          opts.appendLog(`permission.write DENIED (read-only mode): ${fileName}`);
+          return denied("This Copilot session is read-only (review mode). File writes are not permitted.");
+        }
+        if (!fileName) {
+          opts.appendLog("permission.write denied: no fileName provided");
+          return denied("Permission request missing fileName.");
+        }
+        const absolute = fileName.startsWith("/") ? fileName : (0, import_node_path3.resolve)(opts.worktreePath, fileName);
+        if (isPathInside(absolute, opts.worktreePath)) {
+          opts.appendLog(`permission.write approved: ${fileName}`);
+          return approved();
+        }
+        opts.appendLog(`permission.write denied (outside worktree): ${absolute}`);
+        return denied(`Writes outside the worktree (${opts.worktreePath}) are not permitted by the Claude Code Copilot plugin.`);
+      }
+      case "mcp": {
+        const { serverName, toolName, readOnly } = request;
+        if (opts.isolated) {
+          opts.appendLog(`permission.mcp DENIED (isolated mode): ${serverName}/${toolName}`);
+          return denied(`This Copilot session is isolated (reasoning only); MCP tool ${serverName}/${toolName} is not permitted.`);
+        }
+        if (opts.readOnly && readOnly !== true) {
+          opts.appendLog(`permission.mcp DENIED (read-only mode): ${serverName}/${toolName} (readOnly=${readOnly ?? "unknown"})`);
+          return denied(`MCP tool ${serverName}/${toolName} is not marked read-only; not permitted in this Copilot review session.`);
+        }
+        opts.appendLog(`permission.mcp approved: ${serverName}/${toolName} (readOnly=${readOnly ?? false})`);
+        return approved();
+      }
+      case "shell": {
+        const { fullCommandText, intention } = request;
+        const preview = (fullCommandText ?? "").slice(0, 160);
+        if (opts.allowShell) {
+          opts.appendLog(`permission.shell approved: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
+          return approved();
+        }
+        opts.appendLog(`permission.shell DENIED: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
+        return denied("Shell execution is disabled for this Copilot session. Re-run the implement command with --allow-shell if you want to permit shell commands.");
+      }
+      case "url": {
+        const { url } = request;
+        if (opts.allowUrl) {
+          opts.appendLog(`permission.url approved: ${url}`);
+          return approved();
+        }
+        opts.appendLog(`permission.url DENIED: ${url}`);
+        return denied("URL fetching is disabled for this Copilot session. Re-run with --allow-url to permit it.");
+      }
+      case "custom-tool": {
+        const { toolName } = request;
+        opts.appendLog(`permission.custom-tool DENIED: ${toolName}`);
+        return denied(`Custom tool ${toolName} requires explicit user approval; not permitted in automated Copilot sessions.`);
+      }
+      default: {
+        opts.appendLog(`permission.${kind} DENIED (unknown kind, conservative default)`);
+        return denied(`Permission kind "${kind}" is not auto-approved by the Claude Code Copilot plugin.`);
       }
     }
-    try {
-      await client.forceStop();
-    } catch {
+  };
+}
+var import_node_fs3, import_node_path3;
+var init_permission = __esm({
+  "src/lib/permission.ts"() {
+    "use strict";
+    import_node_fs3 = require("node:fs");
+    import_node_path3 = require("node:path");
+  }
+});
+
+// src/lib/quota.ts
+function snapshotPath(stateDir) {
+  return (0, import_node_path4.join)(stateDir, "quota.json");
+}
+function readSnapshot(stateDir) {
+  const path = snapshotPath(stateDir);
+  if (!(0, import_node_fs4.existsSync)(path)) return null;
+  try {
+    return JSON.parse((0, import_node_fs4.readFileSync)(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function recordSnapshot(stateDir, quotas) {
+  const existing = readSnapshot(stateDir);
+  const merged = {
+    checkedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    quotas: { ...existing?.quotas ?? {} }
+  };
+  for (const [id, entry] of Object.entries(quotas)) {
+    if (!entry) continue;
+    merged.quotas[id] = {
+      entitlementRequests: entry.entitlementRequests ?? 0,
+      usedRequests: entry.usedRequests ?? 0,
+      remainingPercentage: entry.remainingPercentage ?? 100,
+      resetDate: entry.resetDate ?? "",
+      isUnlimitedEntitlement: entry.isUnlimitedEntitlement ?? false,
+      usageAllowedWithExhaustedQuota: entry.usageAllowedWithExhaustedQuota ?? false,
+      overage: entry.overage ?? 0,
+      overageAllowedWithExhaustedQuota: entry.overageAllowedWithExhaustedQuota ?? false
+    };
+  }
+  (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(snapshotPath(stateDir)), { recursive: true });
+  (0, import_node_fs4.writeFileSync)(snapshotPath(stateDir), JSON.stringify(merged, null, 2), "utf-8");
+  return merged;
+}
+async function fetchQuota(client, stateDir) {
+  try {
+    const result = await client.rpc.account.getQuota({});
+    return recordSnapshot(stateDir, result.quotaSnapshots ?? {});
+  } catch {
+    return null;
+  }
+}
+function isPremiumModel(modelId) {
+  if (!modelId) return true;
+  const id = modelId.toLowerCase();
+  if (id.startsWith("claude-sonnet-")) return false;
+  if (id.startsWith("claude-haiku-")) return false;
+  if (id.endsWith("-mini") || id.startsWith("gpt-4.1")) return false;
+  return true;
+}
+function evaluateGate(snapshot, opts) {
+  if (!snapshot || Object.keys(snapshot.quotas).length === 0) {
+    return { ok: true, reason: "no_cache" };
+  }
+  const entries = Object.values(snapshot.quotas);
+  const metered = entries.filter(
+    (q) => !q.isUnlimitedEntitlement && q.entitlementRequests > 0
+  );
+  if (metered.length === 0) {
+    return { ok: true, reason: "unlimited" };
+  }
+  if (metered.every((q) => q.remainingPercentage <= 0) && metered.some((q) => q.usageAllowedWithExhaustedQuota || q.overageAllowedWithExhaustedQuota)) {
+    return { ok: true, reason: "overage_allowed" };
+  }
+  let minRemainingAbs = Number.POSITIVE_INFINITY;
+  let tightestReset = "";
+  for (const q of metered) {
+    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
+    if (remaining < minRemainingAbs) {
+      minRemainingAbs = remaining;
+      tightestReset = q.resetDate;
     }
-    emit2({ status: "failed", jobId, error, branch: handle?.branch });
+  }
+  if (minRemainingAbs <= opts.minRemaining) {
+    return {
+      ok: false,
+      reason: "quota_exhausted",
+      remaining: minRemainingAbs === Number.POSITIVE_INFINITY ? 0 : minRemainingAbs,
+      resetAt: tightestReset
+    };
+  }
+  const staleMs = opts.staleAfterMs ?? 2 * 60 * 1e3;
+  const ageMs = Date.now() - new Date(snapshot.checkedAt).getTime();
+  const warning = ageMs > staleMs ? `Quota snapshot is ${Math.round(ageMs / 1e3)}s old; may be out of date.` : void 0;
+  return warning ? { ok: true, reason: "available", warning } : { ok: true, reason: "available" };
+}
+function labelFor(id) {
+  if (POOL_LABELS[id]) return POOL_LABELS[id];
+  return id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function summarize(snapshot) {
+  if (!snapshot) return { pools: [], allUnlimited: false };
+  const entries = Object.entries(snapshot.quotas);
+  if (entries.length === 0) return { pools: [], allUnlimited: false };
+  const pools = entries.map(([id, q]) => {
+    const isMetered = !q.isUnlimitedEntitlement && q.entitlementRequests > 0;
+    if (!isMetered) {
+      return { id, label: labelFor(id), unlimited: true };
+    }
+    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
+    return {
+      id,
+      label: labelFor(id),
+      unlimited: false,
+      used: q.usedRequests,
+      total: q.entitlementRequests,
+      remaining,
+      remainingPercentage: q.remainingPercentage,
+      overage: q.overage || void 0,
+      resetAt: q.resetDate || void 0
+    };
+  });
+  const metered = pools.filter((p) => !p.unlimited);
+  if (metered.length === 0) {
+    return { pools, allUnlimited: true, unlimited: true };
+  }
+  let minRemaining = Number.POSITIVE_INFINITY;
+  let minPct = 100;
+  let tightestReset = "";
+  let tightestEntitlement = 0;
+  for (const p of metered) {
+    if (p.remaining !== void 0 && p.remaining < minRemaining) {
+      minRemaining = p.remaining;
+      tightestReset = p.resetAt ?? "";
+      tightestEntitlement = p.total ?? 0;
+    }
+    if (p.remainingPercentage !== void 0 && p.remainingPercentage < minPct) {
+      minPct = p.remainingPercentage;
+    }
+  }
+  return {
+    pools,
+    allUnlimited: false,
+    premium: minRemaining === Number.POSITIVE_INFINITY ? void 0 : minRemaining,
+    entitlement: tightestEntitlement || void 0,
+    percentage: minPct,
+    resetAt: tightestReset || void 0
   };
-  const onSignal = async () => {
-    if (sessionAborted) return;
-    sessionAborted = true;
-    progress("Received interrupt signal; aborting Copilot session.");
-    log("interrupt signal received");
-    await finalizeFailure("Interrupted by signal");
-    process.exit(130);
+}
+function fmtNum(n) {
+  return Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(2)).toString();
+}
+function renderBar(usedPct) {
+  const clamped = Math.max(0, Math.min(100, usedPct));
+  const filled = Math.round(clamped / 100 * BAR_WIDTH);
+  return "\u2588".repeat(filled) + "\u2591".repeat(BAR_WIDTH - filled);
+}
+function daysUntil(iso) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const diffMs = t - Date.now();
+  if (diffMs <= 0) return 0;
+  return Math.ceil(diffMs / (24 * 60 * 60 * 1e3));
+}
+function renderQuotaBar(q, haveSnapshot) {
+  if (!haveSnapshot) {
+    return ["- No snapshot yet. One will be captured on the next run."];
+  }
+  if (q.allUnlimited && q.pools.length > 0) {
+    return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(", ")}).`];
+  }
+  if (q.pools.length === 0) {
+    return ["- No quota information reported by Copilot yet."];
+  }
+  const metered = q.pools.filter((p) => !p.unlimited);
+  const lines = [];
+  for (const p of metered) {
+    const remainingPct = p.remainingPercentage ?? 0;
+    const usedPct = 100 - remainingPct;
+    const total = p.total === void 0 ? "?" : fmtNum(p.total);
+    const remaining = fmtNum(p.remaining ?? 0);
+    lines.push(`${p.label}`);
+    lines.push(`  Usage      ${renderBar(usedPct)}  ${usedPct.toFixed(1)}%`);
+    lines.push(`  Remaining  ${remaining} / ${total}`);
+    if (p.overage && p.overage > 0) {
+      lines.push(`  Overage    ${fmtNum(p.overage)} (billed beyond entitlement)`);
+    }
+    if (p.resetAt) {
+      const days = daysUntil(p.resetAt);
+      const suffix = days === null ? "" : days === 0 ? "  (resets today)" : `  (in ~${days} days)`;
+      lines.push(`  Resets     ${p.resetAt}${suffix}`);
+    }
+    lines.push("");
+  }
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+var import_node_fs4, import_node_path4, POOL_LABELS, BAR_WIDTH;
+var init_quota = __esm({
+  "src/lib/quota.ts"() {
+    "use strict";
+    import_node_fs4 = require("node:fs");
+    import_node_path4 = require("node:path");
+    POOL_LABELS = {
+      premium_interactions: "Premium requests",
+      chat: "Chat",
+      completions: "Completions"
+    };
+    BAR_WIDTH = 30;
+  }
+});
+
+// src/lib/providers/copilot.ts
+var copilot_exports = {};
+__export(copilot_exports, {
+  CopilotProvider: () => CopilotProvider
+});
+var SHUTDOWN_WAIT_MS, CopilotProvider;
+var init_copilot = __esm({
+  "src/lib/providers/copilot.ts"() {
+    "use strict";
+    init_dist();
+    init_copilot_auth();
+    init_event_stream();
+    init_permission();
+    init_quota();
+    init_state();
+    init_version();
+    SHUTDOWN_WAIT_MS = 5e3;
+    CopilotProvider = class {
+      id = "copilot";
+      capabilities = {
+        metersQuota: true
+      };
+      /**
+       * The live client for the in-flight run, so {@link forceStop} (called from the
+       * centralized SIGINT/SIGTERM handler in runAgentSession) can force-stop the
+       * Copilot CLI subprocess instead of letting an interrupt orphan it. Set at the
+       * start of {@link run} and cleared on teardown.
+       */
+      activeClient = null;
+      /**
+       * Best-effort immediate teardown of the in-flight Copilot CLI client, for an
+       * interrupt handler. Never throws.
+       */
+      async forceStop() {
+        await this.activeClient?.forceStop().catch(() => {
+        });
+      }
+      /**
+       * Probe Copilot auth without running a session. Constructs a client, starts
+       * it, queries the SDK's richer auth summary, and adapts it down to the
+       * neutral {@link AuthSummary} (dropping `authType`). Always stops the client.
+       */
+      async checkAuth(cwd) {
+        const client = new CopilotClient({ workingDirectory: cwd, env: process.env });
+        try {
+          await client.start();
+        } catch (err) {
+          return { ok: false, message: `Failed to start Copilot CLI: ${err.message}` };
+        }
+        try {
+          const auth = await checkAuth(client);
+          return { ok: auth.ok, login: auth.login, host: auth.host, message: auth.message };
+        } finally {
+          await client.stop().catch(() => {
+          });
+        }
+      }
+      /**
+       * Run a single prompt to completion and return the neutral result. Mirrors
+       * the prior inline ask lifecycle: permission handler derived from
+       * readOnly/allowShell, session created with the caller's model/effort
+       * (passed through as-is — undefined stays undefined), completion awaited via
+       * the event stream, usage metrics collected, code changes captured from the
+       * shutdown event, then full teardown.
+       */
+      async run(opts) {
+        const { cwd, prompt, appendLog: appendLog2, progress } = opts;
+        const stateDir = resolveStateDir(cwd);
+        const client = new CopilotClient({ workingDirectory: cwd, env: process.env });
+        this.activeClient = client;
+        let stopped = false;
+        const stop = async () => {
+          if (stopped) return;
+          stopped = true;
+          await client.forceStop().catch(() => {
+          });
+          this.activeClient = null;
+        };
+        try {
+          await client.start();
+        } catch (err) {
+          await stop();
+          throw new Error(`Failed to start Copilot CLI: ${err.message}`);
+        }
+        const auth = await checkAuth(client);
+        if (!auth.ok) {
+          appendLog2(`auth failed: ${auth.message}`);
+          await client.stop().catch(() => {
+          });
+          await stop();
+          throw new Error(`Not authenticated: ${auth.message}`);
+        }
+        appendLog2(`auth ok${auth.login ? ` as ${auth.login}` : ""}`);
+        const permissionHandler = makePermissionHandler({
+          allowShell: opts.readOnly ? false : opts.allowShell,
+          allowUrl: opts.allowUrl,
+          worktreePath: cwd,
+          appendLog: appendLog2,
+          readOnly: opts.readOnly,
+          isolated: opts.readOnly
+        });
+        let session;
+        try {
+          session = await client.createSession({
+            clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
+            model: opts.model,
+            reasoningEffort: opts.reasoning,
+            workingDirectory: cwd,
+            infiniteSessions: { enabled: false },
+            onPermissionRequest: permissionHandler,
+            systemMessage: { mode: "append", content: opts.systemMessage }
+          });
+        } catch (err) {
+          const msg = `Failed to create Copilot session: ${err.message}`;
+          appendLog2(msg);
+          await client.stop().catch(() => {
+          });
+          await stop();
+          throw new Error(msg);
+        }
+        const stream = attachStream({ session, stateDir, appendLog: appendLog2, progress });
+        const onAbort = () => {
+          session.abort().catch((e) => appendLog2(`abort error: ${e.message}`));
+        };
+        if (opts.signal) {
+          if (opts.signal.aborted) onAbort();
+          else opts.signal.addEventListener("abort", onAbort, { once: true });
+        }
+        let completionResult = null;
+        let premiumRequestCost;
+        try {
+          progress(`Sending prompt to Copilot${opts.model ? ` (model=${opts.model})` : ""}\u2026`);
+          await session.send({ prompt });
+          completionResult = await stream.completion;
+          try {
+            const metrics = await session.rpc.usage.getMetrics();
+            premiumRequestCost = metrics.totalPremiumRequestCost;
+          } catch (e) {
+            appendLog2(`usage.getMetrics failed: ${e.message}`);
+          }
+        } catch (err) {
+          const msg = err.message;
+          appendLog2(`session error: ${msg}`);
+          opts.signal?.removeEventListener("abort", onAbort);
+          stream.dispose();
+          await session.disconnect().catch(() => {
+          });
+          await client.stop().catch(() => {
+          });
+          await stop();
+          throw new Error(msg);
+        }
+        opts.signal?.removeEventListener("abort", onAbort);
+        await session.disconnect().catch((e) => appendLog2(`disconnect warn: ${e.message}`));
+        let shutdownTimer;
+        const shutdownResult = await Promise.race([
+          stream.shutdown,
+          new Promise((res) => {
+            shutdownTimer = setTimeout(() => res(null), SHUTDOWN_WAIT_MS);
+            shutdownTimer.unref?.();
+          })
+        ]);
+        if (shutdownTimer) clearTimeout(shutdownTimer);
+        stream.dispose();
+        await fetchQuota(client, stateDir).catch(() => null);
+        await client.stop().catch((e) => appendLog2(`client.stop warn: ${e.message}`));
+        await stop();
+        const lastAssistantMessage = stream.getLastAssistantMessage()?.trim() || completionResult?.summary?.trim() || "";
+        return {
+          lastAssistantMessage,
+          success: completionResult?.success !== false,
+          summary: completionResult?.summary,
+          usage: {
+            kind: "copilot",
+            premiumRequestCost: premiumRequestCost ?? shutdownResult?.premiumRequestCost
+          },
+          codeChanges: shutdownResult?.codeChanges
+        };
+      }
+    };
+  }
+});
+
+// src/companion.ts
+var import_node_process3 = __toESM(require("node:process"), 1);
+
+// src/commands/setup.ts
+init_dist();
+init_copilot_auth();
+init_auth();
+
+// src/lib/run-agent-session.ts
+init_auth();
+
+// src/lib/provider.ts
+var norm = (v) => typeof v === "string" ? v.trim().toLowerCase() : void 0;
+var isId = (v) => v === "copilot" || v === "codex";
+function resolveExplicit(flags) {
+  const flag = norm(flags.provider);
+  if (isId(flag)) return flag;
+  const setting = norm(process.env.CLAUDE_PLUGIN_OPTION_PROVIDER);
+  if (isId(setting)) return setting;
+  return void 0;
+}
+
+// src/lib/run-agent-session.ts
+async function probeCodexUsable(cwd, env) {
+  try {
+    return (await getCodexAuthStatus(cwd, { env })).loggedIn;
+  } catch {
+    return false;
+  }
+}
+async function resolveActiveProvider(flags, cwd, opts = {}) {
+  const explicit = resolveExplicit(flags);
+  if (explicit) return { id: explicit, explicit: true };
+  const probe = opts.probe ?? ((c) => probeCodexUsable(c, opts.env));
+  return { id: await probe(cwd) ? "codex" : "copilot", explicit: false };
+}
+var INTERRUPT_TEARDOWN_CEILING_MS = 2e3;
+async function runAgentSession(args) {
+  let activeProvider;
+  let interrupting = false;
+  const onInterrupt = () => {
+    if (interrupting) return;
+    interrupting = true;
+    args.onInterrupt?.();
+    const exit = () => process.exit(130);
+    const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
+    guard.unref();
+    void Promise.resolve(activeProvider?.forceStop?.()).catch(() => {
+    }).finally(exit);
   };
-  process.on("SIGINT", () => void onSignal());
-  process.on("SIGTERM", () => void onSignal());
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onInterrupt);
+  try {
+    const { id, explicit } = await resolveActiveProvider(args.flags, args.cwd, {
+      probe: args.resolveUsable
+    });
+    args.log?.(`provider resolved: ${id}${explicit ? " (explicit)" : " (auto)"}`);
+    const provider = args.pickProvider ? args.pickProvider(id) : await defaultPick(id);
+    activeProvider = provider;
+    const auth = await provider.checkAuth(args.cwd);
+    if (!auth.ok) {
+      throw new Error(`${id} not authenticated: ${auth.message}`);
+    }
+    provider.precheckRun?.(args.run);
+    if (provider.capabilities.metersQuota && args.enforceQuota) {
+      await args.enforceQuota(provider);
+    }
+    if (args.run.model === void 0 && args.defaultModelFor) {
+      args.run = { ...args.run, model: args.defaultModelFor(id) };
+    }
+    await args.beforeRun?.(provider);
+    const result = await provider.run(args.run);
+    return { provider: id, result };
+  } finally {
+    process.removeListener("SIGINT", onInterrupt);
+    process.removeListener("SIGTERM", onInterrupt);
+  }
+}
+async function defaultPick(id) {
+  if (id === "codex") {
+    const { CodexProvider: CodexProvider2 } = await Promise.resolve().then(() => (init_codex(), codex_exports));
+    return new CodexProvider2();
+  }
+  const { CopilotProvider: CopilotProvider2 } = await Promise.resolve().then(() => (init_copilot(), copilot_exports));
+  return new CopilotProvider2();
+}
+
+// src/commands/setup.ts
+init_quota();
+init_state();
+init_version();
+var DEFAULT_MODEL = "claude-opus-4.8";
+async function runSetup(options = {}) {
+  const cwd = options.cwd ?? process.cwd();
+  const stateDir = resolveStateDir(cwd);
+  const isCheck = options.check === true;
+  const { id } = await resolveActiveProvider(
+    { provider: options.provider },
+    cwd,
+    isCheck ? { probe: async () => false } : {}
+  );
+  if (id === "codex") {
+    await runCodexSetup(cwd, options, isCheck);
+    return;
+  }
+  const client = new CopilotClient({ workingDirectory: cwd });
   try {
     await client.start();
   } catch (err) {
-    await finalizeFailure(`Failed to start Copilot CLI: ${err.message}`);
-    process.exit(1);
+    const msg = `Failed to start Copilot CLI: ${err.message}`;
+    if (isCheck) {
+      console.error(`[copilot] ${msg} \u2014 run \`gh auth login\` and ensure @github/copilot is installed.`);
+      return;
+    }
+    emit(options, {
+      status: "error",
+      defaultModel: DEFAULT_MODEL,
+      defaultModelAvailable: false,
+      models: [],
+      claudeModels: [],
+      message: msg
+    });
+    return;
   }
   const auth = await checkAuth(client);
   if (!auth.ok) {
-    log(`auth failed: ${auth.message}`);
-    await finalizeFailure(`Not authenticated: ${auth.message}`);
     await client.stop().catch(() => {
     });
-    process.exit(1);
+    if (isCheck) {
+      console.error(`[copilot] ${auth.message}`);
+      return;
+    }
+    emit(options, {
+      status: "error",
+      authType: auth.authType,
+      defaultModel: DEFAULT_MODEL,
+      defaultModelAvailable: false,
+      models: [],
+      claudeModels: [],
+      message: auth.message
+    });
+    return;
   }
-  log(`auth ok: ${auth.authType}${auth.login ? ` as ${auth.login}` : ""}`);
-  const permissionHandler = makePermissionHandler({
-    allowShell: options.allowShell ?? false,
-    allowUrl: options.allowUrl ?? false,
-    worktreePath: sessionCwd,
-    appendLog: log
-  });
-  const extraContext = resolveExtraContext(cwd, {
-    context: options.context,
-    onWarn: (m) => {
-      progress(m);
-      log(m);
-    }
-  });
-  const session = await client.createSession({
-    clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
-    model,
-    reasoningEffort: reasoning,
-    workingDirectory: sessionCwd,
-    infiniteSessions: { enabled: false },
-    onPermissionRequest: permissionHandler,
-    systemMessage: {
-      mode: "append",
-      content: buildSystemMessage("implement", { branch: handle?.branch, extraContext })
-    }
-  });
-  const stream = attachStream({
-    session,
-    stateDir,
-    appendLog: log,
-    progress
-  });
-  progress(`Sending task to Copilot (model=${model})\u2026`);
-  await session.send({ prompt: buildPrompt(task) });
-  let completionResult = null;
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms \u2014 aborting session.`);
-    log(`timeout ${timeout}ms`);
-    session.abort().catch((e) => log(`abort error: ${e.message}`));
-  }, timeout);
+  let models = [];
   try {
-    completionResult = await stream.completion;
+    models = await client.listModels();
   } catch (err) {
-    clearTimeout(timeoutHandle);
-    const msg = err.message;
-    log(`completion error: ${msg}`);
-    stream.dispose();
-    await session.disconnect().catch(() => {
-    });
-    await client.stop().catch(() => {
-    });
-    await finalizeFailure(msg);
-    process.exit(1);
+    if (!isCheck) console.error(`[copilot] listModels failed: ${err.message}`);
   }
-  clearTimeout(timeoutHandle);
-  progress("Task complete; collecting usage metrics, disconnecting session.");
-  let premiumRequestCost;
-  try {
-    const metrics = await session.rpc.usage.getMetrics();
-    premiumRequestCost = metrics.totalPremiumRequestCost;
-  } catch (e) {
-    log(`usage.getMetrics failed: ${e.message}`);
-  }
-  await session.disconnect().catch((e) => log(`disconnect warn: ${e.message}`));
-  const shutdownResult = await Promise.race([
-    stream.shutdown,
-    new Promise((res) => setTimeout(() => res(null), 5e3))
-  ]);
-  stream.dispose();
+  const modelIds = models.map((m) => m.id);
+  const claudeModels = modelIds.filter((id2) => id2.toLowerCase().includes("claude"));
+  const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
   await fetchQuota(client, stateDir).catch(() => null);
   await client.stop().catch(() => {
   });
-  if (handle) {
-    const taskSummary = (completionResult?.summary ?? task).slice(0, 72);
-    const committed = commitWorktreeChanges(handle, `copilot: ${taskSummary}`);
-    if (committed) {
-      log("auto-committed worktree changes");
-    } else {
-      log("no uncommitted changes in worktree (Copilot may not have edited any files)");
-    }
+  if (isCheck) {
+    return;
   }
-  let filesModified = [];
-  let linesAdded = 0;
-  let linesRemoved = 0;
-  if (handle) {
-    try {
-      const stats = computeDiffStats(handle);
-      filesModified = stats.filesModified;
-      linesAdded = stats.linesAdded;
-      linesRemoved = stats.linesRemoved;
-    } catch (err) {
-      log(`diff stats failed: ${err.message}`);
-    }
-  }
-  if (shutdownResult) {
-    const selfFiles = new Set(shutdownResult.codeChanges.filesModified);
-    const gitFiles = new Set(filesModified);
-    const missing = [...selfFiles].filter((f) => !gitFiles.has(f));
-    if (missing.length > 0) {
-      log(`codeChanges drift: self-reported but not in git diff: ${missing.join(", ")}`);
-    }
-  }
-  const success = completionResult?.success !== false && !timedOut;
-  if (handle) {
-    cleanupWorktree(handle, { success, onWarn: (m) => log(`cleanup warn: ${m}`) });
-  }
-  if (!success) {
-    const error = timedOut ? `Timed out after ${timeout}ms` : "Task did not complete successfully.";
-    emit2({ status: "failed", jobId, error, branch: handle?.branch });
-    process.exit(0);
-  }
-  const summary = completionResult?.summary && completionResult.summary.trim() || stream.getLastAssistantMessage()?.trim() || "Copilot completed without providing a summary.";
-  const quotaRemaining = summarize(readSnapshot(stateDir));
-  const envelope = {
-    status: "completed",
-    jobId,
-    branch: handle?.branch,
-    summary,
-    filesModified,
-    linesAdded,
-    linesRemoved,
-    premiumRequestCost: premiumRequestCost ?? shutdownResult?.premiumRequestCost ?? 0,
-    model: shutdownResult?.currentModel ?? model,
-    quotaRemaining
+  const report = {
+    status: "ok",
+    authType: auth.authType,
+    login: auth.login,
+    host: auth.host,
+    defaultModel: DEFAULT_MODEL,
+    defaultModelAvailable: defaultAvailable,
+    models: modelIds,
+    claudeModels,
+    quota: summarize(readSnapshot(stateDir))
   };
-  const envelopeJson = emit2(envelope);
-  if (options.writePath) {
-    const outPath = (0, import_node_path7.resolve)(cwd, options.writePath);
-    (0, import_node_fs7.mkdirSync)((0, import_node_path7.dirname)(outPath), { recursive: true });
-    (0, import_node_fs7.writeFileSync)(outPath, envelopeJson + "\n", "utf-8");
-    progress(`Report saved to ${outPath}`);
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
   }
-  log(`implement done: branch=${envelope.branch ?? "none"} files=${envelope.filesModified.length} premiumCost=${envelope.premiumRequestCost}`);
-  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
+  const lines = [];
+  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push("");
+  lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ""})`);
+  if (auth.host) lines.push(`**Host:** ${auth.host}`);
+  lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? "(available)" : "(NOT listed \u2014 pass --model to override)"}`);
+  console.log(lines.join("\n"));
+}
+async function runCodexSetup(cwd, options, isCheck) {
+  if (isCheck) {
+    return;
+  }
+  const availability = getCodexAvailability(cwd);
+  const auth = await getCodexAuthStatus(cwd);
+  if (options.json) {
+    console.log(JSON.stringify({
+      status: auth.loggedIn ? "ok" : "error",
+      provider: "codex",
+      codex: {
+        available: availability.available,
+        availabilityDetail: availability.detail,
+        loggedIn: auth.loggedIn,
+        authMethod: auth.authMethod,
+        detail: auth.detail
+      }
+    }, null, 2));
+    return;
+  }
+  const lines = [];
+  lines.push(`## Codex Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push("");
+  lines.push(`**Provider:** Codex`);
+  lines.push(`**Availability:** ${availability.available ? "available" : "unavailable"} \u2014 ${availability.detail}`);
+  lines.push(`**Status:** ${auth.loggedIn ? "Authenticated" : "Not authenticated"}${auth.authMethod ? ` (${auth.authMethod})` : ""}`);
+  lines.push(`**Detail:** ${auth.detail}`);
+  if (!auth.loggedIn) {
+    lines.push("");
+    lines.push("### Next steps");
+    lines.push("- Run `codex login` to authenticate, then re-run setup.");
+  }
+  console.log(lines.join("\n"));
+}
+function emit(options, report) {
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  const lines = [];
+  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push("");
+  lines.push(`**Status:** ${report.status === "ok" ? "Authenticated" : "Not authenticated"}`);
+  if (report.message) lines.push(`**Message:** ${report.message}`);
+  console.log(lines.join("\n"));
 }
 
+// src/commands/review.ts
+init_state();
+init_quota();
+
 // src/lib/git.ts
-var import_node_child_process3 = require("node:child_process");
-var import_node_fs8 = require("node:fs");
-var import_node_path8 = require("node:path");
+var import_node_child_process5 = require("node:child_process");
+var import_node_fs5 = require("node:fs");
+var import_node_path5 = require("node:path");
 var MAX_UNTRACKED_BYTES = 24 * 1024;
 var DEFAULT_INLINE_DIFF_MAX_FILES = 2;
 var DEFAULT_INLINE_DIFF_MAX_BYTES = 256 * 1024;
@@ -10258,7 +11480,7 @@ function truncateUtf8(s, maxBytes) {
   return { text: cut, truncated: true };
 }
 function git(cwd, args, maxBuffer) {
-  const result = (0, import_node_child_process3.spawnSync)("git", args, {
+  const result = (0, import_node_child_process5.spawnSync)("git", args, {
     cwd,
     encoding: "utf8",
     maxBuffer,
@@ -10370,12 +11592,12 @@ function formatSection(title, body) {
   return [`## ${title}`, "", body.trim() ? body.trim() : "(none)", ""].join("\n");
 }
 function formatUntrackedFile(cwd, relativePath) {
-  const absolute = (0, import_node_path8.join)(cwd, relativePath);
-  if (!(0, import_node_fs8.existsSync)(absolute)) return `### ${relativePath}
+  const absolute = (0, import_node_path5.join)(cwd, relativePath);
+  if (!(0, import_node_fs5.existsSync)(absolute)) return `### ${relativePath}
 (skipped: missing)`;
   let stat;
   try {
-    stat = (0, import_node_fs8.statSync)(absolute);
+    stat = (0, import_node_fs5.statSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
@@ -10386,7 +11608,7 @@ function formatUntrackedFile(cwd, relativePath) {
 (skipped: ${stat.size} bytes exceeds ${MAX_UNTRACKED_BYTES} byte limit)`;
   let buffer;
   try {
-    buffer = (0, import_node_fs8.readFileSync)(absolute);
+    buffer = (0, import_node_fs5.readFileSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
@@ -10824,8 +12046,86 @@ Rules:
 </structured_findings>
 `;
 
+// src/lib/system-message.ts
+var import_node_fs6 = require("node:fs");
+var import_node_path6 = require("node:path");
+var FRAMING = {
+  fix: [
+    "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
+    "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
+    "If a finding cannot be safely applied, skip it and report why rather than forcing a change."
+  ].join("\n"),
+  review: [
+    "You are performing a code review delegated by Claude Code's orchestrator. You run headless.",
+    "This session is read-only: do not attempt to modify files. Report findings; another stage applies any fixes."
+  ].join("\n"),
+  ask: [
+    "You are one independent voice being consulted on a question or topic.",
+    "Reason carefully and state your own honest conclusion. Use only the context",
+    "provided in the prompt \u2014 do not explore the filesystem or run tools.",
+    "Be concrete and decisive; surface key assumptions and the strongest",
+    "counter-argument to your own position."
+  ].join(" ")
+};
+function resolveExtraContext(cwd, opts) {
+  const raw = opts.context;
+  if (!raw || !raw.trim()) return void 0;
+  if (!raw.startsWith("@")) return raw.trim();
+  const ref = raw.slice(1);
+  try {
+    const source = ref === "-" ? 0 : (0, import_node_path6.resolve)(cwd, ref);
+    const text = (0, import_node_fs6.readFileSync)(source, "utf-8").trim();
+    return text || void 0;
+  } catch (err) {
+    opts.onWarn?.(
+      `Could not read --context ${ref === "-" ? "from stdin" : `file ${ref}`}: ${err.message}`
+    );
+    return void 0;
+  }
+}
+function buildSystemMessage(kind, input = {}) {
+  const sections = [];
+  sections.push(FRAMING[kind]);
+  if (input.extraContext && input.extraContext.trim()) {
+    sections.push(`## Additional context from the orchestrator
+The following is context from the Claude Code session that delegated this task. Treat it as authoritative intent:
+
+${input.extraContext.trim()}`);
+  }
+  return sections.join("\n\n");
+}
+
+// src/lib/turn-runtime.ts
+function makeProgress() {
+  return (message) => {
+    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
+    process.stderr.write(`[${time}] ${message}
+`);
+  };
+}
+function startTurnTimeout(opts) {
+  const abort = new AbortController();
+  let firedTimeout = false;
+  const handle = setTimeout(() => {
+    firedTimeout = true;
+    opts.progress(`Timeout after ${opts.timeoutMs}ms reached \u2014 requesting abort.`);
+    opts.log(`timeout ${opts.timeoutMs}ms`);
+    abort.abort();
+  }, opts.timeoutMs);
+  return {
+    signal: abort.signal,
+    timedOut: () => firedTimeout,
+    clear: () => clearTimeout(handle)
+  };
+}
+function formatCodexUsage(u) {
+  const pct = u.rateLimits?.primaryUsedPercent;
+  const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
+  return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
+}
+
 // src/commands/review.ts
-var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
+var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
 var DEFAULT_MODEL_STANDARD = "gpt-5.3-codex";
 var DEFAULT_MODEL_ADVERSARIAL = "gpt-5.5";
 var DEFAULT_MODEL_SIMPLIFY = "gpt-5.3-codex";
@@ -10847,24 +12147,17 @@ function defaultEffortFor(kind) {
   if (kind === "simplify") return DEFAULT_EFFORT_SIMPLIFY;
   return DEFAULT_EFFORT_STANDARD;
 }
-function progressFactory2() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
 async function runReview(cwd, options = {}) {
-  const progress = progressFactory2();
+  const progress = makeProgress();
   const kind = resolveKind(options);
-  const model = options.model ?? defaultModelFor(kind);
   const reasoning = options.reasoning ?? defaultEffortFor(kind);
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS2;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const minQuota = options.minQuota ?? 1;
+  const copilotModel = options.model ?? defaultModelFor(kind);
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const log = (msg) => appendLog(stateDir, jobId, msg);
-  log(`review start: kind=${kind} model=${model} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`);
+  log(`review start: kind=${kind} model=${copilotModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`);
   const target = resolveReviewTarget(cwd, { scope: options.scope, base: options.base });
   const context = collectReviewContext(cwd, target, { shellAvailable: false });
   if (context.fileCount === 0) {
@@ -10876,71 +12169,11 @@ No changes to review under ${context.target.label}.
     return;
   }
   progress(`Target: ${context.target.label} \u2014 ${context.fileCount} file(s), ~${context.diffBytes}B diff (${context.inputMode}).`);
-  const snapshot = readSnapshot(stateDir);
-  if (isPremiumModel(model)) {
-    const gate = evaluateGate(snapshot, { minRemaining: minQuota });
-    if (!gate.ok) {
-      log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-      throw new Error(`Quota exhausted \u2014 review not started. Resets at ${gate.resetAt || "unknown"}.`);
-    }
-    if (gate.ok && "warning" in gate && gate.warning) progress(gate.warning);
-  } else {
-    log(`quota gate skipped: model ${model} is not premium-metered`);
-  }
   const fixMode = options.fix === true;
   let prompt = buildReviewPrompt(kind, { context, focusText: options.focusText ?? "" });
   if (fixMode) prompt += `
 ${FINDINGS_OUTPUT_INSTRUCTION}`;
   log(`prompt built: ${prompt.length} chars${fixMode ? " (structured findings mode)" : ""}`);
-  const client = new CopilotClient({ workingDirectory: context.repoRoot, env: process.env });
-  let cleanupDone = false;
-  let aborted = false;
-  const finalize2 = async (errorMessage) => {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    try {
-      await client.forceStop();
-    } catch {
-    }
-    if (errorMessage) {
-      process.stderr.write(`Review failed: ${errorMessage}
-`);
-    }
-  };
-  const onSignal = async () => {
-    if (aborted) return;
-    aborted = true;
-    progress("Received interrupt; aborting review.");
-    log("interrupt");
-    await finalize2("Interrupted by signal");
-    process.exit(130);
-  };
-  process.on("SIGINT", () => void onSignal());
-  process.on("SIGTERM", () => void onSignal());
-  try {
-    await client.start();
-  } catch (err) {
-    const msg = `Failed to start Copilot CLI: ${err.message}`;
-    await finalize2(msg);
-    throw new Error(msg);
-  }
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    log(`auth failed: ${auth.message}`);
-    const msg = `Not authenticated: ${auth.message}`;
-    await finalize2(msg);
-    await client.stop().catch(() => {
-    });
-    throw new Error(msg);
-  }
-  log(`auth ok: ${auth.authType}${auth.login ? ` as ${auth.login}` : ""}`);
-  const permissionHandler = makePermissionHandler({
-    allowShell: false,
-    allowUrl: false,
-    worktreePath: context.repoRoot,
-    appendLog: log,
-    readOnly: true
-  });
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
     onWarn: (m) => {
@@ -10948,77 +12181,56 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
       log(m);
     }
   });
-  let session;
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
+  let provider;
+  let result;
   try {
-    session = await client.createSession({
-      clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
-      model,
-      reasoningEffort: reasoning,
-      workingDirectory: context.repoRoot,
-      infiniteSessions: { enabled: false },
-      onPermissionRequest: permissionHandler,
-      systemMessage: {
-        mode: "append",
-        content: buildSystemMessage("review", { extraContext })
-      }
-    });
+    ({ provider, result } = await runAgentSession({
+      cwd: context.repoRoot,
+      flags: { provider: options.provider },
+      run: {
+        cwd: context.repoRoot,
+        prompt,
+        model: options.model,
+        // undefined → defaultModelFor fills it per provider
+        reasoning,
+        readOnly: true,
+        allowShell: false,
+        allowUrl: false,
+        systemMessage: buildSystemMessage("review", { extraContext }),
+        appendLog: log,
+        progress,
+        signal: turn.signal
+      },
+      defaultModelFor: (id) => id === "copilot" ? defaultModelFor(kind) : void 0,
+      enforceQuota: () => {
+        if (!isPremiumModel(copilotModel)) {
+          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
+          return;
+        }
+        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
+        if (!gate.ok) {
+          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
+          throw new Error(`Quota exhausted \u2014 review not started. Resets at ${gate.resetAt || "unknown"}.`);
+        }
+        if ("warning" in gate && gate.warning) progress(gate.warning);
+      },
+      log
+    }));
   } catch (err) {
-    const msg = `Failed to create Copilot session: ${err.message}`;
-    log(msg);
-    await client.stop().catch((e) => log(`client.stop warn: ${e.message}`));
-    await finalize2(msg);
-    throw new Error(msg);
-  }
-  const stream = attachStream({ session, stateDir, appendLog: log, progress });
-  let completionResult = null;
-  let shutdownResult = null;
-  let premiumRequestCost;
-  let timedOut = false;
-  let sessionTorn = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms \u2014 aborting session.`);
-    log(`timeout ${timeout}ms`);
-    session.abort().catch((e) => log(`abort error: ${e.message}`));
-  }, timeout);
-  const tearDownSession = async () => {
-    if (sessionTorn) return;
-    sessionTorn = true;
-    clearTimeout(timeoutHandle);
-    await session.disconnect().catch((e) => log(`disconnect warn: ${e.message}`));
-    stream.dispose();
-    await fetchQuota(client, stateDir).catch(() => null);
-    await client.stop().catch((e) => log(`client.stop warn: ${e.message}`));
-  };
-  try {
-    progress(`Sending ${kind} review prompt to Copilot (model=${model}, effort=${reasoning})\u2026`);
-    await session.send({ prompt });
-    completionResult = await stream.completion;
-    progress("Review complete; collecting usage metrics.");
-    try {
-      const metrics = await session.rpc.usage.getMetrics();
-      premiumRequestCost = metrics.totalPremiumRequestCost;
-    } catch (e) {
-      log(`usage.getMetrics failed: ${e.message}`);
-    }
-    await session.disconnect().catch((e) => log(`disconnect warn: ${e.message}`));
-    shutdownResult = await Promise.race([
-      stream.shutdown,
-      new Promise((res) => setTimeout(() => res(null), 5e3))
-    ]);
-  } catch (err) {
+    turn.clear();
     const msg = err.message;
-    log(`session error: ${msg}`);
-    await tearDownSession();
-    await finalize2(msg);
-    throw new Error(msg);
+    process.stderr.write(`Review failed: ${msg}
+`);
+    log(`review failed: ${msg}`);
+    throw err instanceof Error ? err : new Error(msg);
   } finally {
-    await tearDownSession();
+    turn.clear();
   }
-  const reviewBody = stream.getLastAssistantMessage()?.trim() || completionResult?.summary && completionResult.summary.trim() || "_(Copilot returned an empty review.)_";
-  const success = completionResult?.success !== false && !timedOut;
+  const reviewBody = result.lastAssistantMessage?.trim() || result.summary && result.summary.trim() || "_(The model returned an empty review.)_";
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = timedOut ? `Timed out after ${timeout}ms.` : "Review did not complete successfully.";
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Review did not complete successfully.";
     process.stderr.write(`Review failed: ${reason}
 `);
     process.stdout.write(`# Review Failed
@@ -11031,8 +12243,8 @@ ${reviewBody}
     throw new Error(reason);
   }
   const quotaRemaining = summarize(readSnapshot(stateDir));
-  const premium = premiumRequestCost ?? shutdownResult?.premiumRequestCost ?? 0;
-  const usedModel = shutdownResult?.currentModel ?? model;
+  const premium = result.usage?.kind === "copilot" ? result.usage.premiumRequestCost ?? 0 : 0;
+  const usedModel = provider === "copilot" ? copilotModel : options.model ?? "codex";
   if (fixMode) {
     const findings = normalizeFindings(extractJsonBlock(reviewBody));
     const envelope = {
@@ -11053,98 +12265,42 @@ ${reviewBody}
     process.stdout.write(`${reviewBody.trim()}
 `);
   }
-  const poolNote = quotaRemaining.pools.length > 0 ? quotaRemaining.pools.map(
-    (p) => p.unlimited ? `${p.label}=unlimited` : `${p.label}=${fmtNum(p.remaining ?? 0)}/${fmtNum(p.total ?? 0)}`
-  ).join(", ") : "no quota snapshot yet";
-  progress(
-    `Review done \u2014 kind=${kind} model=${usedModel} effort=${reasoning} files=${context.fileCount} premium-cost=${fmtNum(premium)} | ${poolNote}`
-  );
-  log(`review done: kind=${kind} files=${context.fileCount} premium=${premium} pools=${poolNote}`);
+  if (result.usage?.kind === "codex") {
+    const u = result.usage;
+    progress(
+      `Review done \u2014 kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`
+    );
+    log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`);
+  } else {
+    const poolNote = quotaRemaining.pools.length > 0 ? quotaRemaining.pools.map(
+      (p) => p.unlimited ? `${p.label}=unlimited` : `${p.label}=${fmtNum(p.remaining ?? 0)}/${fmtNum(p.total ?? 0)}`
+    ).join(", ") : "no quota snapshot yet";
+    progress(
+      `Review done \u2014 kind=${kind} provider=${provider} model=${usedModel} effort=${reasoning} files=${context.fileCount} premium-cost=${fmtNum(premium)} | ${poolNote}`
+    );
+    log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} premium=${premium} pools=${poolNote}`);
+  }
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
 // src/commands/ask.ts
-var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
-var DEFAULT_MODEL3 = "gpt-5.5";
-var DEFAULT_EFFORT2 = "high";
-function progressFactory3() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
+init_state();
+init_quota();
+var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
+var COPILOT_DEFAULT_MODEL = "gpt-5.5";
+var DEFAULT_EFFORT = "high";
 async function runAsk(cwd, options) {
-  const progress = progressFactory3();
-  const model = options.model ?? DEFAULT_MODEL3;
-  const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS3;
+  const progress = makeProgress();
+  const reasoning = options.reasoning ?? DEFAULT_EFFORT;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
   const minQuota = options.minQuota ?? 1;
+  const copilotModel = options.model ?? COPILOT_DEFAULT_MODEL;
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const log = (msg) => appendLog(stateDir, jobId, msg);
-  log(`ask start: model=${model} effort=${reasoning} promptChars=${prompt.length}`);
-  const snapshot = readSnapshot(stateDir);
-  if (isPremiumModel(model)) {
-    const gate = evaluateGate(snapshot, { minRemaining: minQuota });
-    if (!gate.ok) {
-      log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-      throw new Error(`Quota exhausted \u2014 ask not started. Resets at ${gate.resetAt || "unknown"}.`);
-    }
-    if (gate.ok && "warning" in gate && gate.warning) progress(gate.warning);
-  } else {
-    log(`quota gate skipped: model ${model} is not premium-metered`);
-  }
-  const client = new CopilotClient({ workingDirectory: cwd, env: process.env });
-  let cleanupDone = false;
-  let aborted = false;
-  const finalize2 = async (errorMessage) => {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    try {
-      await client.forceStop();
-    } catch {
-    }
-    if (errorMessage) process.stderr.write(`Ask failed: ${errorMessage}
-`);
-  };
-  const onSignal = async () => {
-    if (aborted) return;
-    aborted = true;
-    progress("Received interrupt; aborting ask.");
-    log("interrupt");
-    await finalize2("Interrupted by signal");
-    process.exit(130);
-  };
-  process.on("SIGINT", () => void onSignal());
-  process.on("SIGTERM", () => void onSignal());
-  try {
-    await client.start();
-  } catch (err) {
-    const msg = `Failed to start Copilot CLI: ${err.message}`;
-    await finalize2(msg);
-    throw new Error(msg);
-  }
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    log(`auth failed: ${auth.message}`);
-    const msg = `Not authenticated: ${auth.message}`;
-    await finalize2(msg);
-    await client.stop().catch(() => {
-    });
-    throw new Error(msg);
-  }
-  log(`auth ok: ${auth.authType}${auth.login ? ` as ${auth.login}` : ""}`);
-  const permissionHandler = makePermissionHandler({
-    allowShell: false,
-    allowUrl: false,
-    worktreePath: cwd,
-    appendLog: log,
-    readOnly: true,
-    isolated: true
-  });
+  log(`ask start: model=${options.model ?? "(provider default)"} effort=${reasoning} promptChars=${prompt.length}`);
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
     onWarn: (m) => {
@@ -11152,68 +12308,56 @@ async function runAsk(cwd, options) {
       log(m);
     }
   });
-  let session;
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
+  let provider;
+  let result;
   try {
-    session = await client.createSession({
-      clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
-      model,
-      reasoningEffort: reasoning,
-      workingDirectory: cwd,
-      infiniteSessions: { enabled: false },
-      onPermissionRequest: permissionHandler,
-      systemMessage: { mode: "append", content: buildSystemMessage("ask", { extraContext }) }
-    });
+    ({ provider, result } = await runAgentSession({
+      cwd,
+      flags: { provider: options.provider },
+      run: {
+        cwd,
+        prompt,
+        model: options.model,
+        // undefined → defaultModelFor fills it per provider
+        reasoning,
+        readOnly: true,
+        allowShell: false,
+        allowUrl: false,
+        systemMessage: buildSystemMessage("ask", { extraContext }),
+        appendLog: log,
+        progress,
+        signal: turn.signal
+      },
+      defaultModelFor: (id) => id === "copilot" ? COPILOT_DEFAULT_MODEL : void 0,
+      enforceQuota: () => {
+        if (!isPremiumModel(copilotModel)) {
+          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
+          return;
+        }
+        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
+        if (!gate.ok) {
+          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
+          throw new Error(`Quota exhausted \u2014 ask not started. Resets at ${gate.resetAt || "unknown"}.`);
+        }
+        if ("warning" in gate && gate.warning) progress(gate.warning);
+      },
+      log
+    }));
   } catch (err) {
-    const msg = `Failed to create Copilot session: ${err.message}`;
-    log(msg);
-    await client.stop().catch((e) => log(`client.stop warn: ${e.message}`));
-    await finalize2(msg);
-    throw new Error(msg);
-  }
-  const stream = attachStream({ session, stateDir, appendLog: log, progress });
-  let completionResult = null;
-  let premiumRequestCost;
-  let timedOut = false;
-  let sessionTorn = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms \u2014 aborting session.`);
-    log(`timeout ${timeout}ms`);
-    session.abort().catch((e) => log(`abort error: ${e.message}`));
-  }, timeout);
-  const tearDownSession = async () => {
-    if (sessionTorn) return;
-    sessionTorn = true;
-    clearTimeout(timeoutHandle);
-    await session.disconnect().catch((e) => log(`disconnect warn: ${e.message}`));
-    stream.dispose();
-    await fetchQuota(client, stateDir).catch(() => null);
-    await client.stop().catch((e) => log(`client.stop warn: ${e.message}`));
-  };
-  try {
-    progress(`Sending prompt to Copilot (model=${model}, effort=${reasoning})\u2026`);
-    await session.send({ prompt });
-    completionResult = await stream.completion;
-    progress("Answer complete; collecting usage metrics.");
-    try {
-      const metrics = await session.rpc.usage.getMetrics();
-      premiumRequestCost = metrics.totalPremiumRequestCost;
-    } catch (e) {
-      log(`usage.getMetrics failed: ${e.message}`);
-    }
-  } catch (err) {
+    turn.clear();
     const msg = err.message;
-    log(`session error: ${msg}`);
-    await tearDownSession();
-    await finalize2(msg);
-    throw new Error(msg);
+    process.stderr.write(`Ask failed: ${msg}
+`);
+    log(`ask failed: ${msg}`);
+    throw err instanceof Error ? err : new Error(msg);
   } finally {
-    await tearDownSession();
+    turn.clear();
   }
-  const body = stream.getLastAssistantMessage()?.trim() || completionResult?.summary && completionResult.summary.trim() || "_(Copilot returned an empty answer.)_";
-  const success = completionResult?.success !== false && !timedOut;
+  const body = result.lastAssistantMessage?.trim() || result.summary && result.summary.trim() || "_(The model returned an empty answer.)_";
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = timedOut ? `Timed out after ${timeout}ms.` : "Ask did not complete successfully.";
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Ask did not complete successfully.";
     process.stdout.write(`${body}
 `);
     log(`ask failed: ${reason}`);
@@ -11221,45 +12365,71 @@ async function runAsk(cwd, options) {
   }
   process.stdout.write(`${body.trim()}
 `);
-  const quotaRemaining = summarize(readSnapshot(stateDir));
-  const premium = premiumRequestCost ?? 0;
-  progress(`Ask done \u2014 model=${model} effort=${reasoning} premium-cost=${fmtNum(premium)}`);
-  log(`ask done: premium=${premium}`);
+  if (result.usage?.kind === "copilot") {
+    const premium = result.usage.premiumRequestCost ?? 0;
+    progress(`Ask done \u2014 provider=${provider} model=${copilotModel} effort=${reasoning} premium-cost=${fmtNum(premium)}`);
+    log(`ask done: provider=${provider} premium=${premium}`);
+  } else if (result.usage?.kind === "codex") {
+    const u = result.usage;
+    progress(`Ask done \u2014 provider=${provider} effort=${reasoning} ${formatCodexUsage(u)}`);
+    log(`ask done: provider=${provider} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`);
+  } else {
+    progress(`Ask done \u2014 provider=${provider} effort=${reasoning}`);
+    log(`ask done: provider=${provider}`);
+  }
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
 // src/commands/fix.ts
-var import_node_child_process4 = require("node:child_process");
-var import_node_fs9 = require("node:fs");
-var import_node_path9 = require("node:path");
-var DEFAULT_MODEL4 = "claude-opus-4.8";
-var DEFAULT_EFFORT3 = "high";
-var DEFAULT_TIMEOUT_MS4 = 30 * 60 * 1e3;
-function progressFactory4() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
+var import_node_child_process7 = require("node:child_process");
+var import_node_fs8 = require("node:fs");
+var import_node_path8 = require("node:path");
+init_state();
+init_quota();
+
+// src/lib/worktree.ts
+var import_node_child_process6 = require("node:child_process");
+var import_node_fs7 = require("node:fs");
+var import_node_path7 = require("node:path");
+function tryGit(args, cwd) {
+  const res = (0, import_node_child_process6.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  return {
+    ok: res.status === 0,
+    stdout: (res.stdout ?? "").trim(),
+    stderr: (res.stderr ?? "").trim()
   };
 }
+function resolveRepoRoot(cwd) {
+  const res = tryGit(["rev-parse", "--show-toplevel"], cwd);
+  if (!res.ok) {
+    throw new Error(`Not a git repository: ${cwd}${res.stderr ? `
+${res.stderr}` : ""}`);
+  }
+  return res.stdout;
+}
+
+// src/commands/fix.ts
+var DEFAULT_MODEL2 = "claude-opus-4.8";
+var DEFAULT_EFFORT2 = "high";
+var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
 function tryGit2(args, cwd) {
-  const res = (0, import_node_child_process4.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  const res = (0, import_node_child_process7.spawnSync)("git", args, { cwd, encoding: "utf-8" });
   return { ok: res.status === 0, stdout: (res.stdout ?? "").trim(), stderr: (res.stderr ?? "").trim() };
 }
 function gitHead(cwd) {
   try {
-    return (0, import_node_child_process4.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
+    return (0, import_node_child_process7.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
   } catch {
     return "";
   }
 }
-function emit3(env) {
+function emit2(env) {
   const json = JSON.stringify(env);
   process.stdout.write(json + "\n");
   return json;
 }
 function loadFindings(path) {
-  const raw = (0, import_node_fs9.readFileSync)(path, "utf-8");
+  const raw = (0, import_node_fs8.readFileSync)(path, "utf-8");
   return normalizeFindings(JSON.parse(raw));
 }
 function buildFixPrompt(findings) {
@@ -11338,114 +12508,50 @@ function computeStagedDiff(cwd, baseline) {
   return { filesModified, linesAdded, linesRemoved };
 }
 async function runFix(cwd, options = {}) {
-  const progress = progressFactory4();
+  const progress = makeProgress();
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
-  const model = options.model ?? DEFAULT_MODEL4;
-  const reasoning = options.reasoning ?? DEFAULT_EFFORT3;
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS4;
+  const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS3;
   const minQuota = options.minQuota ?? 1;
+  const copilotModel = options.model ?? DEFAULT_MODEL2;
   const log = (msg) => appendLog(stateDir, jobId, msg);
   if (!options.findingsPath) {
-    emit3({ status: "failed", jobId, error: "Missing --findings <path>; provide the approved findings JSON." });
+    emit2({ status: "failed", jobId, error: "Missing --findings <path>; provide the approved findings JSON." });
     process.exit(1);
   }
-  const findingsAbs = (0, import_node_path9.resolve)(cwd, options.findingsPath);
+  const findingsAbs = (0, import_node_path8.resolve)(cwd, options.findingsPath);
   let findings;
   try {
     findings = loadFindings(findingsAbs);
   } catch (err) {
-    emit3({ status: "failed", jobId, error: `Could not read findings file ${findingsAbs}: ${err.message}` });
+    emit2({ status: "failed", jobId, error: `Could not read findings file ${findingsAbs}: ${err.message}` });
     process.exit(1);
   }
   if (findings.length === 0) {
-    emit3({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
+    emit2({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
     process.exit(1);
   }
-  log(`fix start: model=${model} findings=${findings.length} source=${findingsAbs}`);
-  const snapshot = readSnapshot(stateDir);
-  const gate = evaluateGate(snapshot, { minRemaining: minQuota });
-  if (!gate.ok) {
-    log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-    emit3({
-      status: "blocked",
-      reason: gate.reason,
-      resetAt: gate.resetAt,
-      remaining: gate.remaining,
-      message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || "unknown"}.`
-    });
-    return;
-  }
-  if (gate.ok && "warning" in gate && gate.warning) progress(gate.warning);
+  log(`fix start: model=${copilotModel} findings=${findings.length} source=${findingsAbs}`);
   let repoRoot;
   try {
     repoRoot = resolveRepoRoot(cwd);
   } catch (err) {
-    emit3({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
+    emit2({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
     process.exit(1);
   }
   let preFixSnapshot = false;
-  const dirty = tryGit2(["status", "--porcelain"], repoRoot);
-  if (dirty.ok && dirty.stdout.trim()) {
-    tryGit2(["add", "-A"], repoRoot);
-    const c = tryGit2(["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"], repoRoot);
-    preFixSnapshot = c.ok;
-    if (c.ok) {
-      progress("Committed pre-existing changes as a baseline snapshot before applying fixes.");
-      log("pre-fix snapshot commit created");
-    } else {
-      log(`pre-fix snapshot commit failed: ${c.stderr}`);
-    }
-  }
-  if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
-    emit3({
-      status: "failed",
-      jobId,
-      error: "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry."
-    });
-    process.exit(1);
-  }
-  const baselineCommit = gitHead(repoRoot);
-  if (!baselineCommit) {
-    emit3({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet)." });
-    process.exit(1);
-  }
-  const client = new CopilotClient({ workingDirectory: repoRoot, env: process.env });
-  let cleanupDone = false;
-  const finalizeFailure = async (error) => {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    await client.forceStop().catch(() => {
-    });
-    emit3({ status: "failed", jobId, error });
-  };
-  const onSignal = async () => {
+  let baselineCommit = "";
+  const snapshotInfo = () => preFixSnapshot ? { preFixSnapshot, ...baselineCommit ? { baselineCommit } : {} } : {};
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
+  let envelopeDone = false;
+  const onInterrupt = () => {
+    if (envelopeDone) return;
+    envelopeDone = true;
+    turn.clear();
     progress("Received interrupt signal; aborting fix session.");
-    await finalizeFailure("Interrupted by signal");
-    process.exit(130);
+    emit2({ status: "failed", jobId, error: "Interrupted by signal" });
   };
-  process.on("SIGINT", () => void onSignal());
-  process.on("SIGTERM", () => void onSignal());
-  try {
-    await client.start();
-  } catch (err) {
-    await finalizeFailure(`Failed to start Copilot CLI: ${err.message}`);
-    process.exit(1);
-  }
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    await finalizeFailure(`Not authenticated: ${auth.message}`);
-    await client.stop().catch(() => {
-    });
-    process.exit(1);
-  }
-  log(`auth ok: ${auth.authType}${auth.login ? ` as ${auth.login}` : ""}`);
-  const permissionHandler = makePermissionHandler({
-    allowShell: options.allowShell ?? false,
-    allowUrl: options.allowUrl ?? false,
-    worktreePath: repoRoot,
-    appendLog: log
-  });
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
     onWarn: (m) => {
@@ -11453,67 +12559,109 @@ async function runFix(cwd, options = {}) {
       log(m);
     }
   });
-  const session = await client.createSession({
-    clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
-    model,
-    reasoningEffort: reasoning,
-    workingDirectory: repoRoot,
-    infiniteSessions: { enabled: false },
-    onPermissionRequest: permissionHandler,
-    systemMessage: {
-      mode: "append",
-      content: buildSystemMessage("fix", { extraContext })
-    }
-  });
-  const stream = attachStream({ session, stateDir, appendLog: log, progress });
-  progress(`Applying ${findings.length} approved fix(es) (model=${model})\u2026`);
-  await session.send({ prompt: buildFixPrompt(findings) });
-  let completionResult = null;
-  let timedOut = false;
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    progress(`Timeout after ${timeout}ms \u2014 aborting session.`);
-    session.abort().catch((e) => log(`abort error: ${e.message}`));
-  }, timeout);
+  progress(`Applying ${findings.length} approved fix(es) (model=${copilotModel})\u2026`);
+  let provider;
+  let result;
   try {
-    completionResult = await stream.completion;
+    ({ provider, result } = await runAgentSession({
+      cwd: repoRoot,
+      flags: { provider: options.provider },
+      run: {
+        cwd: repoRoot,
+        prompt: buildFixPrompt(findings),
+        model: options.model,
+        // undefined → defaultModelFor fills it per provider
+        reasoning,
+        readOnly: false,
+        allowShell: options.allowShell ?? false,
+        allowUrl: options.allowUrl ?? false,
+        systemMessage: buildSystemMessage("fix", { extraContext }),
+        appendLog: log,
+        progress,
+        signal: turn.signal
+      },
+      onInterrupt,
+      defaultModelFor: (id) => id === "copilot" ? DEFAULT_MODEL2 : void 0,
+      enforceQuota: () => {
+        if (!isPremiumModel(copilotModel)) {
+          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
+          return;
+        }
+        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
+        if (!gate.ok) {
+          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
+          envelopeDone = true;
+          turn.clear();
+          emit2({
+            status: "blocked",
+            reason: gate.reason,
+            resetAt: gate.resetAt,
+            remaining: gate.remaining,
+            message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || "unknown"}.`
+          });
+          process.exit(0);
+        }
+        if ("warning" in gate && gate.warning) progress(gate.warning);
+      },
+      // Post-gate / pre-run: snapshot pre-existing changes so the fix diff is
+      // isolated. Runs ONLY after the quota gate passes, so a blocked copilot
+      // fix leaves git history untouched.
+      beforeRun: () => {
+        const dirty = tryGit2(["status", "--porcelain"], repoRoot);
+        if (dirty.ok && dirty.stdout.trim()) {
+          tryGit2(["add", "-A"], repoRoot);
+          const c = tryGit2(["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"], repoRoot);
+          preFixSnapshot = c.ok;
+          if (c.ok) {
+            progress("Committed pre-existing changes as a baseline snapshot before applying fixes.");
+            log("pre-fix snapshot commit created");
+          } else {
+            log(`pre-fix snapshot commit failed: ${c.stderr}`);
+          }
+        }
+        if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
+          envelopeDone = true;
+          turn.clear();
+          emit2({
+            status: "failed",
+            jobId,
+            error: "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry."
+          });
+          process.exit(1);
+        }
+        baselineCommit = gitHead(repoRoot);
+        if (!baselineCommit) {
+          envelopeDone = true;
+          turn.clear();
+          emit2({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet).", ...snapshotInfo() });
+          process.exit(1);
+        }
+      },
+      log
+    }));
   } catch (err) {
-    clearTimeout(timeoutHandle);
-    stream.dispose();
-    await session.disconnect().catch(() => {
-    });
-    await client.stop().catch(() => {
-    });
-    await finalizeFailure(err.message);
+    turn.clear();
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit2({ status: "failed", jobId, error: err.message, ...snapshotInfo() });
+    }
     process.exit(1);
   }
-  clearTimeout(timeoutHandle);
-  let premiumRequestCost;
-  try {
-    const metrics = await session.rpc.usage.getMetrics();
-    premiumRequestCost = metrics.totalPremiumRequestCost;
-  } catch (e) {
-    log(`usage.getMetrics failed: ${e.message}`);
-  }
-  await session.disconnect().catch((e) => log(`disconnect warn: ${e.message}`));
-  const shutdownResult = await Promise.race([
-    stream.shutdown,
-    new Promise((res) => setTimeout(() => res(null), 5e3))
-  ]);
-  stream.dispose();
-  await fetchQuota(client, stateDir).catch(() => null);
-  await client.stop().catch(() => {
-  });
-  const success = completionResult?.success !== false && !timedOut;
+  turn.clear();
+  const success = result.success && !turn.timedOut();
   if (!success) {
-    await finalizeFailure(timedOut ? `Timed out after ${timeout}ms` : "Fix session did not complete successfully.");
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit2({ status: "failed", jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.", ...snapshotInfo() });
+    }
     process.exit(0);
   }
-  cleanupDone = true;
-  const assistant = stream.getLastAssistantMessage() ?? "";
-  const report = parseApplyReport(assistant, findings);
+  envelopeDone = true;
+  const report = parseApplyReport(result.lastAssistantMessage, findings);
   const diff = computeStagedDiff(repoRoot, baselineCommit);
-  const summary = completionResult?.summary && completionResult.summary.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
+  const summary = result.summary && result.summary.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
+  const premium = result.usage?.kind === "copilot" ? result.usage.premiumRequestCost ?? 0 : 0;
+  const usedModel = provider === "copilot" ? copilotModel : options.model ?? "codex";
   const envelope = {
     status: "fixed",
     jobId,
@@ -11525,26 +12673,31 @@ async function runFix(cwd, options = {}) {
     linesRemoved: diff.linesRemoved,
     applied: report.applied,
     skipped: report.skipped,
-    premiumRequestCost: premiumRequestCost ?? shutdownResult?.premiumRequestCost ?? 0,
-    model: shutdownResult?.currentModel ?? model,
+    premiumRequestCost: premium,
+    model: usedModel,
     quotaRemaining: summarize(readSnapshot(stateDir))
   };
-  const envelopeJson = emit3(envelope);
+  const envelopeJson = emit2(envelope);
   if (options.writePath) {
-    const outPath = (0, import_node_path9.resolve)(cwd, options.writePath);
-    (0, import_node_fs9.mkdirSync)((0, import_node_path9.dirname)(outPath), { recursive: true });
-    (0, import_node_fs9.writeFileSync)(outPath, envelopeJson + "\n", "utf-8");
+    const outPath = (0, import_node_path8.resolve)(cwd, options.writePath);
+    (0, import_node_fs8.mkdirSync)((0, import_node_path8.dirname)(outPath), { recursive: true });
+    (0, import_node_fs8.writeFileSync)(outPath, envelopeJson + "\n", "utf-8");
     progress(`Report saved to ${outPath}`);
   }
   progress(
-    `Fix done \u2014 applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`
+    `Fix done \u2014 provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`
   );
-  log(`fix done: applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
+  log(`fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
+// src/commands/status.ts
+init_state();
+init_quota();
+
 // src/lib/zombie.ts
-var import_node_fs10 = require("node:fs");
+var import_node_fs9 = require("node:fs");
+init_state();
 var STALE_LOG_MS = 6e4;
 function isProcessAlive(pid) {
   try {
@@ -11556,8 +12709,8 @@ function isProcessAlive(pid) {
 }
 function logMtimeMs(path) {
   try {
-    if (!(0, import_node_fs10.existsSync)(path)) return null;
-    return (0, import_node_fs10.statSync)(path).mtimeMs;
+    if (!(0, import_node_fs9.existsSync)(path)) return null;
+    return (0, import_node_fs9.statSync)(path).mtimeMs;
   } catch {
     return null;
   }
@@ -11608,12 +12761,18 @@ async function runStatus(cwd, options = {}) {
   const jobs = listJobs(stateDir, sessionId);
   const snapshot = readSnapshot(stateDir);
   const quota = summarize(snapshot);
+  const codexRateLimits = readCodexRateLimits(stateDir);
   if (options.json) {
-    console.log(JSON.stringify({ quota, jobs }, null, 2));
+    console.log(JSON.stringify(
+      { quota, ...codexRateLimits ? { codex: codexRateLimits } : {}, jobs },
+      null,
+      2
+    ));
     return;
   }
   const sections = [];
-  sections.push(renderQuotaBlock(snapshot !== null, quota));
+  sections.push(renderQuotaBlock(snapshot !== null, quota, snapshot?.checkedAt));
+  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits, codexRateLimits.capturedAt));
   const running = jobs.filter((j) => j.status === "queued" || j.status === "running");
   const finished = jobs.filter((j) => j.status === "completed" || j.status === "failed");
   if (running.length > 0) {
@@ -11638,8 +12797,9 @@ async function runStatus(cwd, options = {}) {
   }
   console.log(sections.join("\n\n"));
 }
-function renderQuotaBlock(haveSnapshot, q) {
-  return ["## Copilot Quota", ...renderQuotaBar(q, haveSnapshot)].join("\n");
+function renderQuotaBlock(haveSnapshot, q, checkedAt) {
+  const header = haveSnapshot && checkedAt ? `## Quota (snapshot ${formatSnapshotAge(checkedAt)})` : "## Quota";
+  return [header, ...renderQuotaBar(q, haveSnapshot)].join("\n");
 }
 function toTableRow(job) {
   const icon = job.status === "completed" ? "\u2713 " : job.status === "failed" ? "\u2717 " : job.status === "running" ? "\u25B6 " : job.status === "queued" ? "\u2026 " : "  ";
@@ -11688,6 +12848,7 @@ function renderJobDetail(job, logTail) {
 }
 
 // src/commands/result.ts
+init_state();
 async function runResult(cwd, options = {}) {
   const stateDir = resolveStateDir(cwd);
   sweepZombieJobs(stateDir);
@@ -11708,7 +12869,7 @@ async function runResult(cwd, options = {}) {
     process.exit(1);
   }
   if (job.status === "queued" || job.status === "running") {
-    console.error(`Job ${jobId} is still ${job.status}. Use /copilot:status to check progress.`);
+    console.error(`Job ${jobId} is still ${job.status}. Use /harry:status to check progress.`);
     process.exit(1);
   }
   if (options.json) {
@@ -11735,7 +12896,8 @@ async function runResult(cwd, options = {}) {
 }
 
 // src/commands/background.ts
-var import_node_child_process5 = require("node:child_process");
+var import_node_child_process8 = require("node:child_process");
+init_state();
 
 // src/lib/args.ts
 function extractTask(args, flags) {
@@ -11744,11 +12906,21 @@ function extractTask(args, flags) {
   const flag = flags["task"];
   return typeof flag === "string" ? flag.trim() : "";
 }
+function flagString(flags, key) {
+  const v = flags[key];
+  return typeof v === "string" ? v : void 0;
+}
+function flagNumber(flags, key) {
+  const v = flags[key];
+  if (typeof v !== "string") return void 0;
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : void 0;
+}
 
 // src/commands/background.ts
 function enqueueBackground(command, args, flags, cwd) {
-  if (command !== "implement" && command !== "review") {
-    throw new Error(`Background execution is only supported for 'implement' or 'review', got '${command}'.`);
+  if (command !== "review") {
+    throw new Error(`Background execution is only supported for 'review', got '${command}'.`);
   }
   const stateDir = resolveStateDir(cwd);
   const jobId = generateJobId();
@@ -11756,7 +12928,7 @@ function enqueueBackground(command, args, flags, cwd) {
   const job = {
     id: jobId,
     kind: command,
-    title: `Copilot ${command}`,
+    title: `harry ${command}`,
     summary,
     status: "queued",
     phase: "queued",
@@ -11768,9 +12940,9 @@ function enqueueBackground(command, args, flags, cwd) {
   createJob(stateDir, job);
   appendLog(stateDir, jobId, `Queued for background execution: ${command} "${summary}"`);
   const scriptPath = getScriptPath();
-  const child = (0, import_node_child_process5.spawn)(process.execPath, [scriptPath, "_worker", "--job-id", jobId, "--cwd", cwd], {
+  const child = (0, import_node_child_process8.spawn)(process.execPath, [scriptPath, "_worker", "--job-id", jobId, "--cwd", cwd], {
     cwd,
-    env: { ...process.env, COPILOT_COMPANION_SESSION_ID: getSessionId() ?? "" },
+    env: { ...process.env, HARRY_SESSION_ID: getSessionId() ?? "" },
     detached: true,
     stdio: "ignore"
   });
@@ -11784,15 +12956,9 @@ function getScriptPath() {
   }
   return __filename;
 }
-function flagString(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : void 0;
+function flagProvider(flags) {
+  const v = flags["provider"];
+  return v === "copilot" || v === "codex" ? v : void 0;
 }
 async function runWorker(jobId, cwd) {
   const stateDir = resolveStateDir(cwd);
@@ -11832,40 +12998,31 @@ async function runWorker(jobId, cwd) {
   const validEfforts = ["low", "medium", "high", "xhigh"];
   const effort = reasoning && validEfforts.includes(reasoning) ? reasoning : void 0;
   try {
-    if (job.request.command === "review") {
-      const scope = flagString(flags, "scope");
-      const validScopes = ["auto", "working-tree", "branch"];
-      const reviewOpts = {
-        adversarial: flags["adversarial"] === true,
-        scope: scope && validScopes.includes(scope) ? scope : void 0,
-        base: flagString(flags, "base"),
-        focusText: extractTask(args, flags),
-        model: flagString(flags, "model"),
-        reasoning: effort,
-        timeout: flagNumber(flags, "timeout"),
-        minQuota: flagNumber(flags, "min-quota"),
-        fix: flags["fix"] === true,
-        context: flagString(flags, "context"),
-        jobId
-      };
-      await runReview(cwd, reviewOpts);
-    } else {
-      const implementOpts = {
-        model: flagString(flags, "model"),
-        reasoning: effort,
-        timeout: flagNumber(flags, "timeout"),
-        worktree: flags["no-worktree"] !== true,
-        allowShell: flags["allow-shell"] === true,
-        allowUrl: flags["allow-url"] === true,
-        minQuota: flagNumber(flags, "min-quota"),
-        writePath: flagString(flags, "write"),
-        context: flagString(flags, "context"),
-        jobId
-      };
-      const task = extractTask(args, flags);
-      if (!task) throw new Error("Empty task; provide an implementation objective.");
-      await runImplement(task, cwd, implementOpts);
+    if (job.request.command !== "review") {
+      throw new Error(`Background worker only supports 'review', got '${job.request.command}'.`);
     }
+    const scope = flagString(flags, "scope");
+    const validScopes = ["auto", "working-tree", "branch"];
+    const reviewOpts = {
+      adversarial: flags["adversarial"] === true,
+      scope: scope && validScopes.includes(scope) ? scope : void 0,
+      base: flagString(flags, "base"),
+      focusText: extractTask(args, flags),
+      // provider + simplify MUST be threaded here — the foreground dispatcher
+      // (companion.ts) passes them, so dropping them makes a backgrounded
+      // `review --simplify` / `--provider codex` silently run the wrong
+      // lane/backend.
+      provider: flagProvider(flags),
+      simplify: flags["simplify"] === true,
+      model: flagString(flags, "model"),
+      reasoning: effort,
+      timeout: flagNumber(flags, "timeout"),
+      minQuota: flagNumber(flags, "min-quota"),
+      fix: flags["fix"] === true,
+      context: flagString(flags, "context"),
+      jobId
+    };
+    await runReview(cwd, reviewOpts);
     const captured = stdoutChunks.join("").trim();
     updateJob(stateDir, jobId, {
       status: "completed",
@@ -11883,35 +13040,29 @@ async function runWorker(jobId, cwd) {
   }
 }
 
-// src/copilot-companion.ts
+// src/companion.ts
 function printUsage() {
   console.log(
     [
       "Usage:",
-      "  copilot-companion setup [--check] [--json]",
-      '  copilot-companion implement "<task>" [--model <id>] [--reasoning <low|medium|high>]',
-      "                               [--no-worktree] [--allow-shell] [--allow-url]",
-      "                               [--timeout <ms>] [--min-quota <n>]",
-      "                               [--context <text|@file|@->]",
-      "                               [--background] [--write <path>]",
-      "  copilot-companion review [focus...] [--adversarial] [--base <ref>]",
+      "  companion setup [--check] [--json] [--provider copilot|codex]",
+      "  companion review [focus...] [--adversarial] [--base <ref>]",
       "                           [--scope auto|working-tree|branch] [--fix]",
       "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
       "                           [--context <text|@file|@->]",
       "                           [--timeout <ms>] [--min-quota <n>] [--background]",
-      '  copilot-companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
-      "  copilot-companion fix --findings <path> [--model <id>]",
+      '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
+      "  companion fix --findings <path> [--model <id>]",
       "                        [--reasoning <low|medium|high|xhigh>]",
       "                        [--context <text|@file|@->]",
       "                        [--timeout <ms>] [--min-quota <n>] [--write <path>]",
-      "  copilot-companion status [job-id] [--all] [--json]",
-      "  copilot-companion result [job-id] [--json]",
+      "  companion status [job-id] [--all] [--json]",
+      "  companion result [job-id] [--json]",
       "",
       "Commands:",
-      "  setup       Check GitHub Copilot authentication, available models, quota",
-      "  implement   Delegate an implementation task to GitHub Copilot",
-      "  review      Run a Copilot code review (markdown, or JSON findings with --fix)",
-      "  ask         Ask Copilot a single prompt (read-only) and print the answer",
+      "  setup       Check provider auth, available models, quota",
+      "  review      Run a code review (Copilot or Codex; markdown, or JSON findings with --fix)",
+      "  ask         Ask a single prompt (read-only) and print the answer",
       "  fix         Apply Claude-Code-approved review findings to the working tree",
       "  status      Show quota plus background job status",
       "  result      Retrieve a background job's output"
@@ -11977,16 +13128,6 @@ function parseArgs(argv) {
   }
   return { command, args, flags };
 }
-function flagString2(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber2(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : void 0;
-}
 function flagEnum(flags, key, allowed) {
   const v = flags[key];
   if (v === void 0) return void 0;
@@ -11999,32 +13140,14 @@ function flagEnum(flags, key, allowed) {
   return v;
 }
 async function main() {
-  const { command, args, flags } = parseArgs(import_node_process.default.argv.slice(2));
+  const { command, args, flags } = parseArgs(import_node_process3.default.argv.slice(2));
   switch (command) {
-    case "setup":
+    case "setup": {
+      const provider = flagEnum(flags, "provider", ["copilot", "codex"]);
       await runSetup({
         check: flags["check"] === true,
-        json: flags["json"] === true
-      });
-      break;
-    case "implement": {
-      const reasoning = flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"]);
-      if (flags["background"] === true) {
-        const jobId = enqueueBackground("implement", args, flags, import_node_process.default.cwd());
-        console.log(JSON.stringify({ status: "queued", jobId }));
-        break;
-      }
-      const task = extractTask(args, flags);
-      await runImplement(task, import_node_process.default.cwd(), {
-        model: flagString2(flags, "model"),
-        reasoning,
-        timeout: flagNumber2(flags, "timeout"),
-        worktree: flags["no-worktree"] !== true,
-        allowShell: flags["allow-shell"] === true,
-        allowUrl: flags["allow-url"] === true,
-        minQuota: flagNumber2(flags, "min-quota"),
-        writePath: flagString2(flags, "write"),
-        context: flagString2(flags, "context")
+        json: flags["json"] === true,
+        provider
       });
       break;
     }
@@ -12043,74 +13166,80 @@ async function main() {
       const validEfforts = ["low", "medium", "high", "xhigh"];
       const scope = flagEnum(flags, "scope", validScopes);
       const reasoning = flagEnum(flags, "reasoning", validEfforts);
+      const provider = flagEnum(flags, "provider", ["copilot", "codex"]);
       if (flags["background"] === true) {
-        const jobId = enqueueBackground("review", args, flags, import_node_process.default.cwd());
+        const jobId = enqueueBackground("review", args, flags, import_node_process3.default.cwd());
         console.log(JSON.stringify({ status: "queued", jobId }));
         break;
       }
-      await runReview(import_node_process.default.cwd(), {
+      await runReview(import_node_process3.default.cwd(), {
         adversarial: flags["adversarial"] === true,
         simplify: flags["simplify"] === true,
         scope,
-        base: flagString2(flags, "base"),
+        base: flagString(flags, "base"),
         focusText: args.join(" "),
-        model: flagString2(flags, "model"),
+        provider,
+        model: flagString(flags, "model"),
         reasoning,
-        timeout: flagNumber2(flags, "timeout"),
-        minQuota: flagNumber2(flags, "min-quota"),
+        timeout: flagNumber(flags, "timeout"),
+        minQuota: flagNumber(flags, "min-quota"),
         fix: flags["fix"] === true,
-        context: flagString2(flags, "context")
+        context: flagString(flags, "context")
       });
       break;
     }
     case "ask": {
       const reasoning = flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"]);
+      const provider = flagEnum(flags, "provider", ["copilot", "codex"]);
       const prompt = extractTask(args, flags);
-      await runAsk(import_node_process.default.cwd(), {
+      await runAsk(import_node_process3.default.cwd(), {
         prompt,
-        model: flagString2(flags, "model"),
+        provider,
+        model: flagString(flags, "model"),
         reasoning,
-        timeout: flagNumber2(flags, "timeout"),
-        minQuota: flagNumber2(flags, "min-quota"),
-        context: flagString2(flags, "context")
+        timeout: flagNumber(flags, "timeout"),
+        minQuota: flagNumber(flags, "min-quota"),
+        context: flagString(flags, "context")
       });
       break;
     }
     case "fix": {
       const reasoning = flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"]);
-      await runFix(import_node_process.default.cwd(), {
-        findingsPath: flagString2(flags, "findings"),
-        model: flagString2(flags, "model"),
+      const provider = flagEnum(flags, "provider", ["copilot", "codex"]);
+      await runFix(import_node_process3.default.cwd(), {
+        findingsPath: flagString(flags, "findings"),
+        provider,
+        model: flagString(flags, "model"),
         reasoning,
-        timeout: flagNumber2(flags, "timeout"),
-        minQuota: flagNumber2(flags, "min-quota"),
+        timeout: flagNumber(flags, "timeout"),
+        minQuota: flagNumber(flags, "min-quota"),
         allowShell: flags["allow-shell"] === true,
         allowUrl: flags["allow-url"] === true,
-        writePath: flagString2(flags, "write"),
-        context: flagString2(flags, "context")
+        writePath: flagString(flags, "write"),
+        context: flagString(flags, "context")
       });
       break;
     }
     case "status":
-      await runStatus(import_node_process.default.cwd(), {
+      await runStatus(import_node_process3.default.cwd(), {
         jobId: args[0],
         all: flags["all"] === true,
         json: flags["json"] === true
       });
       break;
     case "result":
-      await runResult(import_node_process.default.cwd(), {
+      await runResult(import_node_process3.default.cwd(), {
         jobId: args[0],
         json: flags["json"] === true
       });
       break;
     // Internal: background worker entry point.
     case "_worker": {
-      const jobId = flagString2(flags, "job-id");
-      const workerCwd = flagString2(flags, "cwd") ?? import_node_process.default.cwd();
+      const jobId = flagString(flags, "job-id");
+      const workerCwd = flagString(flags, "cwd") ?? import_node_process3.default.cwd();
       if (!jobId) {
         console.error("Worker requires --job-id");
-        import_node_process.default.exit(1);
+        import_node_process3.default.exit(1);
       }
       await runWorker(jobId, workerCwd);
       break;
@@ -12123,12 +13252,12 @@ async function main() {
     default:
       console.error(`Unknown command: ${command}`);
       printUsage();
-      import_node_process.default.exit(1);
+      import_node_process3.default.exit(1);
   }
 }
 main().catch((err) => {
   console.error(`
 Fatal error: ${err.message}`);
-  if (import_node_process.default.env["DEBUG"]) console.error(err.stack);
-  import_node_process.default.exit(1);
+  if (import_node_process3.default.env["DEBUG"]) console.error(err.stack);
+  import_node_process3.default.exit(1);
 });

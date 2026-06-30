@@ -5,6 +5,7 @@
  * Ported from the sibling gemini-plugin-cc with minimal changes.
  */
 
+import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync, mkdirSync, readFileSync, writeFileSync,
@@ -12,11 +13,13 @@ import {
 import { join, basename, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
+import type { CodexRateLimits } from './provider.ts';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface JobRecord {
   id: string;
-  kind: string;           // 'implement'
+  kind: string;           // 'review' | 'ask' | 'fix'
   title: string;
   summary: string;
   status: 'queued' | 'running' | 'completed' | 'failed';
@@ -34,7 +37,7 @@ export interface JobRecord {
 }
 
 export interface JobRequest {
-  command: string;        // 'implement'
+  command: string;        // 'review' | 'ask' | 'fix'
   args: string[];
   flags: Record<string, string | boolean>;
   cwd: string;
@@ -49,18 +52,56 @@ interface StateFile {
 
 const MAX_JOBS = 50;
 const PLUGIN_DATA_ENV = 'CLAUDE_PLUGIN_DATA';
-const SESSION_ID_ENV = 'COPILOT_COMPANION_SESSION_ID';
-const FALLBACK_STATE_ROOT = join(tmpdir(), 'copilot-companion');
+const SESSION_ID_ENV = 'HARRY_SESSION_ID';
+// DEBT: back-compat read for background jobs spawned by a pre-rename build that
+// set the old env var. Drop after one release.
+const LEGACY_SESSION_ID_ENV = 'COPILOT_COMPANION_SESSION_ID';
+const FALLBACK_STATE_ROOT = join(tmpdir(), 'harry');
+// DEBT: back-compat fallback for background jobs queued by a pre-rename build,
+// which wrote their state under the old tmp root. Drop after one release.
+const LEGACY_FALLBACK_STATE_ROOT = join(tmpdir(), 'copilot-companion');
 
 // ─── State Directory ─────────────────────────────────────────────────────────
 
+/**
+ * Resolve the git repo root containing `cwd`, falling back to `resolve(cwd)`
+ * when it is not a git repo (or git is unavailable). Keying state on the repo
+ * root — not the raw cwd — keeps a command invoked from a subdirectory and a
+ * provider invoked with the repo root pointed at the SAME state dir, so their
+ * quota / codex rate-limit caches don't silently diverge.
+ */
+function repoRootOf(cwd: string): string {
+  try {
+    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return root || resolve(cwd);
+  } catch {
+    return resolve(cwd);
+  }
+}
+
 export function resolveStateDir(cwd: string): string {
-  const workspaceRoot = resolve(cwd);
+  const workspaceRoot = repoRootOf(cwd);
   const slug = basename(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'workspace';
   const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);
+  const dirName = `${slug}-${hash}`;
   const pluginDataDir = process.env[PLUGIN_DATA_ENV];
-  const stateRoot = pluginDataDir ? join(pluginDataDir, 'state') : FALLBACK_STATE_ROOT;
-  return join(stateRoot, `${slug}-${hash}`);
+  if (pluginDataDir) {
+    return join(pluginDataDir, 'state', dirName);
+  }
+  // Fallback (no CLAUDE_PLUGIN_DATA): a job queued by a pre-rename build lives
+  // under the legacy tmp root. If the current root has no state for this
+  // workspace yet but the legacy one does, keep using the legacy dir so those
+  // queued jobs remain retrievable after the rename.
+  const fallbackDir = join(FALLBACK_STATE_ROOT, dirName);
+  if (!existsSync(fallbackDir)) {
+    const legacyDir = join(LEGACY_FALLBACK_STATE_ROOT, dirName);
+    if (existsSync(legacyDir)) return legacyDir;
+  }
+  return fallbackDir;
 }
 
 function ensureDir(dir: string): void {
@@ -153,7 +194,7 @@ export function generateJobId(): string {
 }
 
 export function getSessionId(): string | undefined {
-  return process.env[SESSION_ID_ENV] || undefined;
+  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || undefined;
 }
 
 export function createJob(stateDir: string, job: JobRecord): void {
@@ -200,4 +241,84 @@ export function listJobs(stateDir: string, sessionId?: string): JobRecord[] {
     return state.jobs.filter((j) => j.sessionId === sessionId);
   }
   return state.jobs;
+}
+
+// ─── Codex rate-limit snapshot ───────────────────────────────────────────────
+//
+// Codex is a rate-limit backend (no metered quota), so instead of a live quota
+// poll we persist the last rate-limit snapshot reported by a codex turn and let
+// `status` render it from cache. Mirrors the job-file read/write style above.
+
+const CODEX_RATE_LIMITS_FILE = 'codex-rate-limits.json';
+
+/** Last codex rate-limit snapshot plus the ISO time it was captured. */
+export interface CodexRateLimitSnapshot extends CodexRateLimits {
+  capturedAt?: string;
+}
+
+function codexRateLimitsPath(stateDir: string): string {
+  return join(stateDir, CODEX_RATE_LIMITS_FILE);
+}
+
+/**
+ * Best-effort persist of a codex rate-limit snapshot. Never throws — a failed
+ * write (read-only FS, missing dir we can't create) must not break a turn.
+ */
+export function writeCodexRateLimits(stateDir: string, rateLimits: CodexRateLimits): void {
+  try {
+    ensureDir(stateDir);
+    const snapshot: CodexRateLimitSnapshot = { ...rateLimits, capturedAt: new Date().toISOString() };
+    writeFileSync(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), 'utf-8');
+  } catch {
+    // best-effort: snapshot is a convenience, never a correctness dependency.
+  }
+}
+
+/** Read the last codex rate-limit snapshot, or null if none/unreadable. */
+export function readCodexRateLimits(stateDir: string): CodexRateLimitSnapshot | null {
+  const filePath = codexRateLimitsPath(stateDir);
+  if (!existsSync(filePath)) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf-8')) as CodexRateLimitSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pure one-line formatter for a codex rate-limit snapshot. Absent fields are
+ * omitted, e.g. `primary 42% / secondary 10% used · plan pro · resets <iso>`.
+ */
+export function formatCodexRateLimits(rl: CodexRateLimits): string {
+  const parts: string[] = [];
+  const used: string[] = [];
+  if (rl.primaryUsedPercent !== undefined) used.push(`primary ${rl.primaryUsedPercent}%`);
+  if (rl.secondaryUsedPercent !== undefined) used.push(`secondary ${rl.secondaryUsedPercent}%`);
+  if (used.length > 0) parts.push(`${used.join(' / ')} used`);
+  if (rl.planType) parts.push(`plan ${rl.planType}`);
+  if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
+  return parts.join(' · ');
+}
+
+/** Human-friendly "<n> ago" for a snapshot ISO timestamp; falls back to raw. */
+export function formatSnapshotAge(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+/**
+ * Pure renderer for the `## Codex` status block. `capturedAt` (from the
+ * persisted snapshot) labels the header with the cache age — codex rate-limits
+ * refresh only on an actual turn, so a stale reading must say so.
+ */
+export function renderCodexBlock(rl: CodexRateLimits, capturedAt?: string): string {
+  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : '## Codex';
+  return [header, formatCodexRateLimits(rl)].join('\n');
 }

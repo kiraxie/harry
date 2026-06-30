@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * copilot-companion — CLI entry point for the Copilot Claude Code plugin.
+ * companion — CLI entry point for the harry Claude Code plugin; drives the
+ * Copilot or Codex provider behind one neutral command set.
  */
 
 import process from 'node:process';
 import { runSetup } from './commands/setup.js';
-import { runImplement } from './commands/implement.js';
 import { runReview } from './commands/review.js';
 import { runAsk } from './commands/ask.js';
 import { runFix } from './commands/fix.js';
@@ -14,36 +14,30 @@ import { runStatus } from './commands/status.js';
 import { runResult } from './commands/result.js';
 import { enqueueBackground, runWorker } from './commands/background.js';
 import type { ReviewScope } from './lib/git.js';
-import { extractTask } from './lib/args.js';
+import { extractTask, flagString, flagNumber } from './lib/args.js';
 
 function printUsage(): void {
   console.log(
     [
       'Usage:',
-      '  copilot-companion setup [--check] [--json]',
-      '  copilot-companion implement "<task>" [--model <id>] [--reasoning <low|medium|high>]',
-      '                               [--no-worktree] [--allow-shell] [--allow-url]',
-      '                               [--timeout <ms>] [--min-quota <n>]',
-      '                               [--context <text|@file|@->]',
-      '                               [--background] [--write <path>]',
-      '  copilot-companion review [focus...] [--adversarial] [--base <ref>]',
+      '  companion setup [--check] [--json] [--provider copilot|codex]',
+      '  companion review [focus...] [--adversarial] [--base <ref>]',
       '                           [--scope auto|working-tree|branch] [--fix]',
       '                           [--model <id>] [--reasoning <low|medium|high|xhigh>]',
       '                           [--context <text|@file|@->]',
       '                           [--timeout <ms>] [--min-quota <n>] [--background]',
-      '  copilot-companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
-      '  copilot-companion fix --findings <path> [--model <id>]',
+      '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
+      '  companion fix --findings <path> [--model <id>]',
       '                        [--reasoning <low|medium|high|xhigh>]',
       '                        [--context <text|@file|@->]',
       '                        [--timeout <ms>] [--min-quota <n>] [--write <path>]',
-      '  copilot-companion status [job-id] [--all] [--json]',
-      '  copilot-companion result [job-id] [--json]',
+      '  companion status [job-id] [--all] [--json]',
+      '  companion result [job-id] [--json]',
       '',
       'Commands:',
-      '  setup       Check GitHub Copilot authentication, available models, quota',
-      '  implement   Delegate an implementation task to GitHub Copilot',
-      '  review      Run a Copilot code review (markdown, or JSON findings with --fix)',
-      '  ask         Ask Copilot a single prompt (read-only) and print the answer',
+      '  setup       Check provider auth, available models, quota',
+      '  review      Run a code review (Copilot or Codex; markdown, or JSON findings with --fix)',
+      '  ask         Ask a single prompt (read-only) and print the answer',
       '  fix         Apply Claude-Code-approved review findings to the working tree',
       '  status      Show quota plus background job status',
       '  result      Retrieve a background job\'s output',
@@ -129,18 +123,6 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { command, args, flags };
 }
 
-function flagString(flags: Record<string, string | boolean>, key: string): string | undefined {
-  const v = flags[key];
-  return typeof v === 'string' ? v : undefined;
-}
-
-function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
-  const v = flags[key];
-  if (typeof v !== 'string') return undefined;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 function flagEnum<T extends string>(
   flags: Record<string, string | boolean>,
   key: string,
@@ -161,32 +143,12 @@ async function main(): Promise<void> {
   const { command, args, flags } = parseArgs(process.argv.slice(2));
 
   switch (command) {
-    case 'setup':
+    case 'setup': {
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
       await runSetup({
         check: flags['check'] === true,
         json: flags['json'] === true,
-      });
-      break;
-
-    case 'implement': {
-      const reasoning = flagEnum(flags, 'reasoning', ['low', 'medium', 'high', 'xhigh'] as const);
-
-      if (flags['background'] === true) {
-        const jobId = enqueueBackground('implement', args, flags, process.cwd());
-        console.log(JSON.stringify({ status: 'queued', jobId }));
-        break;
-      }
-      const task = extractTask(args, flags);
-      await runImplement(task, process.cwd(), {
-        model: flagString(flags, 'model'),
-        reasoning,
-        timeout: flagNumber(flags, 'timeout'),
-        worktree: flags['no-worktree'] !== true,
-        allowShell: flags['allow-shell'] === true,
-        allowUrl: flags['allow-url'] === true,
-        minQuota: flagNumber(flags, 'min-quota'),
-        writePath: flagString(flags, 'write'),
-        context: flagString(flags, 'context'),
+        provider,
       });
       break;
     }
@@ -219,6 +181,7 @@ async function main(): Promise<void> {
       const validEfforts = ['low', 'medium', 'high', 'xhigh'] as const;
       const scope = flagEnum<ReviewScope>(flags, 'scope', validScopes);
       const reasoning = flagEnum(flags, 'reasoning', validEfforts);
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
 
       if (flags['background'] === true) {
         const jobId = enqueueBackground('review', args, flags, process.cwd());
@@ -231,6 +194,7 @@ async function main(): Promise<void> {
         scope,
         base: flagString(flags, 'base'),
         focusText: args.join(' '),
+        provider,
         model: flagString(flags, 'model'),
         reasoning,
         timeout: flagNumber(flags, 'timeout'),
@@ -243,9 +207,11 @@ async function main(): Promise<void> {
 
     case 'ask': {
       const reasoning = flagEnum(flags, 'reasoning', ['low', 'medium', 'high', 'xhigh'] as const);
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
       const prompt = extractTask(args, flags); // reuse positional/`--task`/stdin extraction
       await runAsk(process.cwd(), {
         prompt,
+        provider,
         model: flagString(flags, 'model'),
         reasoning,
         timeout: flagNumber(flags, 'timeout'),
@@ -257,8 +223,10 @@ async function main(): Promise<void> {
 
     case 'fix': {
       const reasoning = flagEnum(flags, 'reasoning', ['low', 'medium', 'high', 'xhigh'] as const);
+      const provider = flagEnum(flags, 'provider', ['copilot', 'codex'] as const);
       await runFix(process.cwd(), {
         findingsPath: flagString(flags, 'findings'),
+        provider,
         model: flagString(flags, 'model'),
         reasoning,
         timeout: flagNumber(flags, 'timeout'),

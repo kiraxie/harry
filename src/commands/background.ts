@@ -1,12 +1,9 @@
 /**
- * Background execution for the implement command.
+ * Background execution for the review command.
  *
  * Spawns a detached worker that re-invokes the companion with `_worker
- * --job-id <id>`. The worker runs runImplement with a preallocated jobId and
+ * --job-id <id>`. The worker runs runReview with a preallocated jobId and
  * captures stdout (the JSON envelope) into the job state file.
- *
- * Adapted from reference/src/commands/background.ts; scope reduced to the
- * single `implement` command.
  */
 
 import { spawn } from 'node:child_process';
@@ -15,15 +12,15 @@ import {
   appendLog, getSessionId, readJobFile,
   type JobRecord,
 } from '../lib/state.js';
-import { runImplement, type ImplementOptions } from './implement.js';
 import { runReview, type ReviewOptions } from './review.js';
 import type { ReviewScope } from '../lib/git.js';
-import { extractTask } from '../lib/args.js';
+import type { ProviderId } from '../lib/provider.ts';
+import { extractTask, flagString, flagNumber } from '../lib/args.js';
 
 declare const __filename: string | undefined;
 
 /**
- * Enqueue an implement run in the background. Returns the job id. The caller
+ * Enqueue a review run in the background. Returns the job id. The caller
  * (CLI dispatcher) is expected to emit the queued envelope to stdout.
  */
 export function enqueueBackground(
@@ -32,8 +29,8 @@ export function enqueueBackground(
   flags: Record<string, string | boolean>,
   cwd: string,
 ): string {
-  if (command !== 'implement' && command !== 'review') {
-    throw new Error(`Background execution is only supported for 'implement' or 'review', got '${command}'.`);
+  if (command !== 'review') {
+    throw new Error(`Background execution is only supported for 'review', got '${command}'.`);
   }
 
   const stateDir = resolveStateDir(cwd);
@@ -43,7 +40,7 @@ export function enqueueBackground(
   const job: JobRecord = {
     id: jobId,
     kind: command,
-    title: `Copilot ${command}`,
+    title: `harry ${command}`,
     summary,
     status: 'queued',
     phase: 'queued',
@@ -59,7 +56,7 @@ export function enqueueBackground(
   const scriptPath = getScriptPath();
   const child = spawn(process.execPath, [scriptPath, '_worker', '--job-id', jobId, '--cwd', cwd], {
     cwd,
-    env: { ...process.env, COPILOT_COMPANION_SESSION_ID: getSessionId() ?? '' },
+    env: { ...process.env, HARRY_SESSION_ID: getSessionId() ?? '' },
     detached: true,
     stdio: 'ignore',
   });
@@ -72,27 +69,20 @@ export function enqueueBackground(
 
 function getScriptPath(): string {
   // The companion is always shipped as a CJS bundle (see build.mjs), so
-  // __filename points to dist/copilot-companion.cjs at runtime.
+  // __filename points to dist/companion.cjs at runtime.
   if (typeof __filename === 'undefined' || !__filename) {
     throw new Error('Unable to resolve script path: __filename is not defined. The companion must be run via the bundled CJS output.');
   }
   return __filename;
 }
 
-function flagString(flags: Record<string, string | boolean>, key: string): string | undefined {
-  const v = flags[key];
-  return typeof v === 'string' ? v : undefined;
-}
-
-function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
-  const v = flags[key];
-  if (typeof v !== 'string') return undefined;
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : undefined;
+function flagProvider(flags: Record<string, string | boolean>): ProviderId | undefined {
+  const v = flags['provider'];
+  return v === 'copilot' || v === 'codex' ? v : undefined;
 }
 
 /**
- * Worker entrypoint. Runs `runImplement` with the jobId from the parent and
+ * Worker entrypoint. Runs `runReview` with the jobId from the parent and
  * captures its stdout into the job record.
  */
 export async function runWorker(jobId: string, cwd: string): Promise<void> {
@@ -115,7 +105,7 @@ export async function runWorker(jobId: string, cwd: string): Promise<void> {
 
   // If anything inside this worker calls process.exit with a non-zero
   // code before the try/catch below can persist failure, this hook is
-  // the backstop so /copilot:status doesn't leave the job stuck at
+  // the backstop so /harry:status doesn't leave the job stuck at
   // `running`. markJobFailed itself is idempotent on terminal states.
   process.on('exit', (code) => {
     if (code === 0) return;
@@ -135,7 +125,7 @@ export async function runWorker(jobId: string, cwd: string): Promise<void> {
     return originalStdoutWrite(chunk as never, ...(rest as []));
   }) as typeof process.stdout.write;
 
-  // Route stderr progress into the job log so /copilot:status can show it.
+  // Route stderr progress into the job log so /harry:status can show it.
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]): boolean => {
     const text = typeof chunk === 'string' ? chunk : chunk.toString();
@@ -152,40 +142,31 @@ export async function runWorker(jobId: string, cwd: string): Promise<void> {
       : undefined;
 
   try {
-    if (job.request.command === 'review') {
-      const scope = flagString(flags, 'scope');
-      const validScopes: ReviewScope[] = ['auto', 'working-tree', 'branch'];
-      const reviewOpts: ReviewOptions = {
-        adversarial: flags['adversarial'] === true,
-        scope: scope && (validScopes as string[]).includes(scope) ? (scope as ReviewScope) : undefined,
-        base: flagString(flags, 'base'),
-        focusText: extractTask(args, flags),
-        model: flagString(flags, 'model'),
-        reasoning: effort,
-        timeout: flagNumber(flags, 'timeout'),
-        minQuota: flagNumber(flags, 'min-quota'),
-        fix: flags['fix'] === true,
-        context: flagString(flags, 'context'),
-        jobId,
-      };
-      await runReview(cwd, reviewOpts);
-    } else {
-      const implementOpts: ImplementOptions = {
-        model: flagString(flags, 'model'),
-        reasoning: effort,
-        timeout: flagNumber(flags, 'timeout'),
-        worktree: flags['no-worktree'] !== true,
-        allowShell: flags['allow-shell'] === true,
-        allowUrl: flags['allow-url'] === true,
-        minQuota: flagNumber(flags, 'min-quota'),
-        writePath: flagString(flags, 'write'),
-        context: flagString(flags, 'context'),
-        jobId,
-      };
-      const task = extractTask(args, flags);
-      if (!task) throw new Error('Empty task; provide an implementation objective.');
-      await runImplement(task, cwd, implementOpts);
+    if (job.request.command !== 'review') {
+      throw new Error(`Background worker only supports 'review', got '${job.request.command}'.`);
     }
+    const scope = flagString(flags, 'scope');
+    const validScopes: ReviewScope[] = ['auto', 'working-tree', 'branch'];
+    const reviewOpts: ReviewOptions = {
+      adversarial: flags['adversarial'] === true,
+      scope: scope && (validScopes as string[]).includes(scope) ? (scope as ReviewScope) : undefined,
+      base: flagString(flags, 'base'),
+      focusText: extractTask(args, flags),
+      // provider + simplify MUST be threaded here — the foreground dispatcher
+      // (companion.ts) passes them, so dropping them makes a backgrounded
+      // `review --simplify` / `--provider codex` silently run the wrong
+      // lane/backend.
+      provider: flagProvider(flags),
+      simplify: flags['simplify'] === true,
+      model: flagString(flags, 'model'),
+      reasoning: effort,
+      timeout: flagNumber(flags, 'timeout'),
+      minQuota: flagNumber(flags, 'min-quota'),
+      fix: flags['fix'] === true,
+      context: flagString(flags, 'context'),
+      jobId,
+    };
+    await runReview(cwd, reviewOpts);
     const captured = stdoutChunks.join('').trim();
     updateJob(stateDir, jobId, {
       status: 'completed',
