@@ -4,18 +4,24 @@
 // strips it. Extracted because divergence between the two would be a bug
 // (HARRY.md §2: shared knowledge across a boundary gets one source of truth).
 
+// Returns `existing` with harry's marked block removed (everything else kept).
+// Used to recover the user-owned base before re-applying or dedup-checking.
+export function stripMarkerBlock(existing, { begin, end }) {
+  const text = existing ?? "";
+  const bi = text.indexOf(begin);
+  const ei = text.indexOf(end);
+  if (bi !== -1 && ei !== -1 && ei > bi) {
+    const tail = text.slice(ei + end.length).replace(/^\n/, "");
+    return text.slice(0, bi) + tail;
+  }
+  return text;
+}
+
 // Returns `existing` with the marked block applied (or removed). Idempotent:
 // any pre-existing block between the markers is stripped first, so a second
 // run produces identical output.
 export function applyMarkerBlock(existing, { begin, end, body, remove = false }) {
-  const text = existing ?? "";
-  const bi = text.indexOf(begin);
-  const ei = text.indexOf(end);
-  let base = text;
-  if (bi !== -1 && ei !== -1 && ei > bi) {
-    const tail = text.slice(ei + end.length).replace(/^\n/, "");
-    base = text.slice(0, bi) + tail;
-  }
+  let base = stripMarkerBlock(existing, { begin, end });
   base = base.replace(/\s+$/, ""); // drop trailing whitespace/newlines
   if (remove) return base === "" ? "" : `${base}\n`;
   const block = [begin, body, end].join("\n");

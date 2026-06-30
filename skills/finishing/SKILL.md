@@ -36,7 +36,7 @@ Implementation complete and tests green. How should I integrate this?
 
 The merge is the start of finishing, not the end. CI green is the real completion evidence (HARRY.md §6).
 
-a. **Memory** — append ONE line for this unit to `.local/history.md` (create if absent, newest first): `- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> (or "local merge, no PR") · <one-line outcome>`. Then delete the now-completed item from `.local/STATUS.md` so the work list tracks only active work. Do NOT paste review/lean detail or commit lists — that lives in git/PR; `history.md` is a thin pointer (HARRY.md §5).
+a. **Memory** — append ONE line for this unit to `.local/HISTORY.md` (create if absent, newest first): `- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> (or "local merge, no PR") · <one-line outcome>`. Then delete the now-completed item from `.local/STATUS.md` so the work list tracks only active work. Do NOT paste review/lean detail or commit lists — that lives in git/PR; `HISTORY.md` is a thin pointer (HARRY.md §5).
 b. **Archive** — move the plan → `.local/plans/archived/`. Leave the spec in `.local/specs/`: it is a long-term, accumulating design record (incl. decisions) and is never archived (HARRY.md §5).
 c. **Cleanup** — delete the feature branch and its worktree. Prefer the harness's NATIVE worktree tooling. Only as fallback: `cd` to the main repo root first, then `git worktree remove <path>` and `git worktree prune`. Provenance rule: only clean up worktrees YOU created — never remove harness-owned ones.
 d. **Back to main** — `git checkout main && git pull`.

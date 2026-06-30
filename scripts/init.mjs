@@ -11,7 +11,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyMarkerBlock } from "./lib/markers.mjs";
+import { applyMarkerBlock, stripMarkerBlock } from "./lib/markers.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -20,8 +20,21 @@ const END = "# <<< harry <<<";
 const ENTRIES = [".local/", ".worktrees/", "CLAUDE.local.md"];
 
 // Returns the .gitignore content with the harry block applied (or removed).
+// Per-entry dedupe: an entry already ignored elsewhere in the file (outside
+// harry's block) is skipped, so the block never duplicates a line the user
+// already has. If every entry is already covered, no block is written.
 export function applyBlock(existing, { remove = false } = {}) {
-  return applyMarkerBlock(existing, { begin: BEGIN, end: END, body: ENTRIES.join("\n"), remove });
+  if (remove) {
+    return applyMarkerBlock(existing, { begin: BEGIN, end: END, body: "", remove: true });
+  }
+  const base = stripMarkerBlock(existing ?? "", { begin: BEGIN, end: END });
+  const present = new Set(base.split("\n").map((l) => l.trim()).filter(Boolean));
+  const entries = ENTRIES.filter((e) => !present.has(e));
+  if (entries.length === 0) {
+    // Nothing left to add — strip any stale harry block, write no new one.
+    return applyMarkerBlock(existing, { begin: BEGIN, end: END, body: "", remove: true });
+  }
+  return applyMarkerBlock(existing, { begin: BEGIN, end: END, body: entries.join("\n") });
 }
 
 function run(targetDir, { remove = false } = {}) {
@@ -52,11 +65,19 @@ function selftest() {
     out = readFileSync(join(dir, ".gitignore"), "utf8");
     assert(out.split(BEGIN).length === 2, "still one block after second run (idempotent)");
 
-    // Removal strips the block, keeps the rest.
+    // Dedupe: an entry already present outside the block is not duplicated.
+    writeFileSync(join(dir, ".gitignore"), "node_modules/\n.local/\n");
+    run(dir);
+    out = readFileSync(join(dir, ".gitignore"), "utf8");
+    assert(out.split("\n").filter((l) => l.trim() === ".local/").length === 1, "no duplicate .local/ entry");
+    assert(out.includes(".worktrees/"), "still adds the non-duplicate entries");
+
+    // Removal strips the block, keeps the rest (dir still has a block from above).
     run(dir, { remove: true });
     out = readFileSync(join(dir, ".gitignore"), "utf8");
     assert(!out.includes(BEGIN), "remove strips the block");
     assert(out.includes("node_modules/"), "remove keeps existing entries");
+    assert(out.includes(".local/"), "remove keeps the user's own .local/ entry");
 
     // Works when no .gitignore exists yet.
     const dir2 = mkdtempSync(join(tmpdir(), "harry-init-"));
