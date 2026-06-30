@@ -28,35 +28,21 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 ## Install
 
-Two layers — install whichever your agent supports.
+**Claude Code only.** No clone, no build — `dist/` is committed and self-contained.
 
-### 1. Plugin (commands + skills + hooks) — Claude Code only
-
-No clone, no build — `dist/` is committed and self-contained (just needs Node **>= 26** for the agent commands):
-
-```bash
-claude plugin marketplace add kiraxie/harry
-claude plugin install harry@kiraxie
+```
+/plugin marketplace add kiraxie/harry   # GitHub owner/repo
+/plugin install harry@kiraxie           # <plugin>@<marketplace> — "harry, published by kiraxie"
+/init                                    # wire the resident laws + set up this project
 ```
 
-Or inside Claude Code: `/plugin marketplace add kiraxie/harry` then `/plugin install harry@kiraxie`.
+`/init` does three things: wires harry's resident laws (`HARRY.md`, which ships
+with the plugin) into your global `~/.claude/CLAUDE.md` so they apply every
+session; adds harry's `.gitignore` block to this project; and offers to migrate
+any legacy spec/plan docs into harry's format. Run it once per project — the laws
+step is idempotent, so re-runs elsewhere are no-ops. (`/init --remove` strips this
+project's `.gitignore` block; the global laws stay.)
 
-Per project, add harry's `.gitignore` block with `/init`.
-
-### 2. Resident laws (`HARRY.md`) — Claude Code, Codex, or Antigravity
-
-`@`-imports need a local copy, so clone first. `scripts/install.mjs` wires a
-marker-wrapped `@<path>/HARRY.md` into a global instructions file (idempotent;
-`--remove` strips it):
-
-```bash
-git clone https://github.com/kiraxie/harry && cd harry
-node scripts/install.mjs                                    # Claude Code → ~/.claude/CLAUDE.md (default)
-HARRY_GLOBAL=~/.codex/AGENTS.md  node scripts/install.mjs   # Codex
-HARRY_GLOBAL=~/.gemini/GEMINI.md node scripts/install.mjs   # Antigravity (agy)
-```
-
-If a host doesn't resolve `@`-imports, paste `HARRY.md`'s contents in instead.
 Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
 
 ## Commands
@@ -72,7 +58,7 @@ Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run buil
 | `/result [job-id]` | Fetch a completed background job's output | no |
 | `/lean [--repo]` | Over-engineering audit — what to delete/simplify (diff, or whole tree with `--repo`) | no |
 | `/debt` | Re-judge deferred decisions (`DEBT:` markers + spec Non-Goals + plan deferrals) into a triaged ledger | no |
-| `/init [--remove]` | Add/remove harry's `.gitignore` block in a project | no |
+| `/init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs | no |
 
 Cheap-first smoke test: `/status` → `/lean` → `/ask` → `/review`/`/debate`.
 

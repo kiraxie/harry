@@ -1,16 +1,32 @@
 ---
-description: Add harry's required ignore entries (.local/, .worktrees/, CLAUDE.local.md) to this project's .gitignore. Idempotent and marker-wrapped; pass --remove to strip them.
+description: Set harry up here — wire the resident laws into your global instructions, add the .gitignore block, and offer to migrate legacy spec/plan docs. --remove strips this project's .gitignore block (laws stay).
 argument-hint: '[--remove] [--force] [targetDir]'
 allowed-tools: Bash(node:*), Bash(git log:*), Glob, Grep, Read, Write, Edit, AskUserQuestion
 ---
 
-## Phase 1 — Gitignore
-
-Run harry's gitignore initializer through the plugin runtime.
-
 Raw slash-command arguments: `$ARGUMENTS`
 
-Execute:
+## Phase 1 — Resident laws
+
+Wire harry's resident laws (`HARRY.md`, which ships with the plugin) into your
+global instructions file so they apply every session. **Skip this phase when
+`$ARGUMENTS` contains `--remove`** — laws are global/per-machine, so a per-project
+`/init --remove` must NOT unwire them. (To unwire laws explicitly, run
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs" --remove`.)
+
+Otherwise execute:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"
+```
+
+It inserts a marker-wrapped `@<plugin>/HARRY.md` import into `~/.claude/CLAUDE.md`
+(idempotent — re-running in another project is a harmless no-op; it also warns
+about stale global entries harry supersedes). Return its output verbatim.
+
+## Phase 2 — Gitignore
+
+Run harry's gitignore initializer through the plugin runtime:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs" $ARGUMENTS
@@ -26,10 +42,10 @@ Return the command output verbatim. Do not edit `.gitignore` by hand — the scr
 
 ---
 
-## Phase 2 — Legacy migration (agent-driven)
+## Phase 3 — Legacy migration (agent-driven)
 
-After Phase 1, help adopt this repo into harry by migrating pre-existing
-design/plan artifacts into harry's format. Phase 1 owns `.gitignore`; Phase 2
+After the earlier phases, help adopt this repo into harry by migrating pre-existing
+design/plan artifacts into harry's format. Phase 2 owns `.gitignore`; this phase
 owns nothing deterministically — every move is gated on the user's answers.
 
 **Skip conditions:**
@@ -86,5 +102,5 @@ Present the full candidate list as a table (source → proposed kind → target 
 3. Per Q_B: keep the original untouched, or delete it ONLY after its new file is
    successfully written.
 
-Phase 2 is best-effort and must never undo Phase 1: if a scan or rewrite fails,
-report it and stop, leaving originals intact.
+This phase is best-effort and must never undo the earlier phases: if a scan or
+rewrite fails, report it and stop, leaving originals intact.
