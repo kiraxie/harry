@@ -51,7 +51,7 @@ Every deliberate shortcut MUST leave a `DEBT:` comment naming its ceiling and it
 - **Spec vs Plan** (keep them separate; non-trivial work has spec before plan):
   - **Spec/Design** `*-design.md` — what the system should be and why it was decided (includes decision records: Discussion → Decision → considered-but-rejected). Long-term. In `.local/specs/`.
   - **Plan/Follow-up** `*-plan.md` / `*-followup.md` — how to proceed, execution steps. Short-term, archived after execution. In `.local/plans/`.
-  - Naming `YYYY-MM-DD-<topic>-<design|plan|followup|archive>.md`. Archive to `.local/{specs,plans}/archived/`.
+  - Naming `YYYY-MM-DD-<topic>-<design|plan|followup>.md`. **Specs accumulate** in `.local/specs/` as long-term personal design records (incl. decisions) — never archived. Only **plans** archive after execution → `.local/plans/archived/`.
 - **Merge vs PR: always ask.** Never auto-decide which.
 - **PR discipline:**
   - Before any `gh pr create`, show the title + body draft and wait for approval (PR descriptions are public; notifications can't be recalled). Exception: the user says "just open it."
