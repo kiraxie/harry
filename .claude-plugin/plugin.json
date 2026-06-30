@@ -1,6 +1,6 @@
 {
   "name": "harry",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Personal engineering workflow plugin: resident philosophy (correctness > cost, no legacy), tiered discipline, and a brainstorm -> plan -> execute -> finish pipeline, distilled from Superpowers + ponytail and fused with multi-model review/debate.",
   "author": {
     "name": "kiraxie",
