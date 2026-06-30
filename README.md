@@ -1,11 +1,11 @@
 # harry
 
-A personal Claude Code plugin. It distills the **Superpowers** workflow philosophy and the **ponytail** laziness discipline into one resident ruleset, recalibrated around a single stance — **correctness and leaving no legacy outrank saving cost** — and fuses in a copilot-centric multi-model review/debate runtime.
+A personal Claude Code plugin: the **Superpowers** workflow philosophy and **ponytail** laziness discipline, distilled into one resident ruleset around a single stance — **correctness and leaving no legacy outrank saving cost** — with a multi-model review/debate runtime.
 
 Two halves:
 
-- **Resident laws** (`HARRY.md`) — loaded into your global instructions via an `@` import, so they apply every session without a keyword: a cost model, a three-tier complexity threshold, red lines, deferral discipline, and the correctness disciplines (TDD, root-cause, honesty/evidence) folded in from Superpowers' iron laws.
-- **A `brainstorm → plan → execute → finish` pipeline** as four skills, plus slash commands for review, debate, and over-engineering/debt audits.
+- **Resident laws** (`HARRY.md`) — loaded into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
+- **A `brainstorm → plan → execute → finish` pipeline** — four skills, plus slash commands for review, debate, and over-engineering/debt audits.
 
 ## The three-tier threshold
 
@@ -23,53 +23,41 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 - Node.js **>= 26**
 - [Claude Code](https://claude.com/claude-code)
-- For the agent commands (`review`, `ask`): a backend **provider** — GitHub Copilot or OpenAI Codex (see [Providers](#providers)). Copilot needs a subscription via `gh auth login` (`pnpm install` pulls the `@github/copilot` CLI); Codex needs the `codex` CLI on `PATH` plus `codex login`. `debate`'s gpt voice runs on Copilot.
+- For the agent commands (`review`, `ask`, `debate`): a backend **provider** — GitHub Copilot (`gh auth login`) or OpenAI Codex (`codex` CLI + `codex login`). See [Providers](#providers).
 - For `debate`'s Gemini voice: the `agy` (Antigravity) CLI on `PATH`.
 
 ## Install
 
-harry has two layers — install whichever your agent supports:
+Two layers — install whichever your agent supports.
 
-- **Resident laws** (`HARRY.md`) — work in any agent that loads a global
-  instructions file via an `@`-import: **Claude Code**, **Codex**, **Antigravity** (`agy`).
-- **Commands + skills + hooks** (the plugin proper) — **Claude Code only**.
+### 1. Plugin (commands + skills + hooks) — Claude Code only
+
+No clone, no build — `dist/` is committed and self-contained (just needs Node **>= 26** for the agent commands):
 
 ```bash
-# Build the runtime once (the committed dist drifts as the provider CLIs update)
-pnpm install
-pnpm run build
+claude plugin marketplace add kiraxie/harry
+claude plugin install harry@kiraxie
 ```
 
-### 1. Resident laws — Claude Code, Codex, or Antigravity
+Or inside Claude Code: `/plugin marketplace add kiraxie/harry` then `/plugin install harry@kiraxie`.
 
-`scripts/install.mjs` wires a marker-wrapped `@<path>/HARRY.md` into a global
-instructions file (idempotent; `--remove` strips it; it warns about entries it
-supersedes). The target defaults to Claude Code's file; point `HARRY_GLOBAL` at the
-others:
+Per project, add harry's `.gitignore` block with `/init`.
+
+### 2. Resident laws (`HARRY.md`) — Claude Code, Codex, or Antigravity
+
+`@`-imports need a local copy, so clone first. `scripts/install.mjs` wires a
+marker-wrapped `@<path>/HARRY.md` into a global instructions file (idempotent;
+`--remove` strips it):
 
 ```bash
-node scripts/install.mjs                              # Claude Code → ~/.claude/CLAUDE.md (default)
+git clone https://github.com/kiraxie/harry && cd harry
+node scripts/install.mjs                                    # Claude Code → ~/.claude/CLAUDE.md (default)
 HARRY_GLOBAL=~/.codex/AGENTS.md  node scripts/install.mjs   # Codex
 HARRY_GLOBAL=~/.gemini/GEMINI.md node scripts/install.mjs   # Antigravity (agy)
-# uninstall: re-run the matching line with --remove
 ```
 
-If a host does not resolve `@`-imports, paste `HARRY.md`'s contents into that file
-instead.
-
-### 2. Commands + skills — Claude Code only
-
-```bash
-# inside Claude Code
-/plugin marketplace add /path/to/harry
-/plugin install harry@harry-dev
-```
-
-Per project, add harry's ignore entries to that project's `.gitignore`:
-
-```bash
-/init                             # or: node scripts/init.mjs [dir]
-```
+If a host doesn't resolve `@`-imports, paste `HARRY.md`'s contents in instead.
+Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
 
 ## Commands
 
@@ -90,29 +78,21 @@ Cheap-first smoke test: `/status` → `/lean` → `/ask` → `/review`/`/debate`
 
 ## Providers
 
-The agent commands (`ask`, `review`, and `review --fix`) run through one of two
+The agent commands (`ask`, `review`, `review --fix`) run through one of two
 interchangeable backends:
 
 - **Copilot** — the GitHub Copilot CLI. Consumes Copilot **premium quota**.
-- **Codex** — OpenAI's `codex` CLI (app-server). Runs on your Codex/ChatGPT
-  subscription and consumes **no Copilot premium**; `status` surfaces its
-  rate-limit snapshot instead of a premium count.
+- **Codex** — OpenAI's `codex` CLI. Runs on your Codex/ChatGPT subscription at
+  **no Copilot premium**; `status` shows its rate-limit snapshot instead.
 
-**Which one runs** is resolved in this order:
+**Which one runs**, in order:
 
-1. An explicit `--provider codex|copilot` flag on the command.
-2. The `provider` plugin setting (exposed as `CLAUDE_PLUGIN_OPTION_PROVIDER`) — set
-   it under `/plugin` → harry → **Backend provider**.
+1. An explicit `--provider codex|copilot` flag.
+2. The `provider` plugin setting (`/plugin` → harry → **Backend provider**).
 3. Otherwise **auto**: Codex when its CLI is installed and logged in, else Copilot.
 
-So an empty setting prefers Codex when it's usable and silently falls back to
-Copilot when it isn't. Codex does not inject a default model — leave `--model`
-unset to let `~/.codex/config.toml` decide.
-
-```bash
-# Codex one-time setup: install OpenAI's `codex` CLI (see its docs), then:
-codex login
-```
+Codex injects no default model — leave `--model` unset to let
+`~/.codex/config.toml` decide. One-time setup: install the `codex` CLI, then `codex login`.
 
 ## Skills
 
