@@ -1,15 +1,14 @@
 /**
  * CodexProvider — wraps the Codex app-server turn runner ({@link runCodexTurn})
  * and auth probe ({@link getCodexAuthStatus}) behind the neutral
- * {@link Provider} contract, mirroring {@link CopilotProvider}.
+ * {@link CodexSession} contract.
  *
  * This file USES the ported (Apache-2.0) codex lib but is not itself a port — it
  * is original harry glue, so no Apache header.
  *
  * It deliberately does NOT inject a default model (leaving `model` undefined lets
- * `~/.codex/config.toml` decide) and does NOT meter quota — codex is a
- * token/rate-limit backend (`metersQuota: false`), so the caller skips the quota
- * pre-gate. The provider only runs one turn and reports usage.
+ * `~/.codex/config.toml` decide). The session only runs one turn and reports
+ * usage.
  */
 
 import { getCodexAuthStatus } from "../codex/auth.ts";
@@ -17,8 +16,7 @@ import type { CodexTurnEvent } from "../codex/turn.ts";
 import { runCodexTurn } from "../codex/turn.ts";
 import type {
   AuthSummary,
-  Provider,
-  ProviderCapabilities,
+  CodexSession,
   ReasoningEffort,
   RunOpts,
   RunResult,
@@ -26,23 +24,18 @@ import type {
 import { resolveStateDir, writeCodexRateLimits } from "../state.ts";
 
 /**
- * Translate the neutral {@link ReasoningEffort} (Copilot's vocabulary) into
- * codex's app-server effort enum (`minimal | low | medium | high`). Codex has no
- * `xhigh`, and `review` defaults every codex lane to `xhigh`, so without this
- * map the most common auto-codex path would send an effort codex may reject.
- * `xhigh` clamps to codex's strongest tier, `high`.
+ * Translate the neutral {@link ReasoningEffort} into codex's app-server effort
+ * enum (`minimal | low | medium | high`). Codex has no `xhigh`, and `review`
+ * defaults every codex lane to `xhigh`, so without this map the most common
+ * path would send an effort codex may reject. `xhigh` clamps to codex's
+ * strongest tier, `high`.
  */
 export function toCodexEffort(reasoning?: ReasoningEffort): string | undefined {
   if (reasoning === undefined) return undefined;
   return reasoning === "xhigh" ? "high" : reasoning;
 }
 
-export class CodexProvider implements Provider {
-  readonly id = "codex" as const;
-  readonly capabilities: ProviderCapabilities = {
-    metersQuota: false,
-  };
-
+export class CodexProvider implements CodexSession {
   /**
    * Abort handle for the in-flight turn, so {@link forceStop} (driven by the
    * session's centralized SIGINT/SIGTERM handler) can tear the codex child down
@@ -56,8 +49,7 @@ export class CodexProvider implements Provider {
    * Best-effort immediate teardown from an interrupt — abort the live turn AND
    * await it so the codex child is actually reaped before this resolves.
    * Returning early (abort only) would let the session's interrupt handler
-   * `process.exit` before close() kills the child, orphaning it; CopilotProvider
-   * awaits its teardown the same way.
+   * `process.exit` before close() kills the child, orphaning it.
    */
   async forceStop(): Promise<void> {
     this.activeController?.abort();
@@ -77,7 +69,7 @@ export class CodexProvider implements Provider {
       throw new Error(
         "Codex cannot grant write access without also allowing shell commands " +
           "(its workspace-write sandbox runs commands autonomously). Re-run with " +
-          "--provider copilot, or explicitly allow shell.",
+          "shell explicitly allowed.",
       );
     }
   }
@@ -189,7 +181,6 @@ export class CodexProvider implements Provider {
       success: result.success,
       summary: result.finalMessage || undefined,
       usage: {
-        kind: "codex",
         inputTokens: result.usage?.inputTokens,
         outputTokens: result.usage?.outputTokens,
         rateLimits: result.usage?.rateLimits,
