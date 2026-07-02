@@ -148,6 +148,7 @@ vite.config.ts.timestamp-*
 .references/
 .local/
 .worktrees/
+.claude/worktrees/
 CLAUDE.local.md
 # dist/companion.cjs is committed (plugin must work without a build step);
 # re-include it despite the generic `dist` rule above.
