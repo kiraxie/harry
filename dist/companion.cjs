@@ -42,6 +42,1642 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// src/lib/quota.ts
+function snapshotPath(stateDir) {
+  return (0, import_node_path.join)(stateDir, "quota.json");
+}
+function readSnapshot(stateDir) {
+  const path = snapshotPath(stateDir);
+  if (!(0, import_node_fs.existsSync)(path)) return null;
+  try {
+    return JSON.parse((0, import_node_fs.readFileSync)(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function recordSnapshot(stateDir, quotas) {
+  const existing = readSnapshot(stateDir);
+  const merged = {
+    checkedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    quotas: { ...existing?.quotas ?? {} }
+  };
+  for (const [id, entry] of Object.entries(quotas)) {
+    if (!entry) continue;
+    merged.quotas[id] = {
+      entitlementRequests: entry.entitlementRequests ?? 0,
+      usedRequests: entry.usedRequests ?? 0,
+      remainingPercentage: entry.remainingPercentage ?? 100,
+      resetDate: entry.resetDate ?? "",
+      isUnlimitedEntitlement: entry.isUnlimitedEntitlement ?? false,
+      usageAllowedWithExhaustedQuota: entry.usageAllowedWithExhaustedQuota ?? false,
+      overage: entry.overage ?? 0,
+      overageAllowedWithExhaustedQuota: entry.overageAllowedWithExhaustedQuota ?? false
+    };
+  }
+  (0, import_node_fs.mkdirSync)((0, import_node_path.dirname)(snapshotPath(stateDir)), { recursive: true });
+  (0, import_node_fs.writeFileSync)(snapshotPath(stateDir), JSON.stringify(merged, null, 2), "utf-8");
+  return merged;
+}
+async function fetchQuota(client, stateDir) {
+  try {
+    const result = await client.rpc.account.getQuota({});
+    return recordSnapshot(stateDir, result.quotaSnapshots ?? {});
+  } catch {
+    return null;
+  }
+}
+function isPremiumModel(modelId) {
+  if (!modelId) return true;
+  const id = modelId.toLowerCase();
+  if (id.startsWith("claude-sonnet-")) return false;
+  if (id.startsWith("claude-haiku-")) return false;
+  if (id.endsWith("-mini") || id.startsWith("gpt-4.1")) return false;
+  return true;
+}
+function evaluateGate(snapshot, opts) {
+  if (!snapshot || Object.keys(snapshot.quotas).length === 0) {
+    return { ok: true, reason: "no_cache" };
+  }
+  const entries = Object.values(snapshot.quotas);
+  const metered = entries.filter((q) => !q.isUnlimitedEntitlement && q.entitlementRequests > 0);
+  if (metered.length === 0) {
+    return { ok: true, reason: "unlimited" };
+  }
+  if (metered.every((q) => q.remainingPercentage <= 0) && metered.some((q) => q.usageAllowedWithExhaustedQuota || q.overageAllowedWithExhaustedQuota)) {
+    return { ok: true, reason: "overage_allowed" };
+  }
+  let minRemainingAbs = Number.POSITIVE_INFINITY;
+  let tightestReset = "";
+  for (const q of metered) {
+    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
+    if (remaining < minRemainingAbs) {
+      minRemainingAbs = remaining;
+      tightestReset = q.resetDate;
+    }
+  }
+  if (minRemainingAbs <= opts.minRemaining) {
+    return {
+      ok: false,
+      reason: "quota_exhausted",
+      remaining: minRemainingAbs === Number.POSITIVE_INFINITY ? 0 : minRemainingAbs,
+      resetAt: tightestReset
+    };
+  }
+  const staleMs = opts.staleAfterMs ?? 2 * 60 * 1e3;
+  const ageMs = Date.now() - new Date(snapshot.checkedAt).getTime();
+  const warning = ageMs > staleMs ? `Quota snapshot is ${Math.round(ageMs / 1e3)}s old; may be out of date.` : void 0;
+  return warning ? { ok: true, reason: "available", warning } : { ok: true, reason: "available" };
+}
+function labelFor(id) {
+  if (POOL_LABELS[id]) return POOL_LABELS[id];
+  return id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function summarize(snapshot) {
+  if (!snapshot) return { pools: [], allUnlimited: false };
+  const entries = Object.entries(snapshot.quotas);
+  if (entries.length === 0) return { pools: [], allUnlimited: false };
+  const pools = entries.map(([id, q]) => {
+    const isMetered = !q.isUnlimitedEntitlement && q.entitlementRequests > 0;
+    if (!isMetered) {
+      return { id, label: labelFor(id), unlimited: true };
+    }
+    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
+    return {
+      id,
+      label: labelFor(id),
+      unlimited: false,
+      used: q.usedRequests,
+      total: q.entitlementRequests,
+      remaining,
+      remainingPercentage: q.remainingPercentage,
+      overage: q.overage || void 0,
+      resetAt: q.resetDate || void 0
+    };
+  });
+  const metered = pools.filter((p) => !p.unlimited);
+  if (metered.length === 0) {
+    return { pools, allUnlimited: true, unlimited: true };
+  }
+  let minRemaining = Number.POSITIVE_INFINITY;
+  let minPct = 100;
+  let tightestReset = "";
+  let tightestEntitlement = 0;
+  for (const p of metered) {
+    if (p.remaining !== void 0 && p.remaining < minRemaining) {
+      minRemaining = p.remaining;
+      tightestReset = p.resetAt ?? "";
+      tightestEntitlement = p.total ?? 0;
+    }
+    if (p.remainingPercentage !== void 0 && p.remainingPercentage < minPct) {
+      minPct = p.remainingPercentage;
+    }
+  }
+  return {
+    pools,
+    allUnlimited: false,
+    premium: minRemaining === Number.POSITIVE_INFINITY ? void 0 : minRemaining,
+    entitlement: tightestEntitlement || void 0,
+    percentage: minPct,
+    resetAt: tightestReset || void 0
+  };
+}
+function fmtNum(n) {
+  return Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(2)).toString();
+}
+function renderBar(usedPct) {
+  const clamped = Math.max(0, Math.min(100, usedPct));
+  const filled = Math.round(clamped / 100 * BAR_WIDTH);
+  return "\u2588".repeat(filled) + "\u2591".repeat(BAR_WIDTH - filled);
+}
+function daysUntil(iso) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const diffMs = t - Date.now();
+  if (diffMs <= 0) return 0;
+  return Math.ceil(diffMs / (24 * 60 * 60 * 1e3));
+}
+function renderQuotaBar(q, haveSnapshot) {
+  if (!haveSnapshot) {
+    return ["- No snapshot yet. One will be captured on the next run."];
+  }
+  if (q.allUnlimited && q.pools.length > 0) {
+    return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(", ")}).`];
+  }
+  if (q.pools.length === 0) {
+    return ["- No quota information reported by Copilot yet."];
+  }
+  const metered = q.pools.filter((p) => !p.unlimited);
+  const lines = [];
+  for (const p of metered) {
+    const remainingPct = p.remainingPercentage ?? 0;
+    const usedPct = 100 - remainingPct;
+    const total = p.total === void 0 ? "?" : fmtNum(p.total);
+    const remaining = fmtNum(p.remaining ?? 0);
+    lines.push(`${p.label}`);
+    lines.push(`  Usage      ${renderBar(usedPct)}  ${usedPct.toFixed(1)}%`);
+    lines.push(`  Remaining  ${remaining} / ${total}`);
+    if (p.overage && p.overage > 0) {
+      lines.push(`  Overage    ${fmtNum(p.overage)} (billed beyond entitlement)`);
+    }
+    if (p.resetAt) {
+      const days = daysUntil(p.resetAt);
+      const suffix = days === null ? "" : days === 0 ? "  (resets today)" : `  (in ~${days} days)`;
+      lines.push(`  Resets     ${p.resetAt}${suffix}`);
+    }
+    lines.push("");
+  }
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+var import_node_fs, import_node_path, POOL_LABELS, BAR_WIDTH;
+var init_quota = __esm({
+  "src/lib/quota.ts"() {
+    "use strict";
+    import_node_fs = require("node:fs");
+    import_node_path = require("node:path");
+    POOL_LABELS = {
+      premium_interactions: "Premium requests",
+      chat: "Chat",
+      completions: "Completions"
+    };
+    BAR_WIDTH = 30;
+  }
+});
+
+// package.json
+var package_default;
+var init_package = __esm({
+  "package.json"() {
+    package_default = {
+      name: "harry",
+      version: "0.4.0",
+      description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
+      type: "module",
+      license: "MIT",
+      author: "kiraxie <kiraxie11287@gmail.com>",
+      homepage: "https://github.com/kiraxie/harry",
+      repository: "https://github.com/kiraxie/harry",
+      engines: {
+        node: ">=26.0.0"
+      },
+      packageManager: "pnpm@10.33.0",
+      scripts: {
+        build: "node build.mjs",
+        test: "node --test",
+        typecheck: "tsc -p tsconfig.json --noEmit",
+        lint: "biome check .",
+        format: "biome format --write .",
+        "install-laws": "node scripts/install.mjs",
+        "init-ignore": "node scripts/init.mjs"
+      },
+      dependencies: {
+        "@github/copilot-sdk": "^1.0.4"
+      },
+      devDependencies: {
+        "@biomejs/biome": "^2.5.1",
+        "@types/node": "^26.0.1",
+        esbuild: "^0.28.1",
+        typescript: "7.0.1-rc"
+      },
+      pnpm: {
+        onlyBuiltDependencies: [
+          "@biomejs/biome",
+          "esbuild"
+        ]
+      }
+    };
+  }
+});
+
+// src/lib/version.ts
+var PLUGIN_VERSION, CLIENT_NAME;
+var init_version = __esm({
+  "src/lib/version.ts"() {
+    "use strict";
+    init_package();
+    PLUGIN_VERSION = package_default.version;
+    CLIENT_NAME = "harry";
+  }
+});
+
+// src/lib/codex/process.ts
+function runCommand(command, args = [], options = {}) {
+  const result = (0, import_node_child_process.spawnSync)(command, args, {
+    cwd: options.cwd,
+    env: options.env,
+    encoding: "utf8",
+    stdio: "pipe",
+    shell: import_node_process.default.platform === "win32" ? import_node_process.default.env.SHELL || true : false,
+    windowsHide: true
+  });
+  return {
+    command,
+    args,
+    status: result.status ?? 0,
+    signal: result.signal ?? null,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    error: result.error ?? null
+  };
+}
+function binaryAvailable(bin, args = ["--version"], opts = {}) {
+  const result = runCommand(bin, args, opts);
+  if (result.error && result.error.code === "ENOENT") {
+    return { available: false, detail: "not found" };
+  }
+  if (result.error) {
+    return { available: false, detail: result.error.message };
+  }
+  if (result.status !== 0) {
+    const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.status}`;
+    return { available: false, detail };
+  }
+  return { available: true, detail: result.stdout.trim() || result.stderr.trim() || "ok" };
+}
+function looksLikeMissingProcessMessage(text) {
+  return /not found|no running instance|cannot find|does not exist|no such process/i.test(text);
+}
+function terminateProcessTree(pid) {
+  if (!Number.isFinite(pid)) {
+    return;
+  }
+  if (import_node_process.default.platform === "win32") {
+    const result = runCommand("taskkill", ["/PID", String(pid), "/T", "/F"]);
+    if (!result.error && result.status === 0) {
+      return;
+    }
+    const combinedOutput = `${result.stderr}
+${result.stdout}`.trim();
+    if (!result.error && looksLikeMissingProcessMessage(combinedOutput)) {
+      return;
+    }
+    if (result.error?.code === "ENOENT") {
+      try {
+        import_node_process.default.kill(pid);
+      } catch (error) {
+        if (error?.code === "ESRCH") {
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+    if (result.error) {
+      throw result.error;
+    }
+    return;
+  }
+  try {
+    import_node_process.default.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      import_node_process.default.kill(pid, "SIGTERM");
+    } catch (innerError) {
+      if (innerError?.code !== "ESRCH") {
+        throw innerError;
+      }
+    }
+  }
+}
+var import_node_child_process, import_node_process;
+var init_process = __esm({
+  "src/lib/codex/process.ts"() {
+    "use strict";
+    import_node_child_process = require("node:child_process");
+    import_node_process = __toESM(require("node:process"), 1);
+  }
+});
+
+// src/lib/codex/app-server.ts
+function buildJsonRpcError(code, message, data) {
+  return data === void 0 ? { code, message } : { code, message, data };
+}
+function createProtocolError(message, data) {
+  const error = new Error(message);
+  error.data = data;
+  if (data && typeof data === "object" && data.code !== void 0) {
+    error.rpcCode = data.code;
+  }
+  return error;
+}
+var import_node_child_process2, import_node_process2, import_node_readline, DEFAULT_CONNECT_TIMEOUT_MS, CLOSE_SIGTERM_DELAY_MS, CLOSE_SIGKILL_GRACE_MS, CLOSE_EXIT_WAIT_MS, DEFAULT_CLIENT_INFO, DEFAULT_CAPABILITIES, CodexAppServerClient;
+var init_app_server = __esm({
+  "src/lib/codex/app-server.ts"() {
+    "use strict";
+    import_node_child_process2 = require("node:child_process");
+    import_node_process2 = __toESM(require("node:process"), 1);
+    import_node_readline = __toESM(require("node:readline"), 1);
+    init_version();
+    init_process();
+    DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1e3;
+    CLOSE_SIGTERM_DELAY_MS = 50;
+    CLOSE_SIGKILL_GRACE_MS = 500;
+    CLOSE_EXIT_WAIT_MS = 3e3;
+    DEFAULT_CLIENT_INFO = {
+      title: "harry",
+      name: "harry",
+      version: PLUGIN_VERSION
+    };
+    DEFAULT_CAPABILITIES = {
+      experimentalApi: false,
+      requestAttestation: false,
+      optOutNotificationMethods: [
+        "item/agentMessage/delta",
+        "item/reasoning/summaryTextDelta",
+        "item/reasoning/summaryPartAdded",
+        "item/reasoning/textDelta"
+      ]
+    };
+    CodexAppServerClient = class _CodexAppServerClient {
+      cwd;
+      options;
+      pending = /* @__PURE__ */ new Map();
+      nextId = 1;
+      stderrBuffer = "";
+      closed = false;
+      exitResolved = false;
+      exitError = null;
+      notificationHandler = null;
+      proc = null;
+      readline = null;
+      exitPromise;
+      resolveExit;
+      constructor(cwd, options) {
+        this.cwd = cwd;
+        this.options = options;
+        this.exitPromise = new Promise((resolve5) => {
+          this.resolveExit = resolve5;
+        });
+      }
+      static async connect(cwd, opts = {}) {
+        const client = new _CodexAppServerClient(cwd, opts);
+        await client.initialize(opts.connectTimeoutMs);
+        return client;
+      }
+      setNotificationHandler(handler) {
+        this.notificationHandler = handler;
+      }
+      get stderr() {
+        return this.stderrBuffer;
+      }
+      request(method, params) {
+        if (this.closed) {
+          return Promise.reject(new Error("codex app-server client is closed."));
+        }
+        const id = this.nextId;
+        this.nextId += 1;
+        return new Promise((resolve5, reject) => {
+          this.pending.set(id, { resolve: resolve5, reject, method });
+          this.sendMessage({ id, method, params });
+        });
+      }
+      notify(method, params = {}) {
+        if (this.closed) {
+          return;
+        }
+        this.sendMessage({ method, params });
+      }
+      handleLine(line) {
+        if (!line.trim()) {
+          return;
+        }
+        let message;
+        try {
+          message = JSON.parse(line);
+        } catch (error) {
+          this.handleExit(
+            createProtocolError(
+              `Failed to parse codex app-server JSONL: ${error.message}`,
+              { line }
+            )
+          );
+          return;
+        }
+        if (message.id !== void 0 && message.method) {
+          this.handleServerRequest(message);
+          return;
+        }
+        if (message.id !== void 0) {
+          const pending = this.pending.get(message.id);
+          if (!pending) {
+            return;
+          }
+          this.pending.delete(message.id);
+          if (message.error) {
+            pending.reject(
+              createProtocolError(
+                message.error.message ?? `codex app-server ${pending.method} failed.`,
+                message.error
+              )
+            );
+          } else {
+            pending.resolve(message.result ?? {});
+          }
+          return;
+        }
+        if (message.method && this.notificationHandler) {
+          this.notificationHandler(message);
+        }
+      }
+      handleServerRequest(message) {
+        this.sendMessage({
+          id: message.id,
+          error: buildJsonRpcError(-32601, `Unsupported server request: ${message.method}`)
+        });
+      }
+      handleExit(error) {
+        if (this.exitResolved) {
+          return;
+        }
+        this.exitResolved = true;
+        this.exitError = error ?? null;
+        for (const pending of this.pending.values()) {
+          pending.reject(this.exitError ?? new Error("codex app-server connection closed."));
+        }
+        this.pending.clear();
+        this.resolveExit();
+      }
+      async initialize(connectTimeoutMs) {
+        this.proc = (0, import_node_child_process2.spawn)("codex", ["app-server"], {
+          cwd: this.cwd,
+          env: this.options.env ?? import_node_process2.default.env,
+          stdio: ["pipe", "pipe", "pipe"],
+          shell: import_node_process2.default.platform === "win32" ? import_node_process2.default.env.SHELL || true : false,
+          windowsHide: true
+        });
+        this.proc.stdout.setEncoding("utf8");
+        this.proc.stderr.setEncoding("utf8");
+        this.proc.stderr.on("data", (chunk) => {
+          this.stderrBuffer += chunk;
+        });
+        this.proc.stdin.on("error", () => {
+        });
+        this.proc.stdout.on("error", () => {
+        });
+        this.proc.on("error", (error) => {
+          this.handleExit(error);
+        });
+        this.proc.on("exit", (code, signal) => {
+          const stderr = this.stderrBuffer.trim();
+          const detail = code === 0 ? null : createProtocolError(
+            `codex app-server exited unexpectedly (${signal ? `signal ${signal}` : `exit ${code}`}).${stderr ? `
+${stderr}` : ""}`
+          );
+          this.handleExit(detail);
+        });
+        this.readline = import_node_readline.default.createInterface({ input: this.proc.stdout });
+        this.readline.on("line", (line) => {
+          this.handleLine(line);
+        });
+        const initRequest = this.request("initialize", {
+          clientInfo: this.options.clientInfo ?? DEFAULT_CLIENT_INFO,
+          capabilities: this.options.capabilities ?? DEFAULT_CAPABILITIES
+        });
+        if (connectTimeoutMs !== void 0 && connectTimeoutMs > 0) {
+          let timer = null;
+          const timeout = new Promise((_, reject) => {
+            timer = setTimeout(() => {
+              const stderr = this.stderrBuffer.trim();
+              reject(
+                createProtocolError(
+                  `codex app-server did not answer initialize within ${connectTimeoutMs}ms.${stderr ? `
+${stderr}` : ""}`
+                )
+              );
+            }, connectTimeoutMs);
+            timer.unref?.();
+          });
+          initRequest.catch(() => {
+          });
+          try {
+            await Promise.race([initRequest, timeout]);
+          } catch (error) {
+            if (timer) {
+              clearTimeout(timer);
+            }
+            await this.close();
+            throw error;
+          }
+          if (timer) {
+            clearTimeout(timer);
+          }
+        } else {
+          try {
+            await initRequest;
+          } catch (error) {
+            await this.close();
+            throw error;
+          }
+        }
+        this.notify("initialized", {});
+      }
+      async close() {
+        if (this.closed) {
+          await this.waitForExit();
+          return;
+        }
+        this.closed = true;
+        if (this.readline) {
+          this.readline.close();
+        }
+        if (this.proc && !this.proc.killed) {
+          this.proc.stdin.end();
+          const proc = this.proc;
+          const termTimer = setTimeout(() => {
+            if (proc.killed || proc.exitCode !== null) {
+              return;
+            }
+            if (import_node_process2.default.platform === "win32") {
+              try {
+                if (proc.pid !== void 0) {
+                  terminateProcessTree(proc.pid);
+                }
+              } catch {
+              }
+              return;
+            }
+            proc.kill("SIGTERM");
+            const killTimer = setTimeout(() => {
+              if (!proc.killed && proc.exitCode === null) {
+                proc.kill("SIGKILL");
+              }
+            }, CLOSE_SIGKILL_GRACE_MS);
+            killTimer.unref?.();
+          }, CLOSE_SIGTERM_DELAY_MS);
+          termTimer.unref?.();
+        }
+        await this.waitForExit();
+      }
+      /**
+       * Wait for the child to exit, but never longer than CLOSE_EXIT_WAIT_MS. Even
+       * with SIGKILL escalation a grandchild can keep stdio open or 'exit' can be
+       * delayed; this bound guarantees close() always resolves so a caller's
+       * `await client.close()` in a finally block can't hang the host.
+       */
+      async waitForExit() {
+        let timer = null;
+        const bound = new Promise((resolve5) => {
+          timer = setTimeout(resolve5, CLOSE_EXIT_WAIT_MS);
+          timer.unref?.();
+        });
+        try {
+          await Promise.race([this.exitPromise, bound]);
+        } finally {
+          if (timer) {
+            clearTimeout(timer);
+          }
+        }
+      }
+      sendMessage(message) {
+        const line = `${JSON.stringify(message)}
+`;
+        const stdin = this.proc?.stdin;
+        if (!stdin) {
+          throw new Error("codex app-server stdin is not available.");
+        }
+        stdin.write(line);
+      }
+    };
+  }
+});
+
+// src/lib/codex/auth.ts
+function normalizeProviderId(value) {
+  const providerId = typeof value === "string" ? value.trim() : "";
+  return providerId || null;
+}
+function resolveProviderConfig(configResponse) {
+  const config = configResponse?.config;
+  if (!config || typeof config !== "object") {
+    return { providerId: null, providerConfig: null };
+  }
+  const providerId = normalizeProviderId(config.model_provider);
+  const providers = config.model_providers && typeof config.model_providers === "object" && !Array.isArray(config.model_providers) ? config.model_providers : null;
+  const candidate = providerId && providers ? providers[providerId] : null;
+  const providerConfig = candidate && typeof candidate === "object" ? candidate : null;
+  return { providerId, providerConfig };
+}
+function formatProviderLabel(providerId, providerConfig) {
+  const configuredName = typeof providerConfig?.name === "string" ? providerConfig.name.trim() : "";
+  if (configuredName) {
+    return configuredName;
+  }
+  if (!providerId) {
+    return "The active provider";
+  }
+  return BUILTIN_PROVIDER_LABELS.get(providerId) ?? providerId;
+}
+function notLoggedIn(detail) {
+  return { available: true, loggedIn: false, detail, authMethod: null, verified: null };
+}
+function buildAppServerAuthStatus(accountResponse, configResponse) {
+  const account = accountResponse?.account ?? null;
+  const requiresOpenaiAuth = typeof accountResponse?.requiresOpenaiAuth === "boolean" ? accountResponse.requiresOpenaiAuth : null;
+  const { providerId, providerConfig } = resolveProviderConfig(configResponse);
+  const providerLabel = formatProviderLabel(providerId, providerConfig);
+  if (account?.type === "chatgpt") {
+    const email = typeof account.email === "string" && account.email.trim() ? account.email.trim() : null;
+    return {
+      available: true,
+      loggedIn: true,
+      detail: email ? `ChatGPT login active for ${email}` : "ChatGPT login active",
+      authMethod: "chatgpt",
+      verified: true
+    };
+  }
+  if (account?.type === "apiKey") {
+    return {
+      available: true,
+      loggedIn: true,
+      detail: "API key configured (unverified)",
+      authMethod: "apiKey",
+      verified: false
+    };
+  }
+  if (requiresOpenaiAuth === false) {
+    return {
+      available: true,
+      loggedIn: true,
+      detail: `${providerLabel} is configured and does not require OpenAI authentication`,
+      authMethod: providerId,
+      verified: null
+    };
+  }
+  return notLoggedIn(`${providerLabel} requires OpenAI authentication`);
+}
+function getCodexAvailability(cwd) {
+  const versionStatus = binaryAvailable("codex", ["--version"], { cwd });
+  if (!versionStatus.available) {
+    return versionStatus;
+  }
+  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], { cwd });
+  if (!appServerStatus.available) {
+    return {
+      available: false,
+      detail: `${versionStatus.detail}; advanced runtime unavailable: ${appServerStatus.detail}`
+    };
+  }
+  return {
+    available: true,
+    detail: `${versionStatus.detail}; advanced runtime available`
+  };
+}
+async function getCodexAuthStatus(cwd, opts = {}) {
+  const availability = getCodexAvailability(cwd);
+  if (!availability.available) {
+    return {
+      available: false,
+      loggedIn: false,
+      detail: availability.detail,
+      authMethod: null,
+      verified: null
+    };
+  }
+  let client = null;
+  try {
+    client = await CodexAppServerClient.connect(cwd, {
+      env: opts.env,
+      // Anti-hang: this probe runs on the default provider-resolution path of
+      // every auto ask/review/fix and in SessionStart setup. Without a ceiling,
+      // a child that spawns but blocks before answering `initialize` (broken
+      // install, interactive/auth prompt) makes connect() await forever — a
+      // hang no try/catch can rescue.
+      connectTimeoutMs: opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
+    });
+    const accountResponse = await client.request("account/read", {
+      refreshToken: false
+    });
+    const configResponse = await client.request("config/read", {
+      includeLayers: false,
+      cwd
+    });
+    return buildAppServerAuthStatus(accountResponse, configResponse);
+  } catch (error) {
+    return notLoggedIn(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (client) {
+      await client.close().catch(() => {
+      });
+    }
+  }
+}
+var BUILTIN_PROVIDER_LABELS;
+var init_auth = __esm({
+  "src/lib/codex/auth.ts"() {
+    "use strict";
+    init_app_server();
+    init_process();
+    BUILTIN_PROVIDER_LABELS = /* @__PURE__ */ new Map([
+      ["openai", "OpenAI"],
+      ["ollama", "Ollama"],
+      ["lmstudio", "LM Studio"]
+    ]);
+  }
+});
+
+// src/lib/codex/turn.ts
+function buildTurnInput(prompt, instructions) {
+  const items = [];
+  const trimmed = instructions?.trim();
+  if (trimmed) {
+    items.push({ type: "text", text: trimmed, text_elements: [] });
+  }
+  items.push({ type: "text", text: prompt, text_elements: [] });
+  return items;
+}
+function shorten(text, limit = 96) {
+  const normalized = String(text ?? "").trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 3)}...`;
+}
+function extractThreadId(message) {
+  return message?.params?.threadId ?? null;
+}
+function extractTurnId(message) {
+  if (message?.params?.turnId) {
+    return message.params.turnId;
+  }
+  if (message?.params?.turn?.id) {
+    return message.params.turn.id;
+  }
+  return null;
+}
+function normalizeReasoningText(text) {
+  return String(text ?? "").replace(/\s+/g, " ").trim();
+}
+function extractReasoningSections(value) {
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string") {
+    const normalized = normalizeReasoningText(value);
+    return normalized ? [normalized] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractReasoningSections(entry));
+  }
+  if (typeof value === "object") {
+    const obj = value;
+    if (typeof obj.text === "string") {
+      return extractReasoningSections(obj.text);
+    }
+    if ("summary" in obj) {
+      return extractReasoningSections(obj.summary);
+    }
+    if ("content" in obj) {
+      return extractReasoningSections(obj.content);
+    }
+    if ("parts" in obj) {
+      return extractReasoningSections(obj.parts);
+    }
+  }
+  return [];
+}
+function mergeReasoningSections(existing, next) {
+  const merged = [];
+  for (const section of [...existing, ...next]) {
+    const normalized = normalizeReasoningText(section);
+    if (!normalized || merged.includes(normalized)) {
+      continue;
+    }
+    merged.push(normalized);
+  }
+  return merged;
+}
+function toFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function parseTokenCount(params) {
+  const usage = {};
+  const lastUsage = params?.last_token_usage;
+  if (lastUsage && typeof lastUsage === "object") {
+    usage.inputTokens = toFiniteNumber(lastUsage.input_tokens);
+    usage.outputTokens = toFiniteNumber(lastUsage.output_tokens);
+  }
+  const rateLimits = params?.rate_limits;
+  if (rateLimits && typeof rateLimits === "object") {
+    const parsed = {};
+    const primary = toFiniteNumber(rateLimits.primary?.used_percent);
+    if (primary !== void 0) {
+      parsed.primaryUsedPercent = primary;
+    }
+    const secondary = toFiniteNumber(rateLimits.secondary?.used_percent);
+    if (secondary !== void 0) {
+      parsed.secondaryUsedPercent = secondary;
+    }
+    if (typeof rateLimits.plan_type === "string") {
+      parsed.planType = rateLimits.plan_type;
+    }
+    if (typeof rateLimits.resets_at === "string") {
+      parsed.resetsAt = rateLimits.resets_at;
+    }
+    if (Object.keys(parsed).length > 0) {
+      usage.rateLimits = parsed;
+    }
+  }
+  return usage;
+}
+function foldRateLimits(prev, next) {
+  if (!prev) {
+    return next;
+  }
+  if (!next) {
+    return prev;
+  }
+  return {
+    primaryUsedPercent: next.primaryUsedPercent ?? prev.primaryUsedPercent,
+    secondaryUsedPercent: next.secondaryUsedPercent ?? prev.secondaryUsedPercent,
+    planType: next.planType ?? prev.planType,
+    resetsAt: next.resetsAt ?? prev.resetsAt
+  };
+}
+function createTurnCaptureState(threadId, onItem) {
+  let resolveCompletion;
+  const completion = new Promise((resolve5) => {
+    resolveCompletion = resolve5;
+  });
+  return {
+    threadId,
+    threadIds: /* @__PURE__ */ new Set([threadId]),
+    threadTurnIds: /* @__PURE__ */ new Map(),
+    turnId: null,
+    turnStarted: false,
+    bufferedNotifications: [],
+    completion,
+    resolveCompletion,
+    finalTurn: null,
+    completed: false,
+    finalAnswerSeen: false,
+    pendingCollaborations: /* @__PURE__ */ new Set(),
+    activeSubagentTurns: /* @__PURE__ */ new Set(),
+    completionTimer: null,
+    lastAgentMessage: "",
+    reasoningSummary: [],
+    error: null,
+    usage: null,
+    onItem
+  };
+}
+function registerThread(state, threadId) {
+  if (threadId) {
+    state.threadIds.add(threadId);
+  }
+}
+function belongsToTurn(state, message) {
+  const messageThreadId = extractThreadId(message);
+  if (!messageThreadId || !state.threadIds.has(messageThreadId)) {
+    return false;
+  }
+  const trackedTurnId = state.threadTurnIds.get(messageThreadId) ?? null;
+  const messageTurnId = extractTurnId(message);
+  return trackedTurnId === null || messageTurnId === null || messageTurnId === trackedTurnId;
+}
+function shouldApplyNotification(state, message) {
+  if (message.method === "thread/started") {
+    return true;
+  }
+  if (message.method === "token_count" || message.method === "error") {
+    return true;
+  }
+  return belongsToTurn(state, message);
+}
+function clearCompletionTimer(state) {
+  if (state.completionTimer) {
+    clearTimeout(state.completionTimer);
+    state.completionTimer = null;
+  }
+}
+function completeTurn(state, turn = null) {
+  if (state.completed) {
+    return;
+  }
+  clearCompletionTimer(state);
+  state.completed = true;
+  if (turn) {
+    state.finalTurn = turn;
+    if (!state.turnId && turn.id) {
+      state.turnId = turn.id;
+    }
+  } else if (!state.finalTurn) {
+    state.finalTurn = { id: state.turnId ?? "inferred-turn", status: "completed" };
+  }
+  state.resolveCompletion();
+}
+function scheduleInferredCompletion(state) {
+  if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
+    return;
+  }
+  if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
+    return;
+  }
+  clearCompletionTimer(state);
+  state.completionTimer = setTimeout(() => {
+    state.completionTimer = null;
+    if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
+      return;
+    }
+    if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
+      return;
+    }
+    completeTurn(state, null);
+  }, 250);
+  state.completionTimer.unref?.();
+}
+function toolLabel(item) {
+  switch (item.type) {
+    case "commandExecution":
+      return `Running command: ${shorten(item.command)}`;
+    case "fileChange":
+      return `Applying ${item.changes?.length ?? 0} file change(s).`;
+    case "mcpToolCall":
+      return `Calling ${item.server}/${item.tool}.`;
+    case "dynamicToolCall":
+      return `Running tool: ${item.tool}.`;
+    case "webSearch":
+      return `Searching: ${shorten(item.query)}`;
+    default:
+      return null;
+  }
+}
+function recordItem(state, item, lifecycle, threadId = null) {
+  if (item.type === "collabAgentToolCall") {
+    if (!threadId || threadId === state.threadId) {
+      if (lifecycle === "started" || item.status === "inProgress") {
+        state.pendingCollaborations.add(item.id);
+      } else if (lifecycle === "completed") {
+        state.pendingCollaborations.delete(item.id);
+        scheduleInferredCompletion(state);
+      }
+    }
+    for (const receiverThreadId of item.receiverThreadIds ?? []) {
+      registerThread(state, receiverThreadId);
+    }
+  }
+  if (item.type === "agentMessage") {
+    if (item.text && (!threadId || threadId === state.threadId)) {
+      state.lastAgentMessage = item.text;
+      const final = lifecycle === "completed" && item.phase === "final_answer";
+      if (final) {
+        state.finalAnswerSeen = true;
+        scheduleInferredCompletion(state);
+      }
+      if (lifecycle === "completed") {
+        state.onItem?.({ kind: "assistant", text: item.text, final });
+      }
+    }
+    return;
+  }
+  if (item.type === "reasoning" && lifecycle === "completed") {
+    const nextSections = extractReasoningSections(item.summary);
+    state.reasoningSummary = mergeReasoningSections(state.reasoningSummary, nextSections);
+    for (const section of nextSections) {
+      state.onItem?.({ kind: "reasoning", text: section });
+    }
+    return;
+  }
+  if (lifecycle === "started") {
+    const label = toolLabel(item);
+    if (label) {
+      state.onItem?.({ kind: "tool", label });
+    }
+  }
+}
+function applyTurnNotification(state, message) {
+  switch (message.method) {
+    case "thread/started":
+      registerThread(state, message.params?.thread?.id);
+      break;
+    case "turn/started":
+      registerThread(state, message.params?.threadId);
+      state.threadTurnIds.set(message.params?.threadId, message.params?.turn?.id ?? null);
+      if ((message.params?.threadId ?? null) !== state.threadId) {
+        state.activeSubagentTurns.add(message.params?.threadId);
+      }
+      break;
+    case "item/started": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "started", message.params?.threadId ?? null);
+      }
+      break;
+    }
+    case "item/completed": {
+      const item = message.params?.item;
+      if (item) {
+        recordItem(state, item, "completed", message.params?.threadId ?? null);
+      }
+      break;
+    }
+    case "token_count": {
+      const next = parseTokenCount(message.params);
+      const prev = state.usage ?? {};
+      const folded = {
+        inputTokens: next.inputTokens ?? prev.inputTokens,
+        outputTokens: next.outputTokens ?? prev.outputTokens,
+        rateLimits: foldRateLimits(prev.rateLimits, next.rateLimits)
+      };
+      const hasContent = folded.inputTokens !== void 0 || folded.outputTokens !== void 0 || folded.rateLimits !== void 0;
+      if (hasContent) {
+        state.usage = folded;
+        state.onItem?.({ kind: "usage", ...folded });
+      }
+      break;
+    }
+    case "error":
+      state.error = message.params?.error ?? { message: "Unknown codex error." };
+      state.onItem?.({
+        kind: "error",
+        message: state.error?.message ?? "Unknown codex error."
+      });
+      break;
+    case "turn/completed":
+      if ((message.params?.threadId ?? null) !== state.threadId) {
+        state.activeSubagentTurns.delete(message.params?.threadId);
+        scheduleInferredCompletion(state);
+        break;
+      }
+      completeTurn(state, message.params?.turn ?? null);
+      break;
+    default:
+      break;
+  }
+}
+async function runCodexTurn(opts) {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
+  const connectTimeoutMs = opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
+  let client;
+  try {
+    client = await CodexAppServerClient.connect(opts.cwd, {
+      env: opts.env,
+      connectTimeoutMs
+    });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    return {
+      success: false,
+      finalMessage: "",
+      reasoningSummary: [],
+      error: message,
+      stderr: ""
+    };
+  }
+  let timer = null;
+  let timedOut = false;
+  const timeout = new Promise((resolve5) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      resolve5();
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  let aborted = false;
+  let resolveAbort = () => {
+  };
+  const abortGate = new Promise((resolve5) => {
+    resolveAbort = resolve5;
+  });
+  const onAbort = () => {
+    aborted = true;
+    resolveAbort();
+    void client.close().catch(() => {
+    });
+  };
+  if (opts.signal) {
+    if (opts.signal.aborted) onAbort();
+    else opts.signal.addEventListener("abort", onAbort, { once: true });
+  }
+  let state = null;
+  try {
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    const started = await Promise.race([
+      client.request("thread/start", {
+        cwd: opts.cwd,
+        model: opts.model ?? null,
+        approvalPolicy: "never",
+        sandbox: opts.readOnly ? "read-only" : "workspace-write",
+        ephemeral: opts.readOnly ?? false
+      }),
+      timeout.then(() => null),
+      abortGate.then(() => null)
+    ]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    if (timedOut || !started) {
+      return failure(client, "Codex turn timed out before the thread started.");
+    }
+    const threadId = started.thread.id;
+    state = createTurnCaptureState(threadId, opts.onItem);
+    const capture = state;
+    client.setNotificationHandler((message) => {
+      if (!capture.turnStarted) {
+        capture.bufferedNotifications.push(message);
+        return;
+      }
+      if (shouldApplyNotification(capture, message)) {
+        applyTurnNotification(capture, message);
+      }
+    });
+    const turnStartParams = {
+      threadId,
+      input: buildTurnInput(opts.prompt, opts.instructions)
+    };
+    if (opts.model) {
+      turnStartParams.model = opts.model;
+    }
+    if (opts.effort) {
+      turnStartParams.effort = opts.effort;
+    }
+    const turnResponse = await Promise.race([
+      client.request("turn/start", turnStartParams),
+      timeout.then(() => null),
+      abortGate.then(() => null)
+    ]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    if (timedOut || !turnResponse) {
+      return failure(client, "Codex turn timed out before the turn started.");
+    }
+    capture.turnId = turnResponse.turn?.id ?? null;
+    if (capture.turnId) {
+      capture.threadTurnIds.set(threadId, capture.turnId);
+    }
+    for (const message of capture.bufferedNotifications) {
+      if (shouldApplyNotification(capture, message)) {
+        applyTurnNotification(capture, message);
+      }
+    }
+    capture.bufferedNotifications.length = 0;
+    capture.turnStarted = true;
+    if (turnResponse.turn?.status && turnResponse.turn.status !== "inProgress") {
+      completeTurn(capture, turnResponse.turn);
+    }
+    await Promise.race([capture.completion, timeout, abortGate]);
+    if (aborted) {
+      return failure(client, "Codex turn aborted.");
+    }
+    if (timedOut && !capture.completed) {
+      return failure(client, "Codex turn timed out while awaiting completion.");
+    }
+    return buildResult(capture, client.stderr);
+  } catch (error) {
+    const stderr = client.stderr;
+    const message = aborted ? "Codex turn aborted." : error?.message ?? String(error);
+    return {
+      success: false,
+      finalMessage: state?.lastAgentMessage ?? "",
+      reasoningSummary: state?.reasoningSummary ?? [],
+      error: stderr ? `${message}
+${stderr}` : message,
+      stderr,
+      usage: state?.usage ?? void 0
+    };
+  } finally {
+    opts.signal?.removeEventListener("abort", onAbort);
+    if (timer) {
+      clearTimeout(timer);
+    }
+    if (state) {
+      clearCompletionTimer(state);
+    }
+    await client.close();
+  }
+}
+function buildResult(state, stderr) {
+  const success = !state.error && (state.finalTurn?.status === "completed" || state.completed);
+  const result = {
+    success,
+    finalMessage: state.lastAgentMessage,
+    reasoningSummary: state.reasoningSummary,
+    stderr
+  };
+  if (state.error?.message) {
+    result.error = state.error.message;
+  }
+  if (state.usage) {
+    result.usage = state.usage;
+  }
+  return result;
+}
+function failure(client, reason) {
+  const stderr = client.stderr;
+  return {
+    success: false,
+    finalMessage: "",
+    reasoningSummary: [],
+    error: stderr ? `${reason}
+${stderr}` : reason,
+    stderr
+  };
+}
+var DEFAULT_TURN_TIMEOUT_MS;
+var init_turn = __esm({
+  "src/lib/codex/turn.ts"() {
+    "use strict";
+    init_app_server();
+    DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1e3;
+  }
+});
+
+// src/lib/state.ts
+function repoRootOf(cwd) {
+  try {
+    const root = (0, import_node_child_process3.execFileSync)("git", ["rev-parse", "--show-toplevel"], {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return root || (0, import_node_path2.resolve)(cwd);
+  } catch {
+    return (0, import_node_path2.resolve)(cwd);
+  }
+}
+function resolveStateDir(cwd) {
+  const workspaceRoot = repoRootOf(cwd);
+  const slug = (0, import_node_path2.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
+  const hash = (0, import_node_crypto.createHash)("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
+  const dirName = `${slug}-${hash}`;
+  const pluginDataDir = process.env[PLUGIN_DATA_ENV];
+  if (pluginDataDir) {
+    return (0, import_node_path2.join)(pluginDataDir, "state", dirName);
+  }
+  const fallbackDir = (0, import_node_path2.join)(FALLBACK_STATE_ROOT, dirName);
+  if (!(0, import_node_fs2.existsSync)(fallbackDir)) {
+    const legacyDir = (0, import_node_path2.join)(LEGACY_FALLBACK_STATE_ROOT, dirName);
+    if ((0, import_node_fs2.existsSync)(legacyDir)) return legacyDir;
+  }
+  return fallbackDir;
+}
+function ensureDir(dir) {
+  (0, import_node_fs2.mkdirSync)(dir, { recursive: true });
+}
+function stateFilePath(stateDir) {
+  return (0, import_node_path2.join)(stateDir, "state.json");
+}
+function loadState(stateDir) {
+  const filePath = stateFilePath(stateDir);
+  if (!(0, import_node_fs2.existsSync)(filePath)) {
+    return { version: 1, jobs: [] };
+  }
+  try {
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
+  } catch {
+    return { version: 1, jobs: [] };
+  }
+}
+function saveState(stateDir, state) {
+  ensureDir(stateDir);
+  if (state.jobs.length > MAX_JOBS) {
+    state.jobs = state.jobs.slice(0, MAX_JOBS);
+  }
+  (0, import_node_fs2.writeFileSync)(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
+}
+function jobsDir(stateDir) {
+  return (0, import_node_path2.join)(stateDir, "jobs");
+}
+function jobFilePath(stateDir, jobId) {
+  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.json`);
+}
+function jobLogPath(stateDir, jobId) {
+  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.log`);
+}
+function writeJobFile(stateDir, job) {
+  const dir = jobsDir(stateDir);
+  ensureDir(dir);
+  (0, import_node_fs2.writeFileSync)(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
+}
+function readJobFile(stateDir, jobId) {
+  const filePath = jobFilePath(stateDir, jobId);
+  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
+  try {
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function appendLog(stateDir, jobId, message) {
+  const logFile = jobLogPath(stateDir, jobId);
+  ensureDir(jobsDir(stateDir));
+  const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
+  (0, import_node_fs2.writeFileSync)(logFile, `[${time}] ${message}
+`, { flag: "a" });
+}
+function readLogTail(stateDir, jobId, maxLines = 10) {
+  const logFile = jobLogPath(stateDir, jobId);
+  if (!(0, import_node_fs2.existsSync)(logFile)) return [];
+  try {
+    const content = (0, import_node_fs2.readFileSync)(logFile, "utf-8");
+    const lines = content.trim().split("\n");
+    return lines.slice(-maxLines);
+  } catch {
+    return [];
+  }
+}
+function generateJobId() {
+  const ts = Date.now();
+  const rand = (0, import_node_crypto.randomUUID)().slice(0, 8);
+  return `job-${ts}-${rand}`;
+}
+function getSessionId() {
+  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || void 0;
+}
+function createJob(stateDir, job) {
+  const state = loadState(stateDir);
+  state.jobs.unshift(job);
+  saveState(stateDir, state);
+  writeJobFile(stateDir, job);
+}
+function updateJob(stateDir, jobId, updates) {
+  const state = loadState(stateDir);
+  const idx = state.jobs.findIndex((j) => j.id === jobId);
+  if (idx >= 0) {
+    state.jobs[idx] = { ...state.jobs[idx], ...updates };
+    saveState(stateDir, state);
+  }
+  const full = readJobFile(stateDir, jobId);
+  if (full) {
+    writeJobFile(stateDir, { ...full, ...updates });
+  }
+}
+function markJobFailed(stateDir, jobId, errorMessage) {
+  const job = readJobFile(stateDir, jobId);
+  if (!job || job.status === "completed" || job.status === "failed") return;
+  updateJob(stateDir, jobId, {
+    status: "failed",
+    phase: "failed",
+    completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    errorMessage
+  });
+  appendLog(stateDir, jobId, `Marked failed: ${errorMessage}`);
+}
+function listJobs(stateDir, sessionId) {
+  const state = loadState(stateDir);
+  if (sessionId) {
+    return state.jobs.filter((j) => j.sessionId === sessionId);
+  }
+  return state.jobs;
+}
+function codexRateLimitsPath(stateDir) {
+  return (0, import_node_path2.join)(stateDir, CODEX_RATE_LIMITS_FILE);
+}
+function writeCodexRateLimits(stateDir, rateLimits) {
+  try {
+    ensureDir(stateDir);
+    const snapshot = {
+      ...rateLimits,
+      capturedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    (0, import_node_fs2.writeFileSync)(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
+  } catch {
+  }
+}
+function readCodexRateLimits(stateDir) {
+  const filePath = codexRateLimitsPath(stateDir);
+  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
+  try {
+    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function formatCodexRateLimits(rl) {
+  const parts = [];
+  const used = [];
+  if (rl.primaryUsedPercent !== void 0) used.push(`primary ${rl.primaryUsedPercent}%`);
+  if (rl.secondaryUsedPercent !== void 0) used.push(`secondary ${rl.secondaryUsedPercent}%`);
+  if (used.length > 0) parts.push(`${used.join(" / ")} used`);
+  if (rl.planType) parts.push(`plan ${rl.planType}`);
+  if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
+  return parts.join(" \xB7 ");
+}
+function formatSnapshotAge(iso) {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1e3));
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+function renderCodexBlock(rl, capturedAt) {
+  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : "## Codex";
+  return [header, formatCodexRateLimits(rl)].join("\n");
+}
+var import_node_child_process3, import_node_crypto, import_node_fs2, import_node_os, import_node_path2, MAX_JOBS, PLUGIN_DATA_ENV, SESSION_ID_ENV, LEGACY_SESSION_ID_ENV, FALLBACK_STATE_ROOT, LEGACY_FALLBACK_STATE_ROOT, CODEX_RATE_LIMITS_FILE;
+var init_state = __esm({
+  "src/lib/state.ts"() {
+    "use strict";
+    import_node_child_process3 = require("node:child_process");
+    import_node_crypto = require("node:crypto");
+    import_node_fs2 = require("node:fs");
+    import_node_os = require("node:os");
+    import_node_path2 = require("node:path");
+    MAX_JOBS = 50;
+    PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
+    SESSION_ID_ENV = "HARRY_SESSION_ID";
+    LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
+    FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "harry");
+    LEGACY_FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "copilot-companion");
+    CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
+  }
+});
+
+// src/lib/providers/codex.ts
+var codex_exports = {};
+__export(codex_exports, {
+  CodexProvider: () => CodexProvider,
+  toCodexEffort: () => toCodexEffort
+});
+function toCodexEffort(reasoning) {
+  if (reasoning === void 0) return void 0;
+  return reasoning === "xhigh" ? "high" : reasoning;
+}
+var CodexProvider;
+var init_codex = __esm({
+  "src/lib/providers/codex.ts"() {
+    "use strict";
+    init_auth();
+    init_turn();
+    init_state();
+    CodexProvider = class {
+      id = "codex";
+      capabilities = {
+        metersQuota: false
+      };
+      /**
+       * Abort handle for the in-flight turn, so {@link forceStop} (driven by the
+       * session's centralized SIGINT/SIGTERM handler) can tear the codex child down
+       * immediately rather than orphaning it on `process.exit`. Null when idle.
+       */
+      activeController = null;
+      /** The in-flight turn promise, awaited by {@link forceStop} so teardown completes. */
+      activeRun = null;
+      /**
+       * Best-effort immediate teardown from an interrupt — abort the live turn AND
+       * await it so the codex child is actually reaped before this resolves.
+       * Returning early (abort only) would let the session's interrupt handler
+       * `process.exit` before close() kills the child, orphaning it; CopilotProvider
+       * awaits its teardown the same way.
+       */
+      async forceStop() {
+        this.activeController?.abort();
+        await this.activeRun?.catch(() => {
+        });
+      }
+      /**
+       * Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
+       * turn is `workspace-write` + approvalPolicy:"never", which lets codex run
+       * shell commands autonomously. It has no "write files but no shell" mode, so a
+       * caller that grants writes while withholding shell (`fix` defaults to
+       * allowShell:false) CANNOT be honored. Refuse rather than silently run MORE
+       * permissively than asked. Runs via the precheckRun seam BEFORE fix's snapshot.
+       */
+      precheckRun(opts) {
+        if (!opts.readOnly && !opts.allowShell) {
+          throw new Error(
+            "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with --provider copilot, or explicitly allow shell."
+          );
+        }
+      }
+      /**
+       * Probe codex auth without running a turn. Codex has no login/host concept in
+       * the neutral summary, so those stay undefined; `message` carries the codex
+       * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
+       */
+      async checkAuth(cwd) {
+        const s = await getCodexAuthStatus(cwd);
+        return { ok: s.loggedIn, message: s.detail };
+      }
+      /**
+       * Run a single prompt to completion. Streams turn events to progress/appendLog
+       * for visibility (never throwing on a stream event), then maps the
+       * {@link CodexTurnResult} onto the neutral {@link RunResult}.
+       *
+       * `opts.reasoning` is mapped to codex's effort enum via {@link toCodexEffort}
+       * (xhigh→high, since codex has no xhigh). `opts.model` is passed through as-is;
+       * undefined stays undefined so ~/.codex config picks the model.
+       */
+      async run(opts) {
+        const { appendLog: appendLog2, progress } = opts;
+        this.precheckRun(opts);
+        const onItem = (ev) => {
+          switch (ev.kind) {
+            case "assistant":
+              if (ev.text) progress(ev.text);
+              break;
+            case "tool":
+              progress(ev.label);
+              break;
+            case "reasoning":
+              if (ev.text) appendLog2(`reasoning: ${ev.text}`);
+              break;
+            case "usage":
+              appendLog2(
+                `usage: in=${ev.inputTokens ?? "?"} out=${ev.outputTokens ?? "?"}` + (ev.rateLimits?.primaryUsedPercent !== void 0 ? ` primary=${ev.rateLimits.primaryUsedPercent}%` : "")
+              );
+              break;
+            case "error":
+              appendLog2(`codex error: ${ev.message}`);
+              break;
+            default:
+              break;
+          }
+        };
+        progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}\u2026`);
+        const controller = new AbortController();
+        if (opts.signal) {
+          if (opts.signal.aborted) controller.abort();
+          else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
+        }
+        this.activeController = controller;
+        let result;
+        const turnPromise = runCodexTurn({
+          cwd: opts.cwd,
+          prompt: opts.prompt,
+          // Carry guardrails + injected --context into the turn (codex has no
+          // separate system slot; turn.ts rides them as a leading input block).
+          instructions: opts.systemMessage,
+          model: opts.model,
+          effort: toCodexEffort(opts.reasoning),
+          readOnly: opts.readOnly,
+          env: process.env,
+          onItem,
+          signal: controller.signal
+        });
+        this.activeRun = turnPromise;
+        try {
+          result = await turnPromise;
+        } finally {
+          this.activeController = null;
+          this.activeRun = null;
+        }
+        if (result.error) appendLog2(`turn error: ${result.error}`);
+        if (result.usage?.rateLimits) {
+          writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);
+        }
+        return {
+          lastAssistantMessage: result.finalMessage,
+          success: result.success,
+          summary: result.finalMessage || void 0,
+          usage: {
+            kind: "codex",
+            inputTokens: result.usage?.inputTokens,
+            outputTokens: result.usage?.outputTokens,
+            rateLimits: result.usage?.rateLimits
+          }
+        };
+      }
+    };
+  }
+});
+
 // node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/is.js
 var require_is = __commonJS({
   "node_modules/.pnpm/vscode-jsonrpc@8.2.1/node_modules/vscode-jsonrpc/lib/common/is.js"(exports2) {
@@ -7256,7 +8892,7 @@ function getBundledCliPath() {
       try {
         const sdkUrl = import_meta.resolve(`${packageName}/sdk`);
         const sdkPath = (0, import_node_url.fileURLToPath)(sdkUrl);
-        return (0, import_node_path.join)((0, import_node_path.dirname)((0, import_node_path.dirname)(sdkPath)), "index.js");
+        return (0, import_node_path3.join)((0, import_node_path3.dirname)((0, import_node_path3.dirname)(sdkPath)), "index.js");
       } catch {
       }
     }
@@ -7268,8 +8904,8 @@ function getBundledCliPath() {
   const searchPaths = req.resolve.paths("@github/copilot") ?? [];
   for (const base of searchPaths) {
     for (const packageName of packageNames) {
-      const candidate = (0, import_node_path.join)(base, ...packageName.split("/"), "index.js");
-      if ((0, import_node_fs.existsSync)(candidate)) {
+      const candidate = (0, import_node_path3.join)(base, ...packageName.split("/"), "index.js");
+      if ((0, import_node_fs3.existsSync)(candidate)) {
         return candidate;
       }
     }
@@ -7278,15 +8914,15 @@ function getBundledCliPath() {
     `Could not find a @github/copilot platform package (tried ${packageNames.join(", ")}). Searched ${searchPaths.length} paths. Ensure @github/copilot is installed, or pass cliPath/cliUrl to CopilotClient.`
   );
 }
-var import_node_child_process, import_node_crypto, import_node_fs, import_node_module, import_node_net, import_node_path, import_node_url, import_node2, import_meta, MIN_PROTOCOL_VERSION, RUNTIME_SHUTDOWN_TIMEOUT_MS, DEFAULT_PROVIDER_NAME, TeardownResilientStreamMessageWriter, CopilotClient;
+var import_node_child_process4, import_node_crypto2, import_node_fs3, import_node_module, import_node_net, import_node_path3, import_node_url, import_node2, import_meta, MIN_PROTOCOL_VERSION, RUNTIME_SHUTDOWN_TIMEOUT_MS, DEFAULT_PROVIDER_NAME, TeardownResilientStreamMessageWriter, CopilotClient;
 var init_client = __esm({
   "node_modules/.pnpm/@github+copilot-sdk@1.0.4/node_modules/@github/copilot-sdk/dist/client.js"() {
-    import_node_child_process = require("node:child_process");
-    import_node_crypto = require("node:crypto");
-    import_node_fs = require("node:fs");
+    import_node_child_process4 = require("node:child_process");
+    import_node_crypto2 = require("node:crypto");
+    import_node_fs3 = require("node:fs");
     import_node_module = require("node:module");
     import_node_net = require("node:net");
-    import_node_path = require("node:path");
+    import_node_path3 = require("node:path");
     import_node_url = require("node:url");
     import_node2 = __toESM(require_node(), 1);
     init_rpc();
@@ -7443,7 +9079,7 @@ var init_client = __esm({
           this.isExternalServer = true;
         }
         if (conn.kind === "tcp") {
-          this.effectiveConnectionToken = conn.connectionToken ?? (0, import_node_crypto.randomUUID)();
+          this.effectiveConnectionToken = conn.connectionToken ?? (0, import_node_crypto2.randomUUID)();
         } else if (conn.kind === "uri") {
           this.effectiveConnectionToken = conn.connectionToken;
         }
@@ -7981,7 +9617,7 @@ var init_client = __esm({
         config.systemMessage = this.getSystemMessageConfigForMode(config.systemMessage);
         const callerSessionId = config.sessionId;
         const useServerGeneratedId = config.cloud != null && callerSessionId == null;
-        const localSessionId = useServerGeneratedId ? void 0 : callerSessionId ?? (0, import_node_crypto.randomUUID)();
+        const localSessionId = useServerGeneratedId ? void 0 : callerSessionId ?? (0, import_node_crypto2.randomUUID)();
         const {
           wireProvider: bearerWireProvider,
           wireProviders: bearerWireProviders,
@@ -8698,7 +10334,7 @@ var init_client = __esm({
                 t.captureContent
               );
           }
-          if (!(0, import_node_fs.existsSync)(this.resolvedCliPath)) {
+          if (!(0, import_node_fs3.existsSync)(this.resolvedCliPath)) {
             throw new Error(
               `Copilot CLI not found at ${this.resolvedCliPath}. Ensure @github/copilot is installed.`
             );
@@ -8706,14 +10342,14 @@ var init_client = __esm({
           const stdioConfig = this.connectionConfig.kind === "stdio" ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"];
           const isJsFile = this.resolvedCliPath.endsWith(".js");
           if (isJsFile) {
-            this.cliProcess = (0, import_node_child_process.spawn)(getNodeExecPath(), [this.resolvedCliPath, ...args], {
+            this.cliProcess = (0, import_node_child_process4.spawn)(getNodeExecPath(), [this.resolvedCliPath, ...args], {
               stdio: stdioConfig,
               cwd: this.options.workingDirectory,
               env: envWithoutNodeDebug,
               windowsHide: true
             });
           } else {
-            this.cliProcess = (0, import_node_child_process.spawn)(this.resolvedCliPath, args, {
+            this.cliProcess = (0, import_node_child_process4.spawn)(this.resolvedCliPath, args, {
               stdio: stdioConfig,
               cwd: this.options.workingDirectory,
               env: envWithoutNodeDebug,
@@ -9094,1444 +10730,13 @@ var init_copilot_auth = __esm({
   }
 });
 
-// package.json
-var package_default;
-var init_package = __esm({
-  "package.json"() {
-    package_default = {
-      name: "harry",
-      version: "0.3.1",
-      description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
-      type: "module",
-      license: "MIT",
-      author: "kiraxie <kiraxie11287@gmail.com>",
-      homepage: "https://github.com/kiraxie/harry",
-      repository: "https://github.com/kiraxie/harry",
-      engines: {
-        node: ">=26.0.0"
-      },
-      packageManager: "pnpm@10.33.0",
-      scripts: {
-        build: "node build.mjs",
-        test: "node --test",
-        typecheck: "tsc -p tsconfig.json --noEmit",
-        lint: "biome check .",
-        format: "biome format --write .",
-        "install-laws": "node scripts/install.mjs",
-        "init-ignore": "node scripts/init.mjs"
-      },
-      dependencies: {
-        "@github/copilot-sdk": "^1.0.4"
-      },
-      devDependencies: {
-        "@biomejs/biome": "^2.5.1",
-        "@types/node": "^26.0.1",
-        esbuild: "^0.28.1",
-        typescript: "7.0.1-rc"
-      },
-      pnpm: {
-        onlyBuiltDependencies: [
-          "@biomejs/biome",
-          "esbuild"
-        ]
-      }
-    };
-  }
-});
-
-// src/lib/version.ts
-var PLUGIN_VERSION, CLIENT_NAME;
-var init_version = __esm({
-  "src/lib/version.ts"() {
-    "use strict";
-    init_package();
-    PLUGIN_VERSION = package_default.version;
-    CLIENT_NAME = "harry";
-  }
-});
-
-// src/lib/codex/process.ts
-function runCommand(command, args = [], options = {}) {
-  const result = (0, import_node_child_process2.spawnSync)(command, args, {
-    cwd: options.cwd,
-    env: options.env,
-    encoding: "utf8",
-    stdio: "pipe",
-    shell: import_node_process.default.platform === "win32" ? import_node_process.default.env.SHELL || true : false,
-    windowsHide: true
-  });
-  return {
-    command,
-    args,
-    status: result.status ?? 0,
-    signal: result.signal ?? null,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    error: result.error ?? null
-  };
-}
-function binaryAvailable(bin, args = ["--version"], opts = {}) {
-  const result = runCommand(bin, args, opts);
-  if (result.error && result.error.code === "ENOENT") {
-    return { available: false, detail: "not found" };
-  }
-  if (result.error) {
-    return { available: false, detail: result.error.message };
-  }
-  if (result.status !== 0) {
-    const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.status}`;
-    return { available: false, detail };
-  }
-  return { available: true, detail: result.stdout.trim() || result.stderr.trim() || "ok" };
-}
-function looksLikeMissingProcessMessage(text) {
-  return /not found|no running instance|cannot find|does not exist|no such process/i.test(text);
-}
-function terminateProcessTree(pid) {
-  if (!Number.isFinite(pid)) {
-    return;
-  }
-  if (import_node_process.default.platform === "win32") {
-    const result = runCommand("taskkill", ["/PID", String(pid), "/T", "/F"]);
-    if (!result.error && result.status === 0) {
-      return;
-    }
-    const combinedOutput = `${result.stderr}
-${result.stdout}`.trim();
-    if (!result.error && looksLikeMissingProcessMessage(combinedOutput)) {
-      return;
-    }
-    if (result.error?.code === "ENOENT") {
-      try {
-        import_node_process.default.kill(pid);
-      } catch (error) {
-        if (error?.code === "ESRCH") {
-          return;
-        }
-        throw error;
-      }
-      return;
-    }
-    if (result.error) {
-      throw result.error;
-    }
-    return;
-  }
-  try {
-    import_node_process.default.kill(-pid, "SIGTERM");
-  } catch {
-    try {
-      import_node_process.default.kill(pid, "SIGTERM");
-    } catch (innerError) {
-      if (innerError?.code !== "ESRCH") {
-        throw innerError;
-      }
-    }
-  }
-}
-var import_node_child_process2, import_node_process;
-var init_process = __esm({
-  "src/lib/codex/process.ts"() {
-    "use strict";
-    import_node_child_process2 = require("node:child_process");
-    import_node_process = __toESM(require("node:process"), 1);
-  }
-});
-
-// src/lib/codex/app-server.ts
-function buildJsonRpcError(code, message, data) {
-  return data === void 0 ? { code, message } : { code, message, data };
-}
-function createProtocolError(message, data) {
-  const error = new Error(message);
-  error.data = data;
-  if (data && typeof data === "object" && data.code !== void 0) {
-    error.rpcCode = data.code;
-  }
-  return error;
-}
-var import_node_child_process3, import_node_process2, import_node_readline, DEFAULT_CONNECT_TIMEOUT_MS, CLOSE_SIGTERM_DELAY_MS, CLOSE_SIGKILL_GRACE_MS, CLOSE_EXIT_WAIT_MS, DEFAULT_CLIENT_INFO, DEFAULT_CAPABILITIES, CodexAppServerClient;
-var init_app_server = __esm({
-  "src/lib/codex/app-server.ts"() {
-    "use strict";
-    import_node_child_process3 = require("node:child_process");
-    import_node_process2 = __toESM(require("node:process"), 1);
-    import_node_readline = __toESM(require("node:readline"), 1);
-    init_version();
-    init_process();
-    DEFAULT_CONNECT_TIMEOUT_MS = 60 * 1e3;
-    CLOSE_SIGTERM_DELAY_MS = 50;
-    CLOSE_SIGKILL_GRACE_MS = 500;
-    CLOSE_EXIT_WAIT_MS = 3e3;
-    DEFAULT_CLIENT_INFO = {
-      title: "harry",
-      name: "harry",
-      version: PLUGIN_VERSION
-    };
-    DEFAULT_CAPABILITIES = {
-      experimentalApi: false,
-      requestAttestation: false,
-      optOutNotificationMethods: [
-        "item/agentMessage/delta",
-        "item/reasoning/summaryTextDelta",
-        "item/reasoning/summaryPartAdded",
-        "item/reasoning/textDelta"
-      ]
-    };
-    CodexAppServerClient = class _CodexAppServerClient {
-      cwd;
-      options;
-      pending = /* @__PURE__ */ new Map();
-      nextId = 1;
-      stderrBuffer = "";
-      closed = false;
-      exitResolved = false;
-      exitError = null;
-      notificationHandler = null;
-      proc = null;
-      readline = null;
-      exitPromise;
-      resolveExit;
-      constructor(cwd, options) {
-        this.cwd = cwd;
-        this.options = options;
-        this.exitPromise = new Promise((resolve5) => {
-          this.resolveExit = resolve5;
-        });
-      }
-      static async connect(cwd, opts = {}) {
-        const client = new _CodexAppServerClient(cwd, opts);
-        await client.initialize(opts.connectTimeoutMs);
-        return client;
-      }
-      setNotificationHandler(handler) {
-        this.notificationHandler = handler;
-      }
-      get stderr() {
-        return this.stderrBuffer;
-      }
-      request(method, params) {
-        if (this.closed) {
-          return Promise.reject(new Error("codex app-server client is closed."));
-        }
-        const id = this.nextId;
-        this.nextId += 1;
-        return new Promise((resolve5, reject) => {
-          this.pending.set(id, { resolve: resolve5, reject, method });
-          this.sendMessage({ id, method, params });
-        });
-      }
-      notify(method, params = {}) {
-        if (this.closed) {
-          return;
-        }
-        this.sendMessage({ method, params });
-      }
-      handleLine(line) {
-        if (!line.trim()) {
-          return;
-        }
-        let message;
-        try {
-          message = JSON.parse(line);
-        } catch (error) {
-          this.handleExit(
-            createProtocolError(
-              `Failed to parse codex app-server JSONL: ${error.message}`,
-              { line }
-            )
-          );
-          return;
-        }
-        if (message.id !== void 0 && message.method) {
-          this.handleServerRequest(message);
-          return;
-        }
-        if (message.id !== void 0) {
-          const pending = this.pending.get(message.id);
-          if (!pending) {
-            return;
-          }
-          this.pending.delete(message.id);
-          if (message.error) {
-            pending.reject(
-              createProtocolError(
-                message.error.message ?? `codex app-server ${pending.method} failed.`,
-                message.error
-              )
-            );
-          } else {
-            pending.resolve(message.result ?? {});
-          }
-          return;
-        }
-        if (message.method && this.notificationHandler) {
-          this.notificationHandler(message);
-        }
-      }
-      handleServerRequest(message) {
-        this.sendMessage({
-          id: message.id,
-          error: buildJsonRpcError(-32601, `Unsupported server request: ${message.method}`)
-        });
-      }
-      handleExit(error) {
-        if (this.exitResolved) {
-          return;
-        }
-        this.exitResolved = true;
-        this.exitError = error ?? null;
-        for (const pending of this.pending.values()) {
-          pending.reject(this.exitError ?? new Error("codex app-server connection closed."));
-        }
-        this.pending.clear();
-        this.resolveExit();
-      }
-      async initialize(connectTimeoutMs) {
-        this.proc = (0, import_node_child_process3.spawn)("codex", ["app-server"], {
-          cwd: this.cwd,
-          env: this.options.env ?? import_node_process2.default.env,
-          stdio: ["pipe", "pipe", "pipe"],
-          shell: import_node_process2.default.platform === "win32" ? import_node_process2.default.env.SHELL || true : false,
-          windowsHide: true
-        });
-        this.proc.stdout.setEncoding("utf8");
-        this.proc.stderr.setEncoding("utf8");
-        this.proc.stderr.on("data", (chunk) => {
-          this.stderrBuffer += chunk;
-        });
-        this.proc.stdin.on("error", () => {
-        });
-        this.proc.stdout.on("error", () => {
-        });
-        this.proc.on("error", (error) => {
-          this.handleExit(error);
-        });
-        this.proc.on("exit", (code, signal) => {
-          const stderr = this.stderrBuffer.trim();
-          const detail = code === 0 ? null : createProtocolError(
-            `codex app-server exited unexpectedly (${signal ? `signal ${signal}` : `exit ${code}`}).${stderr ? `
-${stderr}` : ""}`
-          );
-          this.handleExit(detail);
-        });
-        this.readline = import_node_readline.default.createInterface({ input: this.proc.stdout });
-        this.readline.on("line", (line) => {
-          this.handleLine(line);
-        });
-        const initRequest = this.request("initialize", {
-          clientInfo: this.options.clientInfo ?? DEFAULT_CLIENT_INFO,
-          capabilities: this.options.capabilities ?? DEFAULT_CAPABILITIES
-        });
-        if (connectTimeoutMs !== void 0 && connectTimeoutMs > 0) {
-          let timer = null;
-          const timeout = new Promise((_, reject) => {
-            timer = setTimeout(() => {
-              const stderr = this.stderrBuffer.trim();
-              reject(
-                createProtocolError(
-                  `codex app-server did not answer initialize within ${connectTimeoutMs}ms.${stderr ? `
-${stderr}` : ""}`
-                )
-              );
-            }, connectTimeoutMs);
-            timer.unref?.();
-          });
-          initRequest.catch(() => {
-          });
-          try {
-            await Promise.race([initRequest, timeout]);
-          } catch (error) {
-            if (timer) {
-              clearTimeout(timer);
-            }
-            await this.close();
-            throw error;
-          }
-          if (timer) {
-            clearTimeout(timer);
-          }
-        } else {
-          try {
-            await initRequest;
-          } catch (error) {
-            await this.close();
-            throw error;
-          }
-        }
-        this.notify("initialized", {});
-      }
-      async close() {
-        if (this.closed) {
-          await this.waitForExit();
-          return;
-        }
-        this.closed = true;
-        if (this.readline) {
-          this.readline.close();
-        }
-        if (this.proc && !this.proc.killed) {
-          this.proc.stdin.end();
-          const proc = this.proc;
-          const termTimer = setTimeout(() => {
-            if (proc.killed || proc.exitCode !== null) {
-              return;
-            }
-            if (import_node_process2.default.platform === "win32") {
-              try {
-                if (proc.pid !== void 0) {
-                  terminateProcessTree(proc.pid);
-                }
-              } catch {
-              }
-              return;
-            }
-            proc.kill("SIGTERM");
-            const killTimer = setTimeout(() => {
-              if (!proc.killed && proc.exitCode === null) {
-                proc.kill("SIGKILL");
-              }
-            }, CLOSE_SIGKILL_GRACE_MS);
-            killTimer.unref?.();
-          }, CLOSE_SIGTERM_DELAY_MS);
-          termTimer.unref?.();
-        }
-        await this.waitForExit();
-      }
-      /**
-       * Wait for the child to exit, but never longer than CLOSE_EXIT_WAIT_MS. Even
-       * with SIGKILL escalation a grandchild can keep stdio open or 'exit' can be
-       * delayed; this bound guarantees close() always resolves so a caller's
-       * `await client.close()` in a finally block can't hang the host.
-       */
-      async waitForExit() {
-        let timer = null;
-        const bound = new Promise((resolve5) => {
-          timer = setTimeout(resolve5, CLOSE_EXIT_WAIT_MS);
-          timer.unref?.();
-        });
-        try {
-          await Promise.race([this.exitPromise, bound]);
-        } finally {
-          if (timer) {
-            clearTimeout(timer);
-          }
-        }
-      }
-      sendMessage(message) {
-        const line = `${JSON.stringify(message)}
-`;
-        const stdin = this.proc?.stdin;
-        if (!stdin) {
-          throw new Error("codex app-server stdin is not available.");
-        }
-        stdin.write(line);
-      }
-    };
-  }
-});
-
-// src/lib/codex/auth.ts
-function normalizeProviderId(value) {
-  const providerId = typeof value === "string" ? value.trim() : "";
-  return providerId || null;
-}
-function resolveProviderConfig(configResponse) {
-  const config = configResponse?.config;
-  if (!config || typeof config !== "object") {
-    return { providerId: null, providerConfig: null };
-  }
-  const providerId = normalizeProviderId(config.model_provider);
-  const providers = config.model_providers && typeof config.model_providers === "object" && !Array.isArray(config.model_providers) ? config.model_providers : null;
-  const candidate = providerId && providers ? providers[providerId] : null;
-  const providerConfig = candidate && typeof candidate === "object" ? candidate : null;
-  return { providerId, providerConfig };
-}
-function formatProviderLabel(providerId, providerConfig) {
-  const configuredName = typeof providerConfig?.name === "string" ? providerConfig.name.trim() : "";
-  if (configuredName) {
-    return configuredName;
-  }
-  if (!providerId) {
-    return "The active provider";
-  }
-  return BUILTIN_PROVIDER_LABELS.get(providerId) ?? providerId;
-}
-function notLoggedIn(detail) {
-  return { available: true, loggedIn: false, detail, authMethod: null, verified: null };
-}
-function buildAppServerAuthStatus(accountResponse, configResponse) {
-  const account = accountResponse?.account ?? null;
-  const requiresOpenaiAuth = typeof accountResponse?.requiresOpenaiAuth === "boolean" ? accountResponse.requiresOpenaiAuth : null;
-  const { providerId, providerConfig } = resolveProviderConfig(configResponse);
-  const providerLabel = formatProviderLabel(providerId, providerConfig);
-  if (account?.type === "chatgpt") {
-    const email = typeof account.email === "string" && account.email.trim() ? account.email.trim() : null;
-    return {
-      available: true,
-      loggedIn: true,
-      detail: email ? `ChatGPT login active for ${email}` : "ChatGPT login active",
-      authMethod: "chatgpt",
-      verified: true
-    };
-  }
-  if (account?.type === "apiKey") {
-    return {
-      available: true,
-      loggedIn: true,
-      detail: "API key configured (unverified)",
-      authMethod: "apiKey",
-      verified: false
-    };
-  }
-  if (requiresOpenaiAuth === false) {
-    return {
-      available: true,
-      loggedIn: true,
-      detail: `${providerLabel} is configured and does not require OpenAI authentication`,
-      authMethod: providerId,
-      verified: null
-    };
-  }
-  return notLoggedIn(`${providerLabel} requires OpenAI authentication`);
-}
-function getCodexAvailability(cwd) {
-  const versionStatus = binaryAvailable("codex", ["--version"], { cwd });
-  if (!versionStatus.available) {
-    return versionStatus;
-  }
-  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], { cwd });
-  if (!appServerStatus.available) {
-    return {
-      available: false,
-      detail: `${versionStatus.detail}; advanced runtime unavailable: ${appServerStatus.detail}`
-    };
-  }
-  return {
-    available: true,
-    detail: `${versionStatus.detail}; advanced runtime available`
-  };
-}
-async function getCodexAuthStatus(cwd, opts = {}) {
-  const availability = getCodexAvailability(cwd);
-  if (!availability.available) {
-    return {
-      available: false,
-      loggedIn: false,
-      detail: availability.detail,
-      authMethod: null,
-      verified: null
-    };
-  }
-  let client = null;
-  try {
-    client = await CodexAppServerClient.connect(cwd, {
-      env: opts.env,
-      // Anti-hang: this probe runs on the default provider-resolution path of
-      // every auto ask/review/fix and in SessionStart setup. Without a ceiling,
-      // a child that spawns but blocks before answering `initialize` (broken
-      // install, interactive/auth prompt) makes connect() await forever — a
-      // hang no try/catch can rescue.
-      connectTimeoutMs: opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
-    });
-    const accountResponse = await client.request("account/read", {
-      refreshToken: false
-    });
-    const configResponse = await client.request("config/read", {
-      includeLayers: false,
-      cwd
-    });
-    return buildAppServerAuthStatus(accountResponse, configResponse);
-  } catch (error) {
-    return notLoggedIn(error instanceof Error ? error.message : String(error));
-  } finally {
-    if (client) {
-      await client.close().catch(() => {
-      });
-    }
-  }
-}
-var BUILTIN_PROVIDER_LABELS;
-var init_auth = __esm({
-  "src/lib/codex/auth.ts"() {
-    "use strict";
-    init_app_server();
-    init_process();
-    BUILTIN_PROVIDER_LABELS = /* @__PURE__ */ new Map([
-      ["openai", "OpenAI"],
-      ["ollama", "Ollama"],
-      ["lmstudio", "LM Studio"]
-    ]);
-  }
-});
-
-// src/lib/state.ts
-function repoRootOf(cwd) {
-  try {
-    const root = (0, import_node_child_process4.execFileSync)("git", ["rev-parse", "--show-toplevel"], {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-    return root || (0, import_node_path2.resolve)(cwd);
-  } catch {
-    return (0, import_node_path2.resolve)(cwd);
-  }
-}
-function resolveStateDir(cwd) {
-  const workspaceRoot = repoRootOf(cwd);
-  const slug = (0, import_node_path2.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
-  const hash = (0, import_node_crypto2.createHash)("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
-  const dirName = `${slug}-${hash}`;
-  const pluginDataDir = process.env[PLUGIN_DATA_ENV];
-  if (pluginDataDir) {
-    return (0, import_node_path2.join)(pluginDataDir, "state", dirName);
-  }
-  const fallbackDir = (0, import_node_path2.join)(FALLBACK_STATE_ROOT, dirName);
-  if (!(0, import_node_fs2.existsSync)(fallbackDir)) {
-    const legacyDir = (0, import_node_path2.join)(LEGACY_FALLBACK_STATE_ROOT, dirName);
-    if ((0, import_node_fs2.existsSync)(legacyDir)) return legacyDir;
-  }
-  return fallbackDir;
-}
-function ensureDir(dir) {
-  (0, import_node_fs2.mkdirSync)(dir, { recursive: true });
-}
-function stateFilePath(stateDir) {
-  return (0, import_node_path2.join)(stateDir, "state.json");
-}
-function loadState(stateDir) {
-  const filePath = stateFilePath(stateDir);
-  if (!(0, import_node_fs2.existsSync)(filePath)) {
-    return { version: 1, jobs: [] };
-  }
-  try {
-    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return { version: 1, jobs: [] };
-  }
-}
-function saveState(stateDir, state) {
-  ensureDir(stateDir);
-  if (state.jobs.length > MAX_JOBS) {
-    state.jobs = state.jobs.slice(0, MAX_JOBS);
-  }
-  (0, import_node_fs2.writeFileSync)(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
-}
-function jobsDir(stateDir) {
-  return (0, import_node_path2.join)(stateDir, "jobs");
-}
-function jobFilePath(stateDir, jobId) {
-  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.json`);
-}
-function jobLogPath(stateDir, jobId) {
-  return (0, import_node_path2.join)(jobsDir(stateDir), `${jobId}.log`);
-}
-function writeJobFile(stateDir, job) {
-  const dir = jobsDir(stateDir);
-  ensureDir(dir);
-  (0, import_node_fs2.writeFileSync)(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
-}
-function readJobFile(stateDir, jobId) {
-  const filePath = jobFilePath(stateDir, jobId);
-  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
-  try {
-    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-function appendLog(stateDir, jobId, message) {
-  const logFile = jobLogPath(stateDir, jobId);
-  ensureDir(jobsDir(stateDir));
-  const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-  (0, import_node_fs2.writeFileSync)(logFile, `[${time}] ${message}
-`, { flag: "a" });
-}
-function readLogTail(stateDir, jobId, maxLines = 10) {
-  const logFile = jobLogPath(stateDir, jobId);
-  if (!(0, import_node_fs2.existsSync)(logFile)) return [];
-  try {
-    const content = (0, import_node_fs2.readFileSync)(logFile, "utf-8");
-    const lines = content.trim().split("\n");
-    return lines.slice(-maxLines);
-  } catch {
-    return [];
-  }
-}
-function generateJobId() {
-  const ts = Date.now();
-  const rand = (0, import_node_crypto2.randomUUID)().slice(0, 8);
-  return `job-${ts}-${rand}`;
-}
-function getSessionId() {
-  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || void 0;
-}
-function createJob(stateDir, job) {
-  const state = loadState(stateDir);
-  state.jobs.unshift(job);
-  saveState(stateDir, state);
-  writeJobFile(stateDir, job);
-}
-function updateJob(stateDir, jobId, updates) {
-  const state = loadState(stateDir);
-  const idx = state.jobs.findIndex((j) => j.id === jobId);
-  if (idx >= 0) {
-    state.jobs[idx] = { ...state.jobs[idx], ...updates };
-    saveState(stateDir, state);
-  }
-  const full = readJobFile(stateDir, jobId);
-  if (full) {
-    writeJobFile(stateDir, { ...full, ...updates });
-  }
-}
-function markJobFailed(stateDir, jobId, errorMessage) {
-  const job = readJobFile(stateDir, jobId);
-  if (!job || job.status === "completed" || job.status === "failed") return;
-  updateJob(stateDir, jobId, {
-    status: "failed",
-    phase: "failed",
-    completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    errorMessage
-  });
-  appendLog(stateDir, jobId, `Marked failed: ${errorMessage}`);
-}
-function listJobs(stateDir, sessionId) {
-  const state = loadState(stateDir);
-  if (sessionId) {
-    return state.jobs.filter((j) => j.sessionId === sessionId);
-  }
-  return state.jobs;
-}
-function codexRateLimitsPath(stateDir) {
-  return (0, import_node_path2.join)(stateDir, CODEX_RATE_LIMITS_FILE);
-}
-function writeCodexRateLimits(stateDir, rateLimits) {
-  try {
-    ensureDir(stateDir);
-    const snapshot = { ...rateLimits, capturedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    (0, import_node_fs2.writeFileSync)(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
-  } catch {
-  }
-}
-function readCodexRateLimits(stateDir) {
-  const filePath = codexRateLimitsPath(stateDir);
-  if (!(0, import_node_fs2.existsSync)(filePath)) return null;
-  try {
-    return JSON.parse((0, import_node_fs2.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-function formatCodexRateLimits(rl) {
-  const parts = [];
-  const used = [];
-  if (rl.primaryUsedPercent !== void 0) used.push(`primary ${rl.primaryUsedPercent}%`);
-  if (rl.secondaryUsedPercent !== void 0) used.push(`secondary ${rl.secondaryUsedPercent}%`);
-  if (used.length > 0) parts.push(`${used.join(" / ")} used`);
-  if (rl.planType) parts.push(`plan ${rl.planType}`);
-  if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
-  return parts.join(" \xB7 ");
-}
-function formatSnapshotAge(iso) {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return iso;
-  const secs = Math.max(0, Math.round((Date.now() - then) / 1e3));
-  if (secs < 60) return "just now";
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
-function renderCodexBlock(rl, capturedAt) {
-  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : "## Codex";
-  return [header, formatCodexRateLimits(rl)].join("\n");
-}
-var import_node_child_process4, import_node_crypto2, import_node_fs2, import_node_path2, import_node_os, MAX_JOBS, PLUGIN_DATA_ENV, SESSION_ID_ENV, LEGACY_SESSION_ID_ENV, FALLBACK_STATE_ROOT, LEGACY_FALLBACK_STATE_ROOT, CODEX_RATE_LIMITS_FILE;
-var init_state = __esm({
-  "src/lib/state.ts"() {
-    "use strict";
-    import_node_child_process4 = require("node:child_process");
-    import_node_crypto2 = require("node:crypto");
-    import_node_fs2 = require("node:fs");
-    import_node_path2 = require("node:path");
-    import_node_os = require("node:os");
-    MAX_JOBS = 50;
-    PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
-    SESSION_ID_ENV = "HARRY_SESSION_ID";
-    LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
-    FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "harry");
-    LEGACY_FALLBACK_STATE_ROOT = (0, import_node_path2.join)((0, import_node_os.tmpdir)(), "copilot-companion");
-    CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
-  }
-});
-
-// src/lib/codex/turn.ts
-function buildTurnInput(prompt, instructions) {
-  const items = [];
-  const trimmed = instructions?.trim();
-  if (trimmed) {
-    items.push({ type: "text", text: trimmed, text_elements: [] });
-  }
-  items.push({ type: "text", text: prompt, text_elements: [] });
-  return items;
-}
-function shorten(text, limit = 96) {
-  const normalized = String(text ?? "").trim().replace(/\s+/g, " ");
-  if (!normalized) {
-    return "";
-  }
-  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 3)}...`;
-}
-function extractThreadId(message) {
-  return message?.params?.threadId ?? null;
-}
-function extractTurnId(message) {
-  if (message?.params?.turnId) {
-    return message.params.turnId;
-  }
-  if (message?.params?.turn?.id) {
-    return message.params.turn.id;
-  }
-  return null;
-}
-function normalizeReasoningText(text) {
-  return String(text ?? "").replace(/\s+/g, " ").trim();
-}
-function extractReasoningSections(value) {
-  if (!value) {
-    return [];
-  }
-  if (typeof value === "string") {
-    const normalized = normalizeReasoningText(value);
-    return normalized ? [normalized] : [];
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap((entry) => extractReasoningSections(entry));
-  }
-  if (typeof value === "object") {
-    const obj = value;
-    if (typeof obj.text === "string") {
-      return extractReasoningSections(obj.text);
-    }
-    if ("summary" in obj) {
-      return extractReasoningSections(obj.summary);
-    }
-    if ("content" in obj) {
-      return extractReasoningSections(obj.content);
-    }
-    if ("parts" in obj) {
-      return extractReasoningSections(obj.parts);
-    }
-  }
-  return [];
-}
-function mergeReasoningSections(existing, next) {
-  const merged = [];
-  for (const section of [...existing, ...next]) {
-    const normalized = normalizeReasoningText(section);
-    if (!normalized || merged.includes(normalized)) {
-      continue;
-    }
-    merged.push(normalized);
-  }
-  return merged;
-}
-function toFiniteNumber(value) {
-  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
-}
-function parseTokenCount(params) {
-  const usage = {};
-  const lastUsage = params?.last_token_usage;
-  if (lastUsage && typeof lastUsage === "object") {
-    usage.inputTokens = toFiniteNumber(lastUsage.input_tokens);
-    usage.outputTokens = toFiniteNumber(lastUsage.output_tokens);
-  }
-  const rateLimits = params?.rate_limits;
-  if (rateLimits && typeof rateLimits === "object") {
-    const parsed = {};
-    const primary = toFiniteNumber(rateLimits.primary?.used_percent);
-    if (primary !== void 0) {
-      parsed.primaryUsedPercent = primary;
-    }
-    const secondary = toFiniteNumber(rateLimits.secondary?.used_percent);
-    if (secondary !== void 0) {
-      parsed.secondaryUsedPercent = secondary;
-    }
-    if (typeof rateLimits.plan_type === "string") {
-      parsed.planType = rateLimits.plan_type;
-    }
-    if (typeof rateLimits.resets_at === "string") {
-      parsed.resetsAt = rateLimits.resets_at;
-    }
-    if (Object.keys(parsed).length > 0) {
-      usage.rateLimits = parsed;
-    }
-  }
-  return usage;
-}
-function foldRateLimits(prev, next) {
-  if (!prev) {
-    return next;
-  }
-  if (!next) {
-    return prev;
-  }
-  return {
-    primaryUsedPercent: next.primaryUsedPercent ?? prev.primaryUsedPercent,
-    secondaryUsedPercent: next.secondaryUsedPercent ?? prev.secondaryUsedPercent,
-    planType: next.planType ?? prev.planType,
-    resetsAt: next.resetsAt ?? prev.resetsAt
-  };
-}
-function createTurnCaptureState(threadId, onItem) {
-  let resolveCompletion;
-  const completion = new Promise((resolve5) => {
-    resolveCompletion = resolve5;
-  });
-  return {
-    threadId,
-    threadIds: /* @__PURE__ */ new Set([threadId]),
-    threadTurnIds: /* @__PURE__ */ new Map(),
-    turnId: null,
-    turnStarted: false,
-    bufferedNotifications: [],
-    completion,
-    resolveCompletion,
-    finalTurn: null,
-    completed: false,
-    finalAnswerSeen: false,
-    pendingCollaborations: /* @__PURE__ */ new Set(),
-    activeSubagentTurns: /* @__PURE__ */ new Set(),
-    completionTimer: null,
-    lastAgentMessage: "",
-    reasoningSummary: [],
-    error: null,
-    usage: null,
-    onItem
-  };
-}
-function registerThread(state, threadId) {
-  if (threadId) {
-    state.threadIds.add(threadId);
-  }
-}
-function belongsToTurn(state, message) {
-  const messageThreadId = extractThreadId(message);
-  if (!messageThreadId || !state.threadIds.has(messageThreadId)) {
-    return false;
-  }
-  const trackedTurnId = state.threadTurnIds.get(messageThreadId) ?? null;
-  const messageTurnId = extractTurnId(message);
-  return trackedTurnId === null || messageTurnId === null || messageTurnId === trackedTurnId;
-}
-function shouldApplyNotification(state, message) {
-  if (message.method === "thread/started") {
-    return true;
-  }
-  if (message.method === "token_count" || message.method === "error") {
-    return true;
-  }
-  return belongsToTurn(state, message);
-}
-function clearCompletionTimer(state) {
-  if (state.completionTimer) {
-    clearTimeout(state.completionTimer);
-    state.completionTimer = null;
-  }
-}
-function completeTurn(state, turn = null) {
-  if (state.completed) {
-    return;
-  }
-  clearCompletionTimer(state);
-  state.completed = true;
-  if (turn) {
-    state.finalTurn = turn;
-    if (!state.turnId && turn.id) {
-      state.turnId = turn.id;
-    }
-  } else if (!state.finalTurn) {
-    state.finalTurn = { id: state.turnId ?? "inferred-turn", status: "completed" };
-  }
-  state.resolveCompletion();
-}
-function scheduleInferredCompletion(state) {
-  if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
-    return;
-  }
-  if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
-    return;
-  }
-  clearCompletionTimer(state);
-  state.completionTimer = setTimeout(() => {
-    state.completionTimer = null;
-    if (state.completed || state.finalTurn || !state.finalAnswerSeen) {
-      return;
-    }
-    if (state.pendingCollaborations.size > 0 || state.activeSubagentTurns.size > 0) {
-      return;
-    }
-    completeTurn(state, null);
-  }, 250);
-  state.completionTimer.unref?.();
-}
-function toolLabel(item) {
-  switch (item.type) {
-    case "commandExecution":
-      return `Running command: ${shorten(item.command)}`;
-    case "fileChange":
-      return `Applying ${item.changes?.length ?? 0} file change(s).`;
-    case "mcpToolCall":
-      return `Calling ${item.server}/${item.tool}.`;
-    case "dynamicToolCall":
-      return `Running tool: ${item.tool}.`;
-    case "webSearch":
-      return `Searching: ${shorten(item.query)}`;
-    default:
-      return null;
-  }
-}
-function recordItem(state, item, lifecycle, threadId = null) {
-  if (item.type === "collabAgentToolCall") {
-    if (!threadId || threadId === state.threadId) {
-      if (lifecycle === "started" || item.status === "inProgress") {
-        state.pendingCollaborations.add(item.id);
-      } else if (lifecycle === "completed") {
-        state.pendingCollaborations.delete(item.id);
-        scheduleInferredCompletion(state);
-      }
-    }
-    for (const receiverThreadId of item.receiverThreadIds ?? []) {
-      registerThread(state, receiverThreadId);
-    }
-  }
-  if (item.type === "agentMessage") {
-    if (item.text && (!threadId || threadId === state.threadId)) {
-      state.lastAgentMessage = item.text;
-      const final = lifecycle === "completed" && item.phase === "final_answer";
-      if (final) {
-        state.finalAnswerSeen = true;
-        scheduleInferredCompletion(state);
-      }
-      if (lifecycle === "completed") {
-        state.onItem?.({ kind: "assistant", text: item.text, final });
-      }
-    }
-    return;
-  }
-  if (item.type === "reasoning" && lifecycle === "completed") {
-    const nextSections = extractReasoningSections(item.summary);
-    state.reasoningSummary = mergeReasoningSections(state.reasoningSummary, nextSections);
-    for (const section of nextSections) {
-      state.onItem?.({ kind: "reasoning", text: section });
-    }
-    return;
-  }
-  if (lifecycle === "started") {
-    const label = toolLabel(item);
-    if (label) {
-      state.onItem?.({ kind: "tool", label });
-    }
-  }
-}
-function applyTurnNotification(state, message) {
-  switch (message.method) {
-    case "thread/started":
-      registerThread(state, message.params?.thread?.id);
-      break;
-    case "turn/started":
-      registerThread(state, message.params?.threadId);
-      state.threadTurnIds.set(message.params?.threadId, message.params?.turn?.id ?? null);
-      if ((message.params?.threadId ?? null) !== state.threadId) {
-        state.activeSubagentTurns.add(message.params?.threadId);
-      }
-      break;
-    case "item/started": {
-      const item = message.params?.item;
-      if (item) {
-        recordItem(state, item, "started", message.params?.threadId ?? null);
-      }
-      break;
-    }
-    case "item/completed": {
-      const item = message.params?.item;
-      if (item) {
-        recordItem(state, item, "completed", message.params?.threadId ?? null);
-      }
-      break;
-    }
-    case "token_count": {
-      const next = parseTokenCount(message.params);
-      const prev = state.usage ?? {};
-      const folded = {
-        inputTokens: next.inputTokens ?? prev.inputTokens,
-        outputTokens: next.outputTokens ?? prev.outputTokens,
-        rateLimits: foldRateLimits(prev.rateLimits, next.rateLimits)
-      };
-      const hasContent = folded.inputTokens !== void 0 || folded.outputTokens !== void 0 || folded.rateLimits !== void 0;
-      if (hasContent) {
-        state.usage = folded;
-        state.onItem?.({ kind: "usage", ...folded });
-      }
-      break;
-    }
-    case "error":
-      state.error = message.params?.error ?? { message: "Unknown codex error." };
-      state.onItem?.({
-        kind: "error",
-        message: state.error?.message ?? "Unknown codex error."
-      });
-      break;
-    case "turn/completed":
-      if ((message.params?.threadId ?? null) !== state.threadId) {
-        state.activeSubagentTurns.delete(message.params?.threadId);
-        scheduleInferredCompletion(state);
-        break;
-      }
-      completeTurn(state, message.params?.turn ?? null);
-      break;
-    default:
-      break;
-  }
-}
-async function runCodexTurn(opts) {
-  const timeoutMs = opts.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
-  const connectTimeoutMs = opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
-  let client;
-  try {
-    client = await CodexAppServerClient.connect(opts.cwd, {
-      env: opts.env,
-      connectTimeoutMs
-    });
-  } catch (error) {
-    const message = error?.message ?? String(error);
-    return {
-      success: false,
-      finalMessage: "",
-      reasoningSummary: [],
-      error: message,
-      stderr: ""
-    };
-  }
-  let timer = null;
-  let timedOut = false;
-  const timeout = new Promise((resolve5) => {
-    timer = setTimeout(() => {
-      timedOut = true;
-      resolve5();
-    }, timeoutMs);
-    timer.unref?.();
-  });
-  let aborted = false;
-  let resolveAbort = () => {
-  };
-  const abortGate = new Promise((resolve5) => {
-    resolveAbort = resolve5;
-  });
-  const onAbort = () => {
-    aborted = true;
-    resolveAbort();
-    void client.close().catch(() => {
-    });
-  };
-  if (opts.signal) {
-    if (opts.signal.aborted) onAbort();
-    else opts.signal.addEventListener("abort", onAbort, { once: true });
-  }
-  let state = null;
-  try {
-    if (aborted) {
-      return failure(client, "Codex turn aborted.");
-    }
-    const started = await Promise.race([
-      client.request("thread/start", {
-        cwd: opts.cwd,
-        model: opts.model ?? null,
-        approvalPolicy: "never",
-        sandbox: opts.readOnly ? "read-only" : "workspace-write",
-        ephemeral: opts.readOnly ?? false
-      }),
-      timeout.then(() => null),
-      abortGate.then(() => null)
-    ]);
-    if (aborted) {
-      return failure(client, "Codex turn aborted.");
-    }
-    if (timedOut || !started) {
-      return failure(client, "Codex turn timed out before the thread started.");
-    }
-    const threadId = started.thread.id;
-    state = createTurnCaptureState(threadId, opts.onItem);
-    const capture = state;
-    client.setNotificationHandler((message) => {
-      if (!capture.turnStarted) {
-        capture.bufferedNotifications.push(message);
-        return;
-      }
-      if (shouldApplyNotification(capture, message)) {
-        applyTurnNotification(capture, message);
-      }
-    });
-    const turnStartParams = {
-      threadId,
-      input: buildTurnInput(opts.prompt, opts.instructions)
-    };
-    if (opts.model) {
-      turnStartParams.model = opts.model;
-    }
-    if (opts.effort) {
-      turnStartParams.effort = opts.effort;
-    }
-    const turnResponse = await Promise.race([
-      client.request("turn/start", turnStartParams),
-      timeout.then(() => null),
-      abortGate.then(() => null)
-    ]);
-    if (aborted) {
-      return failure(client, "Codex turn aborted.");
-    }
-    if (timedOut || !turnResponse) {
-      return failure(client, "Codex turn timed out before the turn started.");
-    }
-    capture.turnId = turnResponse.turn?.id ?? null;
-    if (capture.turnId) {
-      capture.threadTurnIds.set(threadId, capture.turnId);
-    }
-    for (const message of capture.bufferedNotifications) {
-      if (shouldApplyNotification(capture, message)) {
-        applyTurnNotification(capture, message);
-      }
-    }
-    capture.bufferedNotifications.length = 0;
-    capture.turnStarted = true;
-    if (turnResponse.turn?.status && turnResponse.turn.status !== "inProgress") {
-      completeTurn(capture, turnResponse.turn);
-    }
-    await Promise.race([capture.completion, timeout, abortGate]);
-    if (aborted) {
-      return failure(client, "Codex turn aborted.");
-    }
-    if (timedOut && !capture.completed) {
-      return failure(client, "Codex turn timed out while awaiting completion.");
-    }
-    return buildResult(capture, client.stderr);
-  } catch (error) {
-    const stderr = client.stderr;
-    const message = aborted ? "Codex turn aborted." : error?.message ?? String(error);
-    return {
-      success: false,
-      finalMessage: state?.lastAgentMessage ?? "",
-      reasoningSummary: state?.reasoningSummary ?? [],
-      error: stderr ? `${message}
-${stderr}` : message,
-      stderr,
-      usage: state?.usage ?? void 0
-    };
-  } finally {
-    opts.signal?.removeEventListener("abort", onAbort);
-    if (timer) {
-      clearTimeout(timer);
-    }
-    if (state) {
-      clearCompletionTimer(state);
-    }
-    await client.close();
-  }
-}
-function buildResult(state, stderr) {
-  const success = !state.error && (state.finalTurn?.status === "completed" || state.completed);
-  const result = {
-    success,
-    finalMessage: state.lastAgentMessage,
-    reasoningSummary: state.reasoningSummary,
-    stderr
-  };
-  if (state.error?.message) {
-    result.error = state.error.message;
-  }
-  if (state.usage) {
-    result.usage = state.usage;
-  }
-  return result;
-}
-function failure(client, reason) {
-  const stderr = client.stderr;
-  return {
-    success: false,
-    finalMessage: "",
-    reasoningSummary: [],
-    error: stderr ? `${reason}
-${stderr}` : reason,
-    stderr
-  };
-}
-var DEFAULT_TURN_TIMEOUT_MS;
-var init_turn = __esm({
-  "src/lib/codex/turn.ts"() {
-    "use strict";
-    init_app_server();
-    DEFAULT_TURN_TIMEOUT_MS = 15 * 60 * 1e3;
-  }
-});
-
-// src/lib/providers/codex.ts
-var codex_exports = {};
-__export(codex_exports, {
-  CodexProvider: () => CodexProvider,
-  toCodexEffort: () => toCodexEffort
-});
-function toCodexEffort(reasoning) {
-  if (reasoning === void 0) return void 0;
-  return reasoning === "xhigh" ? "high" : reasoning;
-}
-var CodexProvider;
-var init_codex = __esm({
-  "src/lib/providers/codex.ts"() {
-    "use strict";
-    init_auth();
-    init_state();
-    init_turn();
-    CodexProvider = class {
-      id = "codex";
-      capabilities = {
-        metersQuota: false
-      };
-      /**
-       * Abort handle for the in-flight turn, so {@link forceStop} (driven by the
-       * session's centralized SIGINT/SIGTERM handler) can tear the codex child down
-       * immediately rather than orphaning it on `process.exit`. Null when idle.
-       */
-      activeController = null;
-      /** The in-flight turn promise, awaited by {@link forceStop} so teardown completes. */
-      activeRun = null;
-      /**
-       * Best-effort immediate teardown from an interrupt — abort the live turn AND
-       * await it so the codex child is actually reaped before this resolves.
-       * Returning early (abort only) would let the session's interrupt handler
-       * `process.exit` before close() kills the child, orphaning it; CopilotProvider
-       * awaits its teardown the same way.
-       */
-      async forceStop() {
-        this.activeController?.abort();
-        await this.activeRun?.catch(() => {
-        });
-      }
-      /**
-       * Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
-       * turn is `workspace-write` + approvalPolicy:"never", which lets codex run
-       * shell commands autonomously. It has no "write files but no shell" mode, so a
-       * caller that grants writes while withholding shell (`fix` defaults to
-       * allowShell:false) CANNOT be honored. Refuse rather than silently run MORE
-       * permissively than asked. Runs via the precheckRun seam BEFORE fix's snapshot.
-       */
-      precheckRun(opts) {
-        if (!opts.readOnly && !opts.allowShell) {
-          throw new Error(
-            "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with --provider copilot, or explicitly allow shell."
-          );
-        }
-      }
-      /**
-       * Probe codex auth without running a turn. Codex has no login/host concept in
-       * the neutral summary, so those stay undefined; `message` carries the codex
-       * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
-       */
-      async checkAuth(cwd) {
-        const s = await getCodexAuthStatus(cwd);
-        return { ok: s.loggedIn, message: s.detail };
-      }
-      /**
-       * Run a single prompt to completion. Streams turn events to progress/appendLog
-       * for visibility (never throwing on a stream event), then maps the
-       * {@link CodexTurnResult} onto the neutral {@link RunResult}.
-       *
-       * `opts.reasoning` is mapped to codex's effort enum via {@link toCodexEffort}
-       * (xhigh→high, since codex has no xhigh). `opts.model` is passed through as-is;
-       * undefined stays undefined so ~/.codex config picks the model.
-       */
-      async run(opts) {
-        const { appendLog: appendLog2, progress } = opts;
-        this.precheckRun(opts);
-        const onItem = (ev) => {
-          switch (ev.kind) {
-            case "assistant":
-              if (ev.text) progress(ev.text);
-              break;
-            case "tool":
-              progress(ev.label);
-              break;
-            case "reasoning":
-              if (ev.text) appendLog2(`reasoning: ${ev.text}`);
-              break;
-            case "usage":
-              appendLog2(
-                `usage: in=${ev.inputTokens ?? "?"} out=${ev.outputTokens ?? "?"}` + (ev.rateLimits?.primaryUsedPercent !== void 0 ? ` primary=${ev.rateLimits.primaryUsedPercent}%` : "")
-              );
-              break;
-            case "error":
-              appendLog2(`codex error: ${ev.message}`);
-              break;
-            default:
-              break;
-          }
-        };
-        progress(`Sending prompt to Codex${opts.model ? ` (model=${opts.model})` : ""}\u2026`);
-        const controller = new AbortController();
-        if (opts.signal) {
-          if (opts.signal.aborted) controller.abort();
-          else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
-        }
-        this.activeController = controller;
-        let result;
-        const turnPromise = runCodexTurn({
-          cwd: opts.cwd,
-          prompt: opts.prompt,
-          // Carry guardrails + injected --context into the turn (codex has no
-          // separate system slot; turn.ts rides them as a leading input block).
-          instructions: opts.systemMessage,
-          model: opts.model,
-          effort: toCodexEffort(opts.reasoning),
-          readOnly: opts.readOnly,
-          env: process.env,
-          onItem,
-          signal: controller.signal
-        });
-        this.activeRun = turnPromise;
-        try {
-          result = await turnPromise;
-        } finally {
-          this.activeController = null;
-          this.activeRun = null;
-        }
-        if (result.error) appendLog2(`turn error: ${result.error}`);
-        if (result.usage?.rateLimits) {
-          writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);
-        }
-        return {
-          lastAssistantMessage: result.finalMessage,
-          success: result.success,
-          summary: result.finalMessage || void 0,
-          usage: {
-            kind: "codex",
-            inputTokens: result.usage?.inputTokens,
-            outputTokens: result.usage?.outputTokens,
-            rateLimits: result.usage?.rateLimits
-          }
-        };
-      }
-    };
-  }
-});
-
 // src/lib/event-stream.ts
 function truncate(text, max) {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max)}\u2026` : flat;
 }
 function attachStream(opts) {
-  const { session, stateDir, appendLog: appendLog2, progress } = opts;
+  const { session, appendLog: appendLog2, progress } = opts;
   let lastAssistantMessage;
   let taskCompleteSummary;
   let taskCompleteSuccess;
@@ -10724,19 +10929,19 @@ function denied(feedback) {
 }
 function canonicalize(p) {
   try {
-    return (0, import_node_fs3.realpathSync)(p);
+    return (0, import_node_fs4.realpathSync)(p);
   } catch {
-    const parent = (0, import_node_path3.dirname)(p);
-    if (parent === p) return (0, import_node_path3.resolve)(p);
-    return (0, import_node_path3.resolve)(canonicalize(parent), p.slice(parent.length).replace(/^[\\/]+/, ""));
+    const parent = (0, import_node_path4.dirname)(p);
+    if (parent === p) return (0, import_node_path4.resolve)(p);
+    return (0, import_node_path4.resolve)(canonicalize(parent), p.slice(parent.length).replace(/^[\\/]+/, ""));
   }
 }
 function isPathInside(child, parent) {
-  const c = canonicalize((0, import_node_path3.resolve)(child));
-  const p = canonicalize((0, import_node_path3.resolve)(parent));
+  const c = canonicalize((0, import_node_path4.resolve)(child));
+  const p = canonicalize((0, import_node_path4.resolve)(parent));
   if (c === p) return true;
-  const rel = (0, import_node_path3.relative)(p, c);
-  return rel !== "" && !rel.startsWith("..") && !(0, import_node_path3.isAbsolute)(rel);
+  const rel = (0, import_node_path4.relative)(p, c);
+  return rel !== "" && !rel.startsWith("..") && !(0, import_node_path4.isAbsolute)(rel);
 }
 function makePermissionHandler(opts) {
   return (request) => {
@@ -10746,17 +10951,21 @@ function makePermissionHandler(opts) {
         const path = request.path ?? "";
         if (opts.isolated) {
           opts.appendLog(`permission.read DENIED (isolated mode): ${path}`);
-          return denied("This Copilot session is isolated (reasoning only); filesystem reads are not permitted.");
+          return denied(
+            "This Copilot session is isolated (reasoning only); filesystem reads are not permitted."
+          );
         }
         if (opts.readOnly) {
           if (!path) {
             opts.appendLog("permission.read DENIED (read-only mode): empty path");
             return denied("Permission request missing path.");
           }
-          const absolute = path.startsWith("/") ? path : (0, import_node_path3.resolve)(opts.worktreePath, path);
+          const absolute = path.startsWith("/") ? path : (0, import_node_path4.resolve)(opts.worktreePath, path);
           if (!isPathInside(absolute, opts.worktreePath)) {
             opts.appendLog(`permission.read DENIED (outside worktree): ${absolute}`);
-            return denied(`Reads outside the review target (${opts.worktreePath}) are not permitted.`);
+            return denied(
+              `Reads outside the review target (${opts.worktreePath}) are not permitted.`
+            );
           }
         }
         opts.appendLog(`permission.read approved: ${path}`);
@@ -10766,42 +10975,58 @@ function makePermissionHandler(opts) {
         const fileName = request.fileName ?? "";
         if (opts.readOnly) {
           opts.appendLog(`permission.write DENIED (read-only mode): ${fileName}`);
-          return denied("This Copilot session is read-only (review mode). File writes are not permitted.");
+          return denied(
+            "This Copilot session is read-only (review mode). File writes are not permitted."
+          );
         }
         if (!fileName) {
           opts.appendLog("permission.write denied: no fileName provided");
           return denied("Permission request missing fileName.");
         }
-        const absolute = fileName.startsWith("/") ? fileName : (0, import_node_path3.resolve)(opts.worktreePath, fileName);
+        const absolute = fileName.startsWith("/") ? fileName : (0, import_node_path4.resolve)(opts.worktreePath, fileName);
         if (isPathInside(absolute, opts.worktreePath)) {
           opts.appendLog(`permission.write approved: ${fileName}`);
           return approved();
         }
         opts.appendLog(`permission.write denied (outside worktree): ${absolute}`);
-        return denied(`Writes outside the worktree (${opts.worktreePath}) are not permitted by the Claude Code Copilot plugin.`);
+        return denied(
+          `Writes outside the worktree (${opts.worktreePath}) are not permitted by the Claude Code Copilot plugin.`
+        );
       }
       case "mcp": {
         const { serverName, toolName, readOnly } = request;
         if (opts.isolated) {
           opts.appendLog(`permission.mcp DENIED (isolated mode): ${serverName}/${toolName}`);
-          return denied(`This Copilot session is isolated (reasoning only); MCP tool ${serverName}/${toolName} is not permitted.`);
+          return denied(
+            `This Copilot session is isolated (reasoning only); MCP tool ${serverName}/${toolName} is not permitted.`
+          );
         }
         if (opts.readOnly && readOnly !== true) {
-          opts.appendLog(`permission.mcp DENIED (read-only mode): ${serverName}/${toolName} (readOnly=${readOnly ?? "unknown"})`);
-          return denied(`MCP tool ${serverName}/${toolName} is not marked read-only; not permitted in this Copilot review session.`);
+          opts.appendLog(
+            `permission.mcp DENIED (read-only mode): ${serverName}/${toolName} (readOnly=${readOnly ?? "unknown"})`
+          );
+          return denied(
+            `MCP tool ${serverName}/${toolName} is not marked read-only; not permitted in this Copilot review session.`
+          );
         }
-        opts.appendLog(`permission.mcp approved: ${serverName}/${toolName} (readOnly=${readOnly ?? false})`);
+        opts.appendLog(
+          `permission.mcp approved: ${serverName}/${toolName} (readOnly=${readOnly ?? false})`
+        );
         return approved();
       }
       case "shell": {
         const { fullCommandText, intention } = request;
         const preview = (fullCommandText ?? "").slice(0, 160);
         if (opts.allowShell) {
-          opts.appendLog(`permission.shell approved: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
+          opts.appendLog(
+            `permission.shell approved: ${preview}${intention ? ` \u2014 ${intention}` : ""}`
+          );
           return approved();
         }
         opts.appendLog(`permission.shell DENIED: ${preview}${intention ? ` \u2014 ${intention}` : ""}`);
-        return denied("Shell execution is disabled for this Copilot session. Re-run the implement command with --allow-shell if you want to permit shell commands.");
+        return denied(
+          "Shell execution is disabled for this Copilot session. Re-run the implement command with --allow-shell if you want to permit shell commands."
+        );
       }
       case "url": {
         const { url } = request;
@@ -10810,230 +11035,32 @@ function makePermissionHandler(opts) {
           return approved();
         }
         opts.appendLog(`permission.url DENIED: ${url}`);
-        return denied("URL fetching is disabled for this Copilot session. Re-run with --allow-url to permit it.");
+        return denied(
+          "URL fetching is disabled for this Copilot session. Re-run with --allow-url to permit it."
+        );
       }
       case "custom-tool": {
         const { toolName } = request;
         opts.appendLog(`permission.custom-tool DENIED: ${toolName}`);
-        return denied(`Custom tool ${toolName} requires explicit user approval; not permitted in automated Copilot sessions.`);
+        return denied(
+          `Custom tool ${toolName} requires explicit user approval; not permitted in automated Copilot sessions.`
+        );
       }
       default: {
         opts.appendLog(`permission.${kind} DENIED (unknown kind, conservative default)`);
-        return denied(`Permission kind "${kind}" is not auto-approved by the Claude Code Copilot plugin.`);
+        return denied(
+          `Permission kind "${kind}" is not auto-approved by the Claude Code Copilot plugin.`
+        );
       }
     }
   };
 }
-var import_node_fs3, import_node_path3;
+var import_node_fs4, import_node_path4;
 var init_permission = __esm({
   "src/lib/permission.ts"() {
     "use strict";
-    import_node_fs3 = require("node:fs");
-    import_node_path3 = require("node:path");
-  }
-});
-
-// src/lib/quota.ts
-function snapshotPath(stateDir) {
-  return (0, import_node_path4.join)(stateDir, "quota.json");
-}
-function readSnapshot(stateDir) {
-  const path = snapshotPath(stateDir);
-  if (!(0, import_node_fs4.existsSync)(path)) return null;
-  try {
-    return JSON.parse((0, import_node_fs4.readFileSync)(path, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-function recordSnapshot(stateDir, quotas) {
-  const existing = readSnapshot(stateDir);
-  const merged = {
-    checkedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    quotas: { ...existing?.quotas ?? {} }
-  };
-  for (const [id, entry] of Object.entries(quotas)) {
-    if (!entry) continue;
-    merged.quotas[id] = {
-      entitlementRequests: entry.entitlementRequests ?? 0,
-      usedRequests: entry.usedRequests ?? 0,
-      remainingPercentage: entry.remainingPercentage ?? 100,
-      resetDate: entry.resetDate ?? "",
-      isUnlimitedEntitlement: entry.isUnlimitedEntitlement ?? false,
-      usageAllowedWithExhaustedQuota: entry.usageAllowedWithExhaustedQuota ?? false,
-      overage: entry.overage ?? 0,
-      overageAllowedWithExhaustedQuota: entry.overageAllowedWithExhaustedQuota ?? false
-    };
-  }
-  (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(snapshotPath(stateDir)), { recursive: true });
-  (0, import_node_fs4.writeFileSync)(snapshotPath(stateDir), JSON.stringify(merged, null, 2), "utf-8");
-  return merged;
-}
-async function fetchQuota(client, stateDir) {
-  try {
-    const result = await client.rpc.account.getQuota({});
-    return recordSnapshot(stateDir, result.quotaSnapshots ?? {});
-  } catch {
-    return null;
-  }
-}
-function isPremiumModel(modelId) {
-  if (!modelId) return true;
-  const id = modelId.toLowerCase();
-  if (id.startsWith("claude-sonnet-")) return false;
-  if (id.startsWith("claude-haiku-")) return false;
-  if (id.endsWith("-mini") || id.startsWith("gpt-4.1")) return false;
-  return true;
-}
-function evaluateGate(snapshot, opts) {
-  if (!snapshot || Object.keys(snapshot.quotas).length === 0) {
-    return { ok: true, reason: "no_cache" };
-  }
-  const entries = Object.values(snapshot.quotas);
-  const metered = entries.filter(
-    (q) => !q.isUnlimitedEntitlement && q.entitlementRequests > 0
-  );
-  if (metered.length === 0) {
-    return { ok: true, reason: "unlimited" };
-  }
-  if (metered.every((q) => q.remainingPercentage <= 0) && metered.some((q) => q.usageAllowedWithExhaustedQuota || q.overageAllowedWithExhaustedQuota)) {
-    return { ok: true, reason: "overage_allowed" };
-  }
-  let minRemainingAbs = Number.POSITIVE_INFINITY;
-  let tightestReset = "";
-  for (const q of metered) {
-    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
-    if (remaining < minRemainingAbs) {
-      minRemainingAbs = remaining;
-      tightestReset = q.resetDate;
-    }
-  }
-  if (minRemainingAbs <= opts.minRemaining) {
-    return {
-      ok: false,
-      reason: "quota_exhausted",
-      remaining: minRemainingAbs === Number.POSITIVE_INFINITY ? 0 : minRemainingAbs,
-      resetAt: tightestReset
-    };
-  }
-  const staleMs = opts.staleAfterMs ?? 2 * 60 * 1e3;
-  const ageMs = Date.now() - new Date(snapshot.checkedAt).getTime();
-  const warning = ageMs > staleMs ? `Quota snapshot is ${Math.round(ageMs / 1e3)}s old; may be out of date.` : void 0;
-  return warning ? { ok: true, reason: "available", warning } : { ok: true, reason: "available" };
-}
-function labelFor(id) {
-  if (POOL_LABELS[id]) return POOL_LABELS[id];
-  return id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-function summarize(snapshot) {
-  if (!snapshot) return { pools: [], allUnlimited: false };
-  const entries = Object.entries(snapshot.quotas);
-  if (entries.length === 0) return { pools: [], allUnlimited: false };
-  const pools = entries.map(([id, q]) => {
-    const isMetered = !q.isUnlimitedEntitlement && q.entitlementRequests > 0;
-    if (!isMetered) {
-      return { id, label: labelFor(id), unlimited: true };
-    }
-    const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
-    return {
-      id,
-      label: labelFor(id),
-      unlimited: false,
-      used: q.usedRequests,
-      total: q.entitlementRequests,
-      remaining,
-      remainingPercentage: q.remainingPercentage,
-      overage: q.overage || void 0,
-      resetAt: q.resetDate || void 0
-    };
-  });
-  const metered = pools.filter((p) => !p.unlimited);
-  if (metered.length === 0) {
-    return { pools, allUnlimited: true, unlimited: true };
-  }
-  let minRemaining = Number.POSITIVE_INFINITY;
-  let minPct = 100;
-  let tightestReset = "";
-  let tightestEntitlement = 0;
-  for (const p of metered) {
-    if (p.remaining !== void 0 && p.remaining < minRemaining) {
-      minRemaining = p.remaining;
-      tightestReset = p.resetAt ?? "";
-      tightestEntitlement = p.total ?? 0;
-    }
-    if (p.remainingPercentage !== void 0 && p.remainingPercentage < minPct) {
-      minPct = p.remainingPercentage;
-    }
-  }
-  return {
-    pools,
-    allUnlimited: false,
-    premium: minRemaining === Number.POSITIVE_INFINITY ? void 0 : minRemaining,
-    entitlement: tightestEntitlement || void 0,
-    percentage: minPct,
-    resetAt: tightestReset || void 0
-  };
-}
-function fmtNum(n) {
-  return Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(2)).toString();
-}
-function renderBar(usedPct) {
-  const clamped = Math.max(0, Math.min(100, usedPct));
-  const filled = Math.round(clamped / 100 * BAR_WIDTH);
-  return "\u2588".repeat(filled) + "\u2591".repeat(BAR_WIDTH - filled);
-}
-function daysUntil(iso) {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  const diffMs = t - Date.now();
-  if (diffMs <= 0) return 0;
-  return Math.ceil(diffMs / (24 * 60 * 60 * 1e3));
-}
-function renderQuotaBar(q, haveSnapshot) {
-  if (!haveSnapshot) {
-    return ["- No snapshot yet. One will be captured on the next run."];
-  }
-  if (q.allUnlimited && q.pools.length > 0) {
-    return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(", ")}).`];
-  }
-  if (q.pools.length === 0) {
-    return ["- No quota information reported by Copilot yet."];
-  }
-  const metered = q.pools.filter((p) => !p.unlimited);
-  const lines = [];
-  for (const p of metered) {
-    const remainingPct = p.remainingPercentage ?? 0;
-    const usedPct = 100 - remainingPct;
-    const total = p.total === void 0 ? "?" : fmtNum(p.total);
-    const remaining = fmtNum(p.remaining ?? 0);
-    lines.push(`${p.label}`);
-    lines.push(`  Usage      ${renderBar(usedPct)}  ${usedPct.toFixed(1)}%`);
-    lines.push(`  Remaining  ${remaining} / ${total}`);
-    if (p.overage && p.overage > 0) {
-      lines.push(`  Overage    ${fmtNum(p.overage)} (billed beyond entitlement)`);
-    }
-    if (p.resetAt) {
-      const days = daysUntil(p.resetAt);
-      const suffix = days === null ? "" : days === 0 ? "  (resets today)" : `  (in ~${days} days)`;
-      lines.push(`  Resets     ${p.resetAt}${suffix}`);
-    }
-    lines.push("");
-  }
-  if (lines[lines.length - 1] === "") lines.pop();
-  return lines;
-}
-var import_node_fs4, import_node_path4, POOL_LABELS, BAR_WIDTH;
-var init_quota = __esm({
-  "src/lib/quota.ts"() {
-    "use strict";
     import_node_fs4 = require("node:fs");
     import_node_path4 = require("node:path");
-    POOL_LABELS = {
-      premium_interactions: "Premium requests",
-      chat: "Chat",
-      completions: "Completions"
-    };
-    BAR_WIDTH = 30;
   }
 });
 
@@ -11223,10 +11250,8 @@ var init_copilot = __esm({
 // src/companion.ts
 var import_node_process3 = __toESM(require("node:process"), 1);
 
-// src/commands/setup.ts
-init_dist();
-init_copilot_auth();
-init_auth();
+// src/commands/ask.ts
+init_quota();
 
 // src/lib/run-agent-session.ts
 init_auth();
@@ -11307,155 +11332,298 @@ async function defaultPick(id) {
   return new CopilotProvider2();
 }
 
-// src/commands/setup.ts
-init_quota();
+// src/commands/ask.ts
 init_state();
-init_version();
-var DEFAULT_MODEL = "claude-opus-4.8";
-async function runSetup(options = {}) {
-  const cwd = options.cwd ?? process.cwd();
-  const stateDir = resolveStateDir(cwd);
-  const isCheck = options.check === true;
-  const { id } = await resolveActiveProvider(
-    { provider: options.provider },
-    cwd,
-    isCheck ? { probe: async () => false } : {}
-  );
-  if (id === "codex") {
-    await runCodexSetup(cwd, options, isCheck);
-    return;
-  }
-  const client = new CopilotClient({ workingDirectory: cwd });
+
+// src/lib/system-message.ts
+var import_node_fs5 = require("node:fs");
+var import_node_path5 = require("node:path");
+var FRAMING = {
+  fix: [
+    "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
+    "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
+    "If a finding cannot be safely applied, skip it and report why rather than forcing a change."
+  ].join("\n"),
+  review: [
+    "You are performing a code review delegated by Claude Code's orchestrator. You run headless.",
+    "This session is read-only: do not attempt to modify files. Report findings; another stage applies any fixes."
+  ].join("\n"),
+  ask: [
+    "You are one independent voice being consulted on a question or topic.",
+    "Reason carefully and state your own honest conclusion. Use only the context",
+    "provided in the prompt \u2014 do not explore the filesystem or run tools.",
+    "Be concrete and decisive; surface key assumptions and the strongest",
+    "counter-argument to your own position."
+  ].join(" ")
+};
+function resolveExtraContext(cwd, opts) {
+  const raw = opts.context;
+  if (!raw?.trim()) return void 0;
+  if (!raw.startsWith("@")) return raw.trim();
+  const ref = raw.slice(1);
   try {
-    await client.start();
+    const source = ref === "-" ? 0 : (0, import_node_path5.resolve)(cwd, ref);
+    const text = (0, import_node_fs5.readFileSync)(source, "utf-8").trim();
+    return text || void 0;
   } catch (err) {
-    const msg = `Failed to start Copilot CLI: ${err.message}`;
-    if (isCheck) {
-      console.error(`[copilot] ${msg} \u2014 run \`gh auth login\` and ensure @github/copilot is installed.`);
-      return;
-    }
-    emit(options, {
-      status: "error",
-      defaultModel: DEFAULT_MODEL,
-      defaultModelAvailable: false,
-      models: [],
-      claudeModels: [],
-      message: msg
-    });
-    return;
+    opts.onWarn?.(
+      `Could not read --context ${ref === "-" ? "from stdin" : `file ${ref}`}: ${err.message}`
+    );
+    return void 0;
   }
-  const auth = await checkAuth(client);
-  if (!auth.ok) {
-    await client.stop().catch(() => {
-    });
-    if (isCheck) {
-      console.error(`[copilot] ${auth.message}`);
-      return;
-    }
-    emit(options, {
-      status: "error",
-      authType: auth.authType,
-      defaultModel: DEFAULT_MODEL,
-      defaultModelAvailable: false,
-      models: [],
-      claudeModels: [],
-      message: auth.message
-    });
-    return;
-  }
-  let models = [];
-  try {
-    models = await client.listModels();
-  } catch (err) {
-    if (!isCheck) console.error(`[copilot] listModels failed: ${err.message}`);
-  }
-  const modelIds = models.map((m) => m.id);
-  const claudeModels = modelIds.filter((id2) => id2.toLowerCase().includes("claude"));
-  const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
-  await fetchQuota(client, stateDir).catch(() => null);
-  await client.stop().catch(() => {
-  });
-  if (isCheck) {
-    return;
-  }
-  const report = {
-    status: "ok",
-    authType: auth.authType,
-    login: auth.login,
-    host: auth.host,
-    defaultModel: DEFAULT_MODEL,
-    defaultModelAvailable: defaultAvailable,
-    models: modelIds,
-    claudeModels,
-    quota: summarize(readSnapshot(stateDir))
-  };
-  if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
-    return;
-  }
-  const lines = [];
-  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push("");
-  lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ""})`);
-  if (auth.host) lines.push(`**Host:** ${auth.host}`);
-  lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? "(available)" : "(NOT listed \u2014 pass --model to override)"}`);
-  console.log(lines.join("\n"));
 }
-async function runCodexSetup(cwd, options, isCheck) {
-  if (isCheck) {
-    return;
+function buildSystemMessage(kind, input = {}) {
+  const sections = [];
+  sections.push(FRAMING[kind]);
+  if (input.extraContext?.trim()) {
+    sections.push(
+      `## Additional context from the orchestrator
+The following is context from the Claude Code session that delegated this task. Treat it as authoritative intent:
+
+${input.extraContext.trim()}`
+    );
   }
-  const availability = getCodexAvailability(cwd);
-  const auth = await getCodexAuthStatus(cwd);
-  if (options.json) {
-    console.log(JSON.stringify({
-      status: auth.loggedIn ? "ok" : "error",
-      provider: "codex",
-      codex: {
-        available: availability.available,
-        availabilityDetail: availability.detail,
-        loggedIn: auth.loggedIn,
-        authMethod: auth.authMethod,
-        detail: auth.detail
-      }
-    }, null, 2));
-    return;
-  }
-  const lines = [];
-  lines.push(`## Codex Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push("");
-  lines.push(`**Provider:** Codex`);
-  lines.push(`**Availability:** ${availability.available ? "available" : "unavailable"} \u2014 ${availability.detail}`);
-  lines.push(`**Status:** ${auth.loggedIn ? "Authenticated" : "Not authenticated"}${auth.authMethod ? ` (${auth.authMethod})` : ""}`);
-  lines.push(`**Detail:** ${auth.detail}`);
-  if (!auth.loggedIn) {
-    lines.push("");
-    lines.push("### Next steps");
-    lines.push("- Run `codex login` to authenticate, then re-run setup.");
-  }
-  console.log(lines.join("\n"));
-}
-function emit(options, report) {
-  if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
-    return;
-  }
-  const lines = [];
-  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push("");
-  lines.push(`**Status:** ${report.status === "ok" ? "Authenticated" : "Not authenticated"}`);
-  if (report.message) lines.push(`**Message:** ${report.message}`);
-  console.log(lines.join("\n"));
+  return sections.join("\n\n");
 }
 
-// src/commands/review.ts
+// src/lib/turn-runtime.ts
+function makeProgress() {
+  return (message) => {
+    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
+    process.stderr.write(`[${time}] ${message}
+`);
+  };
+}
+function startTurnTimeout(opts) {
+  const abort = new AbortController();
+  let firedTimeout = false;
+  const handle = setTimeout(() => {
+    firedTimeout = true;
+    opts.progress(`Timeout after ${opts.timeoutMs}ms reached \u2014 requesting abort.`);
+    opts.log(`timeout ${opts.timeoutMs}ms`);
+    abort.abort();
+  }, opts.timeoutMs);
+  return {
+    signal: abort.signal,
+    timedOut: () => firedTimeout,
+    clear: () => clearTimeout(handle)
+  };
+}
+function formatCodexUsage(u) {
+  const pct = u.rateLimits?.primaryUsedPercent;
+  const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
+  return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
+}
+
+// src/commands/ask.ts
+var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
+var COPILOT_DEFAULT_MODEL = "gpt-5.5";
+var DEFAULT_EFFORT = "high";
+async function runAsk(cwd, options) {
+  const progress = makeProgress();
+  const reasoning = options.reasoning ?? DEFAULT_EFFORT;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const minQuota = options.minQuota ?? 1;
+  const copilotModel = options.model ?? COPILOT_DEFAULT_MODEL;
+  const prompt = options.prompt.trim();
+  if (!prompt) throw new Error("ask: empty prompt");
+  const stateDir = resolveStateDir(cwd);
+  const jobId = options.jobId ?? generateJobId();
+  const log = (msg) => appendLog(stateDir, jobId, msg);
+  log(
+    `ask start: model=${options.model ?? "(provider default)"} effort=${reasoning} promptChars=${prompt.length}`
+  );
+  const extraContext = resolveExtraContext(cwd, {
+    context: options.context,
+    onWarn: (m) => {
+      progress(m);
+      log(m);
+    }
+  });
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
+  let provider;
+  let result;
+  try {
+    ({ provider, result } = await runAgentSession({
+      cwd,
+      flags: { provider: options.provider },
+      run: {
+        cwd,
+        prompt,
+        model: options.model,
+        // undefined → defaultModelFor fills it per provider
+        reasoning,
+        readOnly: true,
+        allowShell: false,
+        allowUrl: false,
+        systemMessage: buildSystemMessage("ask", { extraContext }),
+        appendLog: log,
+        progress,
+        signal: turn.signal
+      },
+      defaultModelFor: (id) => id === "copilot" ? COPILOT_DEFAULT_MODEL : void 0,
+      enforceQuota: () => {
+        if (!isPremiumModel(copilotModel)) {
+          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
+          return;
+        }
+        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
+        if (!gate.ok) {
+          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
+          throw new Error(
+            `Quota exhausted \u2014 ask not started. Resets at ${gate.resetAt || "unknown"}.`
+          );
+        }
+        if ("warning" in gate && gate.warning) progress(gate.warning);
+      },
+      log
+    }));
+  } catch (err) {
+    turn.clear();
+    const msg = err.message;
+    process.stderr.write(`Ask failed: ${msg}
+`);
+    log(`ask failed: ${msg}`);
+    throw err instanceof Error ? err : new Error(msg);
+  } finally {
+    turn.clear();
+  }
+  const body = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty answer.)_";
+  const success = result.success && !turn.timedOut();
+  if (!success) {
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Ask did not complete successfully.";
+    process.stdout.write(`${body}
+`);
+    log(`ask failed: ${reason}`);
+    throw new Error(reason);
+  }
+  process.stdout.write(`${body.trim()}
+`);
+  if (result.usage?.kind === "copilot") {
+    const premium = result.usage.premiumRequestCost ?? 0;
+    progress(
+      `Ask done \u2014 provider=${provider} model=${copilotModel} effort=${reasoning} premium-cost=${fmtNum(premium)}`
+    );
+    log(`ask done: provider=${provider} premium=${premium}`);
+  } else if (result.usage?.kind === "codex") {
+    const u = result.usage;
+    progress(`Ask done \u2014 provider=${provider} effort=${reasoning} ${formatCodexUsage(u)}`);
+    log(
+      `ask done: provider=${provider} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`
+    );
+  } else {
+    progress(`Ask done \u2014 provider=${provider} effort=${reasoning}`);
+    log(`ask done: provider=${provider}`);
+  }
+  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
+}
+
+// src/commands/background.ts
+var import_node_child_process6 = require("node:child_process");
+
+// src/lib/args.ts
+function extractTask(args, flags) {
+  const positional = args.join(" ").trim();
+  if (positional) return positional;
+  const flag = flags.task;
+  return typeof flag === "string" ? flag.trim() : "";
+}
+function flagString(flags, key) {
+  const v = flags[key];
+  return typeof v === "string" ? v : void 0;
+}
+function flagNumber(flags, key) {
+  const v = flags[key];
+  if (typeof v !== "string") return void 0;
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : void 0;
+}
+
+// src/commands/background.ts
 init_state();
-init_quota();
+
+// src/lib/findings.ts
+var VALID_SEVERITIES = /* @__PURE__ */ new Set(["blocker", "major", "minor"]);
+function extractJsonBlock(text) {
+  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
+  const fenced = [];
+  for (const m of text.matchAll(fenceRe)) {
+    if (m[1]?.trim()) fenced.push(m[1]);
+  }
+  const candidates = fenced.reverse();
+  const lastSpan = (open, close) => {
+    const start = text.lastIndexOf(open);
+    const end = text.lastIndexOf(close);
+    return start !== -1 && end > start ? text.slice(start, end + 1) : void 0;
+  };
+  const spans = [lastSpan("[", "]"), lastSpan("{", "}")].filter((s) => !!s).sort((a, b) => b.length - a.length);
+  candidates.push(...spans);
+  for (const c of candidates) {
+    try {
+      return JSON.parse(c.trim());
+    } catch {
+    }
+  }
+  return null;
+}
+function normalizeFindings(parsed) {
+  const arr = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray(parsed.findings) ? parsed.findings : [];
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let i = 0; i < arr.length; i++) {
+    const raw = arr[i];
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw;
+    const file = typeof r.file === "string" ? r.file : "";
+    const title = typeof r.title === "string" ? r.title : "";
+    if (!file || !title) continue;
+    const sev = typeof r.severity === "string" && VALID_SEVERITIES.has(r.severity) ? r.severity : "major";
+    let id = typeof r.id === "string" && r.id.trim() ? r.id.trim() : `finding-${i + 1}`;
+    if (seen.has(id)) id = `${id}-${i + 1}`;
+    seen.add(id);
+    out.push({
+      id,
+      file,
+      line: typeof r.line === "string" ? r.line : typeof r.line === "number" ? String(r.line) : void 0,
+      severity: sev,
+      title,
+      rationale: typeof r.rationale === "string" ? r.rationale : "",
+      suggestedFix: typeof r.suggestedFix === "string" ? r.suggestedFix : ""
+    });
+  }
+  return out;
+}
+var FINDINGS_OUTPUT_INSTRUCTION = `
+<structured_findings>
+This review feeds an automated fix pipeline. After your markdown review, output
+ONE fenced code block tagged \`json\` containing an array of the material
+findings (and ONLY material findings \u2014 omit notes, praise, and style nits):
+
+\`\`\`json
+[
+  {
+    "id": "kebab-case-stable-id",
+    "file": "relative/path.ts",
+    "line": "42-50",
+    "severity": "blocker | major | minor",
+    "title": "one-sentence statement of the defect",
+    "rationale": "why this is a real defect",
+    "suggestedFix": "concrete change to make"
+  }
+]
+\`\`\`
+
+Rules:
+- If there are no material findings, output an empty array: \`[]\`.
+- "line" is optional; omit it for file-wide findings.
+- Keep ids stable and descriptive \u2014 they are how a human approves each fix.
+</structured_findings>
+`;
 
 // src/lib/git.ts
 var import_node_child_process5 = require("node:child_process");
-var import_node_fs5 = require("node:fs");
-var import_node_path5 = require("node:path");
+var import_node_fs6 = require("node:fs");
+var import_node_path6 = require("node:path");
 var MAX_UNTRACKED_BYTES = 24 * 1024;
 var DEFAULT_INLINE_DIFF_MAX_FILES = 2;
 var DEFAULT_INLINE_DIFF_MAX_BYTES = 256 * 1024;
@@ -11467,7 +11635,9 @@ function gitDiffTolerant(cwd, args) {
   }
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`);
+    throw new Error(
+      `git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`
+    );
   }
   return { stdout: result.stdout, overflow: false };
 }
@@ -11497,7 +11667,9 @@ function gitChecked(cwd, args, maxBuffer) {
   const result = git(cwd, args, maxBuffer);
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`);
+    throw new Error(
+      `git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`
+    );
   }
   return result;
 }
@@ -11534,7 +11706,8 @@ function buildBranchComparison(cwd, baseRef) {
 }
 function ensureGitRepository(cwd) {
   const result = git(cwd, ["rev-parse", "--show-toplevel"]);
-  if (result.error?.code === "ENOENT") throw new Error("git is not installed. Install Git and retry.");
+  if (result.error?.code === "ENOENT")
+    throw new Error("git is not installed. Install Git and retry.");
   if (result.status !== 0) throw new Error("This command must run inside a Git repository.");
   return result.stdout.trim();
 }
@@ -11548,10 +11721,14 @@ function detectDefaultBranch(cwd) {
     if (head.startsWith("refs/remotes/")) return head.replace("refs/remotes/", "");
   }
   for (const candidate of ["main", "master", "trunk"]) {
-    if (git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${candidate}`]).status === 0) return candidate;
-    if (git(cwd, ["show-ref", "--verify", "--quiet", `refs/remotes/origin/${candidate}`]).status === 0) return `origin/${candidate}`;
+    if (git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${candidate}`]).status === 0)
+      return candidate;
+    if (git(cwd, ["show-ref", "--verify", "--quiet", `refs/remotes/origin/${candidate}`]).status === 0)
+      return `origin/${candidate}`;
   }
-  throw new Error("Unable to detect the repository default branch. Pass --base <ref> or use --scope working-tree.");
+  throw new Error(
+    "Unable to detect the repository default branch. Pass --base <ref> or use --scope working-tree."
+  );
 }
 function getCurrentBranch(cwd) {
   return gitChecked(cwd, ["branch", "--show-current"]).stdout.trim() || "HEAD";
@@ -11561,7 +11738,12 @@ function getWorkingTreeState(cwd) {
   const staged = split(gitChecked(cwd, ["diff", "--cached", "--name-only"]).stdout);
   const unstaged = split(gitChecked(cwd, ["diff", "--name-only"]).stdout);
   const untracked = split(gitChecked(cwd, ["ls-files", "--others", "--exclude-standard"]).stdout);
-  return { staged, unstaged, untracked, isDirty: staged.length > 0 || unstaged.length > 0 || untracked.length > 0 };
+  return {
+    staged,
+    unstaged,
+    untracked,
+    isDirty: staged.length > 0 || unstaged.length > 0 || untracked.length > 0
+  };
 }
 function resolveReviewTarget(cwd, options = {}) {
   ensureGitRepository(cwd);
@@ -11575,40 +11757,53 @@ function resolveReviewTarget(cwd, options = {}) {
     return { mode: "working-tree", label: "working tree diff", explicit: true };
   }
   if (!supported.has(requestedScope)) {
-    throw new Error(`Unsupported review scope "${requestedScope}". Use one of: auto, working-tree, branch, or pass --base <ref>.`);
+    throw new Error(
+      `Unsupported review scope "${requestedScope}". Use one of: auto, working-tree, branch, or pass --base <ref>.`
+    );
   }
   if (requestedScope === "branch") {
     const detected2 = detectDefaultBranch(cwd);
-    return { mode: "branch", label: `branch diff against ${detected2}`, baseRef: detected2, explicit: true };
+    return {
+      mode: "branch",
+      label: `branch diff against ${detected2}`,
+      baseRef: detected2,
+      explicit: true
+    };
   }
   const state = getWorkingTreeState(cwd);
   if (state.isDirty) {
     return { mode: "working-tree", label: "working tree diff", explicit: false };
   }
   const detected = detectDefaultBranch(cwd);
-  return { mode: "branch", label: `branch diff against ${detected}`, baseRef: detected, explicit: false };
+  return {
+    mode: "branch",
+    label: `branch diff against ${detected}`,
+    baseRef: detected,
+    explicit: false
+  };
 }
 function formatSection(title, body) {
   return [`## ${title}`, "", body.trim() ? body.trim() : "(none)", ""].join("\n");
 }
 function formatUntrackedFile(cwd, relativePath) {
-  const absolute = (0, import_node_path5.join)(cwd, relativePath);
-  if (!(0, import_node_fs5.existsSync)(absolute)) return `### ${relativePath}
+  const absolute = (0, import_node_path6.join)(cwd, relativePath);
+  if (!(0, import_node_fs6.existsSync)(absolute)) return `### ${relativePath}
 (skipped: missing)`;
   let stat;
   try {
-    stat = (0, import_node_fs5.statSync)(absolute);
+    stat = (0, import_node_fs6.statSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
   }
   if (stat.isDirectory()) return `### ${relativePath}
 (skipped: directory)`;
-  if (stat.size > MAX_UNTRACKED_BYTES) return `### ${relativePath}
+  if (stat.size > MAX_UNTRACKED_BYTES)
+    return `### ${relativePath}
 (skipped: ${stat.size} bytes exceeds ${MAX_UNTRACKED_BYTES} byte limit)`;
   let buffer;
   try {
-    buffer = (0, import_node_fs5.readFileSync)(absolute);
+    buffer = (0, import_node_fs6.readFileSync)(absolute);
   } catch {
     return `### ${relativePath}
 (skipped: unreadable)`;
@@ -11624,10 +11819,19 @@ function collectWorkingTreeContext(cwd, state, includeDiff, truncatedDiffBytes) 
   if (includeDiff) {
     parts = [
       formatSection("Git Status", status),
-      formatSection("Staged Diff", gitChecked(cwd, ["diff", "--cached", "--binary", "--no-ext-diff", "--submodule=diff"]).stdout),
-      formatSection("Unstaged Diff", gitChecked(cwd, ["diff", "--binary", "--no-ext-diff", "--submodule=diff"]).stdout),
+      formatSection(
+        "Staged Diff",
+        gitChecked(cwd, ["diff", "--cached", "--binary", "--no-ext-diff", "--submodule=diff"]).stdout
+      ),
+      formatSection(
+        "Unstaged Diff",
+        gitChecked(cwd, ["diff", "--binary", "--no-ext-diff", "--submodule=diff"]).stdout
+      ),
       // Inline path: include full untracked file bodies (small diffs only).
-      formatSection("Untracked Files", state.untracked.map((f) => formatUntrackedFile(cwd, f)).join("\n\n"))
+      formatSection(
+        "Untracked Files",
+        state.untracked.map((f) => formatUntrackedFile(cwd, f)).join("\n\n")
+      )
     ];
   } else {
     const staged = gitDiffTolerant(cwd, ["diff", "--cached", "--no-ext-diff", "--submodule=short"]);
@@ -11645,7 +11849,10 @@ ${diffBlock}`;
     }
     parts = [
       formatSection("Git Status", status),
-      formatSection("Staged Diff Stat", gitChecked(cwd, ["diff", "--shortstat", "--cached"]).stdout.trim()),
+      formatSection(
+        "Staged Diff Stat",
+        gitChecked(cwd, ["diff", "--shortstat", "--cached"]).stdout.trim()
+      ),
       formatSection("Unstaged Diff Stat", gitChecked(cwd, ["diff", "--shortstat"]).stdout.trim()),
       formatSection("Changed Files", changedFiles.join("\n")),
       formatSection("Truncated Diff", diffBlock),
@@ -11662,17 +11869,36 @@ ${diffBlock}`;
 function collectBranchContext(cwd, baseRef, comparison, includeDiff, truncatedDiffBytes) {
   const currentBranch = getCurrentBranch(cwd);
   const changedFiles = gitChecked(cwd, ["diff", "--name-only", comparison.commitRange]).stdout.trim().split("\n").filter(Boolean);
-  const log = gitChecked(cwd, ["log", "--oneline", "--decorate", comparison.commitRange]).stdout.trim();
+  const log = gitChecked(cwd, [
+    "log",
+    "--oneline",
+    "--decorate",
+    comparison.commitRange
+  ]).stdout.trim();
   const stat = gitChecked(cwd, ["diff", "--stat", comparison.commitRange]).stdout.trim();
   let parts;
   if (includeDiff) {
     parts = [
       formatSection("Commit Log", log),
       formatSection("Diff Stat", stat),
-      formatSection("Branch Diff", gitChecked(cwd, ["diff", "--binary", "--no-ext-diff", "--submodule=diff", comparison.commitRange]).stdout)
+      formatSection(
+        "Branch Diff",
+        gitChecked(cwd, [
+          "diff",
+          "--binary",
+          "--no-ext-diff",
+          "--submodule=diff",
+          comparison.commitRange
+        ]).stdout
+      )
     ];
   } else {
-    const branchDiff = gitDiffTolerant(cwd, ["diff", "--no-ext-diff", "--submodule=short", comparison.commitRange]);
+    const branchDiff = gitDiffTolerant(cwd, [
+      "diff",
+      "--no-ext-diff",
+      "--submodule=short",
+      comparison.commitRange
+    ]);
     const trimmed = truncateUtf8(branchDiff.stdout, truncatedDiffBytes);
     let diffBlock = trimmed.truncated ? `${trimmed.text}
 
@@ -11727,7 +11953,13 @@ function collectReviewContext(cwd, target, options = {}) {
       maxInlineDiffBytes
     );
     includeDiff = options.includeDiff ?? (fileCount <= maxInlineFiles && diffBytes <= maxInlineDiffBytes);
-    details = collectBranchContext(repoRoot, target.baseRef, comparison, includeDiff, maxInlineDiffBytes);
+    details = collectBranchContext(
+      repoRoot,
+      target.baseRef,
+      comparison,
+      includeDiff,
+      maxInlineDiffBytes
+    );
   }
   const collectionGuidance = includeDiff ? "Use the repository context below as primary evidence." : options.shellAvailable ? "The repository context below is a lightweight summary. Inspect the target diff yourself with read-only git commands before finalizing findings." : 'The repository context below is a lightweight summary because the diff is too large to inline. Shell execution is disabled. Use the read tool to open individual changed files listed under "Changed Files" and ground findings in their actual contents before finalizing.';
   return {
@@ -11745,6 +11977,9 @@ function collectReviewContext(cwd, target, options = {}) {
     collectionGuidance
   };
 }
+
+// src/commands/review.ts
+init_quota();
 
 // src/lib/review-prompts.ts
 var STANDARD = `<role>
@@ -11955,7 +12190,10 @@ If a simplification depends on an assumption about behavior, state it \u2014 nev
 </repository_context>
 `;
 function interpolate(template, vars) {
-  return template.replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : "");
+  return template.replace(
+    /\{\{([A-Z_]+)\}\}/g,
+    (_, key) => Object.hasOwn(vars, key) ? vars[key] : ""
+  );
 }
 function buildReviewPrompt(kind, vars) {
   const template = kind === "adversarial" ? ADVERSARIAL : kind === "simplify" ? SIMPLIFY : STANDARD;
@@ -11968,164 +12206,9 @@ function buildReviewPrompt(kind, vars) {
   });
 }
 
-// src/lib/findings.ts
-var VALID_SEVERITIES = /* @__PURE__ */ new Set(["blocker", "major", "minor"]);
-function extractJsonBlock(text) {
-  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
-  const fenced = [];
-  for (const m of text.matchAll(fenceRe)) {
-    if (m[1] && m[1].trim()) fenced.push(m[1]);
-  }
-  const candidates = fenced.reverse();
-  const lastSpan = (open, close) => {
-    const start = text.lastIndexOf(open);
-    const end = text.lastIndexOf(close);
-    return start !== -1 && end > start ? text.slice(start, end + 1) : void 0;
-  };
-  const spans = [lastSpan("[", "]"), lastSpan("{", "}")].filter((s) => !!s).sort((a, b) => b.length - a.length);
-  candidates.push(...spans);
-  for (const c of candidates) {
-    try {
-      return JSON.parse(c.trim());
-    } catch {
-    }
-  }
-  return null;
-}
-function normalizeFindings(parsed) {
-  const arr = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray(parsed.findings) ? parsed.findings : [];
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (let i = 0; i < arr.length; i++) {
-    const raw = arr[i];
-    if (!raw || typeof raw !== "object") continue;
-    const r = raw;
-    const file = typeof r["file"] === "string" ? r["file"] : "";
-    const title = typeof r["title"] === "string" ? r["title"] : "";
-    if (!file || !title) continue;
-    const sev = typeof r["severity"] === "string" && VALID_SEVERITIES.has(r["severity"]) ? r["severity"] : "major";
-    let id = typeof r["id"] === "string" && r["id"].trim() ? r["id"].trim() : `finding-${i + 1}`;
-    if (seen.has(id)) id = `${id}-${i + 1}`;
-    seen.add(id);
-    out.push({
-      id,
-      file,
-      line: typeof r["line"] === "string" ? r["line"] : typeof r["line"] === "number" ? String(r["line"]) : void 0,
-      severity: sev,
-      title,
-      rationale: typeof r["rationale"] === "string" ? r["rationale"] : "",
-      suggestedFix: typeof r["suggestedFix"] === "string" ? r["suggestedFix"] : ""
-    });
-  }
-  return out;
-}
-var FINDINGS_OUTPUT_INSTRUCTION = `
-<structured_findings>
-This review feeds an automated fix pipeline. After your markdown review, output
-ONE fenced code block tagged \`json\` containing an array of the material
-findings (and ONLY material findings \u2014 omit notes, praise, and style nits):
-
-\`\`\`json
-[
-  {
-    "id": "kebab-case-stable-id",
-    "file": "relative/path.ts",
-    "line": "42-50",
-    "severity": "blocker | major | minor",
-    "title": "one-sentence statement of the defect",
-    "rationale": "why this is a real defect",
-    "suggestedFix": "concrete change to make"
-  }
-]
-\`\`\`
-
-Rules:
-- If there are no material findings, output an empty array: \`[]\`.
-- "line" is optional; omit it for file-wide findings.
-- Keep ids stable and descriptive \u2014 they are how a human approves each fix.
-</structured_findings>
-`;
-
-// src/lib/system-message.ts
-var import_node_fs6 = require("node:fs");
-var import_node_path6 = require("node:path");
-var FRAMING = {
-  fix: [
-    "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
-    "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
-    "If a finding cannot be safely applied, skip it and report why rather than forcing a change."
-  ].join("\n"),
-  review: [
-    "You are performing a code review delegated by Claude Code's orchestrator. You run headless.",
-    "This session is read-only: do not attempt to modify files. Report findings; another stage applies any fixes."
-  ].join("\n"),
-  ask: [
-    "You are one independent voice being consulted on a question or topic.",
-    "Reason carefully and state your own honest conclusion. Use only the context",
-    "provided in the prompt \u2014 do not explore the filesystem or run tools.",
-    "Be concrete and decisive; surface key assumptions and the strongest",
-    "counter-argument to your own position."
-  ].join(" ")
-};
-function resolveExtraContext(cwd, opts) {
-  const raw = opts.context;
-  if (!raw || !raw.trim()) return void 0;
-  if (!raw.startsWith("@")) return raw.trim();
-  const ref = raw.slice(1);
-  try {
-    const source = ref === "-" ? 0 : (0, import_node_path6.resolve)(cwd, ref);
-    const text = (0, import_node_fs6.readFileSync)(source, "utf-8").trim();
-    return text || void 0;
-  } catch (err) {
-    opts.onWarn?.(
-      `Could not read --context ${ref === "-" ? "from stdin" : `file ${ref}`}: ${err.message}`
-    );
-    return void 0;
-  }
-}
-function buildSystemMessage(kind, input = {}) {
-  const sections = [];
-  sections.push(FRAMING[kind]);
-  if (input.extraContext && input.extraContext.trim()) {
-    sections.push(`## Additional context from the orchestrator
-The following is context from the Claude Code session that delegated this task. Treat it as authoritative intent:
-
-${input.extraContext.trim()}`);
-  }
-  return sections.join("\n\n");
-}
-
-// src/lib/turn-runtime.ts
-function makeProgress() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
-function startTurnTimeout(opts) {
-  const abort = new AbortController();
-  let firedTimeout = false;
-  const handle = setTimeout(() => {
-    firedTimeout = true;
-    opts.progress(`Timeout after ${opts.timeoutMs}ms reached \u2014 requesting abort.`);
-    opts.log(`timeout ${opts.timeoutMs}ms`);
-    abort.abort();
-  }, opts.timeoutMs);
-  return {
-    signal: abort.signal,
-    timedOut: () => firedTimeout,
-    clear: () => clearTimeout(handle)
-  };
-}
-function formatCodexUsage(u) {
-  const pct = u.rateLimits?.primaryUsedPercent;
-  const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
-  return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
-}
-
 // src/commands/review.ts
-var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
+init_state();
+var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
 var DEFAULT_MODEL_STANDARD = "gpt-5.3-codex";
 var DEFAULT_MODEL_ADVERSARIAL = "gpt-5.5";
 var DEFAULT_MODEL_SIMPLIFY = "gpt-5.3-codex";
@@ -12151,24 +12234,30 @@ async function runReview(cwd, options = {}) {
   const progress = makeProgress();
   const kind = resolveKind(options);
   const reasoning = options.reasoning ?? defaultEffortFor(kind);
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
   const minQuota = options.minQuota ?? 1;
   const copilotModel = options.model ?? defaultModelFor(kind);
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const log = (msg) => appendLog(stateDir, jobId, msg);
-  log(`review start: kind=${kind} model=${copilotModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`);
+  log(
+    `review start: kind=${kind} model=${copilotModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`
+  );
   const target = resolveReviewTarget(cwd, { scope: options.scope, base: options.base });
   const context = collectReviewContext(cwd, target, { shellAvailable: false });
   if (context.fileCount === 0) {
-    process.stdout.write(`# Review Summary
+    process.stdout.write(
+      `# Review Summary
 
 No changes to review under ${context.target.label}.
-`);
+`
+    );
     log("review aborted: empty target");
     return;
   }
-  progress(`Target: ${context.target.label} \u2014 ${context.fileCount} file(s), ~${context.diffBytes}B diff (${context.inputMode}).`);
+  progress(
+    `Target: ${context.target.label} \u2014 ${context.fileCount} file(s), ~${context.diffBytes}B diff (${context.inputMode}).`
+  );
   const fixMode = options.fix === true;
   let prompt = buildReviewPrompt(kind, { context, focusText: options.focusText ?? "" });
   if (fixMode) prompt += `
@@ -12211,7 +12300,9 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
         const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
         if (!gate.ok) {
           log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-          throw new Error(`Quota exhausted \u2014 review not started. Resets at ${gate.resetAt || "unknown"}.`);
+          throw new Error(
+            `Quota exhausted \u2014 review not started. Resets at ${gate.resetAt || "unknown"}.`
+          );
         }
         if ("warning" in gate && gate.warning) progress(gate.warning);
       },
@@ -12227,7 +12318,7 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
   } finally {
     turn.clear();
   }
-  const reviewBody = result.lastAssistantMessage?.trim() || result.summary && result.summary.trim() || "_(The model returned an empty review.)_";
+  const reviewBody = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty review.)_";
   const success = result.success && !turn.timedOut();
   if (!success) {
     const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Review did not complete successfully.";
@@ -12270,7 +12361,9 @@ ${reviewBody}
     progress(
       `Review done \u2014 kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`
     );
-    log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`);
+    log(
+      `review done: kind=${kind} provider=${provider} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`
+    );
   } else {
     const poolNote = quotaRemaining.pools.length > 0 ? quotaRemaining.pools.map(
       (p) => p.unlimited ? `${p.label}=unlimited` : `${p.label}=${fmtNum(p.remaining ?? 0)}/${fmtNum(p.total ?? 0)}`
@@ -12278,121 +12371,151 @@ ${reviewBody}
     progress(
       `Review done \u2014 kind=${kind} provider=${provider} model=${usedModel} effort=${reasoning} files=${context.fileCount} premium-cost=${fmtNum(premium)} | ${poolNote}`
     );
-    log(`review done: kind=${kind} provider=${provider} files=${context.fileCount} premium=${premium} pools=${poolNote}`);
+    log(
+      `review done: kind=${kind} provider=${provider} files=${context.fileCount} premium=${premium} pools=${poolNote}`
+    );
   }
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
-// src/commands/ask.ts
-init_state();
-init_quota();
-var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
-var COPILOT_DEFAULT_MODEL = "gpt-5.5";
-var DEFAULT_EFFORT = "high";
-async function runAsk(cwd, options) {
-  const progress = makeProgress();
-  const reasoning = options.reasoning ?? DEFAULT_EFFORT;
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
-  const minQuota = options.minQuota ?? 1;
-  const copilotModel = options.model ?? COPILOT_DEFAULT_MODEL;
-  const prompt = options.prompt.trim();
-  if (!prompt) throw new Error("ask: empty prompt");
+// src/commands/background.ts
+function enqueueBackground(command, args, flags, cwd) {
+  if (command !== "review") {
+    throw new Error(`Background execution is only supported for 'review', got '${command}'.`);
+  }
   const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
-  const log = (msg) => appendLog(stateDir, jobId, msg);
-  log(`ask start: model=${options.model ?? "(provider default)"} effort=${reasoning} promptChars=${prompt.length}`);
-  const extraContext = resolveExtraContext(cwd, {
-    context: options.context,
-    onWarn: (m) => {
-      progress(m);
-      log(m);
+  const jobId = generateJobId();
+  const summary = extractTask(args, flags).slice(0, 80) || command;
+  const job = {
+    id: jobId,
+    kind: command,
+    title: `harry ${command}`,
+    summary,
+    status: "queued",
+    phase: "queued",
+    cwd,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    sessionId: getSessionId(),
+    request: { command, args, flags, cwd }
+  };
+  createJob(stateDir, job);
+  appendLog(stateDir, jobId, `Queued for background execution: ${command} "${summary}"`);
+  const scriptPath = getScriptPath();
+  const child = (0, import_node_child_process6.spawn)(process.execPath, [scriptPath, "_worker", "--job-id", jobId, "--cwd", cwd], {
+    cwd,
+    env: { ...process.env, HARRY_SESSION_ID: getSessionId() ?? "" },
+    detached: true,
+    stdio: "ignore"
+  });
+  child.unref();
+  updateJob(stateDir, jobId, { pid: child.pid ?? null });
+  return jobId;
+}
+function getScriptPath() {
+  if (typeof __filename === "undefined" || !__filename) {
+    throw new Error(
+      "Unable to resolve script path: __filename is not defined. The companion must be run via the bundled CJS output."
+    );
+  }
+  return __filename;
+}
+function flagProvider(flags) {
+  const v = flags.provider;
+  return v === "copilot" || v === "codex" ? v : void 0;
+}
+async function runWorker(jobId, cwd) {
+  const stateDir = resolveStateDir(cwd);
+  const job = readJobFile(stateDir, jobId);
+  if (!job) {
+    console.error(`Worker: Job not found: ${jobId}`);
+    process.exit(1);
+  }
+  const { args, flags } = job.request;
+  updateJob(stateDir, jobId, {
+    status: "running",
+    phase: "starting",
+    startedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  appendLog(stateDir, jobId, "Worker started.");
+  process.on("exit", (code) => {
+    if (code === 0) return;
+    try {
+      markJobFailed(stateDir, jobId, `worker exited with code ${code}`);
+    } catch {
     }
   });
-  const turn = startTurnTimeout({ timeoutMs, progress, log });
-  let provider;
-  let result;
+  const stdoutChunks = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk, ...rest) => {
+    const text = typeof chunk === "string" ? chunk : chunk.toString();
+    stdoutChunks.push(text);
+    return originalStdoutWrite(chunk, ...rest);
+  });
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk, ...rest) => {
+    const text = typeof chunk === "string" ? chunk : chunk.toString();
+    if (text.trim()) appendLog(stateDir, jobId, text.trim());
+    return originalStderrWrite(chunk, ...rest);
+  });
+  const reasoning = flagString(flags, "reasoning");
+  const validEfforts = ["low", "medium", "high", "xhigh"];
+  const effort = reasoning && validEfforts.includes(reasoning) ? reasoning : void 0;
   try {
-    ({ provider, result } = await runAgentSession({
-      cwd,
-      flags: { provider: options.provider },
-      run: {
-        cwd,
-        prompt,
-        model: options.model,
-        // undefined → defaultModelFor fills it per provider
-        reasoning,
-        readOnly: true,
-        allowShell: false,
-        allowUrl: false,
-        systemMessage: buildSystemMessage("ask", { extraContext }),
-        appendLog: log,
-        progress,
-        signal: turn.signal
-      },
-      defaultModelFor: (id) => id === "copilot" ? COPILOT_DEFAULT_MODEL : void 0,
-      enforceQuota: () => {
-        if (!isPremiumModel(copilotModel)) {
-          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
-          return;
-        }
-        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
-        if (!gate.ok) {
-          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-          throw new Error(`Quota exhausted \u2014 ask not started. Resets at ${gate.resetAt || "unknown"}.`);
-        }
-        if ("warning" in gate && gate.warning) progress(gate.warning);
-      },
-      log
-    }));
+    if (job.request.command !== "review") {
+      throw new Error(`Background worker only supports 'review', got '${job.request.command}'.`);
+    }
+    const scope = flagString(flags, "scope");
+    const validScopes = ["auto", "working-tree", "branch"];
+    const reviewOpts = {
+      adversarial: flags.adversarial === true,
+      scope: scope && validScopes.includes(scope) ? scope : void 0,
+      base: flagString(flags, "base"),
+      focusText: extractTask(args, flags),
+      // provider + simplify MUST be threaded here — the foreground dispatcher
+      // (companion.ts) passes them, so dropping them makes a backgrounded
+      // `review --simplify` / `--provider codex` silently run the wrong
+      // lane/backend.
+      provider: flagProvider(flags),
+      simplify: flags.simplify === true,
+      model: flagString(flags, "model"),
+      reasoning: effort,
+      timeout: flagNumber(flags, "timeout"),
+      minQuota: flagNumber(flags, "min-quota"),
+      fix: flags.fix === true,
+      context: flagString(flags, "context"),
+      jobId
+    };
+    await runReview(cwd, reviewOpts);
+    const captured = stdoutChunks.join("").trim();
+    updateJob(stateDir, jobId, {
+      status: "completed",
+      phase: "done",
+      completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      result: captured
+    });
+    appendLog(stateDir, jobId, "Worker completed.");
   } catch (err) {
-    turn.clear();
-    const msg = err.message;
-    process.stderr.write(`Ask failed: ${msg}
-`);
-    log(`ask failed: ${msg}`);
-    throw err instanceof Error ? err : new Error(msg);
+    const message = err instanceof Error ? err.message : String(err);
+    markJobFailed(stateDir, jobId, message);
   } finally {
-    turn.clear();
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
   }
-  const body = result.lastAssistantMessage?.trim() || result.summary && result.summary.trim() || "_(The model returned an empty answer.)_";
-  const success = result.success && !turn.timedOut();
-  if (!success) {
-    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Ask did not complete successfully.";
-    process.stdout.write(`${body}
-`);
-    log(`ask failed: ${reason}`);
-    throw new Error(reason);
-  }
-  process.stdout.write(`${body.trim()}
-`);
-  if (result.usage?.kind === "copilot") {
-    const premium = result.usage.premiumRequestCost ?? 0;
-    progress(`Ask done \u2014 provider=${provider} model=${copilotModel} effort=${reasoning} premium-cost=${fmtNum(premium)}`);
-    log(`ask done: provider=${provider} premium=${premium}`);
-  } else if (result.usage?.kind === "codex") {
-    const u = result.usage;
-    progress(`Ask done \u2014 provider=${provider} effort=${reasoning} ${formatCodexUsage(u)}`);
-    log(`ask done: provider=${provider} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`);
-  } else {
-    progress(`Ask done \u2014 provider=${provider} effort=${reasoning}`);
-    log(`ask done: provider=${provider}`);
-  }
-  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
 // src/commands/fix.ts
-var import_node_child_process7 = require("node:child_process");
+var import_node_child_process8 = require("node:child_process");
 var import_node_fs8 = require("node:fs");
 var import_node_path8 = require("node:path");
-init_state();
 init_quota();
+init_state();
 
 // src/lib/worktree.ts
-var import_node_child_process6 = require("node:child_process");
+var import_node_child_process7 = require("node:child_process");
 var import_node_fs7 = require("node:fs");
 var import_node_path7 = require("node:path");
 function tryGit(args, cwd) {
-  const res = (0, import_node_child_process6.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  const res = (0, import_node_child_process7.spawnSync)("git", args, { cwd, encoding: "utf-8" });
   return {
     ok: res.status === 0,
     stdout: (res.stdout ?? "").trim(),
@@ -12409,23 +12532,28 @@ ${res.stderr}` : ""}`);
 }
 
 // src/commands/fix.ts
-var DEFAULT_MODEL2 = "claude-opus-4.8";
+var DEFAULT_MODEL = "claude-opus-4.8";
 var DEFAULT_EFFORT2 = "high";
 var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
 function tryGit2(args, cwd) {
-  const res = (0, import_node_child_process7.spawnSync)("git", args, { cwd, encoding: "utf-8" });
-  return { ok: res.status === 0, stdout: (res.stdout ?? "").trim(), stderr: (res.stderr ?? "").trim() };
+  const res = (0, import_node_child_process8.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  return {
+    ok: res.status === 0,
+    stdout: (res.stdout ?? "").trim(),
+    stderr: (res.stderr ?? "").trim()
+  };
 }
 function gitHead(cwd) {
   try {
-    return (0, import_node_child_process7.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
+    return (0, import_node_child_process8.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
   } catch {
     return "";
   }
 }
-function emit2(env) {
+function emit(env) {
   const json = JSON.stringify(env);
-  process.stdout.write(json + "\n");
+  process.stdout.write(`${json}
+`);
   return json;
 }
 function loadFindings(path) {
@@ -12478,7 +12606,8 @@ function parseApplyReport(text, findings) {
         if (s && typeof s === "object") {
           const id = s.id;
           const reason = s.reason;
-          if (typeof id === "string") skipped.push({ id, reason: typeof reason === "string" ? reason : "no reason given" });
+          if (typeof id === "string")
+            skipped.push({ id, reason: typeof reason === "string" ? reason : "no reason given" });
         }
       }
     }
@@ -12514,10 +12643,14 @@ async function runFix(cwd, options = {}) {
   const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS3;
   const minQuota = options.minQuota ?? 1;
-  const copilotModel = options.model ?? DEFAULT_MODEL2;
+  const copilotModel = options.model ?? DEFAULT_MODEL;
   const log = (msg) => appendLog(stateDir, jobId, msg);
   if (!options.findingsPath) {
-    emit2({ status: "failed", jobId, error: "Missing --findings <path>; provide the approved findings JSON." });
+    emit({
+      status: "failed",
+      jobId,
+      error: "Missing --findings <path>; provide the approved findings JSON."
+    });
     process.exit(1);
   }
   const findingsAbs = (0, import_node_path8.resolve)(cwd, options.findingsPath);
@@ -12525,11 +12658,15 @@ async function runFix(cwd, options = {}) {
   try {
     findings = loadFindings(findingsAbs);
   } catch (err) {
-    emit2({ status: "failed", jobId, error: `Could not read findings file ${findingsAbs}: ${err.message}` });
+    emit({
+      status: "failed",
+      jobId,
+      error: `Could not read findings file ${findingsAbs}: ${err.message}`
+    });
     process.exit(1);
   }
   if (findings.length === 0) {
-    emit2({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
+    emit({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
     process.exit(1);
   }
   log(`fix start: model=${copilotModel} findings=${findings.length} source=${findingsAbs}`);
@@ -12537,7 +12674,7 @@ async function runFix(cwd, options = {}) {
   try {
     repoRoot = resolveRepoRoot(cwd);
   } catch (err) {
-    emit2({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
+    emit({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
     process.exit(1);
   }
   let preFixSnapshot = false;
@@ -12550,7 +12687,7 @@ async function runFix(cwd, options = {}) {
     envelopeDone = true;
     turn.clear();
     progress("Received interrupt signal; aborting fix session.");
-    emit2({ status: "failed", jobId, error: "Interrupted by signal" });
+    emit({ status: "failed", jobId, error: "Interrupted by signal" });
   };
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
@@ -12581,7 +12718,7 @@ async function runFix(cwd, options = {}) {
         signal: turn.signal
       },
       onInterrupt,
-      defaultModelFor: (id) => id === "copilot" ? DEFAULT_MODEL2 : void 0,
+      defaultModelFor: (id) => id === "copilot" ? DEFAULT_MODEL : void 0,
       enforceQuota: () => {
         if (!isPremiumModel(copilotModel)) {
           log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
@@ -12592,7 +12729,7 @@ async function runFix(cwd, options = {}) {
           log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
           envelopeDone = true;
           turn.clear();
-          emit2({
+          emit({
             status: "blocked",
             reason: gate.reason,
             resetAt: gate.resetAt,
@@ -12610,10 +12747,15 @@ async function runFix(cwd, options = {}) {
         const dirty = tryGit2(["status", "--porcelain"], repoRoot);
         if (dirty.ok && dirty.stdout.trim()) {
           tryGit2(["add", "-A"], repoRoot);
-          const c = tryGit2(["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"], repoRoot);
+          const c = tryGit2(
+            ["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"],
+            repoRoot
+          );
           preFixSnapshot = c.ok;
           if (c.ok) {
-            progress("Committed pre-existing changes as a baseline snapshot before applying fixes.");
+            progress(
+              "Committed pre-existing changes as a baseline snapshot before applying fixes."
+            );
             log("pre-fix snapshot commit created");
           } else {
             log(`pre-fix snapshot commit failed: ${c.stderr}`);
@@ -12622,7 +12764,7 @@ async function runFix(cwd, options = {}) {
         if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
           envelopeDone = true;
           turn.clear();
-          emit2({
+          emit({
             status: "failed",
             jobId,
             error: "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry."
@@ -12633,7 +12775,12 @@ async function runFix(cwd, options = {}) {
         if (!baselineCommit) {
           envelopeDone = true;
           turn.clear();
-          emit2({ status: "failed", jobId, error: "fix requires at least one commit to diff against (repository has no commits yet).", ...snapshotInfo() });
+          emit({
+            status: "failed",
+            jobId,
+            error: "fix requires at least one commit to diff against (repository has no commits yet).",
+            ...snapshotInfo()
+          });
           process.exit(1);
         }
       },
@@ -12643,7 +12790,7 @@ async function runFix(cwd, options = {}) {
     turn.clear();
     if (!envelopeDone) {
       envelopeDone = true;
-      emit2({ status: "failed", jobId, error: err.message, ...snapshotInfo() });
+      emit({ status: "failed", jobId, error: err.message, ...snapshotInfo() });
     }
     process.exit(1);
   }
@@ -12652,14 +12799,19 @@ async function runFix(cwd, options = {}) {
   if (!success) {
     if (!envelopeDone) {
       envelopeDone = true;
-      emit2({ status: "failed", jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.", ...snapshotInfo() });
+      emit({
+        status: "failed",
+        jobId,
+        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.",
+        ...snapshotInfo()
+      });
     }
     process.exit(0);
   }
   envelopeDone = true;
   const report = parseApplyReport(result.lastAssistantMessage, findings);
   const diff = computeStagedDiff(repoRoot, baselineCommit);
-  const summary = result.summary && result.summary.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
+  const summary = result.summary?.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
   const premium = result.usage?.kind === "copilot" ? result.usage.premiumRequestCost ?? 0 : 0;
   const usedModel = provider === "copilot" ? copilotModel : options.model ?? "codex";
   const envelope = {
@@ -12677,23 +12829,25 @@ async function runFix(cwd, options = {}) {
     model: usedModel,
     quotaRemaining: summarize(readSnapshot(stateDir))
   };
-  const envelopeJson = emit2(envelope);
+  const envelopeJson = emit(envelope);
   if (options.writePath) {
     const outPath = (0, import_node_path8.resolve)(cwd, options.writePath);
     (0, import_node_fs8.mkdirSync)((0, import_node_path8.dirname)(outPath), { recursive: true });
-    (0, import_node_fs8.writeFileSync)(outPath, envelopeJson + "\n", "utf-8");
+    (0, import_node_fs8.writeFileSync)(outPath, `${envelopeJson}
+`, "utf-8");
     progress(`Report saved to ${outPath}`);
   }
   progress(
     `Fix done \u2014 provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`
   );
-  log(`fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
+  log(
+    `fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`
+  );
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
-// src/commands/status.ts
+// src/commands/result.ts
 init_state();
-init_quota();
 
 // src/lib/zombie.ts
 var import_node_fs9 = require("node:fs");
@@ -12739,7 +12893,222 @@ function sweepZombieJobs(stateDir) {
   return reaped;
 }
 
+// src/commands/result.ts
+async function runResult(cwd, options = {}) {
+  const stateDir = resolveStateDir(cwd);
+  sweepZombieJobs(stateDir);
+  let jobId = options.jobId;
+  if (!jobId) {
+    const sessionId = getSessionId();
+    const jobs = listJobs(stateDir, sessionId);
+    const finished = jobs.find((j) => j.status === "completed" || j.status === "failed");
+    if (!finished) {
+      console.error("No completed jobs found.");
+      process.exit(1);
+    }
+    jobId = finished.id;
+  }
+  const job = readJobFile(stateDir, jobId);
+  if (!job) {
+    console.error(`Job not found: ${jobId}`);
+    process.exit(1);
+  }
+  if (job.status === "queued" || job.status === "running") {
+    console.error(`Job ${jobId} is still ${job.status}. Use /harry:status to check progress.`);
+    process.exit(1);
+  }
+  if (options.json) {
+    console.log(
+      JSON.stringify(
+        {
+          id: job.id,
+          kind: job.kind,
+          status: job.status,
+          result: job.result,
+          errorMessage: job.errorMessage
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+  if (job.status === "failed") {
+    console.log(`## Job Failed: ${job.id}
+
+**Error:** ${job.errorMessage ?? "Unknown error"}`);
+    return;
+  }
+  if (job.result) {
+    console.log(job.result);
+  } else {
+    console.log("Job completed but produced no output.");
+  }
+}
+
+// src/commands/setup.ts
+init_dist();
+init_auth();
+init_copilot_auth();
+init_quota();
+init_state();
+init_version();
+var DEFAULT_MODEL2 = "claude-opus-4.8";
+async function runSetup(options = {}) {
+  const cwd = options.cwd ?? process.cwd();
+  const stateDir = resolveStateDir(cwd);
+  const isCheck = options.check === true;
+  const { id } = await resolveActiveProvider(
+    { provider: options.provider },
+    cwd,
+    isCheck ? { probe: async () => false } : {}
+  );
+  if (id === "codex") {
+    await runCodexSetup(cwd, options, isCheck);
+    return;
+  }
+  const client = new CopilotClient({ workingDirectory: cwd });
+  try {
+    await client.start();
+  } catch (err) {
+    const msg = `Failed to start Copilot CLI: ${err.message}`;
+    if (isCheck) {
+      console.error(
+        `[copilot] ${msg} \u2014 run \`gh auth login\` and ensure @github/copilot is installed.`
+      );
+      return;
+    }
+    emit2(options, {
+      status: "error",
+      defaultModel: DEFAULT_MODEL2,
+      defaultModelAvailable: false,
+      models: [],
+      claudeModels: [],
+      message: msg
+    });
+    return;
+  }
+  const auth = await checkAuth(client);
+  if (!auth.ok) {
+    await client.stop().catch(() => {
+    });
+    if (isCheck) {
+      console.error(`[copilot] ${auth.message}`);
+      return;
+    }
+    emit2(options, {
+      status: "error",
+      authType: auth.authType,
+      defaultModel: DEFAULT_MODEL2,
+      defaultModelAvailable: false,
+      models: [],
+      claudeModels: [],
+      message: auth.message
+    });
+    return;
+  }
+  let models = [];
+  try {
+    models = await client.listModels();
+  } catch (err) {
+    if (!isCheck) console.error(`[copilot] listModels failed: ${err.message}`);
+  }
+  const modelIds = models.map((m) => m.id);
+  const claudeModels = modelIds.filter((id2) => id2.toLowerCase().includes("claude"));
+  const defaultAvailable = modelIds.includes(DEFAULT_MODEL2);
+  await fetchQuota(client, stateDir).catch(() => null);
+  await client.stop().catch(() => {
+  });
+  if (isCheck) {
+    return;
+  }
+  const report = {
+    status: "ok",
+    authType: auth.authType,
+    login: auth.login,
+    host: auth.host,
+    defaultModel: DEFAULT_MODEL2,
+    defaultModelAvailable: defaultAvailable,
+    models: modelIds,
+    claudeModels,
+    quota: summarize(readSnapshot(stateDir))
+  };
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  const lines = [];
+  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push("");
+  lines.push(
+    `**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ""})`
+  );
+  if (auth.host) lines.push(`**Host:** ${auth.host}`);
+  lines.push(
+    `**Default model:** \`${DEFAULT_MODEL2}\` ${defaultAvailable ? "(available)" : "(NOT listed \u2014 pass --model to override)"}`
+  );
+  console.log(lines.join("\n"));
+}
+async function runCodexSetup(cwd, options, isCheck) {
+  if (isCheck) {
+    return;
+  }
+  const availability = getCodexAvailability(cwd);
+  const auth = await getCodexAuthStatus(cwd);
+  if (options.json) {
+    console.log(
+      JSON.stringify(
+        {
+          status: auth.loggedIn ? "ok" : "error",
+          provider: "codex",
+          codex: {
+            available: availability.available,
+            availabilityDetail: availability.detail,
+            loggedIn: auth.loggedIn,
+            authMethod: auth.authMethod,
+            detail: auth.detail
+          }
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+  const lines = [];
+  lines.push(`## Codex Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push("");
+  lines.push(`**Provider:** Codex`);
+  lines.push(
+    `**Availability:** ${availability.available ? "available" : "unavailable"} \u2014 ${availability.detail}`
+  );
+  lines.push(
+    `**Status:** ${auth.loggedIn ? "Authenticated" : "Not authenticated"}${auth.authMethod ? ` (${auth.authMethod})` : ""}`
+  );
+  lines.push(`**Detail:** ${auth.detail}`);
+  if (!auth.loggedIn) {
+    lines.push("");
+    lines.push("### Next steps");
+    lines.push("- Run `codex login` to authenticate, then re-run setup.");
+  }
+  console.log(lines.join("\n"));
+}
+function emit2(options, report) {
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  const lines = [];
+  lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
+  lines.push("");
+  lines.push(`**Status:** ${report.status === "ok" ? "Authenticated" : "Not authenticated"}`);
+  if (report.message) lines.push(`**Message:** ${report.message}`);
+  console.log(lines.join("\n"));
+}
+
 // src/commands/status.ts
+init_quota();
+init_state();
 async function runStatus(cwd, options = {}) {
   const stateDir = resolveStateDir(cwd);
   sweepZombieJobs(stateDir);
@@ -12763,11 +13132,13 @@ async function runStatus(cwd, options = {}) {
   const quota = summarize(snapshot);
   const codexRateLimits = readCodexRateLimits(stateDir);
   if (options.json) {
-    console.log(JSON.stringify(
-      { quota, ...codexRateLimits ? { codex: codexRateLimits } : {}, jobs },
-      null,
-      2
-    ));
+    console.log(
+      JSON.stringify(
+        { quota, ...codexRateLimits ? { codex: codexRateLimits } : {}, jobs },
+        null,
+        2
+      )
+    );
     return;
   }
   const sections = [];
@@ -12812,11 +13183,14 @@ function renderJobsTable(rows) {
     id: Math.max(headers.id.length, ...rows.map((r) => r.id.length)),
     kind: Math.max(headers.kind.length, ...rows.map((r) => r.kind.length)),
     status: Math.max(headers.status.length, ...rows.map((r) => r.status.length)),
-    task: Math.min(TASK_MAX_WIDTH, Math.max(headers.task.length, ...rows.map((r) => r.task.length)))
+    task: Math.min(
+      TASK_MAX_WIDTH,
+      Math.max(headers.task.length, ...rows.map((r) => r.task.length))
+    )
   };
   const border = (l, m, r) => l + "\u2500".repeat(widths.id + 2) + m + "\u2500".repeat(widths.kind + 2) + m + "\u2500".repeat(widths.status + 2) + m + "\u2500".repeat(widths.task + 2) + r;
   const renderRow = (r) => {
-    const task = r.task.length > widths.task ? r.task.slice(0, widths.task - 1) + "\u2026" : r.task.padEnd(widths.task);
+    const task = r.task.length > widths.task ? `${r.task.slice(0, widths.task - 1)}\u2026` : r.task.padEnd(widths.task);
     return `\u2502 ${r.id.padEnd(widths.id)} \u2502 ${r.kind.padEnd(widths.kind)} \u2502 ${r.status.padEnd(widths.status)} \u2502 ${task} \u2502`;
   };
   return [
@@ -12845,199 +13219,6 @@ function renderJobDetail(job, logTail) {
     sections.push("```");
   }
   return sections.join("\n");
-}
-
-// src/commands/result.ts
-init_state();
-async function runResult(cwd, options = {}) {
-  const stateDir = resolveStateDir(cwd);
-  sweepZombieJobs(stateDir);
-  let jobId = options.jobId;
-  if (!jobId) {
-    const sessionId = getSessionId();
-    const jobs = listJobs(stateDir, sessionId);
-    const finished = jobs.find((j) => j.status === "completed" || j.status === "failed");
-    if (!finished) {
-      console.error("No completed jobs found.");
-      process.exit(1);
-    }
-    jobId = finished.id;
-  }
-  const job = readJobFile(stateDir, jobId);
-  if (!job) {
-    console.error(`Job not found: ${jobId}`);
-    process.exit(1);
-  }
-  if (job.status === "queued" || job.status === "running") {
-    console.error(`Job ${jobId} is still ${job.status}. Use /harry:status to check progress.`);
-    process.exit(1);
-  }
-  if (options.json) {
-    console.log(JSON.stringify({
-      id: job.id,
-      kind: job.kind,
-      status: job.status,
-      result: job.result,
-      errorMessage: job.errorMessage
-    }, null, 2));
-    return;
-  }
-  if (job.status === "failed") {
-    console.log(`## Job Failed: ${job.id}
-
-**Error:** ${job.errorMessage ?? "Unknown error"}`);
-    return;
-  }
-  if (job.result) {
-    console.log(job.result);
-  } else {
-    console.log("Job completed but produced no output.");
-  }
-}
-
-// src/commands/background.ts
-var import_node_child_process8 = require("node:child_process");
-init_state();
-
-// src/lib/args.ts
-function extractTask(args, flags) {
-  const positional = args.join(" ").trim();
-  if (positional) return positional;
-  const flag = flags["task"];
-  return typeof flag === "string" ? flag.trim() : "";
-}
-function flagString(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number(v.trim());
-  return Number.isFinite(n) && n > 0 ? n : void 0;
-}
-
-// src/commands/background.ts
-function enqueueBackground(command, args, flags, cwd) {
-  if (command !== "review") {
-    throw new Error(`Background execution is only supported for 'review', got '${command}'.`);
-  }
-  const stateDir = resolveStateDir(cwd);
-  const jobId = generateJobId();
-  const summary = extractTask(args, flags).slice(0, 80) || command;
-  const job = {
-    id: jobId,
-    kind: command,
-    title: `harry ${command}`,
-    summary,
-    status: "queued",
-    phase: "queued",
-    cwd,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    sessionId: getSessionId(),
-    request: { command, args, flags, cwd }
-  };
-  createJob(stateDir, job);
-  appendLog(stateDir, jobId, `Queued for background execution: ${command} "${summary}"`);
-  const scriptPath = getScriptPath();
-  const child = (0, import_node_child_process8.spawn)(process.execPath, [scriptPath, "_worker", "--job-id", jobId, "--cwd", cwd], {
-    cwd,
-    env: { ...process.env, HARRY_SESSION_ID: getSessionId() ?? "" },
-    detached: true,
-    stdio: "ignore"
-  });
-  child.unref();
-  updateJob(stateDir, jobId, { pid: child.pid ?? null });
-  return jobId;
-}
-function getScriptPath() {
-  if (typeof __filename === "undefined" || !__filename) {
-    throw new Error("Unable to resolve script path: __filename is not defined. The companion must be run via the bundled CJS output.");
-  }
-  return __filename;
-}
-function flagProvider(flags) {
-  const v = flags["provider"];
-  return v === "copilot" || v === "codex" ? v : void 0;
-}
-async function runWorker(jobId, cwd) {
-  const stateDir = resolveStateDir(cwd);
-  const job = readJobFile(stateDir, jobId);
-  if (!job) {
-    console.error(`Worker: Job not found: ${jobId}`);
-    process.exit(1);
-  }
-  const { args, flags } = job.request;
-  updateJob(stateDir, jobId, {
-    status: "running",
-    phase: "starting",
-    startedAt: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  appendLog(stateDir, jobId, "Worker started.");
-  process.on("exit", (code) => {
-    if (code === 0) return;
-    try {
-      markJobFailed(stateDir, jobId, `worker exited with code ${code}`);
-    } catch {
-    }
-  });
-  const stdoutChunks = [];
-  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = ((chunk, ...rest) => {
-    const text = typeof chunk === "string" ? chunk : chunk.toString();
-    stdoutChunks.push(text);
-    return originalStdoutWrite(chunk, ...rest);
-  });
-  const originalStderrWrite = process.stderr.write.bind(process.stderr);
-  process.stderr.write = ((chunk, ...rest) => {
-    const text = typeof chunk === "string" ? chunk : chunk.toString();
-    if (text.trim()) appendLog(stateDir, jobId, text.trim());
-    return originalStderrWrite(chunk, ...rest);
-  });
-  const reasoning = flagString(flags, "reasoning");
-  const validEfforts = ["low", "medium", "high", "xhigh"];
-  const effort = reasoning && validEfforts.includes(reasoning) ? reasoning : void 0;
-  try {
-    if (job.request.command !== "review") {
-      throw new Error(`Background worker only supports 'review', got '${job.request.command}'.`);
-    }
-    const scope = flagString(flags, "scope");
-    const validScopes = ["auto", "working-tree", "branch"];
-    const reviewOpts = {
-      adversarial: flags["adversarial"] === true,
-      scope: scope && validScopes.includes(scope) ? scope : void 0,
-      base: flagString(flags, "base"),
-      focusText: extractTask(args, flags),
-      // provider + simplify MUST be threaded here — the foreground dispatcher
-      // (companion.ts) passes them, so dropping them makes a backgrounded
-      // `review --simplify` / `--provider codex` silently run the wrong
-      // lane/backend.
-      provider: flagProvider(flags),
-      simplify: flags["simplify"] === true,
-      model: flagString(flags, "model"),
-      reasoning: effort,
-      timeout: flagNumber(flags, "timeout"),
-      minQuota: flagNumber(flags, "min-quota"),
-      fix: flags["fix"] === true,
-      context: flagString(flags, "context"),
-      jobId
-    };
-    await runReview(cwd, reviewOpts);
-    const captured = stdoutChunks.join("").trim();
-    updateJob(stateDir, jobId, {
-      status: "completed",
-      phase: "done",
-      completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      result: captured
-    });
-    appendLog(stateDir, jobId, "Worker completed.");
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    markJobFailed(stateDir, jobId, message);
-  } finally {
-    process.stdout.write = originalStdoutWrite;
-    process.stderr.write = originalStderrWrite;
-  }
 }
 
 // src/companion.ts
@@ -13103,7 +13284,9 @@ function parseArgs(argv) {
           } else if (lc === "false" || lc === "0" || lc === "no") {
             flags[key2] = false;
           } else {
-            throw new Error(`Flag --${key2} is boolean and cannot take value "${value}". Use --${key2} or --no-${key2}.`);
+            throw new Error(
+              `Flag --${key2} is boolean and cannot take value "${value}". Use --${key2} or --no-${key2}.`
+            );
           }
           continue;
         }
@@ -13145,14 +13328,14 @@ async function main() {
     case "setup": {
       const provider = flagEnum(flags, "provider", ["copilot", "codex"]);
       await runSetup({
-        check: flags["check"] === true,
-        json: flags["json"] === true,
+        check: flags.check === true,
+        json: flags.json === true,
         provider
       });
       break;
     }
     case "review": {
-      if (flags["full"] !== void 0) {
+      if (flags.full !== void 0) {
         throw new Error(
           "--full is handled by the /review command orchestrator, not the CLI. Run the simplify/adversarial reviews separately, or use /review --full."
         );
@@ -13167,14 +13350,14 @@ async function main() {
       const scope = flagEnum(flags, "scope", validScopes);
       const reasoning = flagEnum(flags, "reasoning", validEfforts);
       const provider = flagEnum(flags, "provider", ["copilot", "codex"]);
-      if (flags["background"] === true) {
+      if (flags.background === true) {
         const jobId = enqueueBackground("review", args, flags, import_node_process3.default.cwd());
         console.log(JSON.stringify({ status: "queued", jobId }));
         break;
       }
       await runReview(import_node_process3.default.cwd(), {
-        adversarial: flags["adversarial"] === true,
-        simplify: flags["simplify"] === true,
+        adversarial: flags.adversarial === true,
+        simplify: flags.simplify === true,
         scope,
         base: flagString(flags, "base"),
         focusText: args.join(" "),
@@ -13183,7 +13366,7 @@ async function main() {
         reasoning,
         timeout: flagNumber(flags, "timeout"),
         minQuota: flagNumber(flags, "min-quota"),
-        fix: flags["fix"] === true,
+        fix: flags.fix === true,
         context: flagString(flags, "context")
       });
       break;
@@ -13223,14 +13406,14 @@ async function main() {
     case "status":
       await runStatus(import_node_process3.default.cwd(), {
         jobId: args[0],
-        all: flags["all"] === true,
-        json: flags["json"] === true
+        all: flags.all === true,
+        json: flags.json === true
       });
       break;
     case "result":
       await runResult(import_node_process3.default.cwd(), {
         jobId: args[0],
-        json: flags["json"] === true
+        json: flags.json === true
       });
       break;
     // Internal: background worker entry point.
@@ -13258,6 +13441,6 @@ async function main() {
 main().catch((err) => {
   console.error(`
 Fatal error: ${err.message}`);
-  if (import_node_process3.default.env["DEBUG"]) console.error(err.stack);
+  if (import_node_process3.default.env.DEBUG) console.error(err.stack);
   import_node_process3.default.exit(1);
 });

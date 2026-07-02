@@ -5,6 +5,32 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-02
+
+### Added
+
+- Restored the brainstorming **Visual Companion** — a zero-dependency local
+  browser companion for genuinely visual design questions (mockups, wireframes,
+  side-by-side layout comparisons), offered just-in-time.
+- **Shared review rubric** (`references/review-rubric.md`): the in-house reviewer
+  subagent now reviews against explicit dimensions (spec compliance, code
+  quality, YAGNI/altitude, test hygiene) instead of an unnamed "shared rubric".
+
+### Changed
+
+- `executing`: a dispatched implementer/fixer now picks its model by **role and
+  task nature** — capable by default (the role does judgment/exploration),
+  cheaper only for mechanical/transcription work — and always sets it explicitly
+  instead of silently inheriting the session model.
+- `HARRY.md` §5: AI-assisted commits keep the `Co-Authored-By: Claude` trailer
+  (previously stripped); the worktree law is rescoped from "any mutation" to
+  work that can collide — a lone trivial edit needn't isolate.
+
+### Fixed
+
+- `.gitignore` now covers the native harness worktree path (`.claude/worktrees/`),
+  so a lint run no longer breaks when a worktree is present.
+
 ## [0.3.1] - 2026-06-30
 
 ### Changed
@@ -56,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `finishing` runs the full wind-down tail even on a pre-decided merge.
 - Tooling: Biome linter/formatter, TypeScript 7, dependency bumps.
 
+[0.4.0]: https://github.com/kiraxie/harry/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/kiraxie/harry/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kiraxie/harry/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kiraxie/harry/releases/tag/v0.2.0
