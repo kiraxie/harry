@@ -34,16 +34,18 @@ CC executes inline. No subagent, no per-task review.
 
 Implementer = **CC's own subagents** (not an external delegate). Each gets isolated, precisely-built context — never your session history — via **file handoffs**, plus an explicit output contract. Run tasks sequentially; only parallelize independent tasks across worktrees (HARRY.md §5).
 
+**Model by role — always specify it; an omitted model silently inherits the session's.** Implementer and fixer default to the **most capable available model** (currently `opus`): the role does judgment/exploration, and a weaker model flails and burns more turns than it saves (turn count beats token price). Route to a cheaper model (`sonnet`) ONLY when the task's *nature* is mechanical/transcription — the plan already carries the complete code, or it's a single-file rote change with no design decision to make. Tier (Standard/Major) does NOT decide this — a Major task that's mechanical (e.g. the same field added across 8 CRUD files) still routes cheap; a Standard task that's subtle (e.g. a 2-file concurrency fix) still routes capable. Reviewers are routed separately (step 3), already tier-scaled.
+
 Per task:
 
 1. **Brief.** Extract the task's full text to a brief file (`.local/ledger/task-N-brief.md`). The dispatch prompt carries: where the task fits (one line), the brief path ("read first — your requirements, exact values verbatim"), interfaces/decisions from earlier tasks the brief can't know, your resolution of any ambiguity, and the report-file path + report contract. Exact values live only in the brief.
-2. **Dispatch implementer.** Fresh subagent. It implements, follows TDD per tier (Standard: one runnable check; Major: red-green + watch-it-fail), tests, commits, self-reviews, writes its full report to the report file, and returns only: status, commits, one-line test summary, concerns.
+2. **Dispatch implementer** (model per the routing above). Fresh subagent. It implements, follows TDD per tier (Standard: one runnable check; Major: red-green + watch-it-fail), tests, commits, self-reviews, writes its full report to the report file, and returns only: status, commits, one-line test summary, concerns.
    - Status handling: **DONE** → review. **DONE_WITH_CONCERNS** → read concerns; address correctness/scope before review. **NEEDS_CONTEXT** → provide it, re-dispatch. **BLOCKED** → stop and ask, don't guess (more context / stronger model / split task / escalate). Never silently retry the same model unchanged.
 3. **Per-task review.** Spec compliance + code quality, scoped to this task's diff (write the diff to a file; hand the reviewer the brief, the report, the diff, and the binding Global Constraints verbatim). Route:
    - **Major** → harry's `/review` (frontier).
    - **Standard, or Copilot/premium quota < 5%** → a free CC reviewer subagent on the shared rubric.
    - Do not pre-judge findings or tell the reviewer what not to flag.
-4. **Fix loop.** Critical/Important findings → dispatch a fix subagent (carries the implementer contract: re-runs covering tests, reports command + output). Re-review. Repeat until spec ✅ and quality approved. Minor findings → record in the ledger for final triage. A finding that conflicts with the plan → human decides (present finding + plan text).
+4. **Fix loop.** Critical/Important findings → dispatch a fix subagent (model per the routing above; carries the implementer contract: re-runs covering tests, reports command + output). Re-review. Repeat until spec ✅ and quality approved. Minor findings → record in the ledger for final triage. A finding that conflicts with the plan → human decides (present finding + plan text).
 5. **Mark complete.** Append one line to the ledger: `Task N: complete (commits <base7>..<head7>, review clean)`. Do not check in with the human between tasks — execute the whole plan; stop only for BLOCKED or genuine ambiguity.
 
 After all tasks:
