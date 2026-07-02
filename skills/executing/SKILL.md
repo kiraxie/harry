@@ -41,7 +41,7 @@ Per task:
    - Status handling: **DONE** → review. **DONE_WITH_CONCERNS** → read concerns; address correctness/scope before review. **NEEDS_CONTEXT** → provide it, re-dispatch. **BLOCKED** → stop and ask, don't guess (more context / stronger model / split task / escalate). Never silently retry the same model unchanged.
 3. **Per-task review.** Spec compliance + code quality, scoped to this task's diff (write the diff to a file; hand the reviewer the brief, the report, the diff, and the binding Global Constraints verbatim). Route:
    - **Major** → harry's `/review` (frontier).
-   - **Standard, or Copilot/premium quota < 5%** → a free CC reviewer subagent on the shared rubric.
+   - **Standard, or Copilot/premium quota < 5%** → a free CC reviewer subagent on the shared rubric (`references/review-rubric.md`).
    - Do not pre-judge findings or tell the reviewer what not to flag.
 4. **Fix loop.** Critical/Important findings → dispatch a fix subagent (carries the implementer contract: re-runs covering tests, reports command + output). Re-review. Repeat until spec ✅ and quality approved. Minor findings → record in the ledger for final triage. A finding that conflicts with the plan → human decides (present finding + plan text).
 5. **Mark complete.** Append one line to the ledger: `Task N: complete (commits <base7>..<head7>, review clean)`. Do not check in with the human between tasks — execute the whole plan; stop only for BLOCKED or genuine ambiguity.
