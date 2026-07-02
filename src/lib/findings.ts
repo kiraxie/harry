@@ -8,7 +8,7 @@
  * them in a write-enabled session.
  */
 
-export type FindingSeverity = 'blocker' | 'major' | 'minor';
+export type FindingSeverity = "blocker" | "major" | "minor";
 
 export interface Finding {
   /** Stable kebab-case id so CC and fix can reference the same finding. */
@@ -25,7 +25,7 @@ export interface Finding {
   suggestedFix: string;
 }
 
-const VALID_SEVERITIES: ReadonlySet<string> = new Set(['blocker', 'major', 'minor']);
+const VALID_SEVERITIES: ReadonlySet<string> = new Set(["blocker", "major", "minor"]);
 
 /**
  * Extract the last fenced ```json block from free-form model output and parse
@@ -40,7 +40,7 @@ export function extractJsonBlock(text: string): unknown {
   const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
   const fenced: string[] = [];
   for (const m of text.matchAll(fenceRe)) {
-    if (m[1] && m[1].trim()) fenced.push(m[1]);
+    if (m[1]?.trim()) fenced.push(m[1]);
   }
   const candidates = fenced.reverse();
   // Fallback for un-fenced payloads: the last top-level array AND object span
@@ -53,7 +53,7 @@ export function extractJsonBlock(text: string): unknown {
   // Try the longest (outermost) span first: for an apply-report object the
   // `{…}` span encloses inner `[…]` arrays, so length-desc avoids grabbing a
   // trailing inner `[]` and parsing it as the whole payload.
-  const spans = [lastSpan('[', ']'), lastSpan('{', '}')]
+  const spans = [lastSpan("[", "]"), lastSpan("{", "}")]
     .filter((s): s is string => !!s)
     .sort((a, b) => b.length - a.length);
   candidates.push(...spans);
@@ -75,34 +75,42 @@ export function extractJsonBlock(text: string): unknown {
 export function normalizeFindings(parsed: unknown): Finding[] {
   const arr = Array.isArray(parsed)
     ? parsed
-    : parsed && typeof parsed === 'object' && Array.isArray((parsed as { findings?: unknown }).findings)
+    : parsed &&
+        typeof parsed === "object" &&
+        Array.isArray((parsed as { findings?: unknown }).findings)
       ? (parsed as { findings: unknown[] }).findings
       : [];
   const out: Finding[] = [];
   const seen = new Set<string>();
   for (let i = 0; i < arr.length; i++) {
     const raw = arr[i];
-    if (!raw || typeof raw !== 'object') continue;
+    if (!raw || typeof raw !== "object") continue;
     const r = raw as Record<string, unknown>;
-    const file = typeof r['file'] === 'string' ? r['file'] : '';
-    const title = typeof r['title'] === 'string' ? r['title'] : '';
+    const file = typeof r.file === "string" ? r.file : "";
+    const title = typeof r.title === "string" ? r.title : "";
     if (!file || !title) continue;
-    const sev = typeof r['severity'] === 'string' && VALID_SEVERITIES.has(r['severity'])
-      ? (r['severity'] as FindingSeverity)
-      : 'major';
+    const sev =
+      typeof r.severity === "string" && VALID_SEVERITIES.has(r.severity)
+        ? (r.severity as FindingSeverity)
+        : "major";
     // Ensure ids are unique — a model-supplied id can collide with a generated
     // `finding-N`, and duplicate ids break per-finding approval/accounting.
-    let id = typeof r['id'] === 'string' && r['id'].trim() ? r['id'].trim() : `finding-${i + 1}`;
+    let id = typeof r.id === "string" && r.id.trim() ? r.id.trim() : `finding-${i + 1}`;
     if (seen.has(id)) id = `${id}-${i + 1}`;
     seen.add(id);
     out.push({
       id,
       file,
-      line: typeof r['line'] === 'string' ? r['line'] : typeof r['line'] === 'number' ? String(r['line']) : undefined,
+      line:
+        typeof r.line === "string"
+          ? r.line
+          : typeof r.line === "number"
+            ? String(r.line)
+            : undefined,
       severity: sev,
       title,
-      rationale: typeof r['rationale'] === 'string' ? r['rationale'] : '',
-      suggestedFix: typeof r['suggestedFix'] === 'string' ? r['suggestedFix'] : '',
+      rationale: typeof r.rationale === "string" ? r.rationale : "",
+      suggestedFix: typeof r.suggestedFix === "string" ? r.suggestedFix : "",
     });
   }
   return out;

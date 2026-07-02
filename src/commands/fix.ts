@@ -21,19 +21,17 @@
  * are reported under `skipped` rather than failing the whole run.
  */
 
-import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-
-import type { ReasoningEffort } from '../lib/provider.ts';
-import { resolveStateDir, generateJobId, appendLog, jobLogPath } from '../lib/state.js';
-import { readSnapshot, evaluateGate, summarize, isPremiumModel } from '../lib/quota.js';
-import { resolveRepoRoot } from '../lib/worktree.js';
-import { extractJsonBlock, normalizeFindings, type Finding } from '../lib/findings.js';
-import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
-import { runAgentSession } from '../lib/run-agent-session.ts';
-import { makeProgress, startTurnTimeout } from '../lib/turn-runtime.ts';
-import type { ProviderId } from '../lib/provider.ts';
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { extractJsonBlock, type Finding, normalizeFindings } from "../lib/findings.js";
+import type { ProviderId, ReasoningEffort, RunResult } from "../lib/provider.ts";
+import { evaluateGate, isPremiumModel, readSnapshot, summarize } from "../lib/quota.js";
+import { runAgentSession } from "../lib/run-agent-session.ts";
+import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.js";
+import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.js";
+import { makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
+import { resolveRepoRoot } from "../lib/worktree.js";
 
 export interface FixOptions {
   /** Path to the approved-findings JSON (array, or a {findings:[...]} object). */
@@ -54,25 +52,29 @@ export interface FixOptions {
   jobId?: string;
 }
 
-const DEFAULT_MODEL = 'claude-opus-4.8';
-const DEFAULT_EFFORT: ReasoningEffort = 'high';
+const DEFAULT_MODEL = "claude-opus-4.8";
+const DEFAULT_EFFORT: ReasoningEffort = "high";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 
 function tryGit(args: string[], cwd: string): { ok: boolean; stdout: string; stderr: string } {
-  const res = spawnSync('git', args, { cwd, encoding: 'utf-8' });
-  return { ok: res.status === 0, stdout: (res.stdout ?? '').trim(), stderr: (res.stderr ?? '').trim() };
+  const res = spawnSync("git", args, { cwd, encoding: "utf-8" });
+  return {
+    ok: res.status === 0,
+    stdout: (res.stdout ?? "").trim(),
+    stderr: (res.stderr ?? "").trim(),
+  };
 }
 
 function gitHead(cwd: string): string {
   try {
-    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
   } catch {
-    return '';
+    return "";
   }
 }
 
 interface FixedEnvelope {
-  status: 'fixed';
+  status: "fixed";
   jobId: string;
   summary: string;
   /** Baseline commit fixes were applied on top of (after pre-fix snapshot). */
@@ -92,7 +94,7 @@ interface FixedEnvelope {
 }
 
 interface FailedEnvelope {
-  status: 'failed';
+  status: "failed";
   jobId: string;
   error: string;
   // beforeRun may have already committed the user's uncommitted work as a
@@ -103,7 +105,7 @@ interface FailedEnvelope {
 }
 
 interface BlockedEnvelope {
-  status: 'blocked';
+  status: "blocked";
   reason: string;
   resetAt?: string;
   remaining?: number;
@@ -114,12 +116,12 @@ type Envelope = FixedEnvelope | FailedEnvelope | BlockedEnvelope;
 
 function emit(env: Envelope): string {
   const json = JSON.stringify(env);
-  process.stdout.write(json + '\n');
+  process.stdout.write(`${json}\n`);
   return json;
 }
 
 function loadFindings(path: string): Finding[] {
-  const raw = readFileSync(path, 'utf-8');
+  const raw = readFileSync(path, "utf-8");
   return normalizeFindings(JSON.parse(raw));
 }
 
@@ -131,31 +133,33 @@ function buildFixPrompt(findings: Finding[]): string {
         `### Finding ${i + 1} — id: ${f.id} (${f.severity})`,
         `Location: ${loc}`,
         `Issue: ${f.title}`,
-        f.rationale ? `Why: ${f.rationale}` : '',
-        f.suggestedFix ? `Suggested fix: ${f.suggestedFix}` : '',
-      ].filter(Boolean).join('\n');
+        f.rationale ? `Why: ${f.rationale}` : "",
+        f.suggestedFix ? `Suggested fix: ${f.suggestedFix}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
     })
-    .join('\n\n');
+    .join("\n\n");
 
   return [
-    'Apply the following code-review fixes to this repository. Each finding has',
-    'already been vetted by a human reviewer — implement the fix for each one.',
-    '',
-    'Guidelines:',
-    '- Make the minimal, correct change for each finding. Do not refactor unrelated code.',
-    '- If a finding cannot be safely applied (already fixed, no longer applies, or',
-    '  the suggested fix would break something), skip it and explain why.',
-    '- Do not commit; just edit the files.',
-    '',
-    'FINDINGS TO FIX:',
-    '',
+    "Apply the following code-review fixes to this repository. Each finding has",
+    "already been vetted by a human reviewer — implement the fix for each one.",
+    "",
+    "Guidelines:",
+    "- Make the minimal, correct change for each finding. Do not refactor unrelated code.",
+    "- If a finding cannot be safely applied (already fixed, no longer applies, or",
+    "  the suggested fix would break something), skip it and explain why.",
+    "- Do not commit; just edit the files.",
+    "",
+    "FINDINGS TO FIX:",
+    "",
     blocks,
-    '',
-    'When done, output ONE fenced ```json block reporting what you did:',
-    '```json',
+    "",
+    "When done, output ONE fenced ```json block reporting what you did:",
+    "```json",
     '{ "applied": ["finding-id", ...], "skipped": [{ "id": "finding-id", "reason": "..." }] }',
-    '```',
-  ].join('\n');
+    "```",
+  ].join("\n");
 }
 
 interface ApplyReport {
@@ -168,17 +172,18 @@ function parseApplyReport(text: string, findings: Finding[]): ApplyReport {
   const ids = new Set(findings.map((f) => f.id));
   const applied: string[] = [];
   const skipped: Array<{ id: string; reason: string }> = [];
-  if (parsed && typeof parsed === 'object') {
+  if (parsed && typeof parsed === "object") {
     const p = parsed as { applied?: unknown; skipped?: unknown };
     if (Array.isArray(p.applied)) {
-      for (const a of p.applied) if (typeof a === 'string' && ids.has(a)) applied.push(a);
+      for (const a of p.applied) if (typeof a === "string" && ids.has(a)) applied.push(a);
     }
     if (Array.isArray(p.skipped)) {
       for (const s of p.skipped) {
-        if (s && typeof s === 'object') {
+        if (s && typeof s === "object") {
           const id = (s as { id?: unknown }).id;
           const reason = (s as { reason?: unknown }).reason;
-          if (typeof id === 'string') skipped.push({ id, reason: typeof reason === 'string' ? reason : 'no reason given' });
+          if (typeof id === "string")
+            skipped.push({ id, reason: typeof reason === "string" ? reason : "no reason given" });
         }
       }
     }
@@ -186,25 +191,28 @@ function parseApplyReport(text: string, findings: Finding[]): ApplyReport {
   // Anything neither applied nor skipped is treated as not-reported (skipped).
   const accounted = new Set([...applied, ...skipped.map((s) => s.id)]);
   for (const f of findings) {
-    if (!accounted.has(f.id)) skipped.push({ id: f.id, reason: 'not reported by the model' });
+    if (!accounted.has(f.id)) skipped.push({ id: f.id, reason: "not reported by the model" });
   }
   return { applied, skipped };
 }
 
-function computeStagedDiff(cwd: string, baseline: string): { filesModified: string[]; linesAdded: number; linesRemoved: number } {
+function computeStagedDiff(
+  cwd: string,
+  baseline: string,
+): { filesModified: string[]; linesAdded: number; linesRemoved: number } {
   // Stage everything so untracked fix files are counted, then diff the index
   // against the baseline commit. Leaves the fix changes staged for the user.
-  tryGit(['add', '-A'], cwd);
-  const names = tryGit(['diff', '--cached', '--name-only', baseline], cwd);
-  const filesModified = names.ok && names.stdout ? names.stdout.split('\n').filter(Boolean) : [];
+  tryGit(["add", "-A"], cwd);
+  const names = tryGit(["diff", "--cached", "--name-only", baseline], cwd);
+  const filesModified = names.ok && names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
   let linesAdded = 0;
   let linesRemoved = 0;
-  const numstat = tryGit(['diff', '--cached', '--numstat', baseline], cwd);
+  const numstat = tryGit(["diff", "--cached", "--numstat", baseline], cwd);
   if (numstat.ok && numstat.stdout) {
-    for (const line of numstat.stdout.split('\n')) {
-      const [addStr, delStr] = line.split('\t');
-      const add = Number.parseInt(addStr ?? '0', 10);
-      const del = Number.parseInt(delStr ?? '0', 10);
+    for (const line of numstat.stdout.split("\n")) {
+      const [addStr, delStr] = line.split("\t");
+      const add = Number.parseInt(addStr ?? "0", 10);
+      const del = Number.parseInt(delStr ?? "0", 10);
       if (Number.isFinite(add)) linesAdded += add;
       if (Number.isFinite(del)) linesRemoved += del;
     }
@@ -227,7 +235,11 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
 
   // 1. Load + validate findings ----------------------------------------------
   if (!options.findingsPath) {
-    emit({ status: 'failed', jobId, error: 'Missing --findings <path>; provide the approved findings JSON.' });
+    emit({
+      status: "failed",
+      jobId,
+      error: "Missing --findings <path>; provide the approved findings JSON.",
+    });
     process.exit(1);
   }
   const findingsAbs = resolve(cwd, options.findingsPath);
@@ -235,11 +247,15 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   try {
     findings = loadFindings(findingsAbs);
   } catch (err) {
-    emit({ status: 'failed', jobId, error: `Could not read findings file ${findingsAbs}: ${(err as Error).message}` });
+    emit({
+      status: "failed",
+      jobId,
+      error: `Could not read findings file ${findingsAbs}: ${(err as Error).message}`,
+    });
     process.exit(1);
   }
   if (findings.length === 0) {
-    emit({ status: 'failed', jobId, error: 'No findings to fix (empty list after parsing).' });
+    emit({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
     process.exit(1);
   }
   log(`fix start: model=${copilotModel} findings=${findings.length} source=${findingsAbs}`);
@@ -249,7 +265,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   try {
     repoRoot = resolveRepoRoot(cwd);
   } catch (err) {
-    emit({ status: 'failed', jobId, error: `Not a git repository: ${(err as Error).message}` });
+    emit({ status: "failed", jobId, error: `Not a git repository: ${(err as Error).message}` });
     process.exit(1);
   }
 
@@ -257,10 +273,10 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   // ONLY after the quota gate passes — a blocked copilot fix must mutate NO git
   // history. These outer vars are filled by that hook and read by the envelope.
   let preFixSnapshot = false;
-  let baselineCommit = '';
+  let baselineCommit = "";
   // Snapshot facts to attach to a `failed` envelope, so a run that fails AFTER
   // beforeRun committed the baseline still reports that commit.
-  const snapshotInfo = (): Pick<FailedEnvelope, 'preFixSnapshot' | 'baselineCommit'> =>
+  const snapshotInfo = (): Pick<FailedEnvelope, "preFixSnapshot" | "baselineCommit"> =>
     preFixSnapshot ? { preFixSnapshot, ...(baselineCommit ? { baselineCommit } : {}) } : {};
 
   // 3. Timeout → abort signal. -----------------------------------------------
@@ -276,19 +292,22 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     if (envelopeDone) return;
     envelopeDone = true;
     turn.clear();
-    progress('Received interrupt signal; aborting fix session.');
-    emit({ status: 'failed', jobId, error: 'Interrupted by signal' });
+    progress("Received interrupt signal; aborting fix session.");
+    emit({ status: "failed", jobId, error: "Interrupted by signal" });
   };
 
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
-    onWarn: (m) => { progress(m); log(m); },
+    onWarn: (m) => {
+      progress(m);
+      log(m);
+    },
   });
 
   // 4. Run the agent session (write-enabled, real working tree). -------------
   progress(`Applying ${findings.length} approved fix(es) (model=${copilotModel})…`);
   let provider: ProviderId;
-  let result;
+  let result: RunResult;
   try {
     ({ provider, result } = await runAgentSession({
       cwd: repoRoot,
@@ -301,13 +320,13 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         readOnly: false,
         allowShell: options.allowShell ?? false,
         allowUrl: options.allowUrl ?? false,
-        systemMessage: buildSystemMessage('fix', { extraContext }),
+        systemMessage: buildSystemMessage("fix", { extraContext }),
         appendLog: log,
         progress,
         signal: turn.signal,
       },
       onInterrupt,
-      defaultModelFor: (id) => (id === 'copilot' ? DEFAULT_MODEL : undefined),
+      defaultModelFor: (id) => (id === "copilot" ? DEFAULT_MODEL : undefined),
       enforceQuota: () => {
         // Copilot-only gate (runAgentSession invokes this only when the provider
         // meters quota). Block early so the user is told to apply fixes directly
@@ -323,29 +342,34 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
           envelopeDone = true;
           turn.clear();
           emit({
-            status: 'blocked',
+            status: "blocked",
             reason: gate.reason,
             resetAt: gate.resetAt,
             remaining: gate.remaining,
-            message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || 'unknown'}.`,
+            message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || "unknown"}.`,
           });
           process.exit(0);
         }
-        if ('warning' in gate && gate.warning) progress(gate.warning);
+        if ("warning" in gate && gate.warning) progress(gate.warning);
       },
       // Post-gate / pre-run: snapshot pre-existing changes so the fix diff is
       // isolated. Runs ONLY after the quota gate passes, so a blocked copilot
       // fix leaves git history untouched.
       beforeRun: () => {
         // Commit any pre-existing uncommitted changes so the fix diff is isolated.
-        const dirty = tryGit(['status', '--porcelain'], repoRoot);
+        const dirty = tryGit(["status", "--porcelain"], repoRoot);
         if (dirty.ok && dirty.stdout.trim()) {
-          tryGit(['add', '-A'], repoRoot);
-          const c = tryGit(['commit', '-m', 'chore: pre-fix snapshot (copilot fix baseline)'], repoRoot);
+          tryGit(["add", "-A"], repoRoot);
+          const c = tryGit(
+            ["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"],
+            repoRoot,
+          );
           preFixSnapshot = c.ok;
           if (c.ok) {
-            progress('Committed pre-existing changes as a baseline snapshot before applying fixes.');
-            log('pre-fix snapshot commit created');
+            progress(
+              "Committed pre-existing changes as a baseline snapshot before applying fixes.",
+            );
+            log("pre-fix snapshot commit created");
           } else {
             log(`pre-fix snapshot commit failed: ${c.stderr}`);
           }
@@ -357,9 +381,10 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
           envelopeDone = true;
           turn.clear();
           emit({
-            status: 'failed',
+            status: "failed",
             jobId,
-            error: 'Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry.',
+            error:
+              "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry.",
           });
           process.exit(1);
         }
@@ -370,7 +395,13 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         if (!baselineCommit) {
           envelopeDone = true;
           turn.clear();
-          emit({ status: 'failed', jobId, error: 'fix requires at least one commit to diff against (repository has no commits yet).', ...snapshotInfo() });
+          emit({
+            status: "failed",
+            jobId,
+            error:
+              "fix requires at least one commit to diff against (repository has no commits yet).",
+            ...snapshotInfo(),
+          });
           process.exit(1);
         }
       },
@@ -380,7 +411,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     turn.clear();
     if (!envelopeDone) {
       envelopeDone = true;
-      emit({ status: 'failed', jobId, error: (err as Error).message, ...snapshotInfo() });
+      emit({ status: "failed", jobId, error: (err as Error).message, ...snapshotInfo() });
     }
     process.exit(1);
   }
@@ -390,7 +421,14 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   if (!success) {
     if (!envelopeDone) {
       envelopeDone = true;
-      emit({ status: 'failed', jobId, error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : 'Fix session did not complete successfully.', ...snapshotInfo() });
+      emit({
+        status: "failed",
+        jobId,
+        error: turn.timedOut()
+          ? `Timed out after ${timeoutMs}ms`
+          : "Fix session did not complete successfully.",
+        ...snapshotInfo(),
+      });
     }
     process.exit(0);
   }
@@ -404,16 +442,16 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   const diff = computeStagedDiff(repoRoot, baselineCommit);
 
   const summary =
-    (result.summary && result.summary.trim()) ||
+    result.summary?.trim() ||
     `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
 
-  const premium = result.usage?.kind === 'copilot' ? result.usage.premiumRequestCost ?? 0 : 0;
+  const premium = result.usage?.kind === "copilot" ? (result.usage.premiumRequestCost ?? 0) : 0;
   // copilot ran the model it was asked for; codex decides via config, so report
   // the requested model or a neutral 'codex' label.
-  const usedModel = provider === 'copilot' ? copilotModel : options.model ?? 'codex';
+  const usedModel = provider === "copilot" ? copilotModel : (options.model ?? "codex");
 
   const envelope: FixedEnvelope = {
-    status: 'fixed',
+    status: "fixed",
     jobId,
     summary,
     baselineCommit,
@@ -432,13 +470,15 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   if (options.writePath) {
     const outPath = resolve(cwd, options.writePath);
     mkdirSync(dirname(outPath), { recursive: true });
-    writeFileSync(outPath, envelopeJson + '\n', 'utf-8');
+    writeFileSync(outPath, `${envelopeJson}\n`, "utf-8");
     progress(`Report saved to ${outPath}`);
   }
 
   progress(
     `Fix done — provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`,
   );
-  log(`fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`);
+  log(
+    `fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`,
+  );
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }

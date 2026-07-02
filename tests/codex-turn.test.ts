@@ -19,7 +19,7 @@ test("runCodexTurn completes a turn and returns the final message", async () => 
     cwd: binDir,
     prompt: "do the thing",
     env: buildEnv(binDir),
-    readOnly: true
+    readOnly: true,
   });
 
   assert.equal(result.success, true);
@@ -34,7 +34,7 @@ test("runCodexTurn parses token_count rate limits into usage", async () => {
     cwd: binDir,
     prompt: "do the thing",
     env: buildEnv(binDir),
-    readOnly: true
+    readOnly: true,
   });
 
   assert.equal(result.success, true);
@@ -53,7 +53,7 @@ test("runCodexTurn completes even when turn/start omits a turn id (cr-1)", async
     prompt: "do the thing",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 5_000
+    timeoutMs: 5_000,
   });
   const elapsed = Date.now() - startedAt;
 
@@ -71,7 +71,7 @@ test("runCodexTurn ignores a malformed item notification without crashing (cr-2)
     prompt: "do the thing",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 5_000
+    timeoutMs: 5_000,
   });
 
   assert.equal(result.success, true);
@@ -87,7 +87,7 @@ test("runCodexTurn applies a token_count without a threadId (cr-10)", async () =
     prompt: "do the thing",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 5_000
+    timeoutMs: 5_000,
   });
 
   assert.equal(result.success, true);
@@ -105,7 +105,7 @@ test("runCodexTurn surfaces an error notification without a threadId (cr-10)", a
     prompt: "do the thing",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 5_000
+    timeoutMs: 5_000,
   });
 
   assert.equal(result.success, false);
@@ -121,7 +121,7 @@ test("runCodexTurn deep-merges partial token_count rate limits (adv-5)", async (
     prompt: "do the thing",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 5_000
+    timeoutMs: 5_000,
   });
 
   assert.equal(result.success, true);
@@ -142,13 +142,13 @@ test("runCodexTurn prepends instructions (the system message) to the turn input 
     instructions: "HARRY-GUARDRAIL-SENTINEL",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 5_000
+    timeoutMs: 5_000,
   });
 
   assert.equal(result.success, true);
-  const state = JSON.parse(
-    fs.readFileSync(path.join(binDir, "fake-codex-state.json"), "utf8")
-  ) as { lastTurnStart?: { prompt?: string } };
+  const state = JSON.parse(fs.readFileSync(path.join(binDir, "fake-codex-state.json"), "utf8")) as {
+    lastTurnStart?: { prompt?: string };
+  };
   // The guardrails + --context that ride in `instructions` must reach codex, not
   // be dropped — assert both the instructions and the prompt are in the turn input.
   assert.match(state.lastTurnStart?.prompt ?? "", /HARRY-GUARDRAIL-SENTINEL/);
@@ -166,7 +166,7 @@ test("runCodexTurn aborts promptly on an already-aborted signal (cr-15)", async 
     env: buildEnv(binDir),
     readOnly: true,
     timeoutMs: 2_000,
-    signal: AbortSignal.abort()
+    signal: AbortSignal.abort(),
   });
   const elapsed = Date.now() - startedAt;
 
@@ -185,14 +185,14 @@ test("runCodexTurn times out a turn that never completes", async () => {
     prompt: "do the thing",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 600
+    timeoutMs: 600,
   });
   const elapsed = Date.now() - startedAt;
 
   assert.equal(result.success, false);
   assert.ok(
     elapsed < 10_000,
-    `expected the stuck turn to be bounded by the timeout, took ${elapsed}ms`
+    `expected the stuck turn to be bounded by the timeout, took ${elapsed}ms`,
   );
 });
 
@@ -206,14 +206,11 @@ test("runCodexTurn times out when codex never answers initialize", async () => {
     prompt: "do the thing",
     env: buildEnv(binDir),
     readOnly: true,
-    timeoutMs: 600
+    timeoutMs: 600,
   });
   const elapsed = Date.now() - startedAt;
 
   assert.equal(result.success, false);
   assert.match(result.error ?? "", /initialize/i);
-  assert.ok(
-    elapsed < 10_000,
-    `expected connect to be bounded by the timeout, took ${elapsed}ms`
-  );
+  assert.ok(elapsed < 10_000, `expected connect to be bounded by the timeout, took ${elapsed}ms`);
 });

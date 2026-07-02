@@ -11,8 +11,8 @@
  * multipliers, so `usedRequests` / `entitlementRequests` may be fractional.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 export interface QuotaEntry {
   entitlementRequests: number;
@@ -33,14 +33,14 @@ export interface QuotaSnapshot {
 }
 
 function snapshotPath(stateDir: string): string {
-  return join(stateDir, 'quota.json');
+  return join(stateDir, "quota.json");
 }
 
 export function readSnapshot(stateDir: string): QuotaSnapshot | null {
   const path = snapshotPath(stateDir);
   if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, 'utf-8')) as QuotaSnapshot;
+    return JSON.parse(readFileSync(path, "utf-8")) as QuotaSnapshot;
   } catch {
     return null;
   }
@@ -67,7 +67,7 @@ export function recordSnapshot(
       entitlementRequests: entry.entitlementRequests ?? 0,
       usedRequests: entry.usedRequests ?? 0,
       remainingPercentage: entry.remainingPercentage ?? 100,
-      resetDate: entry.resetDate ?? '',
+      resetDate: entry.resetDate ?? "",
       isUnlimitedEntitlement: entry.isUnlimitedEntitlement ?? false,
       usageAllowedWithExhaustedQuota: entry.usageAllowedWithExhaustedQuota ?? false,
       overage: entry.overage ?? 0,
@@ -75,7 +75,7 @@ export function recordSnapshot(
     };
   }
   mkdirSync(dirname(snapshotPath(stateDir)), { recursive: true });
-  writeFileSync(snapshotPath(stateDir), JSON.stringify(merged, null, 2), 'utf-8');
+  writeFileSync(snapshotPath(stateDir), JSON.stringify(merged, null, 2), "utf-8");
   return merged;
 }
 
@@ -123,17 +123,21 @@ export async function fetchQuota(
 export function isPremiumModel(modelId: string | undefined): boolean {
   if (!modelId) return true;
   const id = modelId.toLowerCase();
-  if (id.startsWith('claude-sonnet-')) return false;
-  if (id.startsWith('claude-haiku-')) return false;
+  if (id.startsWith("claude-sonnet-")) return false;
+  if (id.startsWith("claude-haiku-")) return false;
   // Known Standard/Fast-tier GPT models that do not meter premium requests.
-  if (id.endsWith('-mini') || id.startsWith('gpt-4.1')) return false;
+  if (id.endsWith("-mini") || id.startsWith("gpt-4.1")) return false;
   // claude-opus-*, gpt-5.x full-size, and any unknown family — fail closed.
   return true;
 }
 
 export type GateDecision =
-  | { ok: true; reason: 'unlimited' | 'overage_allowed' | 'available' | 'no_cache'; warning?: string }
-  | { ok: false; reason: 'quota_exhausted'; remaining: number; resetAt: string };
+  | {
+      ok: true;
+      reason: "unlimited" | "overage_allowed" | "available" | "no_cache";
+      warning?: string;
+    }
+  | { ok: false; reason: "quota_exhausted"; remaining: number; resetAt: string };
 
 export interface GateOptions {
   minRemaining: number; // Block if remaining premium requests <= this value.
@@ -145,12 +149,9 @@ export interface GateOptions {
  * snapshot. `null` snapshot -> allow (optimistic bootstrap; first session may
  * consume one request before we learn the real quota).
  */
-export function evaluateGate(
-  snapshot: QuotaSnapshot | null,
-  opts: GateOptions,
-): GateDecision {
+export function evaluateGate(snapshot: QuotaSnapshot | null, opts: GateOptions): GateDecision {
   if (!snapshot || Object.keys(snapshot.quotas).length === 0) {
-    return { ok: true, reason: 'no_cache' };
+    return { ok: true, reason: "no_cache" };
   }
 
   const entries = Object.values(snapshot.quotas);
@@ -159,25 +160,23 @@ export function evaluateGate(
   // Some quotas like "chat" and "completions" report entitlementRequests=-1
   // with isUnlimitedEntitlement=true — we skip those and focus on the real
   // constrained quota like "premium_interactions".
-  const metered = entries.filter(
-    (q) => !q.isUnlimitedEntitlement && q.entitlementRequests > 0,
-  );
+  const metered = entries.filter((q) => !q.isUnlimitedEntitlement && q.entitlementRequests > 0);
 
   if (metered.length === 0) {
     // All quotas are unlimited — no gate needed.
-    return { ok: true, reason: 'unlimited' };
+    return { ok: true, reason: "unlimited" };
   }
 
   if (
     metered.every((q) => q.remainingPercentage <= 0) &&
     metered.some((q) => q.usageAllowedWithExhaustedQuota || q.overageAllowedWithExhaustedQuota)
   ) {
-    return { ok: true, reason: 'overage_allowed' };
+    return { ok: true, reason: "overage_allowed" };
   }
 
   // Use the tightest metered quota.
   let minRemainingAbs = Number.POSITIVE_INFINITY;
-  let tightestReset = '';
+  let tightestReset = "";
   for (const q of metered) {
     const remaining = Math.max(0, q.entitlementRequests - q.usedRequests);
     if (remaining < minRemainingAbs) {
@@ -189,7 +188,7 @@ export function evaluateGate(
   if (minRemainingAbs <= opts.minRemaining) {
     return {
       ok: false,
-      reason: 'quota_exhausted',
+      reason: "quota_exhausted",
       remaining: minRemainingAbs === Number.POSITIVE_INFINITY ? 0 : minRemainingAbs,
       resetAt: tightestReset,
     };
@@ -197,9 +196,12 @@ export function evaluateGate(
 
   const staleMs = opts.staleAfterMs ?? 2 * 60 * 1000;
   const ageMs = Date.now() - new Date(snapshot.checkedAt).getTime();
-  const warning = ageMs > staleMs ? `Quota snapshot is ${Math.round(ageMs / 1000)}s old; may be out of date.` : undefined;
+  const warning =
+    ageMs > staleMs
+      ? `Quota snapshot is ${Math.round(ageMs / 1000)}s old; may be out of date.`
+      : undefined;
 
-  return warning ? { ok: true, reason: 'available', warning } : { ok: true, reason: 'available' };
+  return warning ? { ok: true, reason: "available", warning } : { ok: true, reason: "available" };
 }
 
 /** One entry per pool the SDK has reported, both metered and unlimited. */
@@ -236,14 +238,14 @@ export interface QuotaSummary {
 }
 
 const POOL_LABELS: Record<string, string> = {
-  premium_interactions: 'Premium requests',
-  chat: 'Chat',
-  completions: 'Completions',
+  premium_interactions: "Premium requests",
+  chat: "Chat",
+  completions: "Completions",
 };
 
 function labelFor(id: string): string {
   if (POOL_LABELS[id]) return POOL_LABELS[id];
-  return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
@@ -280,12 +282,12 @@ export function summarize(snapshot: QuotaSnapshot | null): QuotaSummary {
 
   let minRemaining = Number.POSITIVE_INFINITY;
   let minPct = 100;
-  let tightestReset = '';
+  let tightestReset = "";
   let tightestEntitlement = 0;
   for (const p of metered) {
     if (p.remaining !== undefined && p.remaining < minRemaining) {
       minRemaining = p.remaining;
-      tightestReset = p.resetAt ?? '';
+      tightestReset = p.resetAt ?? "";
       tightestEntitlement = p.total ?? 0;
     }
     if (p.remainingPercentage !== undefined && p.remainingPercentage < minPct) {
@@ -315,7 +317,7 @@ const BAR_WIDTH = 30;
 function renderBar(usedPct: number): string {
   const clamped = Math.max(0, Math.min(100, usedPct));
   const filled = Math.round((clamped / 100) * BAR_WIDTH);
-  return '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
+  return "█".repeat(filled) + "░".repeat(BAR_WIDTH - filled);
 }
 
 function daysUntil(iso: string): number | null {
@@ -331,18 +333,15 @@ function daysUntil(iso: string): number | null {
  * `status` and `setup`. Unlimited pools are listed at the end so the user can
  * still see them, but they do not get a bar (no meaningful percentage).
  */
-export function renderQuotaBar(
-  q: QuotaSummary,
-  haveSnapshot: boolean,
-): string[] {
+export function renderQuotaBar(q: QuotaSummary, haveSnapshot: boolean): string[] {
   if (!haveSnapshot) {
-    return ['- No snapshot yet. One will be captured on the next run.'];
+    return ["- No snapshot yet. One will be captured on the next run."];
   }
   if (q.allUnlimited && q.pools.length > 0) {
-    return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(', ')}).`];
+    return [`- Unlimited entitlement (${q.pools.map((p) => p.label).join(", ")}).`];
   }
   if (q.pools.length === 0) {
-    return ['- No quota information reported by Copilot yet.'];
+    return ["- No quota information reported by Copilot yet."];
   }
 
   const metered = q.pools.filter((p) => !p.unlimited);
@@ -351,7 +350,7 @@ export function renderQuotaBar(
   for (const p of metered) {
     const remainingPct = p.remainingPercentage ?? 0;
     const usedPct = 100 - remainingPct;
-    const total = p.total === undefined ? '?' : fmtNum(p.total);
+    const total = p.total === undefined ? "?" : fmtNum(p.total);
     const remaining = fmtNum(p.remaining ?? 0);
     lines.push(`${p.label}`);
     lines.push(`  Usage      ${renderBar(usedPct)}  ${usedPct.toFixed(1)}%`);
@@ -361,13 +360,13 @@ export function renderQuotaBar(
     }
     if (p.resetAt) {
       const days = daysUntil(p.resetAt);
-      const suffix = days === null ? '' : days === 0 ? '  (resets today)' : `  (in ~${days} days)`;
+      const suffix = days === null ? "" : days === 0 ? "  (resets today)" : `  (in ~${days} days)`;
       lines.push(`  Resets     ${p.resetAt}${suffix}`);
     }
-    lines.push('');
+    lines.push("");
   }
   // Drop trailing blank line introduced by the loop.
-  if (lines[lines.length - 1] === '') lines.pop();
+  if (lines[lines.length - 1] === "") lines.pop();
 
   return lines;
 }

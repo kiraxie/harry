@@ -10,27 +10,27 @@
  * The provider only runs the session and reports usage.
  */
 
-import { CopilotClient } from '@github/copilot-sdk';
+import { CopilotClient } from "@github/copilot-sdk";
 
-import { checkAuth as checkCopilotAuth } from '../copilot-auth.js';
-import { attachStream } from '../event-stream.js';
-import { makePermissionHandler } from '../permission.js';
-import { fetchQuota } from '../quota.js';
-import { resolveStateDir } from '../state.js';
-import { CLIENT_NAME, PLUGIN_VERSION } from '../version.js';
+import { checkAuth as checkCopilotAuth } from "../copilot-auth.js";
+import { attachStream } from "../event-stream.js";
+import { makePermissionHandler } from "../permission.js";
 import type {
   AuthSummary,
   Provider,
   ProviderCapabilities,
   RunOpts,
   RunResult,
-} from '../provider.ts';
+} from "../provider.ts";
+import { fetchQuota } from "../quota.js";
+import { resolveStateDir } from "../state.js";
+import { CLIENT_NAME, PLUGIN_VERSION } from "../version.js";
 
 /** How long to wait for the post-disconnect `session.shutdown` event. */
 const SHUTDOWN_WAIT_MS = 5000;
 
 export class CopilotProvider implements Provider {
-  readonly id = 'copilot' as const;
+  readonly id = "copilot" as const;
   readonly capabilities: ProviderCapabilities = {
     metersQuota: true,
   };
@@ -116,7 +116,7 @@ export class CopilotProvider implements Provider {
       await stop();
       throw new Error(`Not authenticated: ${auth.message}`);
     }
-    appendLog(`auth ok${auth.login ? ` as ${auth.login}` : ''}`);
+    appendLog(`auth ok${auth.login ? ` as ${auth.login}` : ""}`);
 
     // readOnly forces shell off and isolates the session from the filesystem;
     // a writable run honors the caller's allowShell flag.
@@ -129,7 +129,7 @@ export class CopilotProvider implements Provider {
       isolated: opts.readOnly,
     });
 
-    let session;
+    let session: Awaited<ReturnType<typeof client.createSession>>;
     try {
       session = await client.createSession({
         clientName: `${CLIENT_NAME}/${PLUGIN_VERSION}`,
@@ -138,7 +138,7 @@ export class CopilotProvider implements Provider {
         workingDirectory: cwd,
         infiniteSessions: { enabled: false },
         onPermissionRequest: permissionHandler,
-        systemMessage: { mode: 'append', content: opts.systemMessage },
+        systemMessage: { mode: "append", content: opts.systemMessage },
       });
     } catch (err) {
       const msg = `Failed to create Copilot session: ${(err as Error).message}`;
@@ -158,13 +158,13 @@ export class CopilotProvider implements Provider {
     };
     if (opts.signal) {
       if (opts.signal.aborted) onAbort();
-      else opts.signal.addEventListener('abort', onAbort, { once: true });
+      else opts.signal.addEventListener("abort", onAbort, { once: true });
     }
 
     let completionResult: Awaited<typeof stream.completion> | null = null;
     let premiumRequestCost: number | undefined;
     try {
-      progress(`Sending prompt to Copilot${opts.model ? ` (model=${opts.model})` : ''}…`);
+      progress(`Sending prompt to Copilot${opts.model ? ` (model=${opts.model})` : ""}…`);
       await session.send({ prompt });
       completionResult = await stream.completion;
 
@@ -177,7 +177,7 @@ export class CopilotProvider implements Provider {
     } catch (err) {
       const msg = (err as Error).message;
       appendLog(`session error: ${msg}`);
-      opts.signal?.removeEventListener('abort', onAbort);
+      opts.signal?.removeEventListener("abort", onAbort);
       stream.dispose();
       await session.disconnect().catch(() => {
         /* ignore */
@@ -189,7 +189,7 @@ export class CopilotProvider implements Provider {
       throw new Error(msg);
     }
 
-    opts.signal?.removeEventListener('abort', onAbort);
+    opts.signal?.removeEventListener("abort", onAbort);
 
     await session.disconnect().catch((e) => appendLog(`disconnect warn: ${(e as Error).message}`));
 
@@ -213,14 +213,14 @@ export class CopilotProvider implements Provider {
     await stop();
 
     const lastAssistantMessage =
-      stream.getLastAssistantMessage()?.trim() || completionResult?.summary?.trim() || '';
+      stream.getLastAssistantMessage()?.trim() || completionResult?.summary?.trim() || "";
 
     return {
       lastAssistantMessage,
       success: completionResult?.success !== false,
       summary: completionResult?.summary,
       usage: {
-        kind: 'copilot',
+        kind: "copilot",
         premiumRequestCost: premiumRequestCost ?? shutdownResult?.premiumRequestCost,
       },
       codeChanges: shutdownResult?.codeChanges,

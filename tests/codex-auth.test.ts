@@ -39,7 +39,7 @@ test("getCodexAuthStatus threads the connect timeout and fails closed when initi
 
   const status = await getCodexAuthStatus(binDir, {
     env: buildEnv(binDir),
-    connectTimeoutMs: 300
+    connectTimeoutMs: 300,
   });
 
   // The probe must not hang on a child that never answers initialize.

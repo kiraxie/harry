@@ -2,10 +2,8 @@
  * result command — retrieves background job output.
  */
 
-import {
-  resolveStateDir, listJobs, readJobFile, getSessionId,
-} from '../lib/state.js';
-import { sweepZombieJobs } from '../lib/zombie.js';
+import { getSessionId, listJobs, readJobFile, resolveStateDir } from "../lib/state.js";
+import { sweepZombieJobs } from "../lib/zombie.js";
 
 export interface ResultOptions {
   jobId?: string;
@@ -22,9 +20,9 @@ export async function runResult(cwd: string, options: ResultOptions = {}): Promi
   if (!jobId) {
     const sessionId = getSessionId();
     const jobs = listJobs(stateDir, sessionId);
-    const finished = jobs.find((j) => j.status === 'completed' || j.status === 'failed');
+    const finished = jobs.find((j) => j.status === "completed" || j.status === "failed");
     if (!finished) {
-      console.error('No completed jobs found.');
+      console.error("No completed jobs found.");
       process.exit(1);
     }
     jobId = finished.id;
@@ -36,24 +34,30 @@ export async function runResult(cwd: string, options: ResultOptions = {}): Promi
     process.exit(1);
   }
 
-  if (job.status === 'queued' || job.status === 'running') {
+  if (job.status === "queued" || job.status === "running") {
     console.error(`Job ${jobId} is still ${job.status}. Use /harry:status to check progress.`);
     process.exit(1);
   }
 
   if (options.json) {
-    console.log(JSON.stringify({
-      id: job.id,
-      kind: job.kind,
-      status: job.status,
-      result: job.result,
-      errorMessage: job.errorMessage,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          id: job.id,
+          kind: job.kind,
+          status: job.status,
+          result: job.result,
+          errorMessage: job.errorMessage,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
-  if (job.status === 'failed') {
-    console.log(`## Job Failed: ${job.id}\n\n**Error:** ${job.errorMessage ?? 'Unknown error'}`);
+  if (job.status === "failed") {
+    console.log(`## Job Failed: ${job.id}\n\n**Error:** ${job.errorMessage ?? "Unknown error"}`);
     return;
   }
 
@@ -61,6 +65,6 @@ export async function runResult(cwd: string, options: ResultOptions = {}): Promi
   if (job.result) {
     console.log(job.result);
   } else {
-    console.log('Job completed but produced no output.');
+    console.log("Job completed but produced no output.");
   }
 }

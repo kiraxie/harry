@@ -6,14 +6,14 @@
  * primitive, so we ask for markdown and render it verbatim.
  */
 
-import type { ReviewContext } from './git.js';
+import type { ReviewContext } from "./git.js";
 
 interface PromptVars {
   context: ReviewContext;
   focusText: string;
 }
 
-export type ReviewKind = 'standard' | 'adversarial' | 'simplify';
+export type ReviewKind = "standard" | "adversarial" | "simplify";
 
 const STANDARD = `<role>
 You are a careful, technically rigorous code reviewer.
@@ -226,14 +226,16 @@ If a simplification depends on an assumption about behavior, state it — never 
 `;
 
 function interpolate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => Object.prototype.hasOwnProperty.call(vars, key) ? vars[key]! : '');
+  return template.replace(/\{\{([A-Z_]+)\}\}/g, (_, key) =>
+    Object.hasOwn(vars, key) ? vars[key] : "",
+  );
 }
 
 export function buildReviewPrompt(kind: ReviewKind, vars: PromptVars): string {
-  const template = kind === 'adversarial' ? ADVERSARIAL : kind === 'simplify' ? SIMPLIFY : STANDARD;
+  const template = kind === "adversarial" ? ADVERSARIAL : kind === "simplify" ? SIMPLIFY : STANDARD;
   const focusBlock = vars.focusText.trim()
     ? `User focus: ${vars.focusText.trim()}`
-    : 'No extra focus provided.';
+    : "No extra focus provided.";
   return interpolate(template, {
     TARGET_LABEL: vars.context.target.label,
     USER_FOCUS_BLOCK: focusBlock,

@@ -6,12 +6,11 @@
  * GH_TOKEN / GITHUB_TOKEN / COPILOT_GITHUB_TOKEN) as the happy path.
  */
 
-import type { CopilotClient } from '@github/copilot-sdk';
-import type { GetAuthStatusResponse } from '@github/copilot-sdk';
+import type { CopilotClient, GetAuthStatusResponse } from "@github/copilot-sdk";
 
 export interface AuthSummary {
   ok: boolean;
-  authType?: GetAuthStatusResponse['authType'];
+  authType?: GetAuthStatusResponse["authType"];
   login?: string;
   host?: string;
   message: string;
@@ -33,7 +32,9 @@ export async function checkAuth(client: CopilotClient): Promise<AuthSummary> {
       ok: false,
       authType: status.authType,
       host: status.host,
-      message: status.statusMessage ?? 'Not authenticated. Run `gh auth login` or set GH_TOKEN / COPILOT_GITHUB_TOKEN.',
+      message:
+        status.statusMessage ??
+        "Not authenticated. Run `gh auth login` or set GH_TOKEN / COPILOT_GITHUB_TOKEN.",
     };
   }
 
@@ -42,6 +43,6 @@ export async function checkAuth(client: CopilotClient): Promise<AuthSummary> {
     authType: status.authType,
     login: status.login,
     host: status.host,
-    message: status.statusMessage ?? `Authenticated via ${status.authType ?? 'unknown method'}`,
+    message: status.statusMessage ?? `Authenticated via ${status.authType ?? "unknown method"}`,
   };
 }

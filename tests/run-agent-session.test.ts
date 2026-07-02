@@ -7,10 +7,7 @@ import { resolveActiveProvider, runAgentSession } from "../src/lib/run-agent-ses
 const ENV_KEY = "CLAUDE_PLUGIN_OPTION_PROVIDER";
 
 /** Stub provider — no real SDK/codex. */
-function stub(
-  id: ProviderId,
-  opts: { meters?: boolean; authOk?: boolean } = {},
-): Provider {
+function stub(id: ProviderId, opts: { meters?: boolean; authOk?: boolean } = {}): Provider {
   return {
     id,
     capabilities: { metersQuota: opts.meters ?? false },
@@ -201,7 +198,11 @@ test("precheckRun runs before beforeRun, so a refusal skips the fix snapshot (C1
       }),
       /shell/,
     );
-    assert.equal(beforeRunRan, false, "precheckRun must refuse BEFORE beforeRun (the snapshot) runs");
+    assert.equal(
+      beforeRunRan,
+      false,
+      "precheckRun must refuse BEFORE beforeRun (the snapshot) runs",
+    );
     assert.equal(runRan, false);
   });
 });

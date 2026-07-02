@@ -13,9 +13,8 @@
  */
 
 import { getCodexAuthStatus } from "../codex/auth.ts";
-import { resolveStateDir, writeCodexRateLimits } from "../state.ts";
-import { runCodexTurn } from "../codex/turn.ts";
 import type { CodexTurnEvent } from "../codex/turn.ts";
+import { runCodexTurn } from "../codex/turn.ts";
 import type {
   AuthSummary,
   Provider,
@@ -24,6 +23,7 @@ import type {
   RunOpts,
   RunResult,
 } from "../provider.ts";
+import { resolveStateDir, writeCodexRateLimits } from "../state.ts";
 
 /**
  * Translate the neutral {@link ReasoningEffort} (Copilot's vocabulary) into

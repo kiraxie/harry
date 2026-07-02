@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  buildSystemMessage,
-  type SessionKind,
-} from "../src/lib/system-message.ts";
+import { buildSystemMessage, type SessionKind } from "../src/lib/system-message.ts";
 
 // smp-6: the 'implement' SessionKind is dead (implement.ts was deleted); only
 // review/ask/fix remain. Building each surviving kind must still work.
