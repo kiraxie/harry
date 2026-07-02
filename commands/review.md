@@ -1,5 +1,5 @@
 ---
-description: Run a code review against local git state. Read-only unless a fix backend is requested. Review angle is standard (gpt-5.3-codex defects), --adversarial (gpt-5.5 design), --simplify (gpt-5.3-codex cleanups), or --full (adversarial + simplify + CC /code-review max, consolidated). Apply findings with --fix (Claude Code applies) or --harry-fix (isolated Copilot fix session, gpt-5.5/xhigh).
+description: Run a code review against local git state. Read-only unless a fix backend is requested. Review angle is standard (gpt-5.3-codex defects), --adversarial (gpt-5.5 design), --simplify (gpt-5.3-codex cleanups), or --full (adversarial + simplify + CC /code-review max, consolidated). Apply findings with --fix (Claude Code applies) or --harry-fix (isolated Codex fix session).
 argument-hint: '[--adversarial|--simplify|--full] [--fix|--harry-fix] [--wait|--background] [--base <ref>] [focus...]'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, SlashCommand, Bash(node:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(git symbolic-ref:*), Bash(git show-ref:*), Bash(git ls-files:*), Bash(git branch:*), Bash(git add:*), Bash(git commit:*), AskUserQuestion
@@ -18,8 +18,8 @@ is present:
 - **No `--fix` and no `--harry-fix` → READ-ONLY (RO).** Produce findings and stop.
   In this mode you MUST NOT use `Edit`, `Write`, `git add`, or `git commit` — those
   tools are in the allowlist only for RW mode, and using them here breaks the
-  read-only trust boundary the user invoked. (Copilot sub-reviews already run with
-  writes/shell/URL denied at the SDK level.)
+  read-only trust boundary the user invoked. (Codex review sub-agents already run
+  read-only — writes/shell/URL are denied.)
 - **`--fix` or `--harry-fix` present → READ-WRITE (RW).** Review → judge → apply.
   `--fix` and `--harry-fix` are mutually exclusive; if both appear, tell the user to
   pick one and stop.
@@ -55,7 +55,7 @@ not restate it elsewhere:
 ```
 {"status":"reviewed", kind, model, target, fileCount,
  findings:[{id,file,line,severity,title,rationale,suggestedFix}],
- reviewMarkdown, premiumRequestCost, quotaRemaining}
+ reviewMarkdown}
 ```
 
 `line` is optional (file-wide findings omit it). On **failure** (timeout/quota), the
@@ -66,9 +66,9 @@ envelope — so never `JSON.parse` a leg's output without first checking it succ
 
 ## Plain review (RO)
 
-Read-only. Copilot runs with writes/shell/URL denied. Do not fix anything or suggest
-you are about to. Return Copilot's output verbatim (HARRY.md §6 — tool output as-is,
-no performative claims). Do not use any write tool on this path.
+Read-only. The review session runs with writes/shell/URL denied. Do not fix anything
+or suggest you are about to. Return the review session's output verbatim (HARRY.md §6
+— tool output as-is, no performative claims). Do not use any write tool on this path.
 
 **Execution mode:**
 - `--wait` → run foreground, do not ask.
@@ -94,7 +94,7 @@ review is done; the harness then notifies). Strip an explicit `--background`.
 ```typescript
 Bash({
   command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review <args without --background>`,
-  description: "Copilot review",
+  description: "Codex review",
   run_in_background: true
 })
 ```
@@ -119,7 +119,7 @@ Forwarded args = `$ARGUMENTS` minus `--full`, `--adversarial`, `--simplify`, `--
 `--harry-fix`, `--wait`, `--background`, `--model`, `--reasoning` (each lane is
 model-specialized); keep `--base`, `--scope`, `--context`, focus text. In one turn:
 
-1. Two background Copilot reviews (each appends `--fix` for the structured envelope):
+1. Two background Codex reviews (each appends `--fix` for the structured envelope):
 ```typescript
 Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --adversarial --fix <forwarded>`,
        description: "review (adversarial/design)", run_in_background: true })
@@ -133,7 +133,7 @@ Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --simpli
 Wait until ALL THREE have produced output before Stage 2.
 
 ### Stage 2 — Consolidate into a table (your job)
-- For each Copilot leg: check it succeeded first (zero exit, stdout is the envelope
+- For each Codex leg: check it succeeded first (zero exit, stdout is the envelope
   not `# Review Failed`). A failed leg contributes no findings — record it as a
   failed source and continue; never abort the whole consolidation for one bad leg.
   Parse the survivors. Adversarial design-level notes live in `reviewMarkdown`'s
@@ -206,9 +206,9 @@ You apply the approved findings yourself, with full conversation context.
    changed files, and tell the user the fixes are **staged but not committed**
    (`git diff --cached` to review).
 
-## Apply: `--harry-fix` (isolated Copilot fix session, gpt-5.5/xhigh)
+## Apply: `--harry-fix` (isolated Codex fix session, gpt-5.5/xhigh)
 
-A fresh write-enabled Copilot session applies the findings — it cannot see this
+A fresh write-enabled Codex session applies the findings — it cannot see this
 conversation, so carry context explicitly.
 
 1. Write the approved findings (full objects) to a temp JSON via `Write`. For
@@ -220,10 +220,10 @@ conversation, so carry context explicitly.
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" fix \
   --findings /tmp/harry-fix-findings.json \
-  --model gpt-5.5 --reasoning xhigh \
+  --reasoning xhigh \
   [--context @/tmp/harry-fix-context.md]
 ```
 `fix` snapshots pre-existing changes as a baseline, applies fixes (left staged), and
 emits `{"status":"fixed", filesModified, applied, skipped, …}`. Report applied /
 skipped and changed files; fixes are **staged but not committed**. If `status` is
-`blocked` (quota) or `failed`, surface the message and stop.
+`failed`, surface the message and stop.

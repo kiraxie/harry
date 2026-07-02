@@ -1,5 +1,5 @@
 ---
-description: Three frontier models (opus, gpt-5.5, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict. Roughly 2 Copilot premium requests per debate (gpt only).
+description: Three frontier models (opus, gpt-5.5, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
 argument-hint: '"<topic>" [--context <text|@file|@->]'
 allowed-tools: Read, Agent, Bash(node:*), Bash(agy:*), AskUserQuestion
 ---
@@ -13,17 +13,16 @@ synthesize. The structure is **fixed at two rounds**; do not add or skip rounds.
 Raw slash-command arguments:
 `$ARGUMENTS` (the topic, plus optional `--context`).
 
-Cost note: only gpt-5.5 uses Copilot quota (~2 premium requests/debate). opus runs
-on your Claude subscription, gemini on your Google subscription via `agy`. If
-Copilot quota is below harry's **< 5% remaining** fallback threshold, say so and
-proceed with a two-voice debate (opus + gemini) rather than burning the last quota.
+Cost note: gpt runs on your Codex/ChatGPT subscription (no premium-request quota
+involved). opus runs on your Claude subscription, gemini on your Google subscription
+via `agy`.
 
 ## The three voices (fixed routing — do not substitute)
 
 | Voice | How you call it |
 |-------|-----------------|
 | `opus` | Dispatch a subagent via the Agent tool, `model: opus`. Prompt it to "ultrathink". |
-| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --model gpt-5.5 --reasoning high` |
+| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high` |
 | `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with a Bash timeout ≥ 20m (and prefer `run_in_background`) |
 
 `${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when this command runs. The `ask` and

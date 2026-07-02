@@ -18,7 +18,6 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status $ARGUMENTS
 The quota shown is a cached snapshot — refreshed at each session start (the SessionStart hook) and after every ask/review/fix run — with its age labelled in the header.
 
 Return the output verbatim. Then, only if something is worth flagging, append at most one short line:
-- If premium quota is near exhaustion — harry's fallback threshold is **< 5% remaining** (a percentage of entitlement, not an absolute count) — note that delegation will fall back off Copilot.
 - If there is a failed background job the user may not have noticed, flag it in one line.
 
 Do not paraphrase or summarize the runtime output itself; only the appended note is yours.
