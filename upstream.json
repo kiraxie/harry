@@ -69,7 +69,7 @@
     {
       "skill": "ask / status / result",
       "from": "copilot-plugin-cc + codex-plugin-cc",
-      "note": "runtime commands; setup+status merged into status; quota fallback at premium <5%."
+      "note": "runtime commands; setup+status merged into status. Originally had a Copilot premium-quota fallback at <5% remaining; removed along with the Copilot backend."
     },
     {
       "skill": "init",
