@@ -2,7 +2,7 @@
 
 The rubric a **free CC reviewer subagent** applies for per-task and whole-branch
 reviews (executing §3). Frontier `/review` carries its own rubric — this is the
-in-house fallback used at Standard tier or when Copilot/premium quota < 5%.
+in-house fallback used at Standard tier.
 Hand the reviewer the brief, the report, the diff (as a file), and the binding
 Global Constraints verbatim. It reviews **read-only** — no working-tree, index,
 or HEAD mutation.
