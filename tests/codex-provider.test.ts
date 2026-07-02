@@ -50,13 +50,16 @@ test("CodexProvider.run maps a turn to a successful RunResult with codex usage",
       allowUrl: false,
       systemMessage: "",
       appendLog() {},
-      progress() {}
+      progress() {},
     });
   });
 
   assert.equal(res.success, true);
   assert.equal(res.usage?.kind, "codex");
-  assert.equal(res.usage?.kind === "codex" ? res.usage.rateLimits?.primaryUsedPercent : undefined, 12);
+  assert.equal(
+    res.usage?.kind === "codex" ? res.usage.rateLimits?.primaryUsedPercent : undefined,
+    12,
+  );
   assert.ok(res.lastAssistantMessage.length > 0, "expected a non-empty assistant message");
 });
 
@@ -80,9 +83,9 @@ test("CodexProvider.run refuses write mode without shell access (cr-16 trust bou
           allowUrl: false,
           systemMessage: "",
           appendLog() {},
-          progress() {}
+          progress() {},
         }),
-      /shell|copilot/i
+      /shell|copilot/i,
     );
   });
 });
@@ -100,8 +103,8 @@ test("CodexProvider.run allows write mode when shell is explicitly permitted (cr
       allowUrl: false,
       systemMessage: "",
       appendLog() {},
-      progress() {}
-    })
+      progress() {},
+    }),
   );
 
   assert.equal(res.success, true);
@@ -123,8 +126,8 @@ test("CodexProvider.run aborts when opts.signal is already aborted (cr-15)", asy
       systemMessage: "",
       appendLog() {},
       progress() {},
-      signal: AbortSignal.abort()
-    })
+      signal: AbortSignal.abort(),
+    }),
   );
 
   assert.equal(res.success, false);
@@ -134,7 +137,9 @@ test("CodexProvider.forceStop is a no-op when no run is in flight (cr-15)", asyn
   await new CodexProvider().forceStop();
 });
 
-test("CodexProvider.forceStop awaits the in-flight run before resolving (cr-17)", { timeout: 8000 }, async () => {
+test("CodexProvider.forceStop awaits the in-flight run before resolving (cr-17)", {
+  timeout: 8000,
+}, async () => {
   // forceStop must not resolve until the codex child is torn down — otherwise the
   // session's interrupt handler exits the process and orphans the subprocess.
   const binDir = makeTempDir();
@@ -152,7 +157,7 @@ test("CodexProvider.forceStop awaits the in-flight run before resolving (cr-17)"
         allowUrl: false,
         systemMessage: "",
         appendLog() {},
-        progress() {}
+        progress() {},
       })
       .then((r) => {
         runSettled = true;

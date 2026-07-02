@@ -7,12 +7,12 @@
  * background worker silently drift from the foreground dispatcher.
  */
 
-import type { CodexRateLimits } from './provider.ts';
+import type { CodexRateLimits } from "./provider.ts";
 
 /** Timestamped stderr progress writer. No-op-free: every line is flushed. */
 export function makeProgress(): (message: string) => void {
   return (message: string) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const time = new Date().toLocaleTimeString("en-US", { hour12: false });
     process.stderr.write(`[${time}] ${message}\n`);
   };
 }
@@ -64,6 +64,6 @@ export function formatCodexUsage(u: {
   rateLimits?: CodexRateLimits;
 }): string {
   const pct = u.rateLimits?.primaryUsedPercent;
-  const rate = pct !== undefined ? ` rate-limit=${pct}%` : '';
-  return `tokens(in/out)=${u.inputTokens ?? '?'}/${u.outputTokens ?? '?'}${rate}`;
+  const rate = pct !== undefined ? ` rate-limit=${pct}%` : "";
+  return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
 }

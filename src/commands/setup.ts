@@ -2,27 +2,26 @@
  * setup command — auth + model availability + quota + worktree housekeeping.
  */
 
-import { CopilotClient } from '@github/copilot-sdk';
-import type { ModelInfo } from '@github/copilot-sdk';
+import type { ModelInfo } from "@github/copilot-sdk";
+import { CopilotClient } from "@github/copilot-sdk";
+import { getCodexAuthStatus, getCodexAvailability } from "../lib/codex/auth.js";
+import { checkAuth } from "../lib/copilot-auth.js";
+import { fetchQuota, readSnapshot, summarize } from "../lib/quota.js";
+import { resolveActiveProvider } from "../lib/run-agent-session.ts";
+import { resolveStateDir } from "../lib/state.js";
+import { CLIENT_NAME, PLUGIN_VERSION } from "../lib/version.js";
 
-import { checkAuth } from '../lib/copilot-auth.js';
-import { getCodexAvailability, getCodexAuthStatus } from '../lib/codex/auth.js';
-import { resolveActiveProvider } from '../lib/run-agent-session.ts';
-import { readSnapshot, summarize, fetchQuota } from '../lib/quota.js';
-import { resolveStateDir } from '../lib/state.js';
-import { CLIENT_NAME, PLUGIN_VERSION } from '../lib/version.js';
-
-const DEFAULT_MODEL = 'claude-opus-4.8';
+const DEFAULT_MODEL = "claude-opus-4.8";
 
 export interface SetupOptions {
   check?: boolean;
   json?: boolean;
   cwd?: string;
-  provider?: 'copilot' | 'codex';
+  provider?: "copilot" | "codex";
 }
 
 interface SetupReport {
-  status: 'ok' | 'error';
+  status: "ok" | "error";
   authType?: string;
   login?: string;
   host?: string;
@@ -51,7 +50,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     cwd,
     isCheck ? { probe: async () => false } : {},
   );
-  if (id === 'codex') {
+  if (id === "codex") {
     await runCodexSetup(cwd, options, isCheck);
     return;
   }
@@ -63,11 +62,13 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   } catch (err) {
     const msg = `Failed to start Copilot CLI: ${(err as Error).message}`;
     if (isCheck) {
-      console.error(`[copilot] ${msg} — run \`gh auth login\` and ensure @github/copilot is installed.`);
+      console.error(
+        `[copilot] ${msg} — run \`gh auth login\` and ensure @github/copilot is installed.`,
+      );
       return;
     }
     emit(options, {
-      status: 'error',
+      status: "error",
       defaultModel: DEFAULT_MODEL,
       defaultModelAvailable: false,
       models: [],
@@ -79,13 +80,15 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
 
   const auth = await checkAuth(client);
   if (!auth.ok) {
-    await client.stop().catch(() => { /* ignore */ });
+    await client.stop().catch(() => {
+      /* ignore */
+    });
     if (isCheck) {
       console.error(`[copilot] ${auth.message}`);
       return;
     }
     emit(options, {
-      status: 'error',
+      status: "error",
       authType: auth.authType,
       defaultModel: DEFAULT_MODEL,
       defaultModelAvailable: false,
@@ -105,14 +108,16 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   }
 
   const modelIds = models.map((m) => m.id);
-  const claudeModels = modelIds.filter((id) => id.toLowerCase().includes('claude'));
+  const claudeModels = modelIds.filter((id) => id.toLowerCase().includes("claude"));
   const defaultAvailable = modelIds.includes(DEFAULT_MODEL);
 
   // Actively refresh the quota snapshot while the client is live — the SDK no
   // longer pushes quota via events, so this is how `setup` shows real numbers.
   await fetchQuota(client, stateDir).catch(() => null);
 
-  await client.stop().catch(() => { /* ignore */ });
+  await client.stop().catch(() => {
+    /* ignore */
+  });
 
   if (isCheck) {
     // SessionStart hook — silent success.
@@ -120,7 +125,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   }
 
   const report: SetupReport = {
-    status: 'ok',
+    status: "ok",
     authType: auth.authType,
     login: auth.login,
     host: auth.host,
@@ -138,15 +143,19 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
 
   const lines: string[] = [];
   lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push('');
-  lines.push(`**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ''})`);
+  lines.push("");
+  lines.push(
+    `**Status:** Authenticated (${auth.authType}${auth.login ? ` as ${auth.login}` : ""})`,
+  );
   if (auth.host) lines.push(`**Host:** ${auth.host}`);
-  lines.push(`**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? '(available)' : '(NOT listed — pass --model to override)'}`);
+  lines.push(
+    `**Default model:** \`${DEFAULT_MODEL}\` ${defaultAvailable ? "(available)" : "(NOT listed — pass --model to override)"}`,
+  );
   // Quota is intentionally NOT shown here — it lives in `status` (the runtime
   // view) to avoid printing it twice in the merged /harry:status. setup still
   // refreshes the snapshot above (fetchQuota) so status shows fresh numbers.
 
-  console.log(lines.join('\n'));
+  console.log(lines.join("\n"));
 }
 
 /**
@@ -165,33 +174,43 @@ async function runCodexSetup(cwd: string, options: SetupOptions, isCheck: boolea
   const auth = await getCodexAuthStatus(cwd);
 
   if (options.json) {
-    console.log(JSON.stringify({
-      status: auth.loggedIn ? 'ok' : 'error',
-      provider: 'codex',
-      codex: {
-        available: availability.available,
-        availabilityDetail: availability.detail,
-        loggedIn: auth.loggedIn,
-        authMethod: auth.authMethod,
-        detail: auth.detail,
-      },
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          status: auth.loggedIn ? "ok" : "error",
+          provider: "codex",
+          codex: {
+            available: availability.available,
+            availabilityDetail: availability.detail,
+            loggedIn: auth.loggedIn,
+            authMethod: auth.authMethod,
+            detail: auth.detail,
+          },
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   const lines: string[] = [];
   lines.push(`## Codex Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push('');
+  lines.push("");
   lines.push(`**Provider:** Codex`);
-  lines.push(`**Availability:** ${availability.available ? 'available' : 'unavailable'} — ${availability.detail}`);
-  lines.push(`**Status:** ${auth.loggedIn ? 'Authenticated' : 'Not authenticated'}${auth.authMethod ? ` (${auth.authMethod})` : ''}`);
+  lines.push(
+    `**Availability:** ${availability.available ? "available" : "unavailable"} — ${availability.detail}`,
+  );
+  lines.push(
+    `**Status:** ${auth.loggedIn ? "Authenticated" : "Not authenticated"}${auth.authMethod ? ` (${auth.authMethod})` : ""}`,
+  );
   lines.push(`**Detail:** ${auth.detail}`);
   if (!auth.loggedIn) {
-    lines.push('');
-    lines.push('### Next steps');
-    lines.push('- Run `codex login` to authenticate, then re-run setup.');
+    lines.push("");
+    lines.push("### Next steps");
+    lines.push("- Run `codex login` to authenticate, then re-run setup.");
   }
-  console.log(lines.join('\n'));
+  console.log(lines.join("\n"));
 }
 
 function emit(options: SetupOptions, report: SetupReport): void {
@@ -201,8 +220,8 @@ function emit(options: SetupOptions, report: SetupReport): void {
   }
   const lines: string[] = [];
   lines.push(`## Copilot Plugin Setup (${CLIENT_NAME} v${PLUGIN_VERSION})`);
-  lines.push('');
-  lines.push(`**Status:** ${report.status === 'ok' ? 'Authenticated' : 'Not authenticated'}`);
+  lines.push("");
+  lines.push(`**Status:** ${report.status === "ok" ? "Authenticated" : "Not authenticated"}`);
   if (report.message) lines.push(`**Message:** ${report.message}`);
-  console.log(lines.join('\n'));
+  console.log(lines.join("\n"));
 }

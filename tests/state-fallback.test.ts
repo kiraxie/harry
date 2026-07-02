@@ -5,12 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  createJob,
-  readJobFile,
-  resolveStateDir,
-  type JobRecord,
-} from "../src/lib/state.ts";
+import { createJob, type JobRecord, readJobFile, resolveStateDir } from "../src/lib/state.ts";
 
 test("resolveStateDir keys on the git repo root, not the invoking subdir (C2)", () => {
   const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "harry-staterepo-")));

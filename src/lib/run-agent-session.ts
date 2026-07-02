@@ -9,11 +9,11 @@
 
 import { getCodexAuthStatus } from "./codex/auth.ts";
 import {
-  resolveExplicit,
   type Provider,
   type ProviderId,
   type RunOpts,
   type RunResult,
+  resolveExplicit,
 } from "./provider.ts";
 
 /**

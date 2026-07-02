@@ -17,18 +17,18 @@ test("CodexAppServerClient connects and round-trips a request", async () => {
   installFakeCodex(binDir, "logged-in");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir)
+    env: buildEnv(binDir),
   });
 
   try {
     const account = await client.request<{ account: { type: string; email: string } | null }>(
-      "account/read"
+      "account/read",
     );
     assert.equal(account.account?.type, "chatgpt");
     assert.equal(account.account?.email, "test@example.com");
 
     const started = await client.request<{ thread: { id: string } }>("thread/start", {
-      cwd: binDir
+      cwd: binDir,
     });
     assert.match(started.thread.id, /^thr_/);
   } finally {
@@ -41,12 +41,12 @@ test("CodexAppServerClient dispatches notifications during a turn", async () => 
   installFakeCodex(binDir, "logged-in");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir)
+    env: buildEnv(binDir),
   });
 
   try {
     const started = await client.request<{ thread: { id: string } }>("thread/start", {
-      cwd: binDir
+      cwd: binDir,
     });
     const threadId = started.thread.id;
 
@@ -60,7 +60,7 @@ test("CodexAppServerClient dispatches notifications during a turn", async () => 
 
     await client.request("turn/start", {
       threadId,
-      input: [{ type: "text", text: "hello" }]
+      input: [{ type: "text", text: "hello" }],
     });
 
     await completed;
@@ -74,7 +74,7 @@ test("request() rejects (not synchronously throws) after the client is closed", 
   installFakeCodex(binDir, "logged-in");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir)
+    env: buildEnv(binDir),
   });
   await client.close();
 
@@ -95,11 +95,14 @@ test("close() resolves even when the child ignores SIGTERM", async (t) => {
   installFakeCodex(binDir, "ignore-sigterm");
 
   const client = await CodexAppServerClient.connect(binDir, {
-    env: buildEnv(binDir)
+    env: buildEnv(binDir),
   });
 
   const start = Date.now();
   await client.close();
   const elapsed = Date.now() - start;
-  assert.ok(elapsed < 5000, `close() should resolve within the escalation bound (took ${elapsed}ms)`);
+  assert.ok(
+    elapsed < 5000,
+    `close() should resolve within the escalation bound (took ${elapsed}ms)`,
+  );
 });

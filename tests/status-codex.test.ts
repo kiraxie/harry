@@ -3,14 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-
+import type { CodexRateLimits } from "../src/lib/provider.ts";
 import {
   formatCodexRateLimits,
   readCodexRateLimits,
   renderCodexBlock,
   writeCodexRateLimits,
 } from "../src/lib/state.ts";
-import type { CodexRateLimits } from "../src/lib/provider.ts";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "harry-status-codex-test-"));
@@ -61,7 +60,9 @@ test("writeCodexRateLimits never throws on an unwritable target", () => {
   const dir = makeTempDir();
   const filePath = path.join(dir, "not-a-dir");
   fs.writeFileSync(filePath, "x", "utf-8");
-  assert.doesNotThrow(() => writeCodexRateLimits(path.join(filePath, "nested"), { primaryUsedPercent: 1 }));
+  assert.doesNotThrow(() =>
+    writeCodexRateLimits(path.join(filePath, "nested"), { primaryUsedPercent: 1 }),
+  );
 });
 
 test("formatCodexRateLimits omits absent fields", () => {

@@ -28,7 +28,12 @@ export function applyBlock(existing, { remove = false } = {}) {
     return applyMarkerBlock(existing, { begin: BEGIN, end: END, body: "", remove: true });
   }
   const base = stripMarkerBlock(existing ?? "", { begin: BEGIN, end: END });
-  const present = new Set(base.split("\n").map((l) => l.trim()).filter(Boolean));
+  const present = new Set(
+    base
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean),
+  );
   const entries = ENTRIES.filter((e) => !present.has(e));
   if (entries.length === 0) {
     // Nothing left to add — strip any stale harry block, write no new one.
@@ -69,7 +74,10 @@ function selftest() {
     writeFileSync(join(dir, ".gitignore"), "node_modules/\n.local/\n");
     run(dir);
     out = readFileSync(join(dir, ".gitignore"), "utf8");
-    assert(out.split("\n").filter((l) => l.trim() === ".local/").length === 1, "no duplicate .local/ entry");
+    assert(
+      out.split("\n").filter((l) => l.trim() === ".local/").length === 1,
+      "no duplicate .local/ entry",
+    );
     assert(out.includes(".worktrees/"), "still adds the non-duplicate entries");
 
     // Removal strips the block, keeps the rest (dir still has a block from above).

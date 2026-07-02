@@ -5,24 +5,22 @@
  * Ported from the sibling gemini-plugin-cc with minimal changes.
  */
 
-import { execFileSync } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
-import {
-  existsSync, mkdirSync, readFileSync, writeFileSync,
-} from 'node:fs';
-import { join, basename, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { execFileSync } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
 
-import type { CodexRateLimits } from './provider.ts';
+import type { CodexRateLimits } from "./provider.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface JobRecord {
   id: string;
-  kind: string;           // 'review' | 'ask' | 'fix'
+  kind: string; // 'review' | 'ask' | 'fix'
   title: string;
   summary: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: "queued" | "running" | "completed" | "failed";
   phase: string;
   cwd: string;
   pid?: number | null;
@@ -37,7 +35,7 @@ export interface JobRecord {
 }
 
 export interface JobRequest {
-  command: string;        // 'review' | 'ask' | 'fix'
+  command: string; // 'review' | 'ask' | 'fix'
   args: string[];
   flags: Record<string, string | boolean>;
   cwd: string;
@@ -51,15 +49,15 @@ interface StateFile {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MAX_JOBS = 50;
-const PLUGIN_DATA_ENV = 'CLAUDE_PLUGIN_DATA';
-const SESSION_ID_ENV = 'HARRY_SESSION_ID';
+const PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
+const SESSION_ID_ENV = "HARRY_SESSION_ID";
 // DEBT: back-compat read for background jobs spawned by a pre-rename build that
 // set the old env var. Drop after one release.
-const LEGACY_SESSION_ID_ENV = 'COPILOT_COMPANION_SESSION_ID';
-const FALLBACK_STATE_ROOT = join(tmpdir(), 'harry');
+const LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
+const FALLBACK_STATE_ROOT = join(tmpdir(), "harry");
 // DEBT: back-compat fallback for background jobs queued by a pre-rename build,
 // which wrote their state under the old tmp root. Drop after one release.
-const LEGACY_FALLBACK_STATE_ROOT = join(tmpdir(), 'copilot-companion');
+const LEGACY_FALLBACK_STATE_ROOT = join(tmpdir(), "copilot-companion");
 
 // ─── State Directory ─────────────────────────────────────────────────────────
 
@@ -72,10 +70,10 @@ const LEGACY_FALLBACK_STATE_ROOT = join(tmpdir(), 'copilot-companion');
  */
 function repoRootOf(cwd: string): string {
   try {
-    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
       cwd,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     return root || resolve(cwd);
   } catch {
@@ -85,12 +83,15 @@ function repoRootOf(cwd: string): string {
 
 export function resolveStateDir(cwd: string): string {
   const workspaceRoot = repoRootOf(cwd);
-  const slug = basename(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'workspace';
-  const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);
+  const slug =
+    basename(workspaceRoot)
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "workspace";
+  const hash = createHash("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
   const dirName = `${slug}-${hash}`;
   const pluginDataDir = process.env[PLUGIN_DATA_ENV];
   if (pluginDataDir) {
-    return join(pluginDataDir, 'state', dirName);
+    return join(pluginDataDir, "state", dirName);
   }
   // Fallback (no CLAUDE_PLUGIN_DATA): a job queued by a pre-rename build lives
   // under the legacy tmp root. If the current root has no state for this
@@ -111,7 +112,7 @@ function ensureDir(dir: string): void {
 // ─── State File ──────────────────────────────────────────────────────────────
 
 function stateFilePath(stateDir: string): string {
-  return join(stateDir, 'state.json');
+  return join(stateDir, "state.json");
 }
 
 function loadState(stateDir: string): StateFile {
@@ -120,7 +121,7 @@ function loadState(stateDir: string): StateFile {
     return { version: 1, jobs: [] };
   }
   try {
-    return JSON.parse(readFileSync(filePath, 'utf-8')) as StateFile;
+    return JSON.parse(readFileSync(filePath, "utf-8")) as StateFile;
   } catch {
     return { version: 1, jobs: [] };
   }
@@ -131,13 +132,13 @@ function saveState(stateDir: string, state: StateFile): void {
   if (state.jobs.length > MAX_JOBS) {
     state.jobs = state.jobs.slice(0, MAX_JOBS);
   }
-  writeFileSync(stateFilePath(stateDir), JSON.stringify(state, null, 2), 'utf-8');
+  writeFileSync(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
 }
 
 // ─── Job Files ───────────────────────────────────────────────────────────────
 
 function jobsDir(stateDir: string): string {
-  return join(stateDir, 'jobs');
+  return join(stateDir, "jobs");
 }
 
 function jobFilePath(stateDir: string, jobId: string): string {
@@ -151,14 +152,14 @@ export function jobLogPath(stateDir: string, jobId: string): string {
 export function writeJobFile(stateDir: string, job: JobRecord): void {
   const dir = jobsDir(stateDir);
   ensureDir(dir);
-  writeFileSync(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), 'utf-8');
+  writeFileSync(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
 }
 
 export function readJobFile(stateDir: string, jobId: string): JobRecord | null {
   const filePath = jobFilePath(stateDir, jobId);
   if (!existsSync(filePath)) return null;
   try {
-    return JSON.parse(readFileSync(filePath, 'utf-8')) as JobRecord;
+    return JSON.parse(readFileSync(filePath, "utf-8")) as JobRecord;
   } catch {
     return null;
   }
@@ -169,16 +170,16 @@ export function readJobFile(stateDir: string, jobId: string): JobRecord | null {
 export function appendLog(stateDir: string, jobId: string, message: string): void {
   const logFile = jobLogPath(stateDir, jobId);
   ensureDir(jobsDir(stateDir));
-  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-  writeFileSync(logFile, `[${time}] ${message}\n`, { flag: 'a' });
+  const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+  writeFileSync(logFile, `[${time}] ${message}\n`, { flag: "a" });
 }
 
 export function readLogTail(stateDir: string, jobId: string, maxLines = 10): string[] {
   const logFile = jobLogPath(stateDir, jobId);
   if (!existsSync(logFile)) return [];
   try {
-    const content = readFileSync(logFile, 'utf-8');
-    const lines = content.trim().split('\n');
+    const content = readFileSync(logFile, "utf-8");
+    const lines = content.trim().split("\n");
     return lines.slice(-maxLines);
   } catch {
     return [];
@@ -208,7 +209,7 @@ export function updateJob(stateDir: string, jobId: string, updates: Partial<JobR
   const state = loadState(stateDir);
   const idx = state.jobs.findIndex((j) => j.id === jobId);
   if (idx >= 0) {
-    state.jobs[idx] = { ...state.jobs[idx]!, ...updates };
+    state.jobs[idx] = { ...state.jobs[idx], ...updates };
     saveState(stateDir, state);
   }
   const full = readJobFile(stateDir, jobId);
@@ -225,10 +226,10 @@ export function updateJob(stateDir: string, jobId: string, updates: Partial<JobR
  */
 export function markJobFailed(stateDir: string, jobId: string, errorMessage: string): void {
   const job = readJobFile(stateDir, jobId);
-  if (!job || job.status === 'completed' || job.status === 'failed') return;
+  if (!job || job.status === "completed" || job.status === "failed") return;
   updateJob(stateDir, jobId, {
-    status: 'failed',
-    phase: 'failed',
+    status: "failed",
+    phase: "failed",
     completedAt: new Date().toISOString(),
     errorMessage,
   });
@@ -249,7 +250,7 @@ export function listJobs(stateDir: string, sessionId?: string): JobRecord[] {
 // poll we persist the last rate-limit snapshot reported by a codex turn and let
 // `status` render it from cache. Mirrors the job-file read/write style above.
 
-const CODEX_RATE_LIMITS_FILE = 'codex-rate-limits.json';
+const CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
 
 /** Last codex rate-limit snapshot plus the ISO time it was captured. */
 export interface CodexRateLimitSnapshot extends CodexRateLimits {
@@ -267,8 +268,11 @@ function codexRateLimitsPath(stateDir: string): string {
 export function writeCodexRateLimits(stateDir: string, rateLimits: CodexRateLimits): void {
   try {
     ensureDir(stateDir);
-    const snapshot: CodexRateLimitSnapshot = { ...rateLimits, capturedAt: new Date().toISOString() };
-    writeFileSync(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), 'utf-8');
+    const snapshot: CodexRateLimitSnapshot = {
+      ...rateLimits,
+      capturedAt: new Date().toISOString(),
+    };
+    writeFileSync(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
   } catch {
     // best-effort: snapshot is a convenience, never a correctness dependency.
   }
@@ -279,7 +283,7 @@ export function readCodexRateLimits(stateDir: string): CodexRateLimitSnapshot | 
   const filePath = codexRateLimitsPath(stateDir);
   if (!existsSync(filePath)) return null;
   try {
-    return JSON.parse(readFileSync(filePath, 'utf-8')) as CodexRateLimitSnapshot;
+    return JSON.parse(readFileSync(filePath, "utf-8")) as CodexRateLimitSnapshot;
   } catch {
     return null;
   }
@@ -294,10 +298,10 @@ export function formatCodexRateLimits(rl: CodexRateLimits): string {
   const used: string[] = [];
   if (rl.primaryUsedPercent !== undefined) used.push(`primary ${rl.primaryUsedPercent}%`);
   if (rl.secondaryUsedPercent !== undefined) used.push(`secondary ${rl.secondaryUsedPercent}%`);
-  if (used.length > 0) parts.push(`${used.join(' / ')} used`);
+  if (used.length > 0) parts.push(`${used.join(" / ")} used`);
   if (rl.planType) parts.push(`plan ${rl.planType}`);
   if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);
-  return parts.join(' · ');
+  return parts.join(" · ");
 }
 
 /** Human-friendly "<n> ago" for a snapshot ISO timestamp; falls back to raw. */
@@ -305,7 +309,7 @@ export function formatSnapshotAge(iso: string): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return iso;
   const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
-  if (secs < 60) return 'just now';
+  if (secs < 60) return "just now";
   const mins = Math.round(secs / 60);
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.round(mins / 60);
@@ -319,6 +323,6 @@ export function formatSnapshotAge(iso: string): string {
  * refresh only on an actual turn, so a stale reading must say so.
  */
 export function renderCodexBlock(rl: CodexRateLimits, capturedAt?: string): string {
-  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : '## Codex';
-  return [header, formatCodexRateLimits(rl)].join('\n');
+  const header = capturedAt ? `## Codex (snapshot ${formatSnapshotAge(capturedAt)})` : "## Codex";
+  return [header, formatCodexRateLimits(rl)].join("\n");
 }

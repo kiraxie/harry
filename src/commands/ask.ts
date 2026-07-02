@@ -10,13 +10,12 @@
  * contract (the verbatim model answer, which `/debate` depends on).
  */
 
-import { resolveStateDir, generateJobId, appendLog, jobLogPath } from '../lib/state.js';
-import { readSnapshot, evaluateGate, isPremiumModel, fmtNum } from '../lib/quota.js';
-import { buildSystemMessage, resolveExtraContext } from '../lib/system-message.js';
-import { runAgentSession } from '../lib/run-agent-session.ts';
-import { makeProgress, startTurnTimeout, formatCodexUsage } from '../lib/turn-runtime.ts';
-import type { ProviderId } from '../lib/provider.ts';
-import type { ReasoningEffort } from '../lib/provider.ts';
+import type { ProviderId, ReasoningEffort, RunResult } from "../lib/provider.ts";
+import { evaluateGate, fmtNum, isPremiumModel, readSnapshot } from "../lib/quota.js";
+import { runAgentSession } from "../lib/run-agent-session.ts";
+import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.js";
+import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.js";
+import { formatCodexUsage, makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
 
 export interface AskOptions {
   prompt: string;
@@ -32,8 +31,8 @@ export interface AskOptions {
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 /** Model copilot uses when the caller does not pass --model. Codex passes
  *  undefined so ~/.codex/config.toml decides. */
-const COPILOT_DEFAULT_MODEL = 'gpt-5.5';
-const DEFAULT_EFFORT: ReasoningEffort = 'high';
+const COPILOT_DEFAULT_MODEL = "gpt-5.5";
+const DEFAULT_EFFORT: ReasoningEffort = "high";
 
 export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
   const progress = makeProgress();
@@ -45,22 +44,27 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
   const copilotModel = options.model ?? COPILOT_DEFAULT_MODEL;
 
   const prompt = options.prompt.trim();
-  if (!prompt) throw new Error('ask: empty prompt');
+  if (!prompt) throw new Error("ask: empty prompt");
 
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
-  log(`ask start: model=${options.model ?? '(provider default)'} effort=${reasoning} promptChars=${prompt.length}`);
+  log(
+    `ask start: model=${options.model ?? "(provider default)"} effort=${reasoning} promptChars=${prompt.length}`,
+  );
 
   const extraContext = resolveExtraContext(cwd, {
     context: options.context,
-    onWarn: (m) => { progress(m); log(m); },
+    onWarn: (m) => {
+      progress(m);
+      log(m);
+    },
   });
 
   const turn = startTurnTimeout({ timeoutMs, progress, log });
 
   let provider: ProviderId;
-  let result;
+  let result: RunResult;
   try {
     ({ provider, result } = await runAgentSession({
       cwd,
@@ -73,12 +77,12 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
         readOnly: true,
         allowShell: false,
         allowUrl: false,
-        systemMessage: buildSystemMessage('ask', { extraContext }),
+        systemMessage: buildSystemMessage("ask", { extraContext }),
         appendLog: log,
         progress,
         signal: turn.signal,
       },
-      defaultModelFor: (id) => (id === 'copilot' ? COPILOT_DEFAULT_MODEL : undefined),
+      defaultModelFor: (id) => (id === "copilot" ? COPILOT_DEFAULT_MODEL : undefined),
       enforceQuota: () => {
         // Copilot-only gate, evaluated against the model copilot WOULD use.
         if (!isPremiumModel(copilotModel)) {
@@ -88,9 +92,11 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
         const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
         if (!gate.ok) {
           log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-          throw new Error(`Quota exhausted — ask not started. Resets at ${gate.resetAt || 'unknown'}.`);
+          throw new Error(
+            `Quota exhausted — ask not started. Resets at ${gate.resetAt || "unknown"}.`,
+          );
         }
-        if ('warning' in gate && gate.warning) progress(gate.warning);
+        if ("warning" in gate && gate.warning) progress(gate.warning);
       },
       log,
     }));
@@ -106,12 +112,14 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
 
   const body =
     result.lastAssistantMessage?.trim() ||
-    (result.summary && result.summary.trim()) ||
-    '_(The model returned an empty answer.)_';
+    result.summary?.trim() ||
+    "_(The model returned an empty answer.)_";
 
   const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : 'Ask did not complete successfully.';
+    const reason = turn.timedOut()
+      ? `Timed out after ${timeoutMs}ms.`
+      : "Ask did not complete successfully.";
     // Print the (partial) body before throwing — mirrors prior failure behavior.
     process.stdout.write(`${body}\n`);
     log(`ask failed: ${reason}`);
@@ -121,14 +129,18 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
   // Verbatim model answer on stdout — `/debate` depends on this contract.
   process.stdout.write(`${body.trim()}\n`);
 
-  if (result.usage?.kind === 'copilot') {
+  if (result.usage?.kind === "copilot") {
     const premium = result.usage.premiumRequestCost ?? 0;
-    progress(`Ask done — provider=${provider} model=${copilotModel} effort=${reasoning} premium-cost=${fmtNum(premium)}`);
+    progress(
+      `Ask done — provider=${provider} model=${copilotModel} effort=${reasoning} premium-cost=${fmtNum(premium)}`,
+    );
     log(`ask done: provider=${provider} premium=${premium}`);
-  } else if (result.usage?.kind === 'codex') {
+  } else if (result.usage?.kind === "codex") {
     const u = result.usage;
     progress(`Ask done — provider=${provider} effort=${reasoning} ${formatCodexUsage(u)}`);
-    log(`ask done: provider=${provider} inputTokens=${u.inputTokens ?? '?'} outputTokens=${u.outputTokens ?? '?'}`);
+    log(
+      `ask done: provider=${provider} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`,
+    );
   } else {
     progress(`Ask done — provider=${provider} effort=${reasoning}`);
     log(`ask done: provider=${provider}`);

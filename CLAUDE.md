@@ -29,12 +29,17 @@ pnpm run install-laws           # scripts/install.mjs — wire HARRY.md into a g
 pnpm run init-ignore            # scripts/init.mjs — add harry's .gitignore block to a project
 ```
 
-Node **>= 26** is required — tests are `.test.ts` files executed directly by `node --test` via
-native TypeScript stripping; there is no separate ts-node/transpile step for tests.
+Node **>= 26** is required, deliberately — it is the floor for running `.test.ts` files directly
+under `node --test` via native TypeScript stripping, with no ts-node/transpile step. This is a
+conscious trade (newer-than-LTS floor, narrower contributor base) bought for a zero-build test/run
+path; don't "fix" it by lowering the floor without restoring a transpile step for tests.
 
-**Lint scope is narrow by design** (`biome.json` `files.includes`): only `scripts/**/*.mjs`,
-`build.mjs`, and `*.json`. `src/**/*.ts` and `tests/**/*.ts` are **not** covered by `pnpm run lint`
-— rely on `pnpm run typecheck` for the TS source.
+**Lint scope** (`biome.json` `files.includes`): `src/**/*.ts`, `tests/**/*.ts`, `scripts/**/*.mjs`,
+`build.mjs`, `*.json`. The vendored Apache-2.0 Codex code is deliberately excluded from lint
+(`!src/lib/codex/**`, `!tests/fake-codex.*`) — it tracks upstream, so we don't churn it for style.
+`pnpm run lint` currently emits one benign warning (`useBiomeIgnoreFolder` on the exclude glob;
+biome's suggested folder form doesn't actually exclude under `includes`, so the `**` form stays);
+it exits 0. `pnpm run typecheck` covers the whole TS source including the vendored dir.
 
 ## Runtime architecture (`src/`)
 
