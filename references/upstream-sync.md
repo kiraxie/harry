@@ -1,6 +1,6 @@
 # Upstream Sync
 
-Harry is distilled from four upstreams (tracked in `upstream.json`, pinned by commit). This is how to check whether an upstream's newer philosophy is worth pulling into harry.
+Harry is distilled from three upstreams (tracked in `upstream.json`, pinned by commit) — a fourth, `copilot-plugin-cc`, was a historical design influence (see the `derived[].from` notes below) but is no longer pinned/synced now that the Copilot backend is gone. This is how to check whether an upstream's newer philosophy is worth pulling into harry.
 
 Clones live in `.references/` (gitignored). Each `derived` entry in `upstream.json` records which source + path a harry file came from, plus a `note` on *why* it was customized — read the note before pulling, so you don't re-add something deliberately removed.
 

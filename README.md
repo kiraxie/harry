@@ -92,12 +92,12 @@ commands/           review · ask · status · result · debate · lean · debt 
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        agent runtime — Codex provider (bundled via build.mjs)
 scripts/            install.mjs · init.mjs · lib/markers.mjs
-upstream.json       tracks the four upstreams by commit (see references/upstream-sync.md)
+upstream.json       tracks the three upstreams by commit (see references/upstream-sync.md)
 ```
 
 ## Upstream
 
-harry is distilled from `superpowers`, `ponytail`, `copilot-plugin-cc`, and `codex-plugin-cc`. `upstream.json` pins each by commit; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Note: `review`'s design upstream is **codex-plugin-cc** (Copilot's review was ported from it).
+harry is distilled from `superpowers`, `ponytail`, and `codex-plugin-cc` — all three pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. A fourth, `copilot-plugin-cc`, was a historical design influence (`debate`'s three-model structure, `ask`/`status`/`result`'s original shape) but is no longer pinned now that the Copilot backend is gone. Note: `review`'s design upstream is **codex-plugin-cc** (it was originally ported for the Copilot backend).
 
 ## License
 
