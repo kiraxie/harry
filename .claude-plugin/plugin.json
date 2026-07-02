@@ -8,12 +8,5 @@
   },
   "homepage": "https://github.com/kiraxie/harry",
   "repository": "https://github.com/kiraxie/harry",
-  "license": "MIT",
-  "userConfig": {
-    "provider": {
-      "type": "string",
-      "title": "Backend provider",
-      "description": "Which backend powers harry's agent commands (ask/review/fix): \"codex\" or \"copilot\". Leave empty for auto — prefer Codex, fall back to Copilot. Exposed to the companion as CLAUDE_PLUGIN_OPTION_PROVIDER; unrecognised values fall through to auto."
-    }
-  }
+  "license": "MIT"
 }
