@@ -13,12 +13,6 @@
       "synced_commit": "c4d1925ae9b76a1b641877328209ad25cfeb5ef2",
       "synced_date": "2026-06-26"
     },
-    "copilot-plugin-cc": {
-      "repo": "https://github.com/kiraxie/copilot-plugin-cc",
-      "synced_version": "0.4.2",
-      "synced_commit": "c3e8a8a48b86a4d57de0a89d5520c74ad0bdd715",
-      "synced_date": "2026-06-26"
-    },
     "codex-plugin-cc": {
       "repo": "https://github.com/openai/codex-plugin-cc",
       "synced_version": "1.0.5",
@@ -75,7 +69,7 @@
     {
       "skill": "ask / status / result",
       "from": "copilot-plugin-cc + codex-plugin-cc",
-      "note": "runtime commands; setup+status merged into status; quota fallback at premium <5%."
+      "note": "runtime commands; setup+status merged into status. Originally had a Copilot premium-quota fallback at <5% remaining; removed along with the Copilot backend."
     },
     {
       "skill": "init",

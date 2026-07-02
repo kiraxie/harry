@@ -1,7 +1,7 @@
 /**
- * Git worktree lifecycle for isolating Copilot implementations.
+ * Git worktree lifecycle for isolating write-enabled agent sessions.
  *
- * Worktree branches are named `copilot/<jobId>`. On success the checkout is
+ * Worktree branches are named `harry/<jobId>`. On success the checkout is
  * removed but the branch is retained as the deliverable. On failure both the
  * checkout and a commit-free branch are removed.
  */
@@ -77,13 +77,13 @@ export function createWorktree(
 ): WorktreeHandle {
   const repoRoot = resolveRepoRoot(cwd);
   const baseCommit = runGit(["rev-parse", "HEAD"], repoRoot);
-  const branch = `copilot/${jobId}`;
+  const branch = `harry/${jobId}`;
 
   // Warn on uncommitted changes — but do not block.
   const dirty = tryGit(["status", "--porcelain"], repoRoot);
   if (dirty.ok && dirty.stdout.length > 0) {
     opts.onWarn?.(
-      `Main working tree has uncommitted changes; Copilot worktree starts from HEAD (${baseCommit.slice(0, 8)}) — your changes are not visible to the Copilot session.`,
+      `Main working tree has uncommitted changes; the isolated worktree starts from HEAD (${baseCommit.slice(0, 8)}) — your changes are not visible to that session.`,
     );
   }
 
@@ -91,7 +91,7 @@ export function createWorktree(
   // would cross a filesystem boundary, fall back under the repo's .git dir.
   let worktreePath = opts.preferredPath;
   if (!sameDevice(worktreePath, repoRoot)) {
-    worktreePath = join(repoRoot, ".git", "copilot-worktrees", jobId);
+    worktreePath = join(repoRoot, ".git", "harry-worktrees", jobId);
     opts.onWarn?.(`State dir is on a different filesystem; using ${worktreePath} instead.`);
   }
 
@@ -115,9 +115,9 @@ export function createWorktree(
 }
 
 /**
- * Copilot edits files but does NOT commit them. This function stages and
- * commits all changes in the worktree so the branch carries the deliverable
- * and `computeDiffStats` works correctly.
+ * The agent session edits files but does NOT commit them. This function stages
+ * and commits all changes in the worktree so the branch carries the
+ * deliverable and `computeDiffStats` works correctly.
  *
  * Returns `true` if a commit was created, `false` if the worktree was clean.
  */
@@ -131,7 +131,7 @@ export function commitWorktreeChanges(handle: WorktreeHandle, message: string): 
 }
 
 export interface CleanupOptions {
-  /** `true` if the Copilot session finished cleanly. */
+  /** `true` if the agent session finished cleanly. */
   success: boolean;
   onWarn?: (message: string) => void;
 }
@@ -192,7 +192,7 @@ export function computeDiffStats(handle: WorktreeHandle): DiffStats {
 }
 
 /**
- * Best-effort cleanup of orphaned copilot/* worktrees and commit-free branches
+ * Best-effort cleanup of orphaned harry/* worktrees and commit-free branches
  * older than `maxAgeDays`. Called from the `setup` command.
  */
 export function pruneOrphans(
@@ -209,12 +209,12 @@ export function pruneOrphans(
   const prune = tryGit(["worktree", "prune"], repoRoot);
   const worktreesPruned = prune.ok;
 
-  // Enumerate copilot/* branches with their commit date.
+  // Enumerate harry/* branches with their commit date.
   const branches = tryGit(
     [
       "for-each-ref",
       "--format=%(refname:short) %(committerdate:unix) %(objectname)",
-      "refs/heads/copilot/",
+      "refs/heads/harry/",
     ],
     repoRoot,
   );

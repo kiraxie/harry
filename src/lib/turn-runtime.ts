@@ -29,8 +29,7 @@ export interface TurnTimeout {
 /**
  * Arm a per-call timeout that aborts the run when it elapses.
  *
- * Both providers honor the abort via RunOpts.signal: Copilot stops its stream,
- * and CodexProvider links the signal into runCodexTurn (which tears the codex
+ * CodexProvider links the signal into runCodexTurn (which tears the codex
  * child down). Codex additionally enforces its own internal turn ceiling, so
  * whichever fires first ends the turn.
  */

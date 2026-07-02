@@ -1,14 +1,14 @@
 /**
- * review command — sends a review prompt to a frontier model (Copilot or Codex)
- * and prints the assistant's markdown verbatim (or a structured `reviewed` JSON
- * envelope in --fix mode).
+ * review command — sends a review prompt to Codex and prints the assistant's
+ * markdown verbatim (or a structured `reviewed` JSON envelope in --fix mode).
  *
  * Read-only: no worktree, no file writes regardless of path. Default model and
  * reasoning effort differ between the standard / --adversarial / --simplify
- * modes. The whole agent lifecycle (provider resolution, auth, run) is delegated
- * to {@link runAgentSession}; review only supplies the prompt/options, the
- * copilot-only quota gate, the provider-aware default model, and the three
- * output contracts (markdown, `reviewed` envelope, failure text).
+ * modes — each lane runs its own model so adversarial/simplify get a genuinely
+ * different perspective from standard, not just a different prompt. The whole
+ * agent lifecycle (auth, run) is delegated to {@link runAgentSession}; review
+ * only supplies the prompt/options and the three output contracts (markdown,
+ * `reviewed` envelope, failure text).
  */
 
 import {
@@ -17,8 +17,7 @@ import {
   normalizeFindings,
 } from "../lib/findings.js";
 import { collectReviewContext, type ReviewScope, resolveReviewTarget } from "../lib/git.js";
-import type { ProviderId, ReasoningEffort, RunResult } from "../lib/provider.ts";
-import { evaluateGate, fmtNum, isPremiumModel, readSnapshot, summarize } from "../lib/quota.js";
+import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { buildReviewPrompt, type ReviewKind } from "../lib/review-prompts.js";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.js";
@@ -32,11 +31,9 @@ export interface ReviewOptions {
   scope?: ReviewScope;
   base?: string;
   focusText?: string;
-  provider?: ProviderId;
   model?: string;
   reasoning?: ReasoningEffort;
   timeout?: number;
-  minQuota?: number;
   /**
    * Extra context appended to the model's system message. Literal text, or
    * `@file` / `@-` (stdin) to read from a source — see `resolveExtraContext`.
@@ -85,17 +82,14 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   const kind: ReviewKind = resolveKind(options);
   const reasoning = options.reasoning ?? defaultEffortFor(kind);
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  const minQuota = options.minQuota ?? 1;
-  // The model copilot WOULD use (for the copilot-only quota pre-gate and the
-  // markdown/envelope metadata). The actual model is filled per-provider by
-  // runAgentSession's defaultModelFor.
-  const copilotModel = options.model ?? defaultModelFor(kind);
+  // The model actually sent: explicit --model wins, else the per-lane default.
+  const requestedModel = options.model ?? defaultModelFor(kind);
 
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
   log(
-    `review start: kind=${kind} model=${copilotModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`,
+    `review start: kind=${kind} model=${requestedModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`,
   );
 
   // 1. Resolve target + collect context (read-only git ops). -----------------
@@ -131,17 +125,15 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   // 3. Timeout → abort signal. -----------------------------------------------
   const turn = startTurnTimeout({ timeoutMs, progress, log });
 
-  // 4. Run the agent session through the resolved provider. ------------------
-  let provider: ProviderId;
+  // 4. Run the agent session. -------------------------------------------------
   let result: RunResult;
   try {
-    ({ provider, result } = await runAgentSession({
+    ({ result } = await runAgentSession({
       cwd: context.repoRoot,
-      flags: { provider: options.provider },
       run: {
         cwd: context.repoRoot,
         prompt,
-        model: options.model, // undefined → defaultModelFor fills it per provider
+        model: requestedModel,
         reasoning,
         readOnly: true,
         allowShell: false,
@@ -150,25 +142,6 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
         appendLog: log,
         progress,
         signal: turn.signal,
-      },
-      defaultModelFor: (id) => (id === "copilot" ? defaultModelFor(kind) : undefined),
-      enforceQuota: () => {
-        // Copilot-only gate, evaluated against the model copilot WOULD use.
-        // Standard-tier models (Sonnet/Haiku/GPT-*) don't increment
-        // `premium_interactions`, so blocking them when premium is exhausted
-        // would be a false negative.
-        if (!isPremiumModel(copilotModel)) {
-          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
-          return;
-        }
-        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
-        if (!gate.ok) {
-          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-          throw new Error(
-            `Quota exhausted — review not started. Resets at ${gate.resetAt || "unknown"}.`,
-          );
-        }
-        if ("warning" in gate && gate.warning) progress(gate.warning);
       },
       log,
     }));
@@ -203,13 +176,6 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     throw new Error(reason);
   }
 
-  const quotaRemaining = summarize(readSnapshot(stateDir));
-  const premium = result.usage?.kind === "copilot" ? (result.usage.premiumRequestCost ?? 0) : 0;
-  // The model that actually ran: copilot reports the model it was asked for;
-  // codex decides via ~/.codex/config.toml, so surface the requested model or a
-  // neutral 'codex' label rather than a copilot default it never used.
-  const usedModel = provider === "copilot" ? copilotModel : (options.model ?? "codex");
-
   if (fixMode) {
     // Structured mode: emit a single JSON envelope on stdout so Claude Code can
     // parse the findings, judge each against its conversation context, and pass
@@ -218,13 +184,11 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     const envelope = {
       status: "reviewed" as const,
       kind,
-      model: usedModel,
+      model: requestedModel,
       target: context.target.label,
       fileCount: context.fileCount,
       findings,
       reviewMarkdown: reviewBody.trim(),
-      premiumRequestCost: premium,
-      quotaRemaining,
     };
     process.stdout.write(`${JSON.stringify(envelope)}\n`);
     log(`review (fix mode) done: ${findings.length} structured finding(s)`);
@@ -236,34 +200,19 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
 
   // Run metadata goes to stderr (same channel as progress) so foreground users
   // still see it, background workers log it, and stdout stays clean.
-  if (result.usage?.kind === "codex") {
+  if (result.usage) {
     const u = result.usage;
     progress(
-      `Review done — kind=${kind} provider=${provider} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`,
+      `Review done — kind=${kind} model=${requestedModel} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`,
     );
     log(
-      `review done: kind=${kind} provider=${provider} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`,
+      `review done: kind=${kind} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`,
     );
   } else {
-    // Render every observed pool — Copilot only meters `premium_interactions`
-    // today, but Standard-tier models do not consume it, so a per-pool footer is
-    // more honest than a single conflated "remaining" number.
-    const poolNote =
-      quotaRemaining.pools.length > 0
-        ? quotaRemaining.pools
-            .map((p) =>
-              p.unlimited
-                ? `${p.label}=unlimited`
-                : `${p.label}=${fmtNum(p.remaining ?? 0)}/${fmtNum(p.total ?? 0)}`,
-            )
-            .join(", ")
-        : "no quota snapshot yet";
     progress(
-      `Review done — kind=${kind} provider=${provider} model=${usedModel} effort=${reasoning} files=${context.fileCount} premium-cost=${fmtNum(premium)} | ${poolNote}`,
+      `Review done — kind=${kind} model=${requestedModel} effort=${reasoning} files=${context.fileCount}`,
     );
-    log(
-      `review done: kind=${kind} provider=${provider} files=${context.fileCount} premium=${premium} pools=${poolNote}`,
-    );
+    log(`review done: kind=${kind} files=${context.fileCount}`);
   }
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }

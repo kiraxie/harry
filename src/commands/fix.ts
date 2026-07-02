@@ -1,6 +1,6 @@
 /**
  * fix command — applies a Claude-Code-approved set of review findings to the
- * CURRENT working tree using a write-enabled agent session (Copilot or Codex).
+ * CURRENT working tree using a write-enabled Codex session.
  *
  * This is stage 3 of the review→fix pipeline:
  *   1. `review --fix`  — the model emits structured findings (read-only).
@@ -14,19 +14,20 @@
  * uncommitted changes as a baseline snapshot, then leaves the fix edits staged
  * for the user to inspect and commit.
  *
- * The agent lifecycle (provider resolution, auth, run) is delegated to
- * {@link runAgentSession}; fix only supplies the prompt/options, the
- * copilot-only quota gate, the provider-aware default model, and its single
- * JSON-envelope stdout contract. Best-effort: findings the model could not apply
- * are reported under `skipped` rather than failing the whole run.
+ * The agent lifecycle (auth, run) is delegated to {@link runAgentSession}; fix
+ * only supplies the prompt/options and its single JSON-envelope stdout
+ * contract. Best-effort: findings the model could not apply are reported under
+ * `skipped` rather than failing the whole run. Defaults to a capable model
+ * (gpt-5.5) rather than leaving it to `~/.codex/config.toml` — applying vetted
+ * findings is a judgment task, same principle as the implementer/fixer model
+ * routing in HARRY.md §5.
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { extractJsonBlock, type Finding, normalizeFindings } from "../lib/findings.js";
-import type { ProviderId, ReasoningEffort, RunResult } from "../lib/provider.ts";
-import { evaluateGate, isPremiumModel, readSnapshot, summarize } from "../lib/quota.js";
+import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.js";
 import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.js";
@@ -36,11 +37,9 @@ import { resolveRepoRoot } from "../lib/worktree.js";
 export interface FixOptions {
   /** Path to the approved-findings JSON (array, or a {findings:[...]} object). */
   findingsPath?: string;
-  provider?: ProviderId;
   model?: string;
   reasoning?: ReasoningEffort;
   timeout?: number;
-  minQuota?: number;
   allowShell?: boolean;
   allowUrl?: boolean;
   writePath?: string;
@@ -52,7 +51,10 @@ export interface FixOptions {
   jobId?: string;
 }
 
-const DEFAULT_MODEL = "claude-opus-4.8";
+// Capable-by-default model: applying vetted findings is a judgment task, same
+// principle as the implementer/fixer model routing in HARRY.md §5 — don't let
+// it silently inherit whatever ~/.codex/config.toml happens to default to.
+const DEFAULT_MODEL = "gpt-5.5";
 const DEFAULT_EFFORT: ReasoningEffort = "high";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -88,9 +90,7 @@ interface FixedEnvelope {
   applied: string[];
   /** Findings the model could not apply, with reasons. */
   skipped: Array<{ id: string; reason: string }>;
-  premiumRequestCost: number;
   model: string;
-  quotaRemaining?: ReturnType<typeof summarize>;
 }
 
 interface FailedEnvelope {
@@ -104,15 +104,7 @@ interface FailedEnvelope {
   baselineCommit?: string;
 }
 
-interface BlockedEnvelope {
-  status: "blocked";
-  reason: string;
-  resetAt?: string;
-  remaining?: number;
-  message: string;
-}
-
-type Envelope = FixedEnvelope | FailedEnvelope | BlockedEnvelope;
+type Envelope = FixedEnvelope | FailedEnvelope;
 
 function emit(env: Envelope): string {
   const json = JSON.stringify(env);
@@ -226,11 +218,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   const jobId = options.jobId ?? generateJobId();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  const minQuota = options.minQuota ?? 1;
-  // The model copilot WOULD use (for the copilot-only quota pre-gate and the
-  // envelope metadata). The actual model is filled per-provider by
-  // runAgentSession's defaultModelFor.
-  const copilotModel = options.model ?? DEFAULT_MODEL;
+  const requestedModel = options.model ?? DEFAULT_MODEL;
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
 
   // 1. Load + validate findings ----------------------------------------------
@@ -258,7 +246,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     emit({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
     process.exit(1);
   }
-  log(`fix start: model=${copilotModel} findings=${findings.length} source=${findingsAbs}`);
+  log(`fix start: model=${requestedModel} findings=${findings.length} source=${findingsAbs}`);
 
   // 2. Repo --------------------------------------------------------------------
   let repoRoot: string;
@@ -270,8 +258,8 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   }
 
   // The pre-fix snapshot is deferred to the `beforeRun` hook below so it runs
-  // ONLY after the quota gate passes — a blocked copilot fix must mutate NO git
-  // history. These outer vars are filled by that hook and read by the envelope.
+  // ONLY after precheckRun passes — a refused fix must mutate NO git history.
+  // These outer vars are filled by that hook and read by the envelope.
   let preFixSnapshot = false;
   let baselineCommit = "";
   // Snapshot facts to attach to a `failed` envelope, so a run that fails AFTER
@@ -284,7 +272,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
 
   // Single-envelope guard: a late interrupt must not emit a second stdout line
   // once the terminal envelope has been written. The actual SIGINT/SIGTERM
-  // handling (force-stop the live provider subprocess, then exit 130) is owned by
+  // handling (force-stop the live session, then exit 130) is owned by
   // runAgentSession's centralized handler; we only supply `onInterrupt` below to
   // flush this command's terminal `failed` envelope before that exit.
   let envelopeDone = false;
@@ -305,17 +293,15 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   });
 
   // 4. Run the agent session (write-enabled, real working tree). -------------
-  progress(`Applying ${findings.length} approved fix(es) (model=${copilotModel})…`);
-  let provider: ProviderId;
+  progress(`Applying ${findings.length} approved fix(es) (model=${requestedModel})…`);
   let result: RunResult;
   try {
-    ({ provider, result } = await runAgentSession({
+    ({ result } = await runAgentSession({
       cwd: repoRoot,
-      flags: { provider: options.provider },
       run: {
         cwd: repoRoot,
         prompt: buildFixPrompt(findings),
-        model: options.model, // undefined → defaultModelFor fills it per provider
+        model: requestedModel,
         reasoning,
         readOnly: false,
         allowShell: options.allowShell ?? false,
@@ -326,44 +312,15 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         signal: turn.signal,
       },
       onInterrupt,
-      defaultModelFor: (id) => (id === "copilot" ? DEFAULT_MODEL : undefined),
-      enforceQuota: () => {
-        // Copilot-only gate (runAgentSession invokes this only when the provider
-        // meters quota). Block early so the user is told to apply fixes directly
-        // rather than burning the run. Standard-tier models don't consume the
-        // premium pool, so skip the gate for them.
-        if (!isPremiumModel(copilotModel)) {
-          log(`quota gate skipped: model ${copilotModel} is not premium-metered`);
-          return;
-        }
-        const gate = evaluateGate(readSnapshot(stateDir), { minRemaining: minQuota });
-        if (!gate.ok) {
-          log(`quota blocked: remaining=${gate.remaining} resetAt=${gate.resetAt}`);
-          envelopeDone = true;
-          turn.clear();
-          emit({
-            status: "blocked",
-            reason: gate.reason,
-            resetAt: gate.resetAt,
-            remaining: gate.remaining,
-            message: `Copilot quota exhausted; apply these fixes directly. Resets at ${gate.resetAt || "unknown"}.`,
-          });
-          process.exit(0);
-        }
-        if ("warning" in gate && gate.warning) progress(gate.warning);
-      },
-      // Post-gate / pre-run: snapshot pre-existing changes so the fix diff is
-      // isolated. Runs ONLY after the quota gate passes, so a blocked copilot
-      // fix leaves git history untouched.
+      // Post-precheck / pre-run: snapshot pre-existing changes so the fix diff
+      // is isolated. Runs ONLY after precheckRun passes, so a refused fix
+      // leaves git history untouched.
       beforeRun: () => {
         // Commit any pre-existing uncommitted changes so the fix diff is isolated.
         const dirty = tryGit(["status", "--porcelain"], repoRoot);
         if (dirty.ok && dirty.stdout.trim()) {
           tryGit(["add", "-A"], repoRoot);
-          const c = tryGit(
-            ["commit", "-m", "chore: pre-fix snapshot (copilot fix baseline)"],
-            repoRoot,
-          );
+          const c = tryGit(["commit", "-m", "chore: pre-fix snapshot (fix baseline)"], repoRoot);
           preFixSnapshot = c.ok;
           if (c.ok) {
             progress(
@@ -445,11 +402,6 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     result.summary?.trim() ||
     `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
 
-  const premium = result.usage?.kind === "copilot" ? (result.usage.premiumRequestCost ?? 0) : 0;
-  // copilot ran the model it was asked for; codex decides via config, so report
-  // the requested model or a neutral 'codex' label.
-  const usedModel = provider === "copilot" ? copilotModel : (options.model ?? "codex");
-
   const envelope: FixedEnvelope = {
     status: "fixed",
     jobId,
@@ -461,9 +413,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     linesRemoved: diff.linesRemoved,
     applied: report.applied,
     skipped: report.skipped,
-    premiumRequestCost: premium,
-    model: usedModel,
-    quotaRemaining: summarize(readSnapshot(stateDir)),
+    model: requestedModel,
   };
 
   const envelopeJson = emit(envelope);
@@ -475,10 +425,10 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   }
 
   progress(
-    `Fix done — provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`,
+    `Fix done — applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`,
   );
   log(
-    `fix done: provider=${provider} applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`,
+    `fix done: applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`,
   );
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }

@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    and `brainstorm → plan → execute → finish` pipeline that ship to consumers. This is prose/markdown,
    not code.
 2. **The `companion` runtime** (`src/` → bundled to `dist/companion.cjs`) — a TypeScript CLI that
-   backs the `review`, `ask`, and `fix` slash commands, talking to a Copilot or Codex backend.
+   backs the `review`, `ask`, and `fix` slash commands, talking to a Codex backend.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
 required to install it. Only rebuild `dist/` when changing `src/`.
@@ -47,19 +47,18 @@ Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/comma
 (`review`, `ask`, `fix`, `status`, `result`, `background`, `setup`). Bundled by `build.mjs`
 (esbuild, CJS, Node built-ins kept external) into the one committed file `dist/companion.cjs`.
 
-**Provider abstraction** (`src/lib/provider.ts`, `src/lib/providers/{codex,copilot}.ts`): `review`,
-`ask`, and `fix` run through one of two interchangeable backends. Resolution order:
-1. an explicit `--provider codex|copilot` flag
-2. the plugin's `provider` user setting (exposed as `CLAUDE_PLUGIN_OPTION_PROVIDER`)
-3. auto — prefer Codex (if its CLI is installed and logged in), else Copilot
+**Codex session driver** (`src/lib/provider.ts`, `src/lib/run-agent-session.ts`,
+`src/lib/providers/codex.ts`): `review`, `ask`, and `fix` all run through a single Codex-only
+`CodexSession`. No provider selection — the `codex` CLI on `PATH`, logged in via `codex login`,
+is the only backend.
 
 `src/lib/codex/` (protocol, process, app-server, turn, auth) and `tests/fake-codex.mjs` /
 `tests/fake-codex.d.mts` are derived from `codex-plugin-cc` and are **Apache-2.0**, not MIT — see
 `NOTICE`. Everything else in the repo is MIT.
 
-`upstream.json` pins the four upstream sources (`superpowers`, `ponytail`, `copilot-plugin-cc`,
-`codex-plugin-cc`) by commit; `references/upstream-sync.md` documents how to diff an upstream's
-newer philosophy against harry's customized version when pulling in changes.
+`upstream.json` pins the three upstream sources (`superpowers`, `ponytail`, `codex-plugin-cc`) by
+commit; `references/upstream-sync.md` documents how to diff an upstream's newer philosophy against
+harry's customized version when pulling in changes.
 
 ## Plugin content (`HARRY.md`, `skills/`, `commands/`, `references/`)
 
