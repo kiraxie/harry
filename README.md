@@ -23,7 +23,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 - Node.js **>= 26**
 - [Claude Code](https://claude.com/claude-code)
-- For the agent commands (`review`, `ask`, `debate`): a backend **provider** — GitHub Copilot (`gh auth login`) or OpenAI Codex (`codex` CLI + `codex login`). See [Providers](#providers).
+- For the agent commands (`review`, `ask`, `debate`): the `codex` CLI on `PATH`, logged in (`codex login`).
 - For `debate`'s Gemini voice: the `agy` (Antigravity) CLI on `PATH`.
 
 ## Install
@@ -47,38 +47,32 @@ Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run buil
 
 ## Commands
 
-`review`, `ask`, and `debate` run through a backend [provider](#providers). On **Copilot** they **consume premium quota** (costs below); on **Codex** they run on your Codex subscription at **no Copilot premium**. The rest are Claude-native or local scripts and cost **no premium**.
+`review`, `ask`, and `debate` run through Codex, on your Codex/ChatGPT subscription — no
+per-call premium quota. The rest are Claude-native or local scripts.
 
-| Command | What it does | Premium cost |
-|---------|--------------|--------------|
-| `/review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) | **yes** — scales with diff size |
-| `/ask "<prompt>"` | One read-only prompt to a frontier model (gpt-5.5) | **yes** — ~7.5 cost/call |
-| `/debate "<topic>"` | 3 models (opus / gpt-5.5 / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes | **yes** — gpt across 2 rounds (opus on your Claude sub, gemini on your Google sub) |
-| `/status` | Quota / Codex rate-limit snapshot + background jobs | no |
-| `/result [job-id]` | Fetch a completed background job's output | no |
-| `/lean [--repo]` | Over-engineering audit — what to delete/simplify (diff, or whole tree with `--repo`) | no |
-| `/debt` | Re-judge deferred decisions (`DEBT:` markers + spec Non-Goals + plan deferrals) into a triaged ledger | no |
-| `/init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs | no |
+| Command | What it does |
+|---------|--------------|
+| `/review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) |
+| `/ask "<prompt>"` | One read-only prompt to Codex |
+| `/debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
+| `/status` | Codex rate-limit snapshot + background jobs |
+| `/result [job-id]` | Fetch a completed background job's output |
+| `/lean [--repo]` | Over-engineering audit — what to delete/simplify (diff, or whole tree with `--repo`) |
+| `/debt` | Re-judge deferred decisions (`DEBT:` markers + spec Non-Goals + plan deferrals) into a triaged ledger |
+| `/init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
 Cheap-first smoke test: `/status` → `/lean` → `/ask` → `/review`/`/debate`.
 
-## Providers
+## Codex
 
-The agent commands (`ask`, `review`, `review --fix`) run through one of two
-interchangeable backends:
+The agent commands (`ask`, `review`, `review --fix`) all run through the OpenAI **Codex**
+CLI (spawned as a subprocess, JSON-RPC over stdio). No SDK dependency — only the `codex`
+binary on `PATH`.
 
-- **Copilot** — the GitHub Copilot CLI. Consumes Copilot **premium quota**.
-- **Codex** — OpenAI's `codex` CLI. Runs on your Codex/ChatGPT subscription at
-  **no Copilot premium**; `status` shows its rate-limit snapshot instead.
-
-**Which one runs**, in order:
-
-1. An explicit `--provider codex|copilot` flag.
-2. The `provider` plugin setting (`/plugin` → harry → **Backend provider**).
-3. Otherwise **auto**: Codex when its CLI is installed and logged in, else Copilot.
-
-Codex injects no default model — leave `--model` unset to let
-`~/.codex/config.toml` decide. One-time setup: install the `codex` CLI, then `codex login`.
+Codex injects no default model for `ask`/`fix` — leave `--model` unset to let
+`~/.codex/config.toml` decide. `review`'s three lanes (standard/adversarial/simplify) each
+pin their own default model to keep their perspectives distinct; pass `--model` to
+override any of them. One-time setup: install the `codex` CLI, then `codex login`.
 
 ## Skills
 
@@ -96,7 +90,7 @@ HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · writing-plans · executing · finishing
 commands/           review · ask · status · result · debate · lean · debt · init
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
-src/ + dist/        agent runtime — Copilot + Codex providers (bundled via build.mjs)
+src/ + dist/        agent runtime — Codex provider (bundled via build.mjs)
 scripts/            install.mjs · init.mjs · lib/markers.mjs
 upstream.json       tracks the four upstreams by commit (see references/upstream-sync.md)
 ```
