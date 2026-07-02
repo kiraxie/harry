@@ -55,11 +55,7 @@ test("CodexProvider.run maps a turn to a successful RunResult with codex usage",
   });
 
   assert.equal(res.success, true);
-  assert.equal(res.usage?.kind, "codex");
-  assert.equal(
-    res.usage?.kind === "codex" ? res.usage.rateLimits?.primaryUsedPercent : undefined,
-    12,
-  );
+  assert.equal(res.usage?.rateLimits?.primaryUsedPercent, 12);
   assert.ok(res.lastAssistantMessage.length > 0, "expected a non-empty assistant message");
 });
 

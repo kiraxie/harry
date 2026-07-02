@@ -2,7 +2,7 @@
 
 /**
  * companion — CLI entry point for the harry Claude Code plugin; drives the
- * Copilot or Codex provider behind one neutral command set.
+ * Codex provider behind one neutral command set.
  */
 
 import process from "node:process";
@@ -20,26 +20,26 @@ function printUsage(): void {
   console.log(
     [
       "Usage:",
-      "  companion setup [--check] [--json] [--provider copilot|codex]",
+      "  companion setup [--check] [--json]",
       "  companion review [focus...] [--adversarial] [--base <ref>]",
       "                           [--scope auto|working-tree|branch] [--fix]",
       "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
       "                           [--context <text|@file|@->]",
-      "                           [--timeout <ms>] [--min-quota <n>] [--background]",
+      "                           [--timeout <ms>] [--background]",
       '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
       "  companion fix --findings <path> [--model <id>]",
       "                        [--reasoning <low|medium|high|xhigh>]",
       "                        [--context <text|@file|@->]",
-      "                        [--timeout <ms>] [--min-quota <n>] [--write <path>]",
+      "                        [--timeout <ms>] [--write <path>]",
       "  companion status [job-id] [--all] [--json]",
       "  companion result [job-id] [--json]",
       "",
       "Commands:",
-      "  setup       Check provider auth, available models, quota",
-      "  review      Run a code review (Copilot or Codex; markdown, or JSON findings with --fix)",
+      "  setup       Check Codex auth and availability",
+      "  review      Run a code review (markdown, or JSON findings with --fix)",
       "  ask         Ask a single prompt (read-only) and print the answer",
       "  fix         Apply Claude-Code-approved review findings to the working tree",
-      "  status      Show quota plus background job status",
+      "  status      Show Codex rate-limit snapshot plus background job status",
       "  result      Retrieve a background job's output",
     ].join("\n"),
   );
@@ -146,11 +146,9 @@ async function main(): Promise<void> {
 
   switch (command) {
     case "setup": {
-      const provider = flagEnum(flags, "provider", ["copilot", "codex"] as const);
       await runSetup({
         check: flags.check === true,
         json: flags.json === true,
-        provider,
       });
       break;
     }
@@ -174,7 +172,7 @@ async function main(): Promise<void> {
       if (flags["harry-fix"] !== undefined) {
         throw new Error(
           "--harry-fix is a /review fix-backend selector, not a CLI flag. " +
-            "To apply findings via Copilot, run: fix --findings <path> --model gpt-5.5 --reasoning xhigh.",
+            "To apply findings, run: fix --findings <path> --reasoning xhigh.",
         );
       }
 
@@ -183,7 +181,6 @@ async function main(): Promise<void> {
       const validEfforts = ["low", "medium", "high", "xhigh"] as const;
       const scope = flagEnum<ReviewScope>(flags, "scope", validScopes);
       const reasoning = flagEnum(flags, "reasoning", validEfforts);
-      const provider = flagEnum(flags, "provider", ["copilot", "codex"] as const);
 
       if (flags.background === true) {
         const jobId = enqueueBackground("review", args, flags, process.cwd());
@@ -196,11 +193,9 @@ async function main(): Promise<void> {
         scope,
         base: flagString(flags, "base"),
         focusText: args.join(" "),
-        provider,
         model: flagString(flags, "model"),
         reasoning,
         timeout: flagNumber(flags, "timeout"),
-        minQuota: flagNumber(flags, "min-quota"),
         fix: flags.fix === true,
         context: flagString(flags, "context"),
       });
@@ -209,15 +204,12 @@ async function main(): Promise<void> {
 
     case "ask": {
       const reasoning = flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"] as const);
-      const provider = flagEnum(flags, "provider", ["copilot", "codex"] as const);
       const prompt = extractTask(args, flags); // reuse positional/`--task`/stdin extraction
       await runAsk(process.cwd(), {
         prompt,
-        provider,
         model: flagString(flags, "model"),
         reasoning,
         timeout: flagNumber(flags, "timeout"),
-        minQuota: flagNumber(flags, "min-quota"),
         context: flagString(flags, "context"),
       });
       break;
@@ -225,14 +217,11 @@ async function main(): Promise<void> {
 
     case "fix": {
       const reasoning = flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"] as const);
-      const provider = flagEnum(flags, "provider", ["copilot", "codex"] as const);
       await runFix(process.cwd(), {
         findingsPath: flagString(flags, "findings"),
-        provider,
         model: flagString(flags, "model"),
         reasoning,
         timeout: flagNumber(flags, "timeout"),
-        minQuota: flagNumber(flags, "min-quota"),
         allowShell: flags["allow-shell"] === true,
         allowUrl: flags["allow-url"] === true,
         writePath: flagString(flags, "write"),

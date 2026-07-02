@@ -2,8 +2,8 @@
  * Inline prompt templates for /harry:review.
  *
  * Adapted from the codex-plugin-cc adversarial-review template. The structured
- * JSON-schema output contract is dropped — Copilot SDK has no schema enforcement
- * primitive, so we ask for markdown and render it verbatim.
+ * JSON-schema output contract is dropped — we ask for markdown and render it
+ * verbatim, which stays portable across whatever model runs the review.
  */
 
 import type { ReviewContext } from "./git.js";

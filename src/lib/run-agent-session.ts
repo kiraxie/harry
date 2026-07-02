@@ -35,9 +35,7 @@ function defaultSession(): CodexSession {
   return new CodexProvider();
 }
 
-export async function runAgentSession(
-  args: RunAgentSessionArgs,
-): Promise<{ result: RunResult }> {
+export async function runAgentSession(args: RunAgentSessionArgs): Promise<{ result: RunResult }> {
   // Centralized interrupt handling, installed across the WHOLE session span
   // (auth → precheck → run), not just the run: a command's `onInterrupt` (e.g.
   // fix's terminal `failed` envelope) and the live session's forceStop must

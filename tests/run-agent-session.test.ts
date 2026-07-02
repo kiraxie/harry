@@ -109,7 +109,5 @@ test("default buildSession spawns the real CodexProvider (smoke: constructible)"
   // Just confirm the default path resolves without a buildSession override —
   // does NOT run a real codex turn (no cwd/auth available in CI), so it's
   // expected to reject on checkAuth. The point is exercising defaultSession().
-  await assert.rejects(
-    runAgentSession({ cwd: "/nonexistent", run: baseRun("/nonexistent") }),
-  );
+  await assert.rejects(runAgentSession({ cwd: "/nonexistent", run: baseRun("/nonexistent") }));
 });

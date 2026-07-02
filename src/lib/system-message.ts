@@ -1,17 +1,16 @@
 /**
- * Builds the `systemMessage` append fed into a Copilot session.
+ * Builds the `systemMessage` append fed into a Codex session.
  *
- * Copilot already loads the repository's instruction files
- * (`.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`) from the
- * working directory on its own, so we do NOT re-inject those. What the
- * delegated session lacks is:
+ * Codex already loads the repository's instruction files (`AGENTS.md`,
+ * `CLAUDE.md`) from the working directory on its own, so we do NOT re-inject
+ * those. What the delegated session lacks is:
  *   1. the framing — that it is a headless subtask delegated by Claude Code's
  *      orchestrator, with mode-specific guardrails (isolated worktree / real
  *      tree / read-only); and
  *   2. CC-only context — decisions, constraints, and intent that live in the
  *      Claude Code conversation and never made it into a repo file.
  *
- * Both are appended after the SDK-managed system-message sections.
+ * Both are appended after codex's own instruction-file loading.
  */
 
 import { readFileSync } from "node:fs";
