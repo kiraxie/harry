@@ -81,7 +81,7 @@ test("CodexProvider.run refuses write mode without shell access (cr-16 trust bou
           appendLog() {},
           progress() {},
         }),
-      /shell|copilot/i,
+      /shell/i,
     );
   });
 });
