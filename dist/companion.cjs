@@ -34,7 +34,7 @@ var import_node_readline = __toESM(require("node:readline"), 1);
 // package.json
 var package_default = {
   name: "harry",
-  version: "0.5.0",
+  version: "0.6.0",
   description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
   type: "module",
   license: "MIT",
@@ -52,6 +52,7 @@ var package_default = {
     lint: "biome check .",
     format: "biome format --write .",
     "install-laws": "node scripts/install.mjs",
+    "install-laws-codex": "node scripts/install-codex.mjs",
     "init-ignore": "node scripts/init.mjs"
   },
   dependencies: {},

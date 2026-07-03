@@ -5,6 +5,27 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-03
+
+### Added
+
+- **Codex CLI compatibility**: harry now also ships as a Codex CLI plugin, a
+  deliberate partial-parity companion to the Claude Code build. `.codex-plugin/
+  plugin.json` + `.agents/plugins/marketplace.json` register the plugin — both
+  schemas were live-verified against an authenticated Codex CLI install, not
+  guessed from web docs. `codex-skills/` converts the mechanical/read-only
+  slash commands (`ask`, `status`, `result`, `debt`, `lean`, `review`, `init`)
+  into Codex Skills, since Codex's plugin manifest has no `commands`/`prompts`
+  field. `scripts/install-codex.mjs` wires `HARRY.md` into `~/.codex/AGENTS.md`.
+  The four pipeline skills and the `dist/companion.cjs` runtime are shared
+  as-is between both builds.
+- Known, documented degradations on the Codex build: `debate` has no Codex
+  skill; `review --full` drops the Claude-only self-review lane and
+  `--harry-fix`; `review`'s read-only/read-write boundary is instruction-only
+  rather than tool-enforced; `init`'s law-wiring inlines `HARRY.md` as a
+  snapshot rather than a live `@`-import.
+- `pnpm run install-laws-codex` — mirrors `install-laws` for the Codex build.
+
 ## [0.5.0] - 2026-07-03
 
 ### Removed
