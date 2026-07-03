@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// harry install-laws — wire the resident HARRY.md into the global instructions
-// file via an `@` import, so the laws load every session without a keyword.
+// harry install-laws-codex — wire the resident HARRY.md into Codex CLI's global
+// AGENTS.md by inlining its content into a marker block.
 //
-// Inserts a marker-wrapped `@<pluginRoot>/HARRY.md` line into ~/.claude/CLAUDE.md
-// (override with HARRY_GLOBAL). Idempotent; `--remove` strips it. Also warns
-// about stale entries in the global file that harry supersedes (it does NOT
-// edit the user's hand-written rules — that's the user's call).
+// Codex has no `@`-import syntax (unlike Claude Code's global CLAUDE.md), so this
+// embeds a snapshot of HARRY.md's content rather than a live reference — re-run
+// after HARRY.md changes to resync. Inserts into ~/.codex/AGENTS.md (override with
+// HARRY_CODEX_GLOBAL). Idempotent; `--remove` strips it.
 //
 // Usage:
-//   node scripts/install.mjs            # install the @ import
-//   node scripts/install.mjs --remove   # uninstall
-//   node scripts/install.mjs --selftest # runnable check
+//   node scripts/install-codex.mjs            # install the inlined block
+//   node scripts/install-codex.mjs --remove   # uninstall
+//   node scripts/install-codex.mjs --selftest # runnable check
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -25,11 +25,11 @@ const END = "# <<< harry <<<";
 const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function globalPath() {
-  return process.env.HARRY_GLOBAL || join(homedir(), ".claude", "CLAUDE.md");
+  return process.env.HARRY_CODEX_GLOBAL || join(homedir(), ".codex", "AGENTS.md");
 }
 
 export function applyImport(existing, { remove = false, root = pluginRoot } = {}) {
-  const body = `@${root}/HARRY.md`;
+  const body = remove ? "" : readFileSync(join(root, "HARRY.md"), "utf8").replace(/\s+$/, "");
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
 }
 
@@ -56,17 +56,17 @@ function selftest() {
   const assert = (c, m) => {
     if (!c) throw new Error(`selftest failed: ${m}`);
   };
-  const dir = mkdtempSync(join(tmpdir(), "harry-install-"));
+  const dir = mkdtempSync(join(tmpdir(), "harry-install-codex-"));
   try {
-    const g = join(dir, "CLAUDE.md");
+    const g = join(dir, "AGENTS.md");
     writeFileSync(g, "# My rules\n\nUse TDD.\n");
-    const env = process.env.HARRY_GLOBAL;
-    process.env.HARRY_GLOBAL = g;
+    const env = process.env.HARRY_CODEX_GLOBAL;
+    process.env.HARRY_CODEX_GLOBAL = g;
     try {
       run();
       let out = readFileSync(g, "utf8");
       assert(out.includes("# My rules"), "preserves existing content");
-      assert(out.includes("/HARRY.md"), "writes the @ import");
+      assert(out.includes("Resident Engineering Laws"), "inlines HARRY.md content");
       assert(out.split(BEGIN).length === 2, "one block after first run");
       run();
       out = readFileSync(g, "utf8");
@@ -76,10 +76,10 @@ function selftest() {
       assert(!out.includes(BEGIN), "remove strips the block");
       assert(out.includes("Use TDD."), "remove keeps existing content");
     } finally {
-      if (env === undefined) delete process.env.HARRY_GLOBAL;
-      else process.env.HARRY_GLOBAL = env;
+      if (env === undefined) delete process.env.HARRY_CODEX_GLOBAL;
+      else process.env.HARRY_CODEX_GLOBAL = env;
     }
-    console.log("install selftest: OK");
+    console.log("install-codex selftest: OK");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -91,6 +91,6 @@ if (args.includes("--selftest")) {
 } else {
   const path = run({ remove: args.includes("--remove") });
   console.log(
-    `${args.includes("--remove") ? "Removed harry import from" : "Wired HARRY.md into"} ${path}`,
+    `${args.includes("--remove") ? "Removed harry laws from" : "Wired HARRY.md into"} ${path}`,
   );
 }

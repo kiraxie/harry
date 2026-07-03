@@ -26,6 +26,7 @@ pnpm run typecheck              # tsc --noEmit
 pnpm run lint                   # biome check .
 pnpm run format                 # biome format --write .
 pnpm run install-laws           # scripts/install.mjs — wire HARRY.md into a global CLAUDE.md via @-import
+pnpm run install-laws-codex     # scripts/install-codex.mjs — inline HARRY.md into ~/.codex/AGENTS.md (Codex build)
 pnpm run init-ignore            # scripts/init.mjs — add harry's .gitignore block to a project
 ```
 
@@ -76,3 +77,40 @@ skill files themselves short.
 `CLAUDE.local.md` (gitignored, present in this repo) is harry's own convention for
 project-specific rules that refine `HARRY.md` for a single repo — not a task list. Active in-flight
 work lives in the also-gitignored `.local/STATUS.md` instead.
+
+## Codex CLI compatibility (`.codex-plugin/`, `codex-skills/`)
+
+Alongside the Claude Code plugin, harry ships a parallel `.codex-plugin/plugin.json`
++ `.agents/plugins/marketplace.json` for Codex CLI, which has its own Skills/Hooks
+system (`SKILL.md` format is shared with Claude Code; `${CLAUDE_PLUGIN_ROOT}` /
+`${CLAUDE_PLUGIN_DATA}` are aliased by Codex, so `dist/companion.cjs` needs no
+Codex-specific code path). `skills/` (the four pipeline skills) is auto-discovered
+by Codex's default component discovery and `dist/companion.cjs` is shared as-is
+between both builds; `plugin.json`'s `skills` field only needs to name the
+supplemental `./codex-skills` path (it's a single string, not an array — Codex's
+own `plugin-creator` system skill's schema reference confirms this).
+`.agents/plugins/marketplace.json`'s shape (`name` / `interface.displayName` /
+`plugins[]` with `source.source`/`source.path`/`policy.installation`/
+`policy.authentication`/`category` per entry) is Codex-specific and does NOT
+mirror `.claude-plugin/marketplace.json`'s shape — verified live against an
+authenticated Codex CLI install (0.128.0) via `codex debug prompt-input`, not
+guessed from web docs.
+
+`codex-skills/` holds Codex-only conversions of the mechanical/read-only
+`commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `lean`,
+`review`, `init`) — Codex's plugin manifest has no `commands`/`prompts` field, so
+these become semantically-triggered Skills instead of explicit slash commands.
+This is a **deliberate partial-parity build**, not full feature parity:
+
+- `debate` has no Codex skill (its "self" voice is Claude/opus by design).
+- Codex `review --full` drops the CC self-review leg (no `SlashCommand` tool on
+  Codex) and drops `--harry-fix` (redundant when the orchestrator already is
+  Codex) — only `--fix` remains.
+- Codex `review`'s RO/RW boundary is instruction-only; Claude Code's version is
+  tool-enforced via `allowed-tools`. Codex has no discovered equivalent gate.
+- `init`'s law-wiring (`scripts/install-codex.mjs`) inlines HARRY.md's content into
+  `~/.codex/AGENTS.md` as a snapshot (Codex has no `@`-import syntax) — re-run
+  after HARRY.md changes to resync, unlike Claude Code's always-live import.
+
+See `.local/specs/2026-07-03-codex-compat-design.md` for the full design record
+(gitignored, not committed — this section is the durable summary).

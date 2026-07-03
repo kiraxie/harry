@@ -18,6 +18,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "install-laws": "node scripts/install.mjs",
+    "install-laws-codex": "node scripts/install-codex.mjs",
     "init-ignore": "node scripts/init.mjs"
   },
   "dependencies": {},

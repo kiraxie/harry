@@ -1,0 +1,20 @@
+{
+  "name": "kiraxie",
+  "interface": {
+    "displayName": "kiraxie's Codex CLI plugins"
+  },
+  "plugins": [
+    {
+      "name": "harry",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

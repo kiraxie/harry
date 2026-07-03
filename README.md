@@ -45,6 +45,25 @@ project's `.gitignore` block; the global laws stay.)
 
 Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
 
+## Install (Codex CLI)
+
+harry also ships as a **Codex CLI** plugin — a deliberate partial-parity build, not
+full feature parity (see `CLAUDE.md`'s "Codex CLI compatibility" section for exactly
+what's degraded or missing). Requires the `codex` CLI on `PATH`, logged in
+(`codex login`).
+
+```
+codex plugin marketplace add kiraxie/harry   # GitHub owner/repo
+```
+
+Then, inside an interactive `codex` session, run `/plugins` and install `harry`
+from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
+install command yet, only the `/plugins` picker.
+
+`codex-skills/` holds the Codex-only conversions (`ask`, `status`, `result`,
+`debt`, `lean`, `review`, `init`); the four pipeline skills and the runtime are
+shared as-is with the Claude Code build. `debate` has no Codex skill.
+
 ## Commands
 
 `review`, `ask`, and `debate` run through Codex, on your Codex/ChatGPT subscription — no
@@ -87,11 +106,14 @@ These auto-trigger (no slash command); they are the pipeline:
 
 ```
 HARRY.md            resident laws (loaded via @)
-skills/             brainstorming · writing-plans · executing · finishing
-commands/           review · ask · status · result · debate · lean · debt · init
+skills/             brainstorming · writing-plans · executing · finishing (shared, both builds)
+commands/           review · ask · status · result · debate · lean · debt · init (Claude Code)
+codex-skills/       ask · status · result · debt · lean · review · init (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
-src/ + dist/        agent runtime — Codex provider (bundled via build.mjs)
-scripts/            install.mjs · init.mjs · lib/markers.mjs
+src/ + dist/        agent runtime — Codex provider (bundled via build.mjs, shared, both builds)
+scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
+.claude-plugin/     Claude Code plugin manifest
+.codex-plugin/ + .agents/plugins/   Codex CLI plugin manifest
 upstream.json       tracks the three upstreams by commit (see references/upstream-sync.md)
 ```
 
