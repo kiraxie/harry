@@ -17,7 +17,7 @@ const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
 // Per project dir: local scratch (specs/plans/ledger, active-work STATUS.md),
 // worktree sandboxes, and the user's per-project specialization rules. All non-versioned.
-const ENTRIES = [".local/", ".worktrees/", "CLAUDE.local.md"];
+const ENTRIES = [".local/", "*worktrees/", "CLAUDE.local.md"];
 
 // Returns the .gitignore content with the harry block applied (or removed).
 // Per-entry dedupe: an entry already ignored elsewhere in the file (outside
@@ -78,7 +78,7 @@ function selftest() {
       out.split("\n").filter((l) => l.trim() === ".local/").length === 1,
       "no duplicate .local/ entry",
     );
-    assert(out.includes(".worktrees/"), "still adds the non-duplicate entries");
+    assert(out.includes("*worktrees/"), "still adds the non-duplicate entries");
 
     // Removal strips the block, keeps the rest (dir still has a block from above).
     run(dir, { remove: true });
