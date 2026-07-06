@@ -1,0 +1,133 @@
+{
+  "$comment": "Single source of truth for findings.json structure (see VALIDATION-AND-REPORTING.md Round 4). validate-findings.cjs reads this file directly and interprets it — there is no second copy of these rules to keep in sync. Two constraints can't be expressed in this JSON-Schema subset and live in the validator's semantic layer: (1) a confirmed finding needs a non-empty concrete_cost; (2) reusability-hoist and copy-paste findings both need >=2 evidence sites (duplication is inherently multi-site) and a drift_test, and no confirmed reuse/duplication finding may have drift_test.verdict == 'normal-to-diverge'.",
+  "output_schema": {
+    "oneOf": [
+      {
+        "type": "object",
+        "description": "Confirmed structural finding that clears the falsifiability anchor (a named concrete cost).",
+        "properties": {
+          "verdict": { "type": "string", "const": "confirmed" },
+          "title": { "type": "string", "description": "Concise, specific title." },
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "pattern-fit",
+              "reusability-hoist",
+              "copy-paste",
+              "coupling",
+              "layout",
+              "dead-code",
+              "error-handling",
+              "observability",
+              "test-coverage"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "What the structural problem is, in plain terms."
+          },
+          "concrete_cost": {
+            "type": "string",
+            "description": "THE ANCHOR. The specific future change this structure makes expensive/dangerous, OR the bug it has already caused. If this is a taste statement ('cleaner', 'violates SRP') with no named change and no bug, the finding is invalid — reject it instead."
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": { "type": "string", "description": "Path relative to repo root." },
+                "line": { "type": "integer" },
+                "scope": { "type": "string", "description": "Function/method/module name. Optional." },
+                "note": { "type": "string", "description": "What this location shows (a duplication site, a cycle member, the unused export, etc.)." }
+              },
+              "required": ["file", "note"],
+              "additionalProperties": false
+            },
+            "description": "Objective, verifiable facts. For reusability-hoist and copy-paste, list every drifted/duplicated site (>=2)."
+          },
+          "drift_test": {
+            "type": "object",
+            "description": "Required for reusability-hoist and copy-paste findings. The DRY-is-about-knowledge test.",
+            "properties": {
+              "verdict": {
+                "type": "string",
+                "enum": ["bug-if-diverge", "normal-to-diverge"],
+                "description": "A confirmed reuse finding must be 'bug-if-diverge'. 'normal-to-diverge' means incidental duplication — do not report it as confirmed."
+              },
+              "reason": { "type": "string" }
+            },
+            "required": ["verdict", "reason"],
+            "additionalProperties": false
+          },
+          "remediation": {
+            "type": "object",
+            "properties": {
+              "strategy": { "type": "string", "description": "The smallest change that removes the cost. Do not propose abstraction beyond what the cost justifies." },
+              "target": { "type": "string", "description": "For hoist findings: the canonical version and the designated shared destination." },
+              "effort": { "type": "string", "enum": ["low", "medium", "high"] }
+            },
+            "required": ["strategy"],
+            "additionalProperties": false
+          },
+          "classification": {
+            "type": "string",
+            "enum": ["fix-now", "tracked-debt", "accepted"],
+            "description": "fix-now: cheap and in the path of active work. tracked-debt: real cost, needs its own effort. accepted: cost low enough to live with, recorded so it isn't re-litigated."
+          },
+          "severity": {
+            "type": "object",
+            "properties": {
+              "blast_radius": {
+                "type": "object",
+                "properties": {
+                  "score": { "type": "string", "enum": ["low", "medium", "high"] },
+                  "reason": { "type": "string", "description": "How much code / how many call sites — cite counts." }
+                },
+                "required": ["score", "reason"],
+                "additionalProperties": false
+              },
+              "change_likelihood": {
+                "type": "object",
+                "properties": {
+                  "score": { "type": "string", "enum": ["low", "medium", "high"] },
+                  "reason": { "type": "string", "description": "How actively this code changes — cite churn rank." }
+                },
+                "required": ["score", "reason"],
+                "additionalProperties": false
+              },
+              "overall": { "type": "string", "enum": ["low", "moderate", "high"] }
+            },
+            "required": ["blast_radius", "change_likelihood", "overall"],
+            "additionalProperties": false
+          },
+          "confidence": {
+            "type": "object",
+            "properties": {
+              "score": { "type": "string", "enum": ["low", "medium", "high"] },
+              "reason": { "type": "string", "description": "Note anything you couldn't fully trace." }
+            },
+            "required": ["score", "reason"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["verdict", "title", "dimension", "description", "concrete_cost", "evidence", "remediation", "classification", "severity", "confidence"],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "description": "Rejected finding — investigated and dropped. Kept so later runs don't re-derive it.",
+        "properties": {
+          "verdict": { "type": "string", "const": "rejected" },
+          "title": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "description": "Which test it failed: no real cost (taste), normal-to-diverge (incidental duplication), speculative abstraction, framework idiom, false substrate fact, or a factual error found in Round 5."
+          }
+        },
+        "required": ["verdict", "title", "reason"],
+        "additionalProperties": false
+      }
+    ]
+  }
+}

@@ -74,6 +74,14 @@ how much process a task gets. `references/` holds on-demand tables/techniques th
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
 skill files themselves short.
 
+`/audit` (`commands/audit.md`) is a whole-codebase structure/architecture audit — a six-round,
+iterative workflow distinct from the four pipeline skills above (it's user-invoked via slash
+command, not tier-triggered). Its round-by-round methodology, JSON schema, and validator script
+are too large to inline in one command file, so they live in `references/audit/` (`RECON.md`,
+`DEEP-DIVE.md`, `SCAN-DIMENSIONS.md`, `VALIDATION-AND-REPORTING.md`, `report-schema.json`,
+`validate-findings.cjs`) — a subdirectory of the shared `references/`, read by path from
+`commands/audit.md`, not auto-discovered as anything on its own.
+
 `CLAUDE.local.md` (gitignored, present in this repo) is harry's own convention for
 project-specific rules that refine `HARRY.md` for a single repo — not a task list. Active in-flight
 work lives in the also-gitignored `.local/STATUS.md` instead.
@@ -98,9 +106,9 @@ guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the mechanical/read-only
 `commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `lean`,
-`review`, `init`) — Codex's plugin manifest has no `commands`/`prompts` field, so
-these become semantically-triggered Skills instead of explicit slash commands.
-This is a **deliberate partial-parity build**, not full feature parity:
+`review`, `init`, `audit`) — Codex's plugin manifest has no `commands`/`prompts`
+field, so these become semantically-triggered Skills instead of explicit slash
+commands. This is a **deliberate partial-parity build**, not full feature parity:
 
 - `debate` has no Codex skill (its "self" voice is Claude/opus by design).
 - Codex `review --full` drops the CC self-review leg (no `SlashCommand` tool on
@@ -108,6 +116,11 @@ This is a **deliberate partial-parity build**, not full feature parity:
   Codex) — only `--fix` remains.
 - Codex `review`'s RO/RW boundary is instruction-only; Claude Code's version is
   tool-enforced via `allowed-tools`. Codex has no discovered equivalent gate.
+- Codex `audit`'s RO round-boundaries are likewise instruction-only, not
+  tool-enforced (see its skill's own "Known limitation" note); it shares the same
+  `references/audit/` reference bundle and `report-schema.json`/
+  `validate-findings.cjs` as the Claude Code `/audit` command via
+  `${CLAUDE_PLUGIN_ROOT}`.
 - `init`'s law-wiring (`scripts/install-codex.mjs`) inlines HARRY.md's content into
   `~/.codex/AGENTS.md` as a snapshot (Codex has no `@`-import syntax) — re-run
   after HARRY.md changes to resync, unlike Claude Code's always-live import.
