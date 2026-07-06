@@ -33,5 +33,5 @@ Then compare that upstream diff against harry's customized version and decide â€
 | Source | Tracks | Pin |
 |--------|--------|-----|
 | superpowers | HARRY.md laws, the 4 skills | `896224c` (v6.0.3) |
-| ponytail | HARRY.md philosophy, `lean`, `debt` | `c4d1925` (v4.8.3) |
+| ponytail | HARRY.md philosophy, `debt`, historically `lean` (absorbed into `/audit` dimension 10 + `/review --simplify`, 2026-07) | `c4d1925` (v4.8.3) |
 | codex-plugin-cc | `review` | `80c31f9` (v1.0.5) |

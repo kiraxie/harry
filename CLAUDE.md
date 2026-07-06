@@ -105,8 +105,8 @@ authenticated Codex CLI install (0.128.0) via `codex debug prompt-input`, not
 guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the mechanical/read-only
-`commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `lean`,
-`review`, `init`, `audit`) — Codex's plugin manifest has no `commands`/`prompts`
+`commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `review`,
+`init`, `audit`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 

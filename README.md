@@ -61,7 +61,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `status`, `result`,
-`debt`, `lean`, `review`, `init`); the four pipeline skills and the runtime are
+`debt`, `review`, `init`, `audit`); the four pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -76,11 +76,11 @@ per-call premium quota. The rest are Claude-native or local scripts.
 | `/debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
 | `/status` | Codex rate-limit snapshot + background jobs |
 | `/result [job-id]` | Fetch a completed background job's output |
-| `/lean [--repo]` | Over-engineering audit — what to delete/simplify (diff, or whole tree with `--repo`) |
 | `/debt` | Re-judge deferred decisions (`DEBT:` markers + spec Non-Goals + plan deferrals) into a triaged ledger |
+| `/audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
 | `/init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
-Cheap-first smoke test: `/status` → `/lean` → `/ask` → `/review`/`/debate`.
+Cheap-first smoke test: `/status` → `/ask` → `/review`/`/debate`.
 
 ## Codex
 
@@ -107,8 +107,8 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · writing-plans · executing · finishing (shared, both builds)
-commands/           review · ask · status · result · debate · lean · debt · init (Claude Code)
-codex-skills/       ask · status · result · debt · lean · review · init (Codex CLI)
+commands/           review · ask · status · result · debate · debt · init · audit (Claude Code)
+codex-skills/       ask · status · result · debt · review · init · audit (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        agent runtime — Codex provider (bundled via build.mjs, shared, both builds)
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs

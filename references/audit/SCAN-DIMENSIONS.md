@@ -80,10 +80,33 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 **Bar:** Name the class of bug that ships undetected: "no test drives the `PENDING→FAILED` transition, so a regression there passes CI." A single missing edge-case test is not a structural hole.
 
+## 10. Over-engineering / unearned abstraction
+
+**What:** The mirror image of dimensions 1 and 2 — code that carries *more*
+abstraction, flexibility, or indirection than its current call sites earn:
+single-implementation interfaces, factories with one product, config for a value
+that never changes, dead feature flags, speculative "for later" scaffolding,
+wrappers that only delegate, reinvented stdlib/native functionality.
+
+**Seed:** `knip`/`ts-prune`/`vulture` unused-export data (already collected for
+dimension 6) cross-referenced with low fan-in counts from the dependency graph;
+churn (an abstraction nobody has touched since it was added is a stronger signal
+than one under active use).
+
+**Bar:** Same falsifiability anchor as every other dimension — a deletion
+recommendation still needs a named cost, or it's taste. "This `Strategy` interface
+has had exactly one implementation for 8 months; the next reader has to trace an
+extra indirection layer to find the one real code path, and PR #N had to `grep`
+past the interface to find the actual logic" is a finding. "This is unnecessary"
+alone is not. Same red-line carve-out as `/review --simplify`'s Lane B (HARRY.md
+§2): never flag cross-boundary contracts, input validation at trust boundaries,
+error handling that prevents data loss, security/access checks, or a single smoke
+test — apply the drift test before recommending any deletion.
+
 ---
 
 ### Choosing dimensions and shaping agents
 
-- Weight toward dimensions the substrate lit up (many cycles → dimension 4; a recent repo merge → dimension 2) and toward high-churn areas.
+- Weight toward dimensions the substrate lit up (many cycles → dimension 4; a recent repo merge → dimension 2; a repo with a lot of unused-but-maintained flexibility → dimension 10) and toward high-churn areas.
 - One agent may own one dimension across a subsystem, or two related dimensions (4+5, 7+8) in one scope — but don't hand an agent everything, or it goes shallow.
 - Every agent's scope is a *focus, not a fence*: if a coupling agent trips over a swallowed error, it reports it. Attackers-of-badness don't respect category lines.

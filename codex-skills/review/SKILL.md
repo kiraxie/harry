@@ -1,6 +1,6 @@
 ---
 name: review
-description: Run a code review against local git state via harry's companion runtime. Read-only by default; read-write only when the user explicitly asks to apply fixes. Angles are standard (gpt-5.3-codex defects), design-challenge, or cleanup; --full runs design+cleanup together. Use when the user asks for a code review, or to review and fix.
+description: Run a code review against local git state via harry's companion runtime. Read-only by default; read-write only when the user explicitly asks to apply fixes. Angles are standard (gpt-5.3-codex defects), design-challenge, or cleanup (gpt-5.3-codex cleanups run in parallel with a sub-agent over-engineering lane, consolidated into one table); full runs design + the cleanup dual-lane together. Use when the user asks for a code review, or to review and fix.
 ---
 
 # Review
@@ -12,13 +12,18 @@ Run a code review through the harry runtime.
 This skill's RO/RW boundary is **convention, not tool-enforced**: unlike the Claude
 Code version (which locks Edit/Write/git-commit out of its tool allowlist in
 read-only mode), Codex has no discovered per-skill tool permission gate. Follow the
-RO/RW rule below as a hard instruction anyway — do not use any file-write or
-`git commit` action unless the user explicitly asked for fixes to be applied.
+RO/RW rule below as a hard instruction anyway — do not edit repo-tracked files or
+run `git add`/`git commit` unless the user explicitly asked for fixes to be applied.
+Writing a scratch file **outside the repo** that a review lane needs as a handoff
+(e.g. the simplify dual-lane's Lane B diff file, written to `/tmp/...`) is fine even
+in RO mode — that boundary (repo-tracked vs. scratch) is the actual trust boundary,
+not "no writes at all."
 
 ## RO vs RW — decide this first
 
 - **No apply request → READ-ONLY (RO).** Produce findings and stop. Do not edit
-  files or run `git add`/`git commit`.
+  repo-tracked files or run `git add`/`git commit`. (A scratch/temp file outside
+  the repo, like Lane B's diff handoff, is fine — see above.)
 - **User asks to apply/fix → READ-WRITE (RW).** Review → judge → apply.
 
 ## Review angle (what produces findings)
@@ -26,12 +31,16 @@ RO/RW rule below as a hard instruction anyway — do not use any file-write or
 Mutually exclusive:
 - default → standard defect review, `gpt-5.3-codex`.
 - adversarial (design-challenge review, `gpt-5.5`) — questions the approach.
-- simplify (cleanup review, `gpt-5.3-codex`) — behavior-preserving reuse /
-  simplification / efficiency, NOT bugs.
-- full → orchestrate two non-overlapping lanes — adversarial (design) and simplify
-  (cleanup) — in parallel, then consolidate into one deduped table (see **Full
-  mode**). Unlike the Claude Code build, this does NOT include a third
-  self-review lane — Codex has no equivalent to invoke.
+- simplify (cleanup review): `gpt-5.3-codex` behavior-preserving reuse /
+  simplification / efficiency pass, run in parallel with a sub-agent
+  over-engineering lane (see **The simplify dual-lane** below) and consolidated
+  into one table. NOT bugs.
+- full → orchestrate three dispatches — adversarial (design) and the simplify
+  dual-lane's two lanes (the Codex cleanup pass and the sub-agent
+  over-engineering pass) — in parallel, then consolidate into one deduped table
+  (see **Full mode**). Unlike the Claude Code build, this does NOT include a
+  fourth, self-review lane (its `/code-review max` equivalent) — Codex has no
+  equivalent to invoke.
 
 **Shared overrides:** a base ref (`--base <ref>`) sets a base-branch review. A
 scope override (`--scope <auto|working-tree|branch>`) forces working-tree-only or
@@ -57,11 +66,111 @@ envelope — never parse a leg's output as JSON without first checking it succee
 
 ---
 
+## The simplify dual-lane (one definition)
+
+Whenever the active angle is simplify — standalone, under an apply request, or as
+two of full's three dispatches — it runs as **two lanes**, not one. This is the
+single definition; every call site below just says "run the simplify dual-lane."
+
+`<forwarded>` (used by Lane A below) means: the base/scope/context/focus args the
+user gave, keeping `--base`/`--scope`/`--context`/focus and dropping the angle
+keyword itself (`--simplify`) plus any model/reasoning override — Lane A's own
+node call already supplies `--simplify --fix` explicitly, so forwarding those again
+would be redundant, and this build has no separate apply-request flag to strip
+(RW is decided by whether the user asked to apply, not a CLI flag). **Exception:**
+Full mode's Stage 1 already computes its own wider "Forwarded args" (it also strips
+`--full`/`--adversarial`, since the node CLI has no `--full` concept and would
+error on it) — when the dual-lane runs as part of full, use that value instead,
+not this one.
+
+**Lane A — Codex cleanup review** (`gpt-5.3-codex`, behavior-preserving reuse /
+simplification / efficiency — NOT bugs):
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --simplify --fix <forwarded>
+```
+Parse the structured envelope (see above).
+
+**Lane B — over-engineering lane** (a lightweight sub-agent — this is a heuristic
+hunt, not a design judgment call, so it doesn't need your most capable model; no
+Codex backend involved, no extra Codex quota consumed): before dispatching, write
+the target diff to a file so Lane B can read it, matching this repo's own
+reviewer-handoff convention (`references/review-rubric.md`: "hand the reviewer ...
+the diff (as a file)") rather than inlining a full diff into the prompt:
+- Working-tree mode: `git diff --cached` (staged) + `git diff` (unstaged), plus —
+  for untracked files, `git status --porcelain --untracked-files=all` lists paths
+  only, not content, so also append each untracked file's full body (skip
+  binaries), under its own `--- Untracked: <path> ---` heading, mirroring how
+  `src/lib/git.ts`'s `collectWorkingTreeContext`/`formatUntrackedFile` handle this
+  same gap — a bare filename list gives Lane B nothing to actually review, and new
+  files are exactly where dead scaffolding and speculative code show up. Concatenate
+  staged diff + unstaged diff + untracked file bodies into one file.
+- Branch mode (a base ref given): `git diff <base>...HEAD` (new files already
+  appear in this diff normally — no untracked-file gap here).
+Write the result to a temp file (e.g. `/tmp/harry-review-simplify-laneb-diff.txt`).
+Then dispatch a sub-agent — it has no memory of this conversation, so hand it the
+file path explicitly — with this brief, substituting the actual file path and any
+context/focus text into the `Scope:` line:
+
+```
+You are a lazy senior engineer reviewing for ONE thing: over-engineering. The
+best outcome is the code getting shorter. Find what to cut. Do not duplicate
+correctness/security/performance findings — those are out of scope here.
+
+Scope: Read the diff at <substitute the actual temp file path here>. <If context/
+focus text was given, append it here.> Cite real file paths and line numbers from
+within that diff.
+
+Hunt: reinvented stdlib, deps the platform already ships, single-implementation
+interfaces, factories with one product, wrappers that only delegate, config for
+a value that never changes, dead flags, speculative "for later" scaffolding,
+files exporting one thing.
+
+The red-line carve-out — DO NOT flag these as over-engineering. Before
+suggesting a deletion, apply the drift test: "if these two copies silently
+diverge, is that a bug or normal evolution?" Bug -> it is one authoritative
+truth, keep it. Never flag for deletion: cross-boundary contracts and shared
+knowledge, input validation at trust boundaries, error handling that prevents
+data loss, security measures and access checks, a single smoke test or
+assert-based self-check. When unsure whether something is dead flexibility or
+a real contract, leave it and say nothing.
+
+Return one finding per line: <file>:L<line>: <tag> <what>. <replacement>.
+Tags: delete: (dead code/speculative feature), stdlib: (hand-rolled thing the
+standard library ships -- name the function), native: (dependency or code the
+platform already does -- name the feature), yagni: (abstraction with one
+implementation, config for a constant, layer with one caller).
+If there is nothing to cut, say so plainly and return no findings.
+```
+
+**Consolidate (always runs once both lanes return):**
+- Re-key ids by source: `smp-` for Lane A, `lean-` for Lane B.
+- Dedup by `file` + `line` + semantic-title. Lane A's `suggestedFix`-shaped findings
+  vs Lane B's `tag:`-shaped lines will occasionally name the same spot — merge them,
+  keep both sources listed.
+- Judge against this codebase: read cited files where it matters, drop clear false
+  positives (HARRY §6).
+- Present ONE table: `id | file:line | tag/severity | source(s) | title | verdict`.
+  (`source(s)` = `simplify` / `lean` / both; `verdict` = Keep / Drop with a one-line
+  reason per Drop.) If both lanes return nothing, say so and stop.
+
+**Known asymmetry vs. the Claude Code build:** Lane B ports cleanly here because it
+is ordinary sub-agent delegation — the same capability this skill's other sections
+already assume Codex has, not something Claude-Code-specific. This is unlike the
+Claude Code build's fourth lane (`/code-review max`), which has no Codex equivalent
+at all — see **Known limitation** above.
+
+---
+
 ## Plain review (RO)
 
-Read-only. The review session runs with writes/shell/URL denied on the Codex
-runtime side. Do not fix anything or suggest you are about to. Return the review
-session's output verbatim (HARRY.md §6). Do not use any write action on this path.
+**If the active angle is simplify:** skip the single-call path below entirely —
+run **the simplify dual-lane** (defined above) and present its consolidated table
+as the final output.
+
+**Otherwise (standard or adversarial):** the review session runs with
+writes/shell/URL denied on the Codex runtime side. Do not fix anything or suggest
+you are about to. Return the review session's output verbatim (HARRY.md §6). Do
+not use any write action on this path.
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--adversarial|--simplify] [--base <ref>] [--scope <auto|working-tree|branch>] [--context <text|@file|@->] [focus...]
@@ -73,26 +182,45 @@ Return stdout verbatim (markdown). No paraphrase, summary, or commentary.
 
 ## Full mode (`--full`)
 
-Two reviewers, both read-only, in parallel, then one deduped table.
+Three dispatches (two Codex, one sub-agent), all read-only, in parallel,
+then one deduped table.
 
-### Stage 1 — Fan out two lanes in parallel
+### Stage 1 — Fan out three dispatches in parallel
+Forwarded args = the user's base/scope/context/focus args, minus `--full`,
+`--adversarial`, `--simplify`, `--model`, `--reasoning` (each lane is
+model-specialized); keep `--base`/`--scope`/`--context`/focus.
+
+1. Background Codex adversarial review:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --adversarial --fix <forwarded>
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --simplify --fix <forwarded>
 ```
-(`<forwarded>` = the user's base/scope/context/focus args, minus `--full`/`--fix`/
-`--model`/`--reasoning`.) Wait until both have produced output before Stage 2.
+2. **The simplify dual-lane** (defined above) — Lane A (Codex `--simplify --fix`)
+   and Lane B (the over-engineering sub-agent dispatch) both count as their own
+   lanes here; do not consolidate them yet — Stage 2 below merges all three
+   together in one pass. Lane A here uses *this Stage 1 preamble's* "Forwarded
+   args" (computed just above, which already strips `--full` too) — not the
+   dual-lane definition's own narrower `<forwarded>` rule, which would let a bare
+   `--full` reach the node CLI here, which it rejects.
+
+Wait until all three have produced output before Stage 2.
 
 ### Stage 2 — Consolidate into a table (your job)
-- For each leg: check it succeeded first (zero exit, stdout is the envelope not
-  `# Review Failed`). A failed leg contributes no findings — record it as a failed
-  source and continue.
-- Adversarial design-level notes live in `reviewMarkdown`'s `## Design Concerns`;
-  simplify findings are cleanups, not bugs.
+- For each Codex leg (adversarial, simplify Lane A): check it succeeded first
+  (zero exit, stdout is the envelope not `# Review Failed`). A failed leg
+  contributes no findings — record it as a failed source and continue; never
+  abort the whole consolidation for one bad leg. Adversarial design-level notes
+  live in `reviewMarkdown`'s `## Design Concerns`; simplify findings are cleanups,
+  not bugs.
+- Simplify Lane B (the over-engineering sub-agent) returns plain
+  `tag: what. replacement.` lines — map each to a finding: `tag`→severity-ish
+  label, the line itself→title.
 - **Re-key ids across sources** before merging: prefix each by source (`adv-`/
-  `smp-`) so the table's `id` column is unique.
+  `smp-`/`lean-`) so the table's `id` column is unique and unambiguous.
 - **Dedup** by `file` + `line` + semantic-title. When `line` is absent (file-wide),
-  only merge on a genuine semantic-title match on the same file.
+  only merge on a genuine semantic-title match on the same file — do not collapse
+  two different file-wide findings just because they share a file. Simplify Lane A
+  and Lane B will sometimes name the same spot from different angles — merge, keep
+  both sources listed.
 - Judge against this codebase: read cited files where it matters and drop clear
   false positives (HARRY §6 — automated review is a suggestion, not an order).
 
@@ -100,8 +228,8 @@ Present ONE table, plus a `## Design Concerns` section (from adversarial) below 
 
 | id | file:line | severity | source(s) | title | verdict |
 
-(source(s) = adversarial / simplify; verdict = Keep / Drop with a one-line reason
-per Drop.) If both yield nothing material, say so and stop.
+(source(s) = adversarial / simplify / lean; verdict = Keep / Drop with a one-line
+reason per Drop.) If all three yield nothing material, say so and stop.
 
 ### Stage 3 — Output / hand off
 - RO: the table + `## Design Concerns` is the final report. Stop.
@@ -116,8 +244,14 @@ You are the judge in the middle — the reviewer runs in an isolated session and
 flag intentional choices only you know about.
 
 ### Stage 1 — Structured review
-Forward the angle (adversarial/simplify) and base/scope/context/focus args, append
-node's `--fix` for structured output:
+**If the active angle is simplify:** run **the simplify dual-lane** (defined
+above) instead of the single call below — Lane A already appends `--fix`; Lane B
+has no `--fix` concept and always returns its plain tag-lines. Skip straight to
+the dual-lane's own consolidation step, then continue to Stage 2 below with the
+consolidated table instead of a raw envelope.
+
+**Otherwise (standard or adversarial):** forward the angle and
+base/scope/context/focus args, append node's `--fix` for structured output:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --fix <forwarded>
 ```
@@ -126,8 +260,9 @@ Parse the envelope. If `findings` is empty, tell the user and stop.
 ### Stage 2 — Judge each finding
 Decide real defect vs false positive (a false positive is an intentional choice you
 have context for). Read cited files. Present a table — id, file:line, title,
-verdict (Keep / Drop + one-line reason per Drop). Confirm with the user before
-applying; the user may override.
+verdict (Keep / Drop + one-line reason per Drop) — for simplify this is just the
+dual-lane's consolidated table carried forward, already deduped. Confirm with the
+user before applying; the user may override.
 
 ### Stage 3 — Apply
 1. **Baseline snapshot** — if `git status --porcelain` is non-empty, the fix diff

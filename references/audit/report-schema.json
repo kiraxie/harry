@@ -19,7 +19,8 @@
               "dead-code",
               "error-handling",
               "observability",
-              "test-coverage"
+              "test-coverage",
+              "over-engineering"
             ]
           },
           "description": {

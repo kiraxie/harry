@@ -13,12 +13,21 @@ A security audit has a clean anchor: "can you build an exploit?" This domain doe
 
 | Tool | Direction | Scope | Cadence |
 |---|---|---|---|
-| a diff-level code review | correctness | a change | per PR |
-| an over-engineering / "lean" pass | **subtract** (delete, simplify) | diff or project | one-shot |
+| a diff-level code review | correctness — plus a quick over-engineering pass via its simplify mode's sub-agent Lane B | a change | per PR |
 | a debt-ledger pass | re-judge existing debt markers | existing markers | one-shot |
-| **this audit** | **restructure / consolidate** (incl. hoist) | **whole repo / subsystem** | **iterative, accumulative** |
+| **this audit** | **restructure / consolidate** (incl. hoist, dimension 2) **and deep over-engineering hunting** (dimension 10) | **whole repo / subsystem** | **iterative, accumulative** |
 
-The one place this audit and a "lean" pass could seem to contradict — one says *extract a shared abstraction*, the other says *delete abstraction* — is reconciled by the **drift test**: this audit only proposes a hoist when divergence would be a bug (cross-boundary shared truth), which is exactly the case where even KISS/YAGNI says extract. Outside that case, it leaves duplication alone. So the two never fight over the same code.
+Over-engineering has two speeds now, not two competing tools: a quick per-diff pass
+lives in the diff-level code review's simplify mode's sub-agent Lane B (see the
+simplify dual-lane in the review skill; cheap, no extra Codex quota); the deep,
+evidence-verified, severity-ranked version is dimension 10 here. The one
+place this audit's hoist dimension (2) and its own over-engineering dimension (10)
+could seem to contradict — one says *extract a shared abstraction*, the other says
+*delete abstraction* — is reconciled by the **drift test**: dimension 2 only
+proposes a hoist when divergence would be a bug (cross-boundary shared truth),
+which is exactly the case where even KISS/YAGNI says extract. Outside that case,
+this audit leaves duplication alone. So the two dimensions never fight over the
+same code.
 
 Multi-language support: Round 1's substrate collection is the only language-dependent layer, via a per-language tool matrix (TS/JS: knip, madge, jscpd; Go: deadcode, dupl, gocyclo; Python: vulture, import-linter, radon; cross-language: jscpd, scc, semgrep, git churn — see `${CLAUDE_PLUGIN_ROOT}/references/audit/RECON.md`). Tools are pulled on-demand (npx / go run / uvx) so the audit adds nothing to the target's manifests. Everything from Round 2 on is language-neutral.
 
@@ -79,7 +88,7 @@ This is the mirror of a security audit's "if you need the word *theoretically*, 
 
 ### 2. A missing abstraction is not a finding — defer to the drift test
 
-The natural bias of an architecture reviewer is to *add* abstraction (introduce a Strategy, a Factory, a Repository). That bias directly fights KISS / YAGNI and produces over-engineering — the exact thing a *lean* pass exists to remove. So this audit holds the opposite default:
+The natural bias of an architecture reviewer is to *add* abstraction (introduce a Strategy, a Factory, a Repository). That bias directly fights KISS / YAGNI and produces over-engineering — the exact thing dimension 10 (and the diff-level review's simplify mode) exists to remove. So this audit holds the opposite default:
 
 **Duplication or a missing abstraction is a finding only if it fails the drift test:** *if these copies silently diverge, is that a bug, or normal independent evolution?*
 
