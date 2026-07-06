@@ -5,6 +5,34 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-06
+
+### Added
+
+- **`/audit`**: a new whole-codebase structure & architecture-fitness audit —
+  a six-round, iterative, multi-language (TypeScript/JavaScript, Go, Python)
+  workflow that finds design-pattern mismatches, missed reuse/hoist candidates,
+  layering violations, dead code, coupling, error-handling and observability
+  gaps, and structural test-coverage holes. Ships as a Claude Code command
+  (`commands/audit.md`) and a Codex skill (`codex-skills/audit/`), sharing one
+  reference bundle under `references/audit/` via `${CLAUDE_PLUGIN_ROOT}`.
+- `/audit` dimension 10 (over-engineering / unearned abstraction): the deep,
+  evidence-verified, severity-ranked counterpart to `/review --simplify`'s new
+  quick pass (below), governed by the same falsifiability anchor and drift-test
+  discipline as `/audit`'s other nine dimensions.
+- `/review --simplify` now runs as a "dual lane": the existing `gpt-5.3-codex`
+  cleanup pass, plus a new CC-native (Codex build: sub-agent) over-engineering
+  lane running in parallel, consolidated into one table. Costs no extra Codex
+  quota — the new lane runs on the calling session's own compute.
+
+### Removed
+
+- **`/lean`** (command + Codex skill) is retired. Its quick per-diff scan is
+  now `/review --simplify`'s new lane (above); its drift-test philosophy is now
+  `/audit`'s dimension 10 (above). Existing `/lean` users should switch to
+  `/review --simplify` for a quick per-diff check, or `/audit` for a deep,
+  whole-repo, iterative pass.
+
 ## [0.6.1] - 2026-07-03
 
 ### Fixed
