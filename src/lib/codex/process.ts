@@ -43,7 +43,7 @@ function runCommand(
 export function binaryAvailable(
   bin: string,
   args: string[] = ["--version"],
-  opts: { cwd?: string } = {}
+  opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}
 ): { available: boolean; detail: string } {
   const result = runCommand(bin, args, opts);
   if (result.error && result.error.code === "ENOENT") {

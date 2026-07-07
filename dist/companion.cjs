@@ -502,12 +502,15 @@ function buildAppServerAuthStatus(accountResponse, configResponse) {
   }
   return notLoggedIn(`${providerLabel} requires OpenAI authentication`);
 }
-function getCodexAvailability(cwd) {
-  const versionStatus = binaryAvailable("codex", ["--version"], { cwd });
+function getCodexAvailability(cwd, opts = {}) {
+  const versionStatus = binaryAvailable("codex", ["--version"], { cwd, env: opts.env });
   if (!versionStatus.available) {
     return versionStatus;
   }
-  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], { cwd });
+  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], {
+    cwd,
+    env: opts.env
+  });
   if (!appServerStatus.available) {
     return {
       available: false,
@@ -520,7 +523,7 @@ function getCodexAvailability(cwd) {
   };
 }
 async function getCodexAuthStatus(cwd, opts = {}) {
-  const availability = getCodexAvailability(cwd);
+  const availability = getCodexAvailability(cwd, { env: opts.env });
   if (!availability.available) {
     return {
       available: false,
