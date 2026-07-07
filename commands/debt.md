@@ -4,7 +4,7 @@ argument-hint: '[path...]'
 allowed-tools: Read, Glob, Grep, Bash(git log:*), Bash(git grep:*)
 ---
 
-`/debt` is not a grep harvester — plan-first already keeps fresh debt in view. It is a **deferred-decision auditor**: it gathers every deliberate "do it later" from across the repo into one overview, then re-judges whether each deferral's premise still holds. One-shot report. Changes nothing.
+`/debt` is not a grep harvester — plan-first already keeps fresh debt in view. It is a **deferred-decision auditor**: it gathers every deliberate "do it later" from across the repo into one overview, then re-judges whether each deferral's premise still holds. One-shot report. Changes nothing. It does not scan `.local/backlog/` — backlog items were never decided, so there is no premise to re-judge (HARRY.md §5).
 
 Optional `$ARGUMENTS` scopes the scan to the given path(s); default is the whole repo.
 

@@ -1,6 +1,6 @@
 ---
 name: debt
-description: Re-judge deferred decisions (DEBT markers, spec Non-Goals, plan deferrals) into one triaged ledger with a freshness verdict per row. Use when the user asks to audit tech debt, deferred decisions, or find stale shortcuts.
+description: Re-judge deferred decisions (DEBT markers, spec Non-Goals, plan deferrals) into one triaged ledger with a freshness verdict per row; does not cover `.local/backlog/` (undecided items, not deferred decisions). Use when the user asks to audit tech debt, deferred decisions, or find stale shortcuts.
 ---
 
 # Debt
@@ -8,7 +8,8 @@ description: Re-judge deferred decisions (DEBT markers, spec Non-Goals, plan def
 This is not a grep harvester — plan-first already keeps fresh debt in view. It is a
 **deferred-decision auditor**: it gathers every deliberate "do it later" from across
 the repo into one overview, then re-judges whether each deferral's premise still
-holds. One-shot report. Changes nothing.
+holds. One-shot report. Changes nothing. It does not scan `.local/backlog/` —
+backlog items were never decided, so there is no premise to re-judge (HARRY.md §5).
 
 The user may scope the scan to specific path(s); default is the whole repo.
 
