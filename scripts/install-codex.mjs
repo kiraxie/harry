@@ -15,7 +15,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { safeWrite } from "./lib/atomic-write.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 import { STALE } from "./lib/stale-entries.mjs";
 
@@ -43,12 +44,12 @@ function warnStale(text) {
   }
 }
 
-function run({ remove = false } = {}) {
+export function run({ remove = false } = {}) {
   const path = globalPath();
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
   if (!remove) warnStale(existing);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, applyImport(existing, { remove }));
+  safeWrite(path, applyImport(existing, { remove }));
   return path;
 }
 
@@ -85,12 +86,16 @@ function selftest() {
   }
 }
 
-const args = process.argv.slice(2);
-if (args.includes("--selftest")) {
-  selftest();
-} else {
-  const path = run({ remove: args.includes("--remove") });
-  console.log(
-    `${args.includes("--remove") ? "Removed harry laws from" : "Wired HARRY.md into"} ${path}`,
-  );
+// Only run the CLI when invoked directly (node scripts/install-codex.mjs), not
+// when imported by a test — importing must have no side effects on user files.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const args = process.argv.slice(2);
+  if (args.includes("--selftest")) {
+    selftest();
+  } else {
+    const path = run({ remove: args.includes("--remove") });
+    console.log(
+      `${args.includes("--remove") ? "Removed harry laws from" : "Wired HARRY.md into"} ${path}`,
+    );
+  }
 }

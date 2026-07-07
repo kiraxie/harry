@@ -11,8 +11,8 @@ import {
   readLogTail,
   renderCodexBlock,
   resolveStateDir,
-} from "../lib/state.js";
-import { sweepZombieJobs } from "../lib/zombie.js";
+} from "../lib/state.ts";
+import { sweepZombieJobs } from "../lib/zombie.ts";
 
 export interface StatusOptions {
   jobId?: string;

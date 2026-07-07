@@ -7,9 +7,9 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import type { CodexRateLimits } from "./provider.ts";
 
@@ -105,8 +105,26 @@ export function resolveStateDir(cwd: string): string {
   return fallbackDir;
 }
 
+// State dirs/files are 0700/0600: the fallback root is under a world-readable
+// /tmp (see FALLBACK_STATE_ROOT), and job records + logs hold prompts, review
+// findings, diffs, and the model's reasoning text — not readable by other users
+// on a shared host.
 function ensureDir(dir: string): void {
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+}
+
+/**
+ * Write `content` to `filePath` atomically: write a uniquely-named temp file in
+ * the same directory, then rename it into place (rename is atomic on a single
+ * filesystem). A crash mid-write leaves the previous file intact instead of a
+ * truncated one — the torn read a plain writeFileSync exposes would make
+ * loadState's catch fall back to an empty store and permanently drop all jobs.
+ */
+function atomicWrite(filePath: string, content: string): void {
+  ensureDir(dirname(filePath));
+  const tmp = `${filePath}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`;
+  writeFileSync(tmp, content, { encoding: "utf-8", mode: 0o600 });
+  renameSync(tmp, filePath);
 }
 
 // ─── State File ──────────────────────────────────────────────────────────────
@@ -130,9 +148,15 @@ function loadState(stateDir: string): StateFile {
 function saveState(stateDir: string, state: StateFile): void {
   ensureDir(stateDir);
   if (state.jobs.length > MAX_JOBS) {
+    // MAX_JOBS caps state.json, but the per-job files/logs it drops are never
+    // referenced again — delete them so the jobs/ dir doesn't grow without bound.
+    for (const job of state.jobs.slice(MAX_JOBS)) {
+      rmSync(jobFilePath(stateDir, job.id), { force: true });
+      rmSync(jobLogPath(stateDir, job.id), { force: true });
+    }
     state.jobs = state.jobs.slice(0, MAX_JOBS);
   }
-  writeFileSync(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
+  atomicWrite(stateFilePath(stateDir), JSON.stringify(state, null, 2));
 }
 
 // ─── Job Files ───────────────────────────────────────────────────────────────
@@ -150,9 +174,7 @@ export function jobLogPath(stateDir: string, jobId: string): string {
 }
 
 export function writeJobFile(stateDir: string, job: JobRecord): void {
-  const dir = jobsDir(stateDir);
-  ensureDir(dir);
-  writeFileSync(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
+  atomicWrite(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2));
 }
 
 export function readJobFile(stateDir: string, jobId: string): JobRecord | null {
@@ -171,7 +193,9 @@ export function appendLog(stateDir: string, jobId: string, message: string): voi
   const logFile = jobLogPath(stateDir, jobId);
   ensureDir(jobsDir(stateDir));
   const time = new Date().toLocaleTimeString("en-US", { hour12: false });
-  writeFileSync(logFile, `[${time}] ${message}\n`, { flag: "a" });
+  // Append (not atomic-replace): a log grows line by line. mode 0o600 applies on
+  // first creation so the reasoning text it accumulates isn't world-readable.
+  writeFileSync(logFile, `[${time}] ${message}\n`, { flag: "a", mode: 0o600 });
 }
 
 export function readLogTail(stateDir: string, jobId: string, maxLines = 10): string[] {
@@ -272,7 +296,7 @@ export function writeCodexRateLimits(stateDir: string, rateLimits: CodexRateLimi
       ...rateLimits,
       capturedAt: new Date().toISOString(),
     };
-    writeFileSync(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
+    atomicWrite(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2));
   } catch {
     // best-effort: snapshot is a convenience, never a correctness dependency.
   }

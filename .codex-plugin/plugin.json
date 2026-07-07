@@ -9,6 +9,5 @@
   "homepage": "https://github.com/kiraxie/harry",
   "repository": "https://github.com/kiraxie/harry",
   "license": "MIT",
-  "skills": "./codex-skills",
-  "hooks": "./hooks.json"
+  "skills": "./codex-skills"
 }

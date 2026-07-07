@@ -7,8 +7,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { extractTask, flagNumber, flagString } from "../lib/args.js";
-import type { ReviewScope } from "../lib/git.js";
+import { extractTask, flagNumber, flagString } from "../lib/args.ts";
+import type { ReviewScope } from "../lib/git.ts";
 import {
   appendLog,
   createJob,
@@ -19,8 +19,8 @@ import {
   readJobFile,
   resolveStateDir,
   updateJob,
-} from "../lib/state.js";
-import { type ReviewOptions, runReview } from "./review.js";
+} from "../lib/state.ts";
+import { type ReviewOptions, runReview } from "./review.ts";
 
 declare const __filename: string | undefined;
 

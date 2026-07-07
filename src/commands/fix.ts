@@ -9,10 +9,11 @@
  *                        knows about) and writes the approved subset to a file.
  *   3. `fix`           — THIS command applies the approved findings.
  *
- * Unlike `implement`, fix edits the real working tree (not an isolated
- * worktree). To keep the fix diff reviewable, it first commits any pre-existing
- * uncommitted changes as a baseline snapshot, then leaves the fix edits staged
- * for the user to inspect and commit.
+ * fix edits the real working tree (not an isolated worktree). To keep the fix
+ * diff reviewable, it isolates the fix's changes from any pre-existing
+ * uncommitted work using `git stash create` — an ephemeral snapshot object that
+ * touches neither the working tree nor branch history — then leaves the fix
+ * edits staged for the user to inspect and commit.
  *
  * The agent lifecycle (auth, run) is delegated to {@link runAgentSession}; fix
  * only supplies the prompt/options and its single JSON-envelope stdout
@@ -26,13 +27,13 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { extractJsonBlock, type Finding, normalizeFindings } from "../lib/findings.js";
+import { extractJsonBlock, type Finding, normalizeFindings } from "../lib/findings.ts";
+import { ensureGitRepository } from "../lib/git.ts";
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
-import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.js";
-import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.js";
+import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
+import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.ts";
 import { makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
-import { resolveRepoRoot } from "../lib/worktree.js";
 
 export interface FixOptions {
   /** Path to the approved-findings JSON (array, or a {findings:[...]} object). */
@@ -79,10 +80,12 @@ interface FixedEnvelope {
   status: "fixed";
   jobId: string;
   summary: string;
-  /** Baseline commit fixes were applied on top of (after pre-fix snapshot). */
+  /** HEAD the fix was applied on top of; the fix diff is reported against this
+   * (or an ephemeral `git stash create` snapshot when the tree was dirty). */
   baselineCommit: string;
-  /** Whether a pre-fix snapshot commit was created for pre-existing changes. */
-  preFixSnapshot: boolean;
+  /** Whether the working tree was dirty pre-fix — isolated via `git stash
+   * create`, i.e. no commit was made. */
+  preFixDirty: boolean;
   filesModified: string[];
   linesAdded: number;
   linesRemoved: number;
@@ -97,10 +100,11 @@ interface FailedEnvelope {
   status: "failed";
   jobId: string;
   error: string;
-  // beforeRun may have already committed the user's uncommitted work as a
-  // baseline before the run failed — report it so they are not surprised by a
-  // `pre-fix snapshot` commit with no machine-readable signal it happened.
-  preFixSnapshot?: boolean;
+  // Report the baseline the fix would have been isolated against, so a run that
+  // failed after beforeRun computed it is still traceable. No commit is ever
+  // made (isolation is via `git stash create`), so there is no surprise commit
+  // to disclose — unlike the prior snapshot-commit design.
+  preFixDirty?: boolean;
   baselineCommit?: string;
 }
 
@@ -251,21 +255,23 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   // 2. Repo --------------------------------------------------------------------
   let repoRoot: string;
   try {
-    repoRoot = resolveRepoRoot(cwd);
+    repoRoot = ensureGitRepository(cwd);
   } catch (err) {
     emit({ status: "failed", jobId, error: `Not a git repository: ${(err as Error).message}` });
     process.exit(1);
   }
 
   // The pre-fix snapshot is deferred to the `beforeRun` hook below so it runs
-  // ONLY after precheckRun passes — a refused fix must mutate NO git history.
-  // These outer vars are filled by that hook and read by the envelope.
-  let preFixSnapshot = false;
+  // ONLY after precheckRun passes. `git stash create` never mutates git history,
+  // so this is doubly safe. These outer vars are filled by that hook and read by
+  // the envelope. `diffBase` is the ref the fix diff is computed against.
+  let preFixDirty = false;
   let baselineCommit = "";
-  // Snapshot facts to attach to a `failed` envelope, so a run that fails AFTER
-  // beforeRun committed the baseline still reports that commit.
-  const snapshotInfo = (): Pick<FailedEnvelope, "preFixSnapshot" | "baselineCommit"> =>
-    preFixSnapshot ? { preFixSnapshot, ...(baselineCommit ? { baselineCommit } : {}) } : {};
+  let diffBase = "";
+  // Facts to attach to a `failed` envelope, so a run that fails AFTER beforeRun
+  // computed the baseline still reports it.
+  const snapshotInfo = (): Pick<FailedEnvelope, "preFixDirty" | "baselineCommit"> =>
+    baselineCommit ? { baselineCommit, ...(preFixDirty ? { preFixDirty } : {}) } : {};
 
   // 3. Timeout → abort signal. -----------------------------------------------
   const turn = startTurnTimeout({ timeoutMs, progress, log });
@@ -313,41 +319,12 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
       },
       onInterrupt,
       // Post-precheck / pre-run: snapshot pre-existing changes so the fix diff
-      // is isolated. Runs ONLY after precheckRun passes, so a refused fix
-      // leaves git history untouched.
+      // is isolated. Runs ONLY after precheckRun passes. Uses `git stash create`
+      // — an ephemeral snapshot object — so NOTHING (working tree, index, branch
+      // history, stash ref) is mutated, unlike the prior baseline-commit design.
       beforeRun: () => {
-        // Commit any pre-existing uncommitted changes so the fix diff is isolated.
-        const dirty = tryGit(["status", "--porcelain"], repoRoot);
-        if (dirty.ok && dirty.stdout.trim()) {
-          tryGit(["add", "-A"], repoRoot);
-          const c = tryGit(["commit", "-m", "chore: pre-fix snapshot (fix baseline)"], repoRoot);
-          preFixSnapshot = c.ok;
-          if (c.ok) {
-            progress(
-              "Committed pre-existing changes as a baseline snapshot before applying fixes.",
-            );
-            log("pre-fix snapshot commit created");
-          } else {
-            log(`pre-fix snapshot commit failed: ${c.stderr}`);
-          }
-        }
-        // If the tree was dirty but the snapshot commit failed, the baseline is
-        // contaminated — proceeding would mix the user's pre-existing changes
-        // into the reported fix diff. Abort instead.
-        if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
-          envelopeDone = true;
-          turn.clear();
-          emit({
-            status: "failed",
-            jobId,
-            error:
-              "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry.",
-          });
-          process.exit(1);
-        }
-
         baselineCommit = gitHead(repoRoot);
-        // fix diffs the applied changes against this baseline; with no commit to
+        // fix diffs the applied changes against a baseline; with no commit to
         // diff against (unborn HEAD) the diff would silently report nothing.
         if (!baselineCommit) {
           envelopeDone = true;
@@ -357,9 +334,31 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
             jobId,
             error:
               "fix requires at least one commit to diff against (repository has no commits yet).",
-            ...snapshotInfo(),
           });
           process.exit(1);
+        }
+
+        const dirty = tryGit(["status", "--porcelain"], repoRoot);
+        preFixDirty = dirty.ok && dirty.stdout.trim().length > 0;
+        if (preFixDirty) {
+          // Capture the pre-fix tracked state as an ephemeral commit object
+          // WITHOUT removing it from the working tree, then diff the fix against
+          // it so the user's pre-existing WIP is excluded from the reported diff.
+          const snap = tryGit(["stash", "create"], repoRoot);
+          // `git stash create` prints nothing when there is nothing to stash
+          // (e.g. only untracked changes) — fall back to HEAD then.
+          // DEBT: pre-existing UNTRACKED files are not captured by stash-create,
+          // so if the tree had untracked files pre-fix, `git add -A` in
+          // computeStagedDiff attributes them to the fix in the reported stats.
+          // Stats-only imprecision, never a history mutation; refine with a
+          // temp-index snapshot if it ever matters.
+          diffBase = snap.ok && snap.stdout.trim() ? snap.stdout.trim() : baselineCommit;
+          progress("Isolating the fix diff from your uncommitted changes (no commit made).");
+          log(
+            `pre-fix dirty; diff base = ${diffBase === baselineCommit ? "HEAD" : "stash-create snapshot"}`,
+          );
+        } else {
+          diffBase = baselineCommit;
         }
       },
       log,
@@ -387,7 +386,10 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         ...snapshotInfo(),
       });
     }
-    process.exit(0);
+    // Non-zero: a timed-out / incomplete fix is a failure. Every other failure
+    // path in this command exits 1; a shell/orchestrator caller keying on the
+    // exit code must not read a failed fix as success.
+    process.exit(1);
   }
 
   // Past the point of no return: claim the single-envelope slot so a late
@@ -396,7 +398,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
 
   // 5. Diff stats + apply report ---------------------------------------------
   const report = parseApplyReport(result.lastAssistantMessage, findings);
-  const diff = computeStagedDiff(repoRoot, baselineCommit);
+  const diff = computeStagedDiff(repoRoot, diffBase);
 
   const summary =
     result.summary?.trim() ||
@@ -407,7 +409,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
     jobId,
     summary,
     baselineCommit,
-    preFixSnapshot,
+    preFixDirty,
     filesModified: diff.filesModified,
     linesAdded: diff.linesAdded,
     linesRemoved: diff.linesRemoved,

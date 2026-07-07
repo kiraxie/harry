@@ -2,25 +2,21 @@
  * setup command — Codex availability + auth status.
  */
 
-import { getCodexAuthStatus, getCodexAvailability } from "../lib/codex/auth.js";
-import { CLIENT_NAME, PLUGIN_VERSION } from "../lib/version.js";
+// Deliberate second entry point into the vendored codex layer: setup needs the
+// availability + authMethod detail that the neutral `AuthSummary` (provider.ts)
+// intentionally omits, and widening that single-impl interface just for setup
+// would be unearned abstraction (HARRY.md §1). Kept a clean top-level import (no
+// reach into internals) — upstream-sync of codex/auth.ts must re-check this file.
+import { getCodexAuthStatus, getCodexAvailability } from "../lib/codex/auth.ts";
+import { CLIENT_NAME, PLUGIN_VERSION } from "../lib/version.ts";
 
 export interface SetupOptions {
-  check?: boolean;
   json?: boolean;
   cwd?: string;
 }
 
 export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const cwd = options.cwd ?? process.cwd();
-  const isCheck = options.check === true;
-
-  if (isCheck) {
-    // SessionStart hook — silent success. Return BEFORE the availability/auth
-    // probe so we do not spawn `codex app-server` (a full connect + account/read
-    // + config/read RPC) on every session start just to discard the result.
-    return;
-  }
 
   const availability = getCodexAvailability(cwd);
   const auth = await getCodexAuthStatus(cwd);

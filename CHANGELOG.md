@@ -5,6 +5,41 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **CI** (`.github/workflows/ci.yml`): typecheck, lint, test, and a **dist-drift
+  gate** (`pnpm run build` + `git diff --exit-code dist/`) so the committed
+  `dist/companion.cjs` can never silently diverge from `src/`.
+- Tests for the previously-uncovered first-party core: `findings` (the
+  review→fix JSON parsing), `zombie` (reaper logic), install-script atomicity,
+  and a manifest/`package.json` version-sync guard.
+
+### Changed
+
+- **`fix`** isolates the pre-fix baseline with `git stash create` (an ephemeral
+  snapshot) instead of committing the user's uncommitted work onto their branch —
+  no branch-history mutation. It also now exits non-zero when the fix session
+  fails or times out (was exit 0).
+- **`state`** writes job state atomically (temp + rename) and with `0600`/`0700`
+  permissions, and prunes per-job files/logs it drops past `MAX_JOBS` — closing a
+  torn-read data-loss window and unbounded state-dir growth.
+- The CLI rejects unknown/typo'd flags per command and prints usage for
+  `<command> --help` instead of launching a run.
+- Slimmed HARRY.md §5: the `.local/` doc-type taxonomy and lifecycle moved to
+  `references/doc-types.md` (loaded on demand), keeping the resident law compact.
+- Install scripts write the user's global files atomically with a one-time
+  `.bak`, and no longer strip trailing bytes outside harry's marker block.
+
+### Removed
+
+- The no-op `SessionStart` hook (both `hooks.json` files) and its dead
+  `setup --check` branch — it spawned `node` every session without refreshing
+  anything. Docs that claimed a session-start quota refresh were corrected.
+- ~170 lines of dead worktree-lifecycle code (`src/lib/worktree.ts`); the one
+  live helper moved to the existing `src/lib/git.ts`.
+
 ## [0.7.0] - 2026-07-06
 
 ### Added

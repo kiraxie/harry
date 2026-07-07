@@ -22,16 +22,11 @@
     "init-ignore": "node scripts/init.mjs"
   },
   "dependencies": {},
+  "//typescript": "DEBT: pinned to 7.0.1-rc (tsgo) for native-TS speed; revisit → stable 7.0 final when released",
   "devDependencies": {
     "@biomejs/biome": "^2.5.1",
     "@types/node": "^26.0.1",
     "esbuild": "^0.28.1",
     "typescript": "7.0.1-rc"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@biomejs/biome",
-      "esbuild"
-    ]
   }
 }

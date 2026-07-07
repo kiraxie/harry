@@ -6,21 +6,21 @@
  */
 
 import process from "node:process";
-import { runAsk } from "./commands/ask.js";
-import { enqueueBackground, runWorker } from "./commands/background.js";
-import { runFix } from "./commands/fix.js";
-import { runResult } from "./commands/result.js";
-import { runReview } from "./commands/review.js";
-import { runSetup } from "./commands/setup.js";
-import { runStatus } from "./commands/status.js";
-import { extractTask, flagNumber, flagString } from "./lib/args.js";
-import type { ReviewScope } from "./lib/git.js";
+import { runAsk } from "./commands/ask.ts";
+import { enqueueBackground, runWorker } from "./commands/background.ts";
+import { runFix } from "./commands/fix.ts";
+import { runResult } from "./commands/result.ts";
+import { runReview } from "./commands/review.ts";
+import { runSetup } from "./commands/setup.ts";
+import { runStatus } from "./commands/status.ts";
+import { extractTask, flagNumber, flagString } from "./lib/args.ts";
+import type { ReviewScope } from "./lib/git.ts";
 
 function printUsage(): void {
   console.log(
     [
       "Usage:",
-      "  companion setup [--check] [--json]",
+      "  companion setup [--json]",
       "  companion review [focus...] [--adversarial] [--base <ref>]",
       "                           [--scope auto|working-tree|branch] [--fix]",
       "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
@@ -67,9 +67,56 @@ const BOOLEAN_FLAGS = new Set<string>([
   "help",
   "simplify",
   "json",
-  "no-worktree",
-  "wait",
 ]);
+
+// Allowed flag keys per command. An unrecognized `--flag` errors loudly instead
+// of being silently swallowed (a typo like `--adversaria` must not quietly run a
+// plain review). `help` is accepted everywhere and handled before dispatch.
+// `full`/`harry-fix` are listed for `review` so their targeted guidance (below)
+// fires instead of a generic "unknown flag".
+const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
+  setup: new Set(["json"]),
+  review: new Set([
+    "adversarial",
+    "simplify",
+    "full",
+    "harry-fix",
+    "scope",
+    "base",
+    "model",
+    "reasoning",
+    "timeout",
+    "fix",
+    "context",
+    "background",
+  ]),
+  ask: new Set(["task", "model", "reasoning", "timeout", "context"]),
+  fix: new Set([
+    "findings",
+    "model",
+    "reasoning",
+    "timeout",
+    "allow-shell",
+    "allow-url",
+    "write",
+    "context",
+  ]),
+  status: new Set(["all", "json"]),
+  result: new Set(["json"]),
+  _worker: new Set(["job-id", "cwd"]),
+};
+
+/** Throw on any `--flag` not in the command's allow-list (typos error loudly). */
+function assertKnownFlags(command: string, flags: Record<string, string | boolean>): void {
+  const allowed = KNOWN_FLAGS[command];
+  if (!allowed) return; // help/unknown commands: handled by the switch default.
+  for (const key of Object.keys(flags)) {
+    if (key === "help") continue;
+    if (!allowed.has(key)) {
+      throw new Error(`Unknown flag --${key} for '${command}'. Run 'companion help' for usage.`);
+    }
+  }
+}
 
 function parseArgs(argv: string[]): ParsedArgs {
   const command = argv[0] ?? "help";
@@ -144,10 +191,20 @@ function flagEnum<T extends string>(
 async function main(): Promise<void> {
   const { command, args, flags } = parseArgs(process.argv.slice(2));
 
+  // `--help` after a command (e.g. `companion review --help`) must print usage,
+  // not launch a real run. Handle it before dispatch, for every command.
+  if (flags.help === true) {
+    printUsage();
+    return;
+  }
+
+  // Reject typo'd / unknown flags before dispatch so they never silently change
+  // behavior (an unrecognized flag used to be swallowed).
+  assertKnownFlags(command, flags);
+
   switch (command) {
     case "setup": {
       await runSetup({
-        check: flags.check === true,
         json: flags.json === true,
       });
       break;

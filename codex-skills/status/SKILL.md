@@ -15,9 +15,8 @@ every session.
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status [job-id] [--all]
 ```
 
-The quota shown is a cached snapshot — refreshed at each session start (the
-SessionStart hook) and after every ask/review/fix run — with its age labelled in
-the header.
+The quota shown is a cached snapshot — refreshed after every ask/review/fix run —
+with its age labelled in the header.
 
 Return the output verbatim. Then, only if something is worth flagging, append at
 most one short line: if there is a failed background job the user may not have

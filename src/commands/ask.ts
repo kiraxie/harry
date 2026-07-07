@@ -13,8 +13,8 @@
 
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
-import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.js";
-import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.js";
+import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
+import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.ts";
 import { formatCodexUsage, makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
 
 export interface AskOptions {

@@ -114,8 +114,12 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
 - Codex `review --full` drops the CC self-review leg (no `SlashCommand` tool on
   Codex) and drops `--harry-fix` (redundant when the orchestrator already is
   Codex) — only `--fix` remains.
-- Codex `review`'s RO/RW boundary is instruction-only; Claude Code's version is
-  tool-enforced via `allowed-tools`. Codex has no discovered equivalent gate.
+- `review`'s RO/RW boundary is instruction-only on **both** builds. Claude
+  Code's `allowed-tools` frontmatter is a single static allowlist that must
+  include the write tools (`Edit`/`git add`/`git commit`) for the RW `--fix`
+  path, so it cannot conditionally gate read-only vs read-write — the RO
+  discipline is enforced by instruction, same as Codex. (CC's allowlist still
+  bounds the overall tool universe; it just doesn't enforce the RO/RW split.)
 - Codex `audit`'s RO round-boundaries are likewise instruction-only, not
   tool-enforced (see its skill's own "Known limitation" note); it shares the same
   `references/audit/` reference bundle and `report-schema.json`/

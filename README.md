@@ -33,15 +33,21 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 ```
 /plugin marketplace add kiraxie/harry   # GitHub owner/repo
 /plugin install harry@kiraxie           # <plugin>@<marketplace> — "harry, published by kiraxie"
-/init                                    # wire the resident laws + set up this project
+/harry:init                             # wire the resident laws + set up this project
 ```
 
-`/init` does three things: wires harry's resident laws (`HARRY.md`, which ships
-with the plugin) into your global `~/.claude/CLAUDE.md` so they apply every
+harry's commands share the `/harry:` namespace. The ones whose bare name collides
+with a Claude Code built-in — `/harry:init`, `/harry:review`, `/harry:status` —
+**must** be typed with the prefix, or the built-in runs instead; the rest
+(`/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`)
+accept the bare name when unambiguous.
+
+`/harry:init` does three things: wires harry's resident laws (`HARRY.md`, which
+ships with the plugin) into your global `~/.claude/CLAUDE.md` so they apply every
 session; adds harry's `.gitignore` block to this project; and offers to migrate
 any legacy spec/plan docs into harry's format. Run it once per project — the laws
-step is idempotent, so re-runs elsewhere are no-ops. (`/init --remove` strips this
-project's `.gitignore` block; the global laws stay.)
+step is idempotent, so re-runs elsewhere are no-ops. (`/harry:init --remove`
+strips this project's `.gitignore` block; the global laws stay.)
 
 Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
 
@@ -88,10 +94,12 @@ The agent commands (`ask`, `review`, `review --fix`) all run through the OpenAI 
 CLI (spawned as a subprocess, JSON-RPC over stdio). No SDK dependency — only the `codex`
 binary on `PATH`.
 
-Codex injects no default model for `ask`/`fix` — leave `--model` unset to let
-`~/.codex/config.toml` decide. `review`'s three lanes (standard/adversarial/simplify) each
-pin their own default model to keep their perspectives distinct; pass `--model` to
-override any of them. One-time setup: install the `codex` CLI, then `codex login`.
+`ask` and `fix` default to a capable model (`gpt-5.5`) rather than inheriting
+whatever `~/.codex/config.toml` happens to set — applying vetted findings and
+answering a one-shot prompt are judgment tasks (HARRY.md §5); pass `--model` to
+override. `review`'s three lanes (standard/adversarial/simplify) each pin their own
+default model to keep their perspectives distinct; pass `--model` to override any of
+them. One-time setup: install the `codex` CLI, then `codex login`.
 
 ## Skills
 
