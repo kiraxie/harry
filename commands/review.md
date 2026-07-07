@@ -230,15 +230,16 @@ You apply the approved findings yourself, with full conversation context.
    HEAD` as the baseline instead. Reuse that literal SHA in step 3 — each `Bash`
    call is a fresh shell, so a `BASE=…` variable will not survive; substitute the
    actual value. Known limit (same as runFix): `stash create` skips pre-existing
-   untracked files, so the reported diff may attribute them to the fix — stats-only
-   imprecision.
+   untracked files, so `git add -A` in step 3 stages them and they appear in the
+   fix diff as if the fix created them.
 2. **Apply** each approved finding with `Edit`/`Write`: minimal, correct change per
    finding; no unrelated refactor. Skip any that is already fixed, no longer applies,
    or whose fix would change intended behavior — note why.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons) and
    changed files, and tell the user the fixes are **staged but not committed** —
    review the fix-only diff with `git diff --cached <baseline-sha>` (the SHA recorded
-   in step 1; it excludes their pre-existing WIP).
+   in step 1; it excludes their pre-existing *tracked* WIP — pre-existing *untracked*
+   files may still appear, so warn the user before they commit the staged changes).
 
 ## Apply: `--harry-fix` (isolated Codex fix session, gpt-5.5/xhigh)
 

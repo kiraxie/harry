@@ -192,4 +192,6 @@ user before applying; the user may override.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons)
    and changed files, and tell the user the fixes are **staged but not committed**
    — review the fix-only diff with `git diff --cached <baseline-sha>` (the SHA
-   recorded in step 1; it excludes their pre-existing WIP).
+   recorded in step 1; it excludes their pre-existing *tracked* WIP —
+   pre-existing *untracked* files may still appear, so warn the user before they
+   commit the staged changes).

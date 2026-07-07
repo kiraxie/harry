@@ -150,10 +150,16 @@ function saveState(stateDir: string, state: StateFile): void {
   if (state.jobs.length > MAX_JOBS) {
     // MAX_JOBS caps state.json, but never at the cost of an in-flight job: a
     // running/queued entry keeps its slot (and its files) regardless of position
-    // — pruning it would delete the state/log out from under a live worker (and
-    // the zombie sweep already bounds how long an entry can stay in-flight).
+    // — pruning it would delete the state/log out from under a live worker.
     // Dropped terminal jobs' per-job files/logs are never referenced again —
     // delete them so the jobs/ dir doesn't grow without bound.
+    // DEBT: terminal jobs are hard-capped at MAX_JOBS, but in-flight ones are
+    // not — a worker that dies without persisting failure (SIGKILL/OOM/reboot)
+    // stays `running` until sweepZombieJobs marks it failed, and that sweep is
+    // lazy (only status/result invoke it), so a never-inspected queue of dead
+    // jobs grows state.json/jobs-dir unbounded until the next status/result.
+    // Ceiling: count of never-swept dead in-flight jobs. Upgrade path: invoke
+    // sweepZombieJobs from createJob, or cap in-flight retention, if it grows.
     const keep: JobRecord[] = [];
     for (const job of state.jobs) {
       const inFlight = job.status === "running" || job.status === "queued";
