@@ -11,12 +11,18 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { run as initRun } from "../scripts/init.mjs";
 import { run as installRun } from "../scripts/install.mjs";
 import { run as codexRun } from "../scripts/install-codex.mjs";
 import { safeWrite } from "../scripts/lib/atomic-write.mjs";
 
 const BEGIN = "# >>> harry >>>";
+const END = "# <<< harry <<<";
+
+// The plugin's own HARRY.md — the source that install deploys as a snapshot.
+const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const sourceLaws = readFileSync(path.join(pluginRoot, "HARRY.md"), "utf8");
 
 function tmpDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -121,6 +127,84 @@ test("install.mjs: user content outside the block (incl. trailing newlines) is b
       original,
       "install + remove round-trips to the original bytes exactly",
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("install.mjs: deploys a HARRY.md snapshot and imports the deployed copy, not the repo", () => {
+  const dir = tmpDir("harry-install-test-");
+  try {
+    const g = path.join(dir, "CLAUDE.md");
+    writeFileSync(g, "# My rules\n\nUse TDD.\n");
+    // Snapshot lives beside the global file (both under <home>/.claude in real use).
+    const snapshot = path.join(dir, "harry", "HARRY.md");
+
+    withGlobal(g, () => installRun());
+
+    assert.ok(existsSync(snapshot), "snapshot deployed under the fake HOME");
+    assert.equal(
+      readFileSync(snapshot, "utf8"),
+      sourceLaws,
+      "deployed snapshot is a byte copy of the plugin's HARRY.md",
+    );
+
+    const out = readFileSync(g, "utf8");
+    assert.ok(out.includes(`@${snapshot}`), "block imports the deployed snapshot path");
+    assert.ok(
+      !out.includes(`@${path.join(pluginRoot, "HARRY.md")}`),
+      "block does NOT import the live repo/plugin HARRY.md",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("install.mjs: re-run redeploys the snapshot and stays idempotent", () => {
+  const dir = tmpDir("harry-install-test-");
+  try {
+    const g = path.join(dir, "CLAUDE.md");
+    writeFileSync(g, "# My rules\n\nUse TDD.\n");
+    const snapshot = path.join(dir, "harry", "HARRY.md");
+
+    withGlobal(g, () => {
+      installRun();
+      const afterFirst = readFileSync(g, "utf8");
+      // Simulate the deployed snapshot drifting; a re-run must overwrite it.
+      writeFileSync(snapshot, "STALE\n");
+      installRun();
+      const afterSecond = readFileSync(g, "utf8");
+
+      assert.equal(afterSecond, afterFirst, "global file byte-identical across re-runs");
+      assert.equal(afterSecond.split(BEGIN).length, 2, "exactly one block");
+      assert.equal(
+        readFileSync(snapshot, "utf8"),
+        sourceLaws,
+        "re-run redeploys the current HARRY.md over the stale snapshot",
+      );
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("install.mjs: migrates an old direct-repo import to the deployed snapshot on re-run", () => {
+  const dir = tmpDir("harry-install-test-");
+  try {
+    const g = path.join(dir, "CLAUDE.md");
+    // A global file that already has a harry block wired the OLD way: a live
+    // @-import pointing straight at the plugin checkout's HARRY.md.
+    const oldImport = `@${path.join(pluginRoot, "HARRY.md")}`;
+    writeFileSync(g, `# My rules\n\n${BEGIN}\n${oldImport}\n${END}\n`);
+    const snapshot = path.join(dir, "harry", "HARRY.md");
+
+    withGlobal(g, () => installRun());
+
+    const out = readFileSync(g, "utf8");
+    assert.equal(out.split(BEGIN).length, 2, "still exactly one block (no duplicate)");
+    assert.ok(!out.includes(oldImport), "old direct-repo import is gone");
+    assert.ok(out.includes(`@${snapshot}`), "block now imports the deployed snapshot");
+    assert.ok(out.includes("# My rules"), "user content preserved through migration");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

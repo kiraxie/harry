@@ -1,15 +1,28 @@
 #!/usr/bin/env node
-// harry install-laws — wire the resident HARRY.md into the global instructions
-// file via an `@` import, so the laws load every session without a keyword.
+// harry install-laws — DEPLOY the resident HARRY.md as a snapshot and wire the
+// global instructions file to it via an `@` import, so the laws load every
+// session without a keyword.
 //
-// Inserts a marker-wrapped `@<pluginRoot>/HARRY.md` line into ~/.claude/CLAUDE.md
-// (override with HARRY_GLOBAL). Idempotent; `--remove` strips it. Also warns
-// about stale entries in the global file that harry supersedes (it does NOT
-// edit the user's hand-written rules — that's the user's call).
+// Deploys a copy of the plugin's current HARRY.md to <home>/.claude/harry/HARRY.md
+// and inserts a marker-wrapped `@<home>/.claude/harry/HARRY.md` line into
+// ~/.claude/CLAUDE.md (override the global file with HARRY_GLOBAL; the snapshot
+// path derives from its directory). This is a snapshot, NOT a live reference to
+// the plugin checkout: editing the plugin's HARRY.md (even uncommitted) does not
+// change installed behavior until you re-run this — "release" = re-run
+// `pnpm run install-laws` / `/harry:init`. This mirrors the Codex build
+// (install-codex.mjs), so both builds share one mental model: re-run init to
+// resync laws after updating.
+//
+// Re-running re-deploys the snapshot and rewrites the marker block idempotently,
+// migrating any older direct-repo-path import inside harry's block to the
+// deployed path. Idempotent; `--remove` strips the import block (the deployed
+// snapshot copy is left in place — a harmless file, and deletion is the user's
+// call). Also warns about stale entries in the global file that harry supersedes
+// (it does NOT edit the user's hand-written rules — that's the user's call).
 //
 // Usage:
-//   node scripts/install.mjs            # install the @ import
-//   node scripts/install.mjs --remove   # uninstall
+//   node scripts/install.mjs            # deploy the snapshot + wire the @ import
+//   node scripts/install.mjs --remove   # uninstall the import block
 //   node scripts/install.mjs --selftest # runnable check
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -29,8 +42,15 @@ function globalPath() {
   return process.env.HARRY_GLOBAL || join(homedir(), ".claude", "CLAUDE.md");
 }
 
-export function applyImport(existing, { remove = false, root = pluginRoot } = {}) {
-  const body = `@${root}/HARRY.md`;
+// Where the deployed snapshot of HARRY.md lives: alongside the global
+// instructions file (both under <home>/.claude in real use), so tests that point
+// HARRY_GLOBAL at a temp dir get a temp snapshot path too — never the real home.
+function snapshotPath() {
+  return join(dirname(globalPath()), "harry", "HARRY.md");
+}
+
+export function applyImport(existing, { remove = false, importPath = snapshotPath() } = {}) {
+  const body = `@${importPath}`;
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
 }
 
@@ -46,10 +66,17 @@ function warnStale(text) {
 
 export function run({ remove = false } = {}) {
   const path = globalPath();
+  const snapshot = snapshotPath();
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
-  if (!remove) warnStale(existing);
+  if (!remove) {
+    warnStale(existing);
+    // Deploy: copy the plugin's current HARRY.md into the snapshot location, so
+    // the wired-in @ import reads a frozen copy — not the live plugin checkout.
+    mkdirSync(dirname(snapshot), { recursive: true });
+    safeWrite(snapshot, readFileSync(join(pluginRoot, "HARRY.md"), "utf8"));
+  }
   mkdirSync(dirname(path), { recursive: true });
-  safeWrite(path, applyImport(existing, { remove }));
+  safeWrite(path, applyImport(existing, { remove, importPath: snapshot }));
   return path;
 }
 
@@ -64,10 +91,16 @@ function selftest() {
     const env = process.env.HARRY_GLOBAL;
     process.env.HARRY_GLOBAL = g;
     try {
+      const snap = join(dir, "harry", "HARRY.md");
       run();
       let out = readFileSync(g, "utf8");
       assert(out.includes("# My rules"), "preserves existing content");
-      assert(out.includes("/HARRY.md"), "writes the @ import");
+      assert(out.includes(`@${snap}`), "wires the @ import at the deployed snapshot");
+      assert(existsSync(snap), "deploys the HARRY.md snapshot");
+      assert(
+        readFileSync(snap, "utf8").includes("Resident Engineering Laws"),
+        "snapshot holds HARRY.md content",
+      );
       assert(out.split(BEGIN).length === 2, "one block after first run");
       run();
       out = readFileSync(g, "utf8");
