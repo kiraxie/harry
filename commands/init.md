@@ -20,9 +20,13 @@ Otherwise execute:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"
 ```
 
-It inserts a marker-wrapped `@<plugin>/HARRY.md` import into `~/.claude/CLAUDE.md`
-(idempotent — re-running in another project is a harmless no-op; it also warns
-about stale global entries harry supersedes). Return its output verbatim.
+It deploys a snapshot of the plugin's current `HARRY.md` to
+`~/.claude/harry/HARRY.md` and inserts a marker-wrapped `@~/.claude/harry/HARRY.md`
+import into `~/.claude/CLAUDE.md` (idempotent — re-running in another project is a
+harmless no-op; it also warns about stale global entries harry supersedes). This
+is a **snapshot**, not a live reference to the plugin checkout: after the plugin
+is updated (or `HARRY.md` is edited), re-run this to re-deploy and resync — same
+resync model as the Codex build. Return its output verbatim.
 
 ## Phase 2 — Gitignore
 
@@ -34,7 +38,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs" $ARGUMENTS
 
 What it does:
 
-- Appends a marker-wrapped block (`# >>> harry >>>` … `# <<< harry <<<`) to the target project's `.gitignore` listing the paths harry keeps out of version control: `.local/` (specs, plans, backlog, milestones, research, ledger scratch, `STATUS.md`/`HISTORY.md`/`INDEX.md`), `*worktrees/` (worktree sandboxes, at any depth — covers both `.worktrees/` and `.claude/worktrees/`), and `CLAUDE.local.md` (the user's per-project specialization rules).
+- Appends a marker-wrapped block (`# >>> harry >>>` … `# <<< harry <<<`) to the target project's `.gitignore` listing the paths harry keeps out of version control: `.local/` (specs, plans, backlog, milestones, research, `tmp/` scratch, `INDEX.md`/`HISTORY.md`), `*worktrees/` (worktree sandboxes, at any depth — covers both `.worktrees/` and `.claude/worktrees/`), and `CLAUDE.local.md` (the user's per-project specialization rules).
 - Idempotent — re-running replaces the block in place rather than duplicating it.
 - `--remove` strips the block cleanly, leaving the rest of `.gitignore` untouched.
 

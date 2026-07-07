@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A prose reference-path linter test (`tests/prose-refs.test.ts`): every repo-relative
+  path and `${CLAUDE_PLUGIN_ROOT}` reference across HARRY.md, skills, commands, and
+  references must resolve — renames/deletes can no longer leave dangling instructions.
+
 - **CI** (`.github/workflows/ci.yml`): typecheck, lint, test, and a **dist-drift
   gate** (`pnpm run build` + `git diff --exit-code dist/`) so the committed
   `dist/companion.cjs` can never silently diverge from `src/`.
@@ -18,6 +22,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Laws release boundary**: `install-laws` / `/harry:init` now deploys HARRY.md as a
+  **snapshot** to `~/.claude/harry/HARRY.md` and `@`-imports that copy, instead of
+  live-importing the plugin checkout — "release" = re-run init, converging with the
+  Codex build's resync model. Old direct-repo imports migrate automatically on re-run.
+- **Standard tier executes inline** (session mode, isolated worktree) with a now
+  **mandatory** independent reviewer subagent; subagent-per-task execution is Major-only.
+  The Standard spec rule is canonicalized across all copies: a spec only when real
+  alternatives were weighed, otherwise the decision lives at the top of the plan.
+- **Tracking files simplified**: `.local/STATUS.md` merged into `.local/INDEX.md` as an
+  `## In flight` section (now wired into the executing/finishing skills so start/finish
+  marks actually happen); `HISTORY.md` rotates yearly to `.local/history/<year>.md`; the
+  separate `.local/ledger/` is gone — progress marks live in the plan file itself, and
+  Major-mode handoff files move to `.local/tmp/<branch>/`.
+- **Audit orchestration hoisted**: the ~77%-identical `commands/audit.md` and
+  `codex-skills/audit/SKILL.md` now share `references/audit/ORCHESTRATION.md`
+  (same treatment as `review-orchestration.md`); the wrappers keep only their
+  build-specific surface.
+- The finishing skill now states completion evidence honestly: CI green when pushed,
+  the full local suite when a merge stays local (CI does not run on local merges).
+- Removed the unexplained `Intensity: full` orphan line from HARRY.md §1 and the
+  contradictory "Every project, regardless of perceived simplicity" wording from the
+  brainstorming HARD-GATE (the gate now defers tier claims to §3).
 - **`fix`** isolates the pre-fix baseline with `git stash create` (an ephemeral
   snapshot) instead of committing the user's uncommitted work onto their branch —
   no branch-history mutation. It also now exits non-zero when the fix session

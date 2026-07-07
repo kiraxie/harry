@@ -23,11 +23,14 @@ It inlines HARRY.md's content into a marker-wrapped block in `~/.codex/AGENTS.md
 (idempotent — re-running in another project is a harmless no-op; it also warns
 about stale global entries harry supersedes).
 
-**Known limitation vs. the Claude Code build:** this is a snapshot, not a live
-reference — unlike Claude Code's `@`-import (which always reads the current
-`HARRY.md`), this embeds HARRY.md's content as of the moment `/init` ran. If
-HARRY.md is updated later, re-run this to resync. Say this explicitly to the user
-after running it, not just in this doc.
+**Snapshot semantics (shared with the Claude Code build):** this embeds
+HARRY.md's content as of the moment `/init` ran — a snapshot, not a live
+reference. The Claude Code build now works the same way: it deploys a HARRY.md
+snapshot and `@`-imports that copy, rather than the live plugin checkout. The only
+difference is form — Codex inlines the content (no `@`-import syntax), Claude Code
+`@`-imports a deployed copy — but both require a re-run to resync after HARRY.md
+changes. If HARRY.md is updated later, re-run this to resync. Say this explicitly
+to the user after running it, not just in this doc.
 
 Return the command output verbatim.
 
@@ -43,7 +46,7 @@ What it does:
 
 - Appends a marker-wrapped block to the target project's `.gitignore` listing the
   paths harry keeps out of version control: `.local/` (specs, plans, backlog,
-  milestones, research, ledger scratch, `STATUS.md`/`HISTORY.md`/`INDEX.md`),
+  milestones, research, `tmp/` scratch, `INDEX.md`/`HISTORY.md`),
   `*worktrees/` (worktree sandboxes, at any depth — covers both `.worktrees/`
   and `.claude/worktrees/`), and `CLAUDE.local.md` (the user's per-project
   specialization rules — same file harry uses for Claude Code, still

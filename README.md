@@ -4,7 +4,7 @@ A personal Claude Code plugin: the **Superpowers** workflow philosophy and **pon
 
 Two halves:
 
-- **Resident laws** (`HARRY.md`) — loaded into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
+- **Resident laws** (`HARRY.md`) — deployed as a snapshot into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
 - **A `brainstorm → plan → execute → finish` pipeline** — four skills, plus slash commands for review, debate, and over-engineering/debt audits.
 
 ## The three-tier threshold
@@ -14,7 +14,7 @@ Every non-trivial task is classified; the tier decides how much process applies 
 | Tier | Trigger | What runs |
 |------|---------|-----------|
 | **Trivial** | 1 file, mechanical, no branching | just do it + verify |
-| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, bullet plan, one test, subagent execution |
+| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, bullet plan, one test, inline execution + required independent review |
 | **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → spec → plan → subagent execution with per-task review → finish |
 
 Any red line (security/auth/money/delete/migration/external contract/cross-boundary contract) forces **Major** regardless of size.
@@ -42,12 +42,18 @@ with a Claude Code built-in — `/harry:init`, `/harry:review`, `/harry:status` 
 (`/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`)
 accept the bare name when unambiguous.
 
-`/harry:init` does three things: wires harry's resident laws (`HARRY.md`, which
-ships with the plugin) into your global `~/.claude/CLAUDE.md` so they apply every
+`/harry:init` does three things: deploys harry's resident laws (`HARRY.md`, which
+ships with the plugin) as a snapshot to `~/.claude/harry/HARRY.md` and wires an
+`@`-import to it into your global `~/.claude/CLAUDE.md` so they apply every
 session; adds harry's `.gitignore` block to this project; and offers to migrate
 any legacy spec/plan docs into harry's format. Run it once per project — the laws
 step is idempotent, so re-runs elsewhere are no-ops. (`/harry:init --remove`
 strips this project's `.gitignore` block; the global laws stay.)
+
+The laws are a **snapshot**, not a live reference to the plugin checkout: after
+updating the plugin (or editing `HARRY.md`), re-run `/harry:init` (or
+`pnpm run install-laws`) to re-deploy and resync — same model as the Codex build
+below. "Release" = re-run init.
 
 Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
 
@@ -108,7 +114,7 @@ These auto-trigger (no slash command); they are the pipeline:
 - **brainstorming** — turn an idea into an approved SCQA spec (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
 - **writing-plans** — turn a spec into a tier-appropriate execution plan.
 - **executing** — run the plan; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
-- **finishing** — verify green, ask merge-vs-PR, then archive spec/plan, clean up the worktree, return to main, and watch CI.
+- **finishing** — verify green, ask merge-vs-PR, then archive the plan, clean up the worktree, return to main, and verify completion (CI when pushed, the full local suite when the merge stays local).
 
 ## Layout
 

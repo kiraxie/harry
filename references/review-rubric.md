@@ -36,7 +36,7 @@ or HEAD mutation.
 - **Important** — architecture problems, poor error handling, test gaps,
   unrequested scope, a red line crossed.
 - **Minor** — style, naming, local optimization, doc polish. Record in the
-  ledger for final triage; do not block on these.
+  plan's Minor list for final triage; do not block on these.
 
 Categorize by *actual* severity — not everything is Critical, and a nitpick is
 never Critical. Acknowledge what was done well before listing issues.
@@ -63,7 +63,7 @@ never Critical. Acknowledge what was done well before listing issues.
 ### Issues
 #### Critical (must fix)
 #### Important (should fix)
-#### Minor (nice to have — ledger for final triage)
+#### Minor (nice to have — plan's Minor list for final triage)
 [each: file:line · what's wrong · why it matters · how to fix]
 
 ### Assessment

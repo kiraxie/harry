@@ -8,7 +8,7 @@ description: "Use when starting any creative work — a new feature, component, 
 Turn an idea into an agreed design through collaborative dialogue, then write a spec. This is a procedure governed by the Harry laws (HARRY.md); when they conflict, the laws win.
 
 <HARD-GATE>
-No code, no scaffolding, no implementation skill, no implementation action until you have presented a design AND the user has approved it. Every project, regardless of perceived simplicity. "Too simple to design" is where unexamined assumptions cost the most.
+No code, no scaffolding, no implementation skill, no implementation action until you have presented a design AND the user has approved it. This governs every task that enters this skill — Standard and Major alike (Trivial never enters, per HARRY.md §3). "Too simple to design" is not an exit from this skill: it is a tier claim, and tier claims are settled by §3, not by feel.
 </HARD-GATE>
 
 ## Tier-Aware Entry (HARRY.md §3)
@@ -18,7 +18,7 @@ Classify the task first, then take the matching path. Do NOT pop a mode-choice p
 | Tier | Brainstorming |
 |------|---------------|
 | Trivial | **Skip** — go straight to the work. |
-| Standard | **Compressed 3-step**: understand → design (one approach proposal is enough) → write spec. |
+| Standard | **Compressed 3-step**: understand → design (one approach proposal is enough) → write a spec ONLY when a real design decision was weighed (alternatives existed); otherwise skip the spec and record the decision inline at the top of the plan. |
 | Major | **Full flow** below. |
 
 A red line hit (HARRY.md §2) auto-promotes to Major.
@@ -37,7 +37,7 @@ Complete these in order:
 8. **User reviews the spec** — ask, wait, revise if needed.
 9. **Transition** — invoke `writing-plans`. It is the ONLY next skill.
 
-The compressed Standard path runs steps 1 → (one approach) → present → approve → 6-9.
+The compressed Standard path runs steps 1 → (one approach) → present → approve → then step 6 (write the spec) **only when a real design decision was weighed** (alternatives existed); otherwise skip 6-8 and go straight to step 9 (invoke `writing-plans`), noting the decision inline at the top of the plan.
 
 ## Decision Aids (opt-in, cost quota)
 

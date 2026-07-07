@@ -1,12 +1,12 @@
 # `.local/` Doc Types — full detail for HARRY.md §5
 
-harry keeps five long-lived/short-lived document types under `.local/`, plus three
-tracking files (`INDEX.md`, `STATUS.md`, `HISTORY.md`). HARRY.md §5 carries the
+harry keeps five long-lived/short-lived document types under `.local/`, plus two
+tracking files (`INDEX.md`, `HISTORY.md`). HARRY.md §5 carries the
 one-paragraph summary and the load trigger; this reference is the full taxonomy,
 naming, and lifecycle. **Read this whenever you create, graduate, or archive any
 `.local/` doc.**
 
-## The five doc types (keep them separate; non-trivial work has spec before plan)
+## The five doc types (keep them separate; Major work has a spec before a plan; Standard records decisions in a spec only when real alternatives were weighed)
 
 - **Spec/Design** `*-design.md` — what the system should be and why it was decided (includes decision records: Discussion → Decision → considered-but-rejected). Long-term. In `.local/specs/`.
 - **Plan/Follow-up** `*-plan.md` / `*-followup.md` — how to proceed, execution steps. Short-term, archived after execution. In `.local/plans/`.
@@ -22,11 +22,19 @@ naming, and lifecycle. **Read this whenever you create, graduate, or archive any
 
 ## Lifecycle rules
 
-- **Backlog graduation**: once an item is decided, move the decision into a spec (Discussion → Decision) or a plan (execution steps), then delete that item from the backlog file — delete the whole file once empty. No tombstones — the item's content moved wholesale into the spec/plan, which is now the durable record (unlike a STATUS.md pointer, nothing is left behind to summarize). No auto-expiry — the discipline is manual: check existing `.local/backlog/` files for the topic before a new brainstorm/audit session touches the same area, the same way `.local/STATUS.md` is checked at session start.
+- **Backlog graduation**: once an item is decided, move the decision into a spec (Discussion → Decision) or a plan (execution steps), then delete that item from the backlog file — delete the whole file once empty. No tombstones — the item's content moved wholesale into the spec/plan, which is now the durable record (unlike an `## In flight` line, nothing is left behind to summarize). No auto-expiry — the discipline is manual: check existing `.local/backlog/` files for the topic before a new brainstorm/audit session touches the same area, the same way `.local/INDEX.md` `## In flight` is checked at session start.
 - **Backlog vs `/debt`**: `/debt` re-judges deferred *decisions* (DEBT: markers, spec Non-Goals, plan deferrals) by checking whether each one's premise still holds. Backlog items never had a premise — so `/debt` sweeps them too, but asks a different question: still open, now urgent, or already settled elsewhere? This is what keeps backlog from becoming a write-only graveyard; see `/debt`'s own definition for the verdict vocabulary.
 - **Milestone lifecycle**: update the Members checklist and Status as member specs/backlogs get decided or graduate. Once the goal is achieved, archive the file to `.local/milestones/archived/` (like a plan), add one `.local/HISTORY.md` line, and remove its `.local/INDEX.md` entry. A milestone never gains its own `/debt` sweep — it holds no deferred decisions; its members already are covered by `/debt`.
 - **Research lifecycle**: track spawned milestones in the checklist as they're created; update Status as the investigation continues or goes dormant. Never archives — unlike a milestone, an investigation has no fixed completion point. No `/debt` sweep — it holds no decisions itself; spawned milestones (and their members) are already covered.
 
 ## Global index `.local/INDEX.md`
 
-A live, content-oriented map over specs/backlog/milestones/research (not plans — `STATUS.md`/`HISTORY.md` already cover active/completed execution), one line per doc grouped by category: `<topic> · <path> · <one-line summary> · <status>`. It is a snapshot of what currently exists, not a log — an entry is removed when its file is deleted (backlog graduation) or archived (milestone completion); `HISTORY.md` already holds the permanent record of anything that leaves it. Update it when you create a spec (wired into the brainstorming skill's spec-writing step), and whenever a backlog is created or graduates, a milestone is created or archives, or a research doc is created or its spawned-milestones list changes (prose discipline, same as the doc types themselves — no dedicated skill hooks them).
+A live, content-oriented map over specs/backlog/milestones/research (not plans — the `## In flight` section and `HISTORY.md` already cover active/completed execution), one line per doc grouped by category: `<topic> · <path> · <one-line summary> · <status>`. It is a snapshot of what currently exists, not a log — an entry is removed when its file is deleted (backlog graduation) or archived (milestone completion); `HISTORY.md` already holds the permanent record of anything that leaves it. Update it when you create a spec (wired into the brainstorming skill's spec-writing step), and whenever a backlog is created or graduates, a milestone is created or archives, or a research doc is created or its spawned-milestones list changes (prose discipline, same as the doc types themselves — no dedicated skill hooks them).
+
+### `## In flight` — the active-work list
+
+`.local/INDEX.md` opens with an `## In flight` section: one line per active unit of work, `<topic> · <branch> · <started YYYY-MM-DD>`. This is harry's work list (it absorbed the former `STATUS.md`). Gitignored, **NOT auto-loaded** (lazy) — check it yourself at session start so you don't duplicate an in-flight item. Mark a unit started when you begin it (wired into the executing skill), update at commit time; on completion move a one-line conclusion to `HISTORY.md` and remove the In-flight line (wired into finishing). It tracks only active work — nothing is left behind as a tombstone.
+
+## Chronological archive `.local/HISTORY.md`
+
+The permanent one-line-per-unit completion log (`- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> · <one-line outcome>`, newest first). On-demand, gitignored, NOT auto-loaded — a thin pointer; the detail lives in git/PR. **Yearly rotation:** when adding the first entry of a new year, first move the previous year's entries out to `.local/history/<year>.md` (create the `history/` dir on demand), leaving `HISTORY.md` holding only the current year. This keeps the live file short without losing the archive.

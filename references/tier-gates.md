@@ -24,11 +24,11 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 |------|---------|
 | Trigger | 2–5 files, real logic, single subsystem |
 | Brainstorm | compressed — confirm intent + approach in a few lines, no full exploration |
-| Spec | `*-design.md` in `.local/specs/` if a decision needs recording; otherwise inline |
+| Spec | `*-design.md` in `.local/specs/` ONLY when a real design decision was weighed (alternatives existed); otherwise record the decision inline at the top of the plan |
 | Plan | bullet plan (`*-plan.md` in `.local/plans/`) |
 | TDD | one runnable check left behind (smallest thing that fails if the logic breaks); watch-it-fail encouraged, not mandatory |
-| Review | free subagent review, or skip |
-| Execution | subagent |
+| Review | free subagent review — required (compensates for inline execution) |
+| Execution | session (inline), in an isolated worktree per §5 |
 | Todos | track the few units if the plan has more than one step |
 
 ### Major
