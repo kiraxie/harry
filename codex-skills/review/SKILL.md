@@ -178,16 +178,18 @@ user before applying; the user may override.
 ### Stage 3 — Apply
 1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix): if
    `git status --porcelain` is non-empty, the fix diff must be isolated from the
-   user's pre-existing work. Capture it with `BASE=$(git stash create)` — an
-   ephemeral snapshot object; nothing (working tree, index, branch history, stash
-   ref) is mutated, so no confirmation is needed. If it prints nothing (e.g. only
-   untracked changes), fall back to `BASE=$(git rev-parse HEAD)`; clean tree →
-   same fallback. Known limit (same as runFix): `stash create` skips pre-existing
-   untracked files, so the reported diff may attribute them to the fix.
+   user's pre-existing work. Run `git stash create` and **record the printed SHA**
+   as the baseline — an ephemeral snapshot object; nothing (working tree, index,
+   branch history, stash ref) is mutated, so no confirmation is needed. If it
+   prints nothing (e.g. only untracked changes) or the tree is clean, use `git
+   rev-parse HEAD` as the baseline instead. Reuse that literal SHA in step 3
+   (don't rely on a shell variable surviving between commands). Known limit (same
+   as runFix): `stash create` skips pre-existing untracked files, so the reported
+   diff may attribute them to the fix.
 2. **Apply** each approved finding directly: minimal, correct change per finding;
    no unrelated refactor. Skip any that is already fixed, no longer applies, or
    whose fix would change intended behavior — note why.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons)
    and changed files, and tell the user the fixes are **staged but not committed**
-   — review the fix-only diff with `git diff --cached $BASE` (it excludes their
-   pre-existing WIP).
+   — review the fix-only diff with `git diff --cached <baseline-sha>` (the SHA
+   recorded in step 1; it excludes their pre-existing WIP).
