@@ -77,16 +77,16 @@ per-call premium quota. The rest are Claude-native or local scripts.
 
 | Command | What it does |
 |---------|--------------|
-| `/review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) |
-| `/ask "<prompt>"` | One read-only prompt to Codex |
-| `/debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
-| `/status` | Codex rate-limit snapshot + background jobs |
-| `/result [job-id]` | Fetch a completed background job's output |
-| `/debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
-| `/audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
-| `/init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
+| `/harry:review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) |
+| `/harry:ask "<prompt>"` | One read-only prompt to Codex |
+| `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
+| `/harry:status` | Codex rate-limit snapshot + background jobs |
+| `/harry:result [job-id]` | Fetch a completed background job's output |
+| `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
+| `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
+| `/harry:init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
-Cheap-first smoke test: `/status` → `/ask` → `/review`/`/debate`.
+Cheap-first smoke test: `/harry:status` → `/harry:ask` → `/harry:review`/`/harry:debate`.
 
 ## Codex
 

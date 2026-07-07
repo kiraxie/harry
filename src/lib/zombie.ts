@@ -14,8 +14,10 @@ const STALE_LOG_MS = 60_000;
 
 // When the recorded pid is *alive*, we normally treat the job as live. But a pid
 // can be reused by an unrelated long-lived process, wedging a job in `running`
-// forever. No real turn outlives the 30-min turn timeout, so a log silent this
-// long against a "live" pid is a reused pid, not our worker — reap it anyway.
+// forever. A log silent far longer than the job could legitimately run against a
+// "live" pid is a reused pid, not our worker — reap it anyway. The floor is 6h;
+// a job launched with a larger `--timeout` widens its own window (see below),
+// since there is no heartbeat to keep the log fresh during a long silent turn.
 const PID_REUSE_STALE_MS = 6 * 60 * 60 * 1000; // 6h
 
 function isProcessAlive(pid: number): boolean {
@@ -51,10 +53,14 @@ export function isZombie(job: JobRecord, logFile: string, now: number = Date.now
   };
 
   // A live pid normally clears the job — unless the log has been silent far
-  // longer than any real turn could run, which means the pid was reused (a job
-  // in `queued` may also simply have no pid yet; both fall through to staleness).
+  // longer than the job could legitimately run, which means the pid was reused
+  // (a job in `queued` may also simply have no pid yet; both fall through to
+  // staleness). `--timeout` is uncapped, so a job that asked for more than the
+  // 6h floor gets a window of its own timeout plus the usual grace.
   if (job.pid != null && isProcessAlive(job.pid)) {
-    return silentFor(PID_REUSE_STALE_MS);
+    const requested = Number(job.request?.flags?.timeout);
+    const ownWindow = Number.isFinite(requested) && requested > 0 ? requested + STALE_LOG_MS : 0;
+    return silentFor(Math.max(PID_REUSE_STALE_MS, ownWindow));
   }
   return silentFor(STALE_LOG_MS);
 }

@@ -92,8 +92,10 @@ claims). Do not use any write tool on this path.
 
 **Foreground:**
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review <args without --wait/--background>
 ```
+`--wait`/`--background` are execution-mode flags for this command, not companion
+flags — strip them before forwarding (the CLI rejects `--wait` as an unknown flag).
 Return stdout verbatim (markdown). No paraphrase, summary, or commentary.
 
 **Background:** launch with the harness's own background mode — do NOT pass
@@ -221,17 +223,19 @@ You apply the approved findings yourself, with full conversation context.
 
 1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix): if `git
    status --porcelain` is non-empty, the fix diff must be isolated from the user's
-   pre-existing work. Because this commits their uncommitted changes, **confirm first**
-   with `AskUserQuestion` ("snapshot your uncommitted work as a baseline commit before
-   applying?"); on yes, `git add -A` and `git commit -m "chore: pre-fix snapshot (cc
-   fix baseline)"`. If the commit fails on a dirty tree, STOP and tell the user to
-   commit/stash manually — never mix fix edits into their pre-existing changes.
+   pre-existing work. Capture it with `BASE=$(git stash create)` — an ephemeral
+   snapshot object; nothing (working tree, index, branch history, stash ref) is
+   mutated, so no confirmation is needed. If it prints nothing (e.g. only untracked
+   changes), fall back to `BASE=$(git rev-parse HEAD)`; clean tree → same fallback.
+   Known limit (same as runFix): `stash create` skips pre-existing untracked files,
+   so the reported diff may attribute them to the fix — stats-only imprecision.
 2. **Apply** each approved finding with `Edit`/`Write`: minimal, correct change per
    finding; no unrelated refactor. Skip any that is already fixed, no longer applies,
    or whose fix would change intended behavior — note why.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons) and
-   changed files, and tell the user the fixes are **staged but not committed**
-   (`git diff --cached` to review).
+   changed files, and tell the user the fixes are **staged but not committed** —
+   review the fix-only diff with `git diff --cached $BASE` (it excludes their
+   pre-existing WIP).
 
 ## Apply: `--harry-fix` (isolated Codex fix session, gpt-5.5/xhigh)
 

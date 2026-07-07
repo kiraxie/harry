@@ -148,13 +148,23 @@ function loadState(stateDir: string): StateFile {
 function saveState(stateDir: string, state: StateFile): void {
   ensureDir(stateDir);
   if (state.jobs.length > MAX_JOBS) {
-    // MAX_JOBS caps state.json, but the per-job files/logs it drops are never
-    // referenced again — delete them so the jobs/ dir doesn't grow without bound.
-    for (const job of state.jobs.slice(MAX_JOBS)) {
-      rmSync(jobFilePath(stateDir, job.id), { force: true });
-      rmSync(jobLogPath(stateDir, job.id), { force: true });
+    // MAX_JOBS caps state.json, but never at the cost of an in-flight job: a
+    // running/queued entry keeps its slot (and its files) regardless of position
+    // — pruning it would delete the state/log out from under a live worker (and
+    // the zombie sweep already bounds how long an entry can stay in-flight).
+    // Dropped terminal jobs' per-job files/logs are never referenced again —
+    // delete them so the jobs/ dir doesn't grow without bound.
+    const keep: JobRecord[] = [];
+    for (const job of state.jobs) {
+      const inFlight = job.status === "running" || job.status === "queued";
+      if (inFlight || keep.length < MAX_JOBS) {
+        keep.push(job);
+      } else {
+        rmSync(jobFilePath(stateDir, job.id), { force: true });
+        rmSync(jobLogPath(stateDir, job.id), { force: true });
+      }
     }
-    state.jobs = state.jobs.slice(0, MAX_JOBS);
+    state.jobs = keep;
   }
   atomicWrite(stateFilePath(stateDir), JSON.stringify(state, null, 2));
 }

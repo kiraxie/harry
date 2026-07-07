@@ -176,14 +176,18 @@ dual-lane's consolidated table carried forward, already deduped. Confirm with th
 user before applying; the user may override.
 
 ### Stage 3 — Apply
-1. **Baseline snapshot** — if `git status --porcelain` is non-empty, the fix diff
-   must be isolated from the user's pre-existing work. Confirm first: "snapshot
-   your uncommitted work as a baseline commit before applying?"; on yes, `git add
-   -A` and `git commit -m "chore: pre-fix snapshot (codex fix baseline)"`. If the
-   commit fails on a dirty tree, STOP and tell the user to commit/stash manually.
+1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix): if
+   `git status --porcelain` is non-empty, the fix diff must be isolated from the
+   user's pre-existing work. Capture it with `BASE=$(git stash create)` — an
+   ephemeral snapshot object; nothing (working tree, index, branch history, stash
+   ref) is mutated, so no confirmation is needed. If it prints nothing (e.g. only
+   untracked changes), fall back to `BASE=$(git rev-parse HEAD)`; clean tree →
+   same fallback. Known limit (same as runFix): `stash create` skips pre-existing
+   untracked files, so the reported diff may attribute them to the fix.
 2. **Apply** each approved finding directly: minimal, correct change per finding;
    no unrelated refactor. Skip any that is already fixed, no longer applies, or
    whose fix would change intended behavior — note why.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons)
    and changed files, and tell the user the fixes are **staged but not committed**
-   (`git diff --cached` to review).
+   — review the fix-only diff with `git diff --cached $BASE` (it excludes their
+   pre-existing WIP).

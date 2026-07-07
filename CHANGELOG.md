@@ -24,9 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails or times out (was exit 0).
 - **`state`** writes job state atomically (temp + rename) and with `0600`/`0700`
   permissions, and prunes per-job files/logs it drops past `MAX_JOBS` — closing a
-  torn-read data-loss window and unbounded state-dir growth.
+  torn-read data-loss window and unbounded state-dir growth. Pruning never drops
+  a running/queued job, and the zombie reaper's pid-reuse window scales with the
+  job's own `--timeout` — a long-running job is never reaped or deleted mid-run.
 - The CLI rejects unknown/typo'd flags per command and prints usage for
   `<command> --help` instead of launching a run.
+- The shared `/review` orchestration (structured-review envelope, simplify
+  dual-lane) moved to `references/review-orchestration.md`; the CC command and
+  Codex skill both reference it instead of carrying diverging copies. Its `--fix`
+  apply path now uses the same `git stash create` baseline as `fix` (no commit).
+- Doc corrections: README documents the `/harry:` command namespace consistently;
+  the `ask`/`fix` model-default claim and the RO/RW "instruction-only on both
+  builds" wording in CLAUDE.md now match the code.
 - Slimmed HARRY.md §5: the `.local/` doc-type taxonomy and lifecycle moved to
   `references/doc-types.md` (loaded on demand), keeping the resident law compact.
 - Install scripts write the user's global files atomically with a one-time

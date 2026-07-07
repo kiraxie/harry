@@ -47,6 +47,35 @@ test("a live pid silent past the pid-reuse window is reaped (L3)", () => {
   assert.equal(isZombie(j, NO_LOG, NOW), true);
 });
 
+test("a live pid's reuse window widens to the job's own --timeout", () => {
+  // --timeout is uncapped: a job that asked for 10h must not be reaped at the
+  // 6h floor while its pid is alive — its window is its own timeout + grace.
+  const tenHours = 10 * HOUR;
+  const silent7h = job({
+    pid: ALIVE_PID,
+    startedAt: new Date(NOW - 7 * HOUR).toISOString(),
+    request: { command: "review", args: [], flags: { timeout: String(tenHours) }, cwd: "/tmp" },
+  });
+  assert.equal(isZombie(silent7h, NO_LOG, NOW), false);
+  const silent11h = job({
+    pid: ALIVE_PID,
+    startedAt: new Date(NOW - 11 * HOUR).toISOString(),
+    request: { command: "review", args: [], flags: { timeout: String(tenHours) }, cwd: "/tmp" },
+  });
+  assert.equal(isZombie(silent11h, NO_LOG, NOW), true);
+});
+
+test("a small --timeout never narrows the 6h floor", () => {
+  // A 30-min timeout job silent for 5h is still inside the floor: the window
+  // is max(floor, own timeout), never less than the floor.
+  const j = job({
+    pid: ALIVE_PID,
+    startedAt: new Date(NOW - 5 * HOUR).toISOString(),
+    request: { command: "review", args: [], flags: { timeout: String(30 * MINUTE) }, cwd: "/tmp" },
+  });
+  assert.equal(isZombie(j, NO_LOG, NOW), false);
+});
+
 test("a dead pid with a stale heartbeat is a zombie", () => {
   const j = job({ pid: DEAD_PID, startedAt: new Date(NOW - 2 * MINUTE).toISOString() });
   assert.equal(isZombie(j, NO_LOG, NOW), true);

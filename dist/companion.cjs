@@ -1127,11 +1127,17 @@ function loadState(stateDir) {
 function saveState(stateDir, state) {
   ensureDir(stateDir);
   if (state.jobs.length > MAX_JOBS) {
-    for (const job of state.jobs.slice(MAX_JOBS)) {
-      (0, import_node_fs.rmSync)(jobFilePath(stateDir, job.id), { force: true });
-      (0, import_node_fs.rmSync)(jobLogPath(stateDir, job.id), { force: true });
+    const keep = [];
+    for (const job of state.jobs) {
+      const inFlight = job.status === "running" || job.status === "queued";
+      if (inFlight || keep.length < MAX_JOBS) {
+        keep.push(job);
+      } else {
+        (0, import_node_fs.rmSync)(jobFilePath(stateDir, job.id), { force: true });
+        (0, import_node_fs.rmSync)(jobLogPath(stateDir, job.id), { force: true });
+      }
     }
-    state.jobs = state.jobs.slice(0, MAX_JOBS);
+    state.jobs = keep;
   }
   atomicWrite(stateFilePath(stateDir), JSON.stringify(state, null, 2));
 }
@@ -2833,7 +2839,9 @@ function isZombie(job, logFile, now = Date.now()) {
     return now - mtime > threshold;
   };
   if (job.pid != null && isProcessAlive(job.pid)) {
-    return silentFor(PID_REUSE_STALE_MS);
+    const requested = Number(job.request?.flags?.timeout);
+    const ownWindow = Number.isFinite(requested) && requested > 0 ? requested + STALE_LOG_MS : 0;
+    return silentFor(Math.max(PID_REUSE_STALE_MS, ownWindow));
   }
   return silentFor(STALE_LOG_MS);
 }
