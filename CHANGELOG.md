@@ -5,14 +5,13 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-07-07
 
 ### Added
 
 - A prose reference-path linter test (`tests/prose-refs.test.ts`): every repo-relative
   path and `${CLAUDE_PLUGIN_ROOT}` reference across HARRY.md, skills, commands, and
   references must resolve — renames/deletes can no longer leave dangling instructions.
-
 - **CI** (`.github/workflows/ci.yml`): typecheck, lint, test, and a **dist-drift
   gate** (`pnpm run build` + `git diff --exit-code dist/`) so the committed
   `dist/companion.cjs` can never silently diverge from `src/`.
@@ -66,6 +65,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/doc-types.md` (loaded on demand), keeping the resident law compact.
 - Install scripts write the user's global files atomically with a one-time
   `.bak`, and no longer strip trailing bytes outside harry's marker block.
+
+### Fixed
+
+- `getCodexAvailability` never accepted an `env` override, so it always probed
+  the real inherited `PATH` even when a caller (namely the test suite's fake
+  Codex fixture) asked it to look elsewhere. Masked on a machine with a real
+  `codex` CLI installed (the probe happened to succeed against the real
+  binary); surfaced by this release's own new CI, which has no `codex` on
+  `PATH` — `env` is now threaded through to `binaryAvailable` so the
+  availability probe and the real RPC connection agree on which binary to use.
 
 ### Removed
 
