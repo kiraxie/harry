@@ -32,7 +32,7 @@ Complete these in order:
 3. **Propose 2-3 approaches** — with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here.
 4. **Present the design** — section by section, scaled to complexity; ask after each whether it holds. Cover architecture, components, data flow, error handling, testing. Break the system into small units each with one clear purpose and a defined interface.
 5. **Get approval** — revise and re-present until the user approves. Only then proceed.
-6. **Write the spec** (template below) → `.local/specs/YYYY-MM-DD-<topic>-design.md`. Gitignored — do NOT commit it.
+6. **Write the spec** (template below) → `.local/specs/YYYY-MM-DD-<topic>-design.md`. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` under `## Specs` (topic · path · one-line summary · `active`).
 7. **Spec self-review** — fix inline (see below).
 8. **User reviews the spec** — ask, wait, revise if needed.
 9. **Transition** — invoke `writing-plans`. It is the ONLY next skill.
@@ -47,6 +47,8 @@ The compressed Standard path runs steps 1 → (one approach) → present → app
 ## Spec Template (write literally)
 
 ```
+Milestone: <link to .local/milestones/*.md, if this spec is part of one — omit the line entirely if standalone>
+
 ## 1. Context (SCQA)
 Situation / Complication / Question / Answer
 
