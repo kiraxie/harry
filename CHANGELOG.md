@@ -5,6 +5,76 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A prose reference-path linter test (`tests/prose-refs.test.ts`): every repo-relative
+  path and `${CLAUDE_PLUGIN_ROOT}` reference across HARRY.md, skills, commands, and
+  references must resolve — renames/deletes can no longer leave dangling instructions.
+
+- **CI** (`.github/workflows/ci.yml`): typecheck, lint, test, and a **dist-drift
+  gate** (`pnpm run build` + `git diff --exit-code dist/`) so the committed
+  `dist/companion.cjs` can never silently diverge from `src/`.
+- Tests for the previously-uncovered first-party core: `findings` (the
+  review→fix JSON parsing), `zombie` (reaper logic), install-script atomicity,
+  and a manifest/`package.json` version-sync guard.
+
+### Changed
+
+- **Laws release boundary**: `install-laws` / `/harry:init` now deploys HARRY.md as a
+  **snapshot** to `~/.claude/harry/HARRY.md` and `@`-imports that copy, instead of
+  live-importing the plugin checkout — "release" = re-run init, converging with the
+  Codex build's resync model. Old direct-repo imports migrate automatically on re-run.
+- **Standard tier executes inline** (session mode, isolated worktree) with a now
+  **mandatory** independent reviewer subagent; subagent-per-task execution is Major-only.
+  The Standard spec rule is canonicalized across all copies: a spec only when real
+  alternatives were weighed, otherwise the decision lives at the top of the plan.
+- **Tracking files simplified**: `.local/STATUS.md` merged into `.local/INDEX.md` as an
+  `## In flight` section (now wired into the executing/finishing skills so start/finish
+  marks actually happen); `HISTORY.md` rotates yearly to `.local/history/<year>.md`; the
+  separate `.local/ledger/` is gone — progress marks live in the plan file itself, and
+  Major-mode handoff files move to `.local/tmp/<branch>/`.
+- **Audit orchestration hoisted**: the ~77%-identical `commands/audit.md` and
+  `codex-skills/audit/SKILL.md` now share `references/audit/ORCHESTRATION.md`
+  (same treatment as `review-orchestration.md`); the wrappers keep only their
+  build-specific surface.
+- The finishing skill now states completion evidence honestly: CI green when pushed,
+  the full local suite when a merge stays local (CI does not run on local merges).
+- Removed the unexplained `Intensity: full` orphan line from HARRY.md §1 and the
+  contradictory "Every project, regardless of perceived simplicity" wording from the
+  brainstorming HARD-GATE (the gate now defers tier claims to §3).
+- **`fix`** isolates the pre-fix baseline with `git stash create` (an ephemeral
+  snapshot) instead of committing the user's uncommitted work onto their branch —
+  no branch-history mutation. It also now exits non-zero when the fix session
+  fails or times out (was exit 0).
+- **`state`** writes job state atomically (temp + rename) and with `0600`/`0700`
+  permissions, and prunes per-job files/logs it drops past `MAX_JOBS` — closing a
+  torn-read data-loss window and unbounded state-dir growth. Pruning never drops
+  a running/queued job, and the zombie reaper's pid-reuse window scales with the
+  job's own `--timeout` — a long-running job is never reaped or deleted mid-run.
+- The CLI rejects unknown/typo'd flags per command and prints usage for
+  `<command> --help` instead of launching a run.
+- The shared `/review` orchestration (structured-review envelope, simplify
+  dual-lane) moved to `references/review-orchestration.md`; the CC command and
+  Codex skill both reference it instead of carrying diverging copies. Its `--fix`
+  apply path now uses the same `git stash create` baseline as `fix` (no commit).
+- Doc corrections: README documents the `/harry:` command namespace consistently;
+  the `ask`/`fix` model-default claim and the RO/RW "instruction-only on both
+  builds" wording in CLAUDE.md now match the code.
+- Slimmed HARRY.md §5: the `.local/` doc-type taxonomy and lifecycle moved to
+  `references/doc-types.md` (loaded on demand), keeping the resident law compact.
+- Install scripts write the user's global files atomically with a one-time
+  `.bak`, and no longer strip trailing bytes outside harry's marker block.
+
+### Removed
+
+- The no-op `SessionStart` hook (both `hooks.json` files) and its dead
+  `setup --check` branch — it spawned `node` every session without refreshing
+  anything. Docs that claimed a session-start quota refresh were corrected.
+- ~170 lines of dead worktree-lifecycle code (`src/lib/worktree.ts`); the one
+  live helper moved to the existing `src/lib/git.ts`.
+
 ## [0.7.0] - 2026-07-06
 
 ### Added

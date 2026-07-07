@@ -4,7 +4,7 @@ A personal Claude Code plugin: the **Superpowers** workflow philosophy and **pon
 
 Two halves:
 
-- **Resident laws** (`HARRY.md`) — loaded into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
+- **Resident laws** (`HARRY.md`) — deployed as a snapshot into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
 - **A `brainstorm → plan → execute → finish` pipeline** — four skills, plus slash commands for review, debate, and over-engineering/debt audits.
 
 ## The three-tier threshold
@@ -14,7 +14,7 @@ Every non-trivial task is classified; the tier decides how much process applies 
 | Tier | Trigger | What runs |
 |------|---------|-----------|
 | **Trivial** | 1 file, mechanical, no branching | just do it + verify |
-| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, bullet plan, one test, subagent execution |
+| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, bullet plan, one test, inline execution + required independent review |
 | **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → spec → plan → subagent execution with per-task review → finish |
 
 Any red line (security/auth/money/delete/migration/external contract/cross-boundary contract) forces **Major** regardless of size.
@@ -33,15 +33,27 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 ```
 /plugin marketplace add kiraxie/harry   # GitHub owner/repo
 /plugin install harry@kiraxie           # <plugin>@<marketplace> — "harry, published by kiraxie"
-/init                                    # wire the resident laws + set up this project
+/harry:init                             # wire the resident laws + set up this project
 ```
 
-`/init` does three things: wires harry's resident laws (`HARRY.md`, which ships
-with the plugin) into your global `~/.claude/CLAUDE.md` so they apply every
+harry's commands share the `/harry:` namespace. The ones whose bare name collides
+with a Claude Code built-in — `/harry:init`, `/harry:review`, `/harry:status` —
+**must** be typed with the prefix, or the built-in runs instead; the rest
+(`/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`)
+accept the bare name when unambiguous.
+
+`/harry:init` does three things: deploys harry's resident laws (`HARRY.md`, which
+ships with the plugin) as a snapshot to `~/.claude/harry/HARRY.md` and wires an
+`@`-import to it into your global `~/.claude/CLAUDE.md` so they apply every
 session; adds harry's `.gitignore` block to this project; and offers to migrate
 any legacy spec/plan docs into harry's format. Run it once per project — the laws
-step is idempotent, so re-runs elsewhere are no-ops. (`/init --remove` strips this
-project's `.gitignore` block; the global laws stay.)
+step is idempotent, so re-runs elsewhere are no-ops. (`/harry:init --remove`
+strips this project's `.gitignore` block; the global laws stay.)
+
+The laws are a **snapshot**, not a live reference to the plugin checkout: after
+updating the plugin (or editing `HARRY.md`), re-run `/harry:init` (or
+`pnpm run install-laws`) to re-deploy and resync — same model as the Codex build
+below. "Release" = re-run init.
 
 Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
 
@@ -71,16 +83,16 @@ per-call premium quota. The rest are Claude-native or local scripts.
 
 | Command | What it does |
 |---------|--------------|
-| `/review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) |
-| `/ask "<prompt>"` | One read-only prompt to Codex |
-| `/debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
-| `/status` | Codex rate-limit snapshot + background jobs |
-| `/result [job-id]` | Fetch a completed background job's output |
-| `/debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
-| `/audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
-| `/init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
+| `/harry:review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) |
+| `/harry:ask "<prompt>"` | One read-only prompt to Codex |
+| `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
+| `/harry:status` | Codex rate-limit snapshot + background jobs |
+| `/harry:result [job-id]` | Fetch a completed background job's output |
+| `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
+| `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
+| `/harry:init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
-Cheap-first smoke test: `/status` → `/ask` → `/review`/`/debate`.
+Cheap-first smoke test: `/harry:status` → `/harry:ask` → `/harry:review`/`/harry:debate`.
 
 ## Codex
 
@@ -88,10 +100,12 @@ The agent commands (`ask`, `review`, `review --fix`) all run through the OpenAI 
 CLI (spawned as a subprocess, JSON-RPC over stdio). No SDK dependency — only the `codex`
 binary on `PATH`.
 
-Codex injects no default model for `ask`/`fix` — leave `--model` unset to let
-`~/.codex/config.toml` decide. `review`'s three lanes (standard/adversarial/simplify) each
-pin their own default model to keep their perspectives distinct; pass `--model` to
-override any of them. One-time setup: install the `codex` CLI, then `codex login`.
+`ask` and `fix` default to a capable model (`gpt-5.5`) rather than inheriting
+whatever `~/.codex/config.toml` happens to set — applying vetted findings and
+answering a one-shot prompt are judgment tasks (HARRY.md §5); pass `--model` to
+override. `review`'s three lanes (standard/adversarial/simplify) each pin their own
+default model to keep their perspectives distinct; pass `--model` to override any of
+them. One-time setup: install the `codex` CLI, then `codex login`.
 
 ## Skills
 
@@ -100,7 +114,7 @@ These auto-trigger (no slash command); they are the pipeline:
 - **brainstorming** — turn an idea into an approved SCQA spec (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
 - **writing-plans** — turn a spec into a tier-appropriate execution plan.
 - **executing** — run the plan; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
-- **finishing** — verify green, ask merge-vs-PR, then archive spec/plan, clean up the worktree, return to main, and watch CI.
+- **finishing** — verify green, ask merge-vs-PR, then archive the plan, clean up the worktree, return to main, and verify completion (CI when pushed, the full local suite when the merge stays local).
 
 ## Layout
 

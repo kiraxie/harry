@@ -2,8 +2,8 @@
  * result command — retrieves background job output.
  */
 
-import { getSessionId, listJobs, readJobFile, resolveStateDir } from "../lib/state.js";
-import { sweepZombieJobs } from "../lib/zombie.js";
+import { getSessionId, listJobs, readJobFile, resolveStateDir } from "../lib/state.ts";
+import { sweepZombieJobs } from "../lib/zombie.ts";
 
 export interface ResultOptions {
   jobId?: string;

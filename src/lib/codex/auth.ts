@@ -123,13 +123,19 @@ function buildAppServerAuthStatus(
  * Probe whether `codex` is installed and its app-server runtime is usable.
  * Runs `codex --version` then `codex app-server --help`. Synchronous.
  */
-export function getCodexAvailability(cwd: string): CodexAvailability {
-  const versionStatus = binaryAvailable("codex", ["--version"], { cwd });
+export function getCodexAvailability(
+  cwd: string,
+  opts: { env?: NodeJS.ProcessEnv } = {}
+): CodexAvailability {
+  const versionStatus = binaryAvailable("codex", ["--version"], { cwd, env: opts.env });
   if (!versionStatus.available) {
     return versionStatus;
   }
 
-  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], { cwd });
+  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], {
+    cwd,
+    env: opts.env
+  });
   if (!appServerStatus.available) {
     return {
       available: false,
@@ -152,7 +158,7 @@ export async function getCodexAuthStatus(
   cwd: string,
   opts: { env?: NodeJS.ProcessEnv; connectTimeoutMs?: number } = {}
 ): Promise<CodexAuthStatus> {
-  const availability = getCodexAvailability(cwd);
+  const availability = getCodexAvailability(cwd, { env: opts.env });
   if (!availability.available) {
     return {
       available: false,

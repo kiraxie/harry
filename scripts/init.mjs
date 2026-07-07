@@ -11,12 +11,15 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { safeWrite } from "./lib/atomic-write.mjs";
 import { applyMarkerBlock, stripMarkerBlock } from "./lib/markers.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
-// Per project dir: local scratch (specs/plans/ledger, active-work STATUS.md),
-// worktree sandboxes, and the user's per-project specialization rules. All non-versioned.
+// Per project dir: local scratch (specs/plans/backlog, INDEX.md with its
+// in-flight work list, HISTORY.md, tmp/ handoff files), worktree sandboxes,
+// and the user's per-project specialization rules. All non-versioned.
 const ENTRIES = [".local/", "*worktrees/", "CLAUDE.local.md"];
 
 // Returns the .gitignore content with the harry block applied (or removed).
@@ -42,10 +45,10 @@ export function applyBlock(existing, { remove = false } = {}) {
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body: entries.join("\n") });
 }
 
-function run(targetDir, { remove = false } = {}) {
+export function run(targetDir, { remove = false } = {}) {
   const path = join(targetDir, ".gitignore");
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
-  writeFileSync(path, applyBlock(existing, { remove }));
+  safeWrite(path, applyBlock(existing, { remove }));
   return path;
 }
 
@@ -102,12 +105,16 @@ function selftest() {
   }
 }
 
-const args = process.argv.slice(2);
-if (args.includes("--selftest")) {
-  selftest();
-} else {
-  const remove = args.includes("--remove");
-  const target = args.find((a) => !a.startsWith("--")) ?? process.cwd();
-  const path = run(target, { remove });
-  console.log(`${remove ? "Removed harry block from" : "Updated"} ${path}`);
+// Only run the CLI when invoked directly (node scripts/init.mjs), not when
+// imported by a test — importing must have no side effects on the target dir.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const args = process.argv.slice(2);
+  if (args.includes("--selftest")) {
+    selftest();
+  } else {
+    const remove = args.includes("--remove");
+    const target = args.find((a) => !a.startsWith("--")) ?? process.cwd();
+    const path = run(target, { remove });
+    console.log(`${remove ? "Removed harry block from" : "Updated"} ${path}`);
+  }
 }

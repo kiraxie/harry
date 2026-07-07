@@ -23,7 +23,7 @@ via `agy`.
 |-------|-----------------|
 | `opus` | Dispatch a subagent via the Agent tool, `model: opus`. Prompt it to "ultrathink". |
 | `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high` |
-| `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with a Bash timeout ≥ 20m (and prefer `run_in_background`) |
+| `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
 
 `${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when this command runs. The `ask` and
 `agy` calls are single-shot stateless calls, so the **entire** prompt (including all
@@ -35,9 +35,11 @@ runs and took **18+ minutes** on others, with no correlation to prompt length or
 formatting (an earlier theory that multi-line prompts hang was disproven — single-line
 prompts also ran 18 min). `--print-timeout` did NOT reliably cap the wait (a `3m`
 setting still ran 18 min). Practical consequences for the conductor:
-- Run the gemini call with `run_in_background: true` and a generous Bash timeout
-  (≥ 20 min), so a slow Gemini turn doesn't block the opus/gpt voices — dispatch
-  all three, then collect gemini whenever it lands.
+- Run the gemini call with `run_in_background: true` — a backgrounded Bash task
+  is not subject to the 10-min foreground timeout, so an 18-min Gemini turn can
+  still land (a foreground call would be killed at 10m, below Gemini's worst
+  case). This also keeps a slow Gemini turn from blocking the opus/gpt voices:
+  dispatch all three, then collect gemini whenever it lands.
 - It usually succeeds eventually (exit 0 with a real answer); treat a true >20-min
   hang, not mere slowness, as failure. If gemini fails twice, proceed with a
   **two-voice debate** (opus + gpt) and say so explicitly in the final report

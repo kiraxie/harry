@@ -56,17 +56,12 @@ var package_default = {
     "init-ignore": "node scripts/init.mjs"
   },
   dependencies: {},
+  "//typescript": "DEBT: pinned to 7.0.1-rc (tsgo) for native-TS speed; revisit \u2192 stable 7.0 final when released",
   devDependencies: {
     "@biomejs/biome": "^2.5.1",
     "@types/node": "^26.0.1",
     esbuild: "^0.28.1",
     typescript: "7.0.1-rc"
-  },
-  pnpm: {
-    onlyBuiltDependencies: [
-      "@biomejs/biome",
-      "esbuild"
-    ]
   }
 };
 
@@ -507,12 +502,15 @@ function buildAppServerAuthStatus(accountResponse, configResponse) {
   }
   return notLoggedIn(`${providerLabel} requires OpenAI authentication`);
 }
-function getCodexAvailability(cwd) {
-  const versionStatus = binaryAvailable("codex", ["--version"], { cwd });
+function getCodexAvailability(cwd, opts = {}) {
+  const versionStatus = binaryAvailable("codex", ["--version"], { cwd, env: opts.env });
   if (!versionStatus.available) {
     return versionStatus;
   }
-  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], { cwd });
+  const appServerStatus = binaryAvailable("codex", ["app-server", "--help"], {
+    cwd,
+    env: opts.env
+  });
   if (!appServerStatus.available) {
     return {
       available: false,
@@ -525,7 +523,7 @@ function getCodexAvailability(cwd) {
   };
 }
 async function getCodexAuthStatus(cwd, opts = {}) {
-  const availability = getCodexAvailability(cwd);
+  const availability = getCodexAvailability(cwd, { env: opts.env });
   if (!availability.available) {
     return {
       available: false,
@@ -1107,7 +1105,13 @@ function resolveStateDir(cwd) {
   return fallbackDir;
 }
 function ensureDir(dir) {
-  (0, import_node_fs.mkdirSync)(dir, { recursive: true });
+  (0, import_node_fs.mkdirSync)(dir, { recursive: true, mode: 448 });
+}
+function atomicWrite(filePath, content) {
+  ensureDir((0, import_node_path.dirname)(filePath));
+  const tmp = `${filePath}.tmp-${process.pid}-${(0, import_node_crypto.randomUUID)().slice(0, 8)}`;
+  (0, import_node_fs.writeFileSync)(tmp, content, { encoding: "utf-8", mode: 384 });
+  (0, import_node_fs.renameSync)(tmp, filePath);
 }
 function stateFilePath(stateDir) {
   return (0, import_node_path.join)(stateDir, "state.json");
@@ -1126,9 +1130,19 @@ function loadState(stateDir) {
 function saveState(stateDir, state) {
   ensureDir(stateDir);
   if (state.jobs.length > MAX_JOBS) {
-    state.jobs = state.jobs.slice(0, MAX_JOBS);
+    const keep = [];
+    for (const job of state.jobs) {
+      const inFlight = job.status === "running" || job.status === "queued";
+      if (inFlight || keep.length < MAX_JOBS) {
+        keep.push(job);
+      } else {
+        (0, import_node_fs.rmSync)(jobFilePath(stateDir, job.id), { force: true });
+        (0, import_node_fs.rmSync)(jobLogPath(stateDir, job.id), { force: true });
+      }
+    }
+    state.jobs = keep;
   }
-  (0, import_node_fs.writeFileSync)(stateFilePath(stateDir), JSON.stringify(state, null, 2), "utf-8");
+  atomicWrite(stateFilePath(stateDir), JSON.stringify(state, null, 2));
 }
 function jobsDir(stateDir) {
   return (0, import_node_path.join)(stateDir, "jobs");
@@ -1140,9 +1154,7 @@ function jobLogPath(stateDir, jobId) {
   return (0, import_node_path.join)(jobsDir(stateDir), `${jobId}.log`);
 }
 function writeJobFile(stateDir, job) {
-  const dir = jobsDir(stateDir);
-  ensureDir(dir);
-  (0, import_node_fs.writeFileSync)(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2), "utf-8");
+  atomicWrite(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2));
 }
 function readJobFile(stateDir, jobId) {
   const filePath = jobFilePath(stateDir, jobId);
@@ -1158,7 +1170,7 @@ function appendLog(stateDir, jobId, message) {
   ensureDir(jobsDir(stateDir));
   const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
   (0, import_node_fs.writeFileSync)(logFile, `[${time}] ${message}
-`, { flag: "a" });
+`, { flag: "a", mode: 384 });
 }
 function readLogTail(stateDir, jobId, maxLines = 10) {
   const logFile = jobLogPath(stateDir, jobId);
@@ -1226,7 +1238,7 @@ function writeCodexRateLimits(stateDir, rateLimits) {
       ...rateLimits,
       capturedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    (0, import_node_fs.writeFileSync)(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2), "utf-8");
+    atomicWrite(codexRateLimitsPath(stateDir), JSON.stringify(snapshot, null, 2));
   } catch {
   }
 }
@@ -2526,14 +2538,12 @@ async function runWorker(jobId, cwd) {
 }
 
 // src/commands/fix.ts
-var import_node_child_process7 = require("node:child_process");
-var import_node_fs5 = require("node:fs");
-var import_node_path5 = require("node:path");
-
-// src/lib/worktree.ts
 var import_node_child_process6 = require("node:child_process");
 var import_node_fs4 = require("node:fs");
 var import_node_path4 = require("node:path");
+var DEFAULT_MODEL2 = "gpt-5.5";
+var DEFAULT_EFFORT2 = "high";
+var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
 function tryGit(args, cwd) {
   const res = (0, import_node_child_process6.spawnSync)("git", args, { cwd, encoding: "utf-8" });
   return {
@@ -2542,30 +2552,9 @@ function tryGit(args, cwd) {
     stderr: (res.stderr ?? "").trim()
   };
 }
-function resolveRepoRoot(cwd) {
-  const res = tryGit(["rev-parse", "--show-toplevel"], cwd);
-  if (!res.ok) {
-    throw new Error(`Not a git repository: ${cwd}${res.stderr ? `
-${res.stderr}` : ""}`);
-  }
-  return res.stdout;
-}
-
-// src/commands/fix.ts
-var DEFAULT_MODEL2 = "gpt-5.5";
-var DEFAULT_EFFORT2 = "high";
-var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
-function tryGit2(args, cwd) {
-  const res = (0, import_node_child_process7.spawnSync)("git", args, { cwd, encoding: "utf-8" });
-  return {
-    ok: res.status === 0,
-    stdout: (res.stdout ?? "").trim(),
-    stderr: (res.stderr ?? "").trim()
-  };
-}
 function gitHead(cwd) {
   try {
-    return (0, import_node_child_process7.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
+    return (0, import_node_child_process6.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
   } catch {
     return "";
   }
@@ -2577,7 +2566,7 @@ function emit(env) {
   return json;
 }
 function loadFindings(path) {
-  const raw = (0, import_node_fs5.readFileSync)(path, "utf-8");
+  const raw = (0, import_node_fs4.readFileSync)(path, "utf-8");
   return normalizeFindings(JSON.parse(raw));
 }
 function buildFixPrompt(findings) {
@@ -2639,12 +2628,12 @@ function parseApplyReport(text, findings) {
   return { applied, skipped };
 }
 function computeStagedDiff(cwd, baseline) {
-  tryGit2(["add", "-A"], cwd);
-  const names = tryGit2(["diff", "--cached", "--name-only", baseline], cwd);
+  tryGit(["add", "-A"], cwd);
+  const names = tryGit(["diff", "--cached", "--name-only", baseline], cwd);
   const filesModified = names.ok && names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
   let linesAdded = 0;
   let linesRemoved = 0;
-  const numstat = tryGit2(["diff", "--cached", "--numstat", baseline], cwd);
+  const numstat = tryGit(["diff", "--cached", "--numstat", baseline], cwd);
   if (numstat.ok && numstat.stdout) {
     for (const line of numstat.stdout.split("\n")) {
       const [addStr, delStr] = line.split("	");
@@ -2672,7 +2661,7 @@ async function runFix(cwd, options = {}) {
     });
     process.exit(1);
   }
-  const findingsAbs = (0, import_node_path5.resolve)(cwd, options.findingsPath);
+  const findingsAbs = (0, import_node_path4.resolve)(cwd, options.findingsPath);
   let findings;
   try {
     findings = loadFindings(findingsAbs);
@@ -2691,14 +2680,15 @@ async function runFix(cwd, options = {}) {
   log(`fix start: model=${requestedModel} findings=${findings.length} source=${findingsAbs}`);
   let repoRoot;
   try {
-    repoRoot = resolveRepoRoot(cwd);
+    repoRoot = ensureGitRepository(cwd);
   } catch (err) {
     emit({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
     process.exit(1);
   }
-  let preFixSnapshot = false;
+  let preFixDirty = false;
   let baselineCommit = "";
-  const snapshotInfo = () => preFixSnapshot ? { preFixSnapshot, ...baselineCommit ? { baselineCommit } : {} } : {};
+  let diffBase = "";
+  const snapshotInfo = () => baselineCommit ? { baselineCommit, ...preFixDirty ? { preFixDirty } : {} } : {};
   const turn = startTurnTimeout({ timeoutMs, progress, log });
   let envelopeDone = false;
   const onInterrupt = () => {
@@ -2735,33 +2725,10 @@ async function runFix(cwd, options = {}) {
       },
       onInterrupt,
       // Post-precheck / pre-run: snapshot pre-existing changes so the fix diff
-      // is isolated. Runs ONLY after precheckRun passes, so a refused fix
-      // leaves git history untouched.
+      // is isolated. Runs ONLY after precheckRun passes. Uses `git stash create`
+      // — an ephemeral snapshot object — so NOTHING (working tree, index, branch
+      // history, stash ref) is mutated, unlike the prior baseline-commit design.
       beforeRun: () => {
-        const dirty = tryGit2(["status", "--porcelain"], repoRoot);
-        if (dirty.ok && dirty.stdout.trim()) {
-          tryGit2(["add", "-A"], repoRoot);
-          const c = tryGit2(["commit", "-m", "chore: pre-fix snapshot (fix baseline)"], repoRoot);
-          preFixSnapshot = c.ok;
-          if (c.ok) {
-            progress(
-              "Committed pre-existing changes as a baseline snapshot before applying fixes."
-            );
-            log("pre-fix snapshot commit created");
-          } else {
-            log(`pre-fix snapshot commit failed: ${c.stderr}`);
-          }
-        }
-        if (dirty.ok && dirty.stdout.trim() && !preFixSnapshot) {
-          envelopeDone = true;
-          turn.clear();
-          emit({
-            status: "failed",
-            jobId,
-            error: "Could not snapshot your uncommitted changes (git commit failed); aborting so the fix diff is not mixed with pre-existing work. Commit or stash manually, then retry."
-          });
-          process.exit(1);
-        }
         baselineCommit = gitHead(repoRoot);
         if (!baselineCommit) {
           envelopeDone = true;
@@ -2769,10 +2736,21 @@ async function runFix(cwd, options = {}) {
           emit({
             status: "failed",
             jobId,
-            error: "fix requires at least one commit to diff against (repository has no commits yet).",
-            ...snapshotInfo()
+            error: "fix requires at least one commit to diff against (repository has no commits yet)."
           });
           process.exit(1);
+        }
+        const dirty = tryGit(["status", "--porcelain"], repoRoot);
+        preFixDirty = dirty.ok && dirty.stdout.trim().length > 0;
+        if (preFixDirty) {
+          const snap = tryGit(["stash", "create"], repoRoot);
+          diffBase = snap.ok && snap.stdout.trim() ? snap.stdout.trim() : baselineCommit;
+          progress("Isolating the fix diff from your uncommitted changes (no commit made).");
+          log(
+            `pre-fix dirty; diff base = ${diffBase === baselineCommit ? "HEAD" : "stash-create snapshot"}`
+          );
+        } else {
+          diffBase = baselineCommit;
         }
       },
       log
@@ -2797,18 +2775,18 @@ async function runFix(cwd, options = {}) {
         ...snapshotInfo()
       });
     }
-    process.exit(0);
+    process.exit(1);
   }
   envelopeDone = true;
   const report = parseApplyReport(result.lastAssistantMessage, findings);
-  const diff = computeStagedDiff(repoRoot, baselineCommit);
+  const diff = computeStagedDiff(repoRoot, diffBase);
   const summary = result.summary?.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
   const envelope = {
     status: "fixed",
     jobId,
     summary,
     baselineCommit,
-    preFixSnapshot,
+    preFixDirty,
     filesModified: diff.filesModified,
     linesAdded: diff.linesAdded,
     linesRemoved: diff.linesRemoved,
@@ -2818,9 +2796,9 @@ async function runFix(cwd, options = {}) {
   };
   const envelopeJson = emit(envelope);
   if (options.writePath) {
-    const outPath = (0, import_node_path5.resolve)(cwd, options.writePath);
-    (0, import_node_fs5.mkdirSync)((0, import_node_path5.dirname)(outPath), { recursive: true });
-    (0, import_node_fs5.writeFileSync)(outPath, `${envelopeJson}
+    const outPath = (0, import_node_path4.resolve)(cwd, options.writePath);
+    (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(outPath), { recursive: true });
+    (0, import_node_fs4.writeFileSync)(outPath, `${envelopeJson}
 `, "utf-8");
     progress(`Report saved to ${outPath}`);
   }
@@ -2834,8 +2812,9 @@ async function runFix(cwd, options = {}) {
 }
 
 // src/lib/zombie.ts
-var import_node_fs6 = require("node:fs");
+var import_node_fs5 = require("node:fs");
 var STALE_LOG_MS = 6e4;
+var PID_REUSE_STALE_MS = 6 * 60 * 60 * 1e3;
 function isProcessAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -2846,23 +2825,28 @@ function isProcessAlive(pid) {
 }
 function logMtimeMs(path) {
   try {
-    if (!(0, import_node_fs6.existsSync)(path)) return null;
-    return (0, import_node_fs6.statSync)(path).mtimeMs;
+    if (!(0, import_node_fs5.existsSync)(path)) return null;
+    return (0, import_node_fs5.statSync)(path).mtimeMs;
   } catch {
     return null;
   }
 }
 function isZombie(job, logFile, now = Date.now()) {
   if (job.status !== "running" && job.status !== "queued") return false;
-  if (job.pid != null && isProcessAlive(job.pid)) return false;
   const mtime = logMtimeMs(logFile);
-  if (mtime == null) {
-    const refIso = job.startedAt ?? job.createdAt;
-    const ref = Date.parse(refIso);
-    if (!Number.isFinite(ref)) return false;
-    return now - ref > STALE_LOG_MS;
+  const silentFor = (threshold) => {
+    if (mtime == null) {
+      const ref = Date.parse(job.startedAt ?? job.createdAt);
+      return Number.isFinite(ref) && now - ref > threshold;
+    }
+    return now - mtime > threshold;
+  };
+  if (job.pid != null && isProcessAlive(job.pid)) {
+    const requested = Number(job.request?.flags?.timeout);
+    const ownWindow = Number.isFinite(requested) && requested > 0 ? requested + STALE_LOG_MS : 0;
+    return silentFor(Math.max(PID_REUSE_STALE_MS, ownWindow));
   }
-  return now - mtime > STALE_LOG_MS;
+  return silentFor(STALE_LOG_MS);
 }
 function sweepZombieJobs(stateDir) {
   const reaped = [];
@@ -2932,10 +2916,6 @@ async function runResult(cwd, options = {}) {
 // src/commands/setup.ts
 async function runSetup(options = {}) {
   const cwd = options.cwd ?? process.cwd();
-  const isCheck = options.check === true;
-  if (isCheck) {
-    return;
-  }
   const availability = getCodexAvailability(cwd);
   const auth = await getCodexAuthStatus(cwd);
   if (options.json) {
@@ -3080,7 +3060,7 @@ function printUsage() {
   console.log(
     [
       "Usage:",
-      "  companion setup [--check] [--json]",
+      "  companion setup [--json]",
       "  companion review [focus...] [--adversarial] [--base <ref>]",
       "                           [--scope auto|working-tree|branch] [--fix]",
       "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
@@ -3116,10 +3096,49 @@ var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
   "harry-fix",
   "help",
   "simplify",
-  "json",
-  "no-worktree",
-  "wait"
+  "json"
 ]);
+var KNOWN_FLAGS = {
+  setup: /* @__PURE__ */ new Set(["json"]),
+  review: /* @__PURE__ */ new Set([
+    "adversarial",
+    "simplify",
+    "full",
+    "harry-fix",
+    "scope",
+    "base",
+    "model",
+    "reasoning",
+    "timeout",
+    "fix",
+    "context",
+    "background"
+  ]),
+  ask: /* @__PURE__ */ new Set(["task", "model", "reasoning", "timeout", "context"]),
+  fix: /* @__PURE__ */ new Set([
+    "findings",
+    "model",
+    "reasoning",
+    "timeout",
+    "allow-shell",
+    "allow-url",
+    "write",
+    "context"
+  ]),
+  status: /* @__PURE__ */ new Set(["all", "json"]),
+  result: /* @__PURE__ */ new Set(["json"]),
+  _worker: /* @__PURE__ */ new Set(["job-id", "cwd"])
+};
+function assertKnownFlags(command, flags) {
+  const allowed = KNOWN_FLAGS[command];
+  if (!allowed) return;
+  for (const key of Object.keys(flags)) {
+    if (key === "help") continue;
+    if (!allowed.has(key)) {
+      throw new Error(`Unknown flag --${key} for '${command}'. Run 'companion help' for usage.`);
+    }
+  }
+}
 function parseArgs(argv) {
   const command = argv[0] ?? "help";
   const args = [];
@@ -3178,10 +3197,14 @@ function flagEnum(flags, key, allowed) {
 }
 async function main() {
   const { command, args, flags } = parseArgs(import_node_process3.default.argv.slice(2));
+  if (flags.help === true) {
+    printUsage();
+    return;
+  }
+  assertKnownFlags(command, flags);
   switch (command) {
     case "setup": {
       await runSetup({
-        check: flags.check === true,
         json: flags.json === true
       });
       break;

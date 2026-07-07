@@ -15,13 +15,13 @@ import {
   extractJsonBlock,
   FINDINGS_OUTPUT_INSTRUCTION,
   normalizeFindings,
-} from "../lib/findings.js";
-import { collectReviewContext, type ReviewScope, resolveReviewTarget } from "../lib/git.js";
+} from "../lib/findings.ts";
+import { collectReviewContext, type ReviewScope, resolveReviewTarget } from "../lib/git.ts";
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
-import { buildReviewPrompt, type ReviewKind } from "../lib/review-prompts.js";
+import { buildReviewPrompt, type ReviewKind } from "../lib/review-prompts.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
-import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.js";
-import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.js";
+import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
+import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.ts";
 import { formatCodexUsage, makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
 
 export interface ReviewOptions {

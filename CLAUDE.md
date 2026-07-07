@@ -63,10 +63,14 @@ harry's customized version when pulling in changes.
 
 ## Plugin content (`HARRY.md`, `skills/`, `commands/`, `references/`)
 
-`HARRY.md` is the resident law file, `@`-imported into a consumer's global `~/.claude/CLAUDE.md` by
-`scripts/install.mjs` (`pnpm run install-laws` / the plugin's own `/init` command) so it applies
-every session without needing a keyword. Editing `HARRY.md` changes behavior for every project that
-has already run `/init` — there is no versioning/opt-in per edit, the `@`-import is live.
+`HARRY.md` is the resident law file. `scripts/install.mjs` (`pnpm run install-laws` / the plugin's
+own `/init` command) **deploys a snapshot** of it to `~/.claude/harry/HARRY.md` and `@`-imports that
+deployed copy into a consumer's global `~/.claude/CLAUDE.md`, so it applies every session without
+needing a keyword. The import points at the deployed snapshot, NOT the live plugin checkout: editing
+`HARRY.md` (even uncommitted) does not change installed behavior until you re-run install-laws /
+`/init`, which re-deploys the snapshot and rewrites the import block (migrating any older
+direct-repo-path import). "Release" = re-run init — the same resync model as the Codex build
+(`scripts/install-codex.mjs`), so both builds converge on one mental model.
 
 The four pipeline skills (`skills/brainstorming`, `skills/writing-plans`, `skills/executing`,
 `skills/finishing`) auto-trigger (no slash command) and read `HARRY.md`'s tier table (§3) to decide
@@ -77,14 +81,16 @@ skill files themselves short.
 `/audit` (`commands/audit.md`) is a whole-codebase structure/architecture audit — a six-round,
 iterative workflow distinct from the four pipeline skills above (it's user-invoked via slash
 command, not tier-triggered). Its round-by-round methodology, JSON schema, and validator script
-are too large to inline in one command file, so they live in `references/audit/` (`RECON.md`,
-`DEEP-DIVE.md`, `SCAN-DIMENSIONS.md`, `VALIDATION-AND-REPORTING.md`, `report-schema.json`,
-`validate-findings.cjs`) — a subdirectory of the shared `references/`, read by path from
-`commands/audit.md`, not auto-discovered as anything on its own.
+are too large to inline in one command file, so they live in `references/audit/`
+(`ORCHESTRATION.md` — the shared six-round orchestration both builds' thin wrappers point at —
+plus `RECON.md`, `DEEP-DIVE.md`, `SCAN-DIMENSIONS.md`, `VALIDATION-AND-REPORTING.md`,
+`report-schema.json`, `validate-findings.cjs`) — a subdirectory of the shared `references/`,
+read by path from `commands/audit.md` and `codex-skills/audit/SKILL.md`, not auto-discovered
+as anything on its own.
 
 `CLAUDE.local.md` (gitignored, present in this repo) is harry's own convention for
 project-specific rules that refine `HARRY.md` for a single repo — not a task list. Active in-flight
-work lives in the also-gitignored `.local/STATUS.md` instead.
+work lives in the also-gitignored `.local/INDEX.md` `## In flight` section instead.
 
 ## Codex CLI compatibility (`.codex-plugin/`, `codex-skills/`)
 
@@ -114,8 +120,12 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
 - Codex `review --full` drops the CC self-review leg (no `SlashCommand` tool on
   Codex) and drops `--harry-fix` (redundant when the orchestrator already is
   Codex) — only `--fix` remains.
-- Codex `review`'s RO/RW boundary is instruction-only; Claude Code's version is
-  tool-enforced via `allowed-tools`. Codex has no discovered equivalent gate.
+- `review`'s RO/RW boundary is instruction-only on **both** builds. Claude
+  Code's `allowed-tools` frontmatter is a single static allowlist that must
+  include the write tools (`Edit`/`git add`/`git commit`) for the RW `--fix`
+  path, so it cannot conditionally gate read-only vs read-write — the RO
+  discipline is enforced by instruction, same as Codex. (CC's allowlist still
+  bounds the overall tool universe; it just doesn't enforce the RO/RW split.)
 - Codex `audit`'s RO round-boundaries are likewise instruction-only, not
   tool-enforced (see its skill's own "Known limitation" note); it shares the same
   `references/audit/` reference bundle and `report-schema.json`/

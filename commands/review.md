@@ -1,6 +1,6 @@
 ---
 description: Run a code review against local git state. Read-only unless a fix backend is requested. Review angle is standard (gpt-5.3-codex defects), --adversarial (gpt-5.5 design), --simplify (gpt-5.3-codex cleanups + a parallel CC-native over-engineering lane, consolidated into one table), or --full (adversarial + simplify + CC /code-review max, consolidated). Apply findings with --fix (Claude Code applies) or --harry-fix (isolated Codex fix session).
-argument-hint: '[--adversarial|--simplify|--full] [--fix|--harry-fix] [--wait|--background] [--base <ref>] [focus...]'
+argument-hint: '[--adversarial|--simplify|--full] [--fix|--harry-fix] [--wait|--background] [--base <ref>] [--scope auto|working-tree|branch] [--context <text|@file|@->] [--model <id>] [--reasoning <effort>] [focus...]'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Agent, SlashCommand, Bash(node:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(git symbolic-ref:*), Bash(git show-ref:*), Bash(git ls-files:*), Bash(git branch:*), Bash(git add:*), Bash(git commit:*), AskUserQuestion
 ---
@@ -53,107 +53,15 @@ model-specialized). Anything not a known flag is focus text, forwarded verbatim.
 
 ## The structured-review envelope (one definition)
 
-`node … review --fix` (node's `--fix` = "emit structured JSON", regardless of RO/RW)
-prints exactly one JSON line. This is the single source of truth for its shape — do
-not restate it elsewhere:
-
-```
-{"status":"reviewed", kind, model, target, fileCount,
- findings:[{id,file,line,severity,title,rationale,suggestedFix}],
- reviewMarkdown}
-```
-
-`line` is optional (file-wide findings omit it). On **failure** (timeout/quota), the
-process exits non-zero and stdout is markdown beginning `# Review Failed`, NOT this
-envelope — so never `JSON.parse` a leg's output without first checking it succeeded.
+See **The structured-review envelope** in
+`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
 
 ---
 
 ## The simplify dual-lane (one definition)
 
-Whenever the active angle is `--simplify` — standalone, under a fix backend, or as
-two of `--full`'s four lanes — it runs as **two lanes**, not one. This is the single
-definition; every call site below just says "run the simplify dual-lane."
-
-`<forwarded>` (used by Lane A below) by default means: the invoking args minus the
-slash-level fix/execution flags (`--fix`, `--harry-fix`, `--wait`, `--background`),
-keeping `--base`/`--scope`/`--context`/focus. Never let a raw `--harry-fix` reach the
-node CLI: it throws ("--harry-fix is a /review fix-backend selector, not a CLI
-flag", `src/companion.ts`). **Exception:** Full mode's Stage 1 already computes its
-own wider "Forwarded args" (it also strips `--full`/`--adversarial`/`--simplify`/
-`--model`/`--reasoning`, since `--full` alone would crash the node CLI the same way)
-— when the dual-lane runs as part of `--full`, use that value instead, not this one.
-
-**Lane A — Codex cleanup review** (`gpt-5.3-codex`, behavior-preserving reuse /
-simplification / efficiency — NOT bugs):
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --simplify --fix <forwarded>
-```
-Parse the structured envelope (see above).
-
-**Lane B — CC-native over-engineering lane** (`Agent` tool, `model: sonnet` — a
-heuristic hunt, not a design judgment call, so it does not need the session's most
-capable model; no Codex backend, no extra Codex quota — same cost class as
-`--full`'s `/code-review max` lane): before dispatching, write the target diff to a
-file so Lane B can `Read` it, matching this repo's own reviewer-handoff convention
-(`references/review-rubric.md`: "hand the reviewer ... the diff (as a file)") rather
-than inlining a full diff into the prompt:
-- Working-tree mode: `git diff --cached` (staged) + `git diff` (unstaged), plus —
-  for untracked files, `git status --porcelain --untracked-files=all` lists paths
-  only, not content, so also append each untracked file's full body (skip
-  binaries), under its own `--- Untracked: <path> ---` heading, mirroring how
-  `src/lib/git.ts`'s `collectWorkingTreeContext`/`formatUntrackedFile` handle this
-  same gap — a bare filename list gives Lane B nothing to actually review, and new
-  files are exactly where dead scaffolding and speculative code show up. Concatenate
-  staged diff + unstaged diff + untracked file bodies into one file.
-- Branch mode (`--base <ref>` given): `git diff <base>...HEAD` (new files already
-  appear in this diff normally — no untracked-file gap here).
-Write the result to a temp file (e.g. `/tmp/harry-review-simplify-laneb-diff.txt`).
-Then dispatch an agent — it has no memory of this conversation, so hand it the file
-path explicitly — with this brief, substituting the actual file path and any
-`--context`/focus text into the `Scope:` line:
-
-```
-You are a lazy senior engineer reviewing for ONE thing: over-engineering. The
-best outcome is the code getting shorter. Find what to cut. Do not duplicate
-correctness/security/performance findings — those are out of scope here.
-
-Scope: Read the diff at <substitute the actual temp file path here>. <If context/
-focus text was given, append it here.> Cite real file paths and line numbers from
-within that diff.
-
-Hunt: reinvented stdlib, deps the platform already ships, single-implementation
-interfaces, factories with one product, wrappers that only delegate, config for
-a value that never changes, dead flags, speculative "for later" scaffolding,
-files exporting one thing.
-
-The red-line carve-out — DO NOT flag these as over-engineering. Before
-suggesting a deletion, apply the drift test: "if these two copies silently
-diverge, is that a bug or normal evolution?" Bug -> it is one authoritative
-truth, keep it. Never flag for deletion: cross-boundary contracts and shared
-knowledge, input validation at trust boundaries, error handling that prevents
-data loss, security measures and access checks, a single smoke test or
-assert-based self-check. When unsure whether something is dead flexibility or
-a real contract, leave it and say nothing.
-
-Return one finding per line: <file>:L<line>: <tag> <what>. <replacement>.
-Tags: delete: (dead code/speculative feature), stdlib: (hand-rolled thing the
-standard library ships -- name the function), native: (dependency or code the
-platform already does -- name the feature), yagni: (abstraction with one
-implementation, config for a constant, layer with one caller).
-If there is nothing to cut, say so plainly and return no findings.
-```
-
-**Consolidate (always runs once both lanes return):**
-- Re-key ids by source: `smp-` for Lane A, `lean-` for Lane B.
-- Dedup by `file` + `line` + semantic-title (Lane A's `suggestedFix`-shaped findings
-  vs Lane B's `tag:`-shaped lines will occasionally name the same spot — merge them,
-  keep both sources listed).
-- Judge against this codebase: `Read` cited files where it matters, drop clear false
-  positives (HARRY §6).
-- Present ONE table: `id | file:line | tag/severity | source(s) | title | verdict`.
-  (`source(s)` = `simplify` / `lean` / both; `verdict` = Keep / Drop with a one-line
-  reason per Drop.) If both lanes return nothing, say so and stop.
+See **The simplify dual-lane** in
+`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
 
 ---
 
@@ -184,8 +92,10 @@ claims). Do not use any write tool on this path.
 
 **Foreground:**
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review <args without --wait/--background>
 ```
+`--wait`/`--background` are execution-mode flags for this command, not companion
+flags — strip them before forwarding (the CLI rejects `--wait` as an unknown flag).
 Return stdout verbatim (markdown). No paraphrase, summary, or commentary.
 
 **Background:** launch with the harness's own background mode — do NOT pass
@@ -313,17 +223,23 @@ You apply the approved findings yourself, with full conversation context.
 
 1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix): if `git
    status --porcelain` is non-empty, the fix diff must be isolated from the user's
-   pre-existing work. Because this commits their uncommitted changes, **confirm first**
-   with `AskUserQuestion` ("snapshot your uncommitted work as a baseline commit before
-   applying?"); on yes, `git add -A` and `git commit -m "chore: pre-fix snapshot (cc
-   fix baseline)"`. If the commit fails on a dirty tree, STOP and tell the user to
-   commit/stash manually — never mix fix edits into their pre-existing changes.
+   pre-existing work. Run `git stash create` and **record the printed SHA** as the
+   baseline — an ephemeral snapshot object; nothing (working tree, index, branch
+   history, stash ref) is mutated, so no confirmation is needed. If it prints
+   nothing (e.g. only untracked changes) or the tree is clean, use `git rev-parse
+   HEAD` as the baseline instead. Reuse that literal SHA in step 3 — each `Bash`
+   call is a fresh shell, so a `BASE=…` variable will not survive; substitute the
+   actual value. Known limit (same as runFix): `stash create` skips pre-existing
+   untracked files, so `git add -A` in step 3 stages them and they appear in the
+   fix diff as if the fix created them.
 2. **Apply** each approved finding with `Edit`/`Write`: minimal, correct change per
    finding; no unrelated refactor. Skip any that is already fixed, no longer applies,
    or whose fix would change intended behavior — note why.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons) and
-   changed files, and tell the user the fixes are **staged but not committed**
-   (`git diff --cached` to review).
+   changed files, and tell the user the fixes are **staged but not committed** —
+   review the fix-only diff with `git diff --cached <baseline-sha>` (the SHA recorded
+   in step 1; it excludes their pre-existing *tracked* WIP — pre-existing *untracked*
+   files may still appear, so warn the user before they commit the staged changes).
 
 ## Apply: `--harry-fix` (isolated Codex fix session, gpt-5.5/xhigh)
 

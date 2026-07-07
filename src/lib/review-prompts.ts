@@ -6,7 +6,7 @@
  * verbatim, which stays portable across whatever model runs the review.
  */
 
-import type { ReviewContext } from "./git.js";
+import type { ReviewContext } from "./git.ts";
 
 interface PromptVars {
   context: ReviewContext;
