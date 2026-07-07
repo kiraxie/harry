@@ -43,7 +43,7 @@ What it does:
 
 - Appends a marker-wrapped block to the target project's `.gitignore` listing the
   paths harry keeps out of version control: `.local/` (specs, plans, backlog,
-  milestones, ledger scratch, `STATUS.md`/`HISTORY.md`/`INDEX.md`),
+  milestones, research, ledger scratch, `STATUS.md`/`HISTORY.md`/`INDEX.md`),
   `*worktrees/` (worktree sandboxes, at any depth — covers both `.worktrees/`
   and `.claude/worktrees/`), and `CLAUDE.local.md` (the user's per-project
   specialization rules — same file harry uses for Claude Code, still
