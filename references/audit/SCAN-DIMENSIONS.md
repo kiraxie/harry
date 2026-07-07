@@ -2,7 +2,7 @@
 
 The facets a code audit hunts along. In Round 2, fan out by **workspace × dimension** — assign each agent a scope (a subsystem/package) and one or two dimensions, so each stays deep instead of shallow-everywhere.
 
-Not every dimension applies to every codebase. Pick the ones the target's `intended-architecture.md` and substrate make relevant. Each dimension below states **what it is**, **the deterministic seed** (what Round 1 substrate feeds it), and **the falsifiability bar** (what a real finding must show — the SKILL.md Principle 1 anchor, specialized).
+Not every dimension applies to every codebase. Pick the ones the target's `intended-architecture.md` and substrate make relevant. Each dimension below states **what it is**, **the deterministic seed** (what Round 1 substrate feeds it), and **the falsifiability bar** (what a real finding must show — the ORCHESTRATION.md Principle 1 anchor, specialized).
 
 Every finding, in every dimension, must clear the same bar: name the concrete future change made expensive/dangerous, or the bug already caused.
 
