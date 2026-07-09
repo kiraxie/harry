@@ -44,12 +44,12 @@ Per task:
 2. **Dispatch implementer** (model per the routing above). Fresh subagent. It implements, follows TDD (red-green + watch-it-fail), tests, commits, self-reviews, writes its full report to the report file (`.local/tmp/<branch>/task-N-report.md`), and returns only: status, commits, one-line test summary, concerns.
    - Status handling: **DONE** → review. **DONE_WITH_CONCERNS** → read concerns; address correctness/scope before review. **NEEDS_CONTEXT** → provide it, re-dispatch. **BLOCKED** → stop and ask, don't guess (more context / stronger model / split task / escalate). Never silently retry the same model unchanged.
 3. **Per-task review.** Item compliance + code quality, scoped to this task's diff (write the diff to a file under `.local/tmp/<branch>/`; hand the reviewer the brief, the report, the diff, and the binding Global Constraints verbatim). Route to harry's `/review` (frontier). Do not pre-judge findings or tell the reviewer what not to flag.
-4. **Fix loop.** Critical/Important findings → dispatch a fix subagent (model per the routing above; carries the implementer contract: re-runs covering tests, reports command + output). Re-review. Repeat until spec ✅ and quality approved. Minor findings → record in the plan's Minor list for final triage. A finding that conflicts with the plan → human decides (present finding + plan text).
-5. **Mark complete.** Mark the task complete in the plan file: append `Task N: complete (commits <base7>..<head7>, review clean)` (or check its box) — the plan's archival then preserves this record. Do not check in with the human between tasks — execute the whole plan; stop only for BLOCKED or genuine ambiguity.
+4. **Fix loop.** Critical/Important findings → dispatch a fix subagent (model per the routing above; carries the implementer contract: re-runs covering tests, reports command + output). Re-review. Repeat until spec ✅ and quality approved. Minor findings → append to the item's `## Follow-ups` for final triage (so finishing's flush covers them). A finding that conflicts with the plan → human decides (present finding + plan text).
+5. **Mark complete.** Mark the task complete in the item's `## Plan` section: append `Task N: complete (commits <base7>..<head7>, review clean)` (or check its box) — the item's archival then preserves this record. Do not check in with the human between tasks — execute the whole plan; stop only for BLOCKED or genuine ambiguity.
 
 After all tasks:
 
-6. **Final review** — one broad whole-branch review (frontier `/review`). Package the full branch diff (`merge-base..HEAD`) to a file. Findings → **one** fix subagent with the complete list (not one fixer per finding). Point it at the plan's Minor list to triage what must be fixed before merge.
+6. **Final review** — one broad whole-branch review (frontier `/review`). Package the full branch diff (`merge-base..HEAD`) to a file. Findings → **one** fix subagent with the complete list (not one fixer per finding). Point it at the item's `## Follow-ups` to triage what must be fixed before merge.
 7. → **finishing** skill.
 
 ## Follow-ups discovered during execution

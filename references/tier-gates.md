@@ -11,8 +11,7 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 |------|---------|
 | Trigger | 1 file, mechanical, no branching logic, revert is one glance |
 | Brainstorm | skip |
-| Spec | none |
-| Plan | none |
+| Item | none |
 | TDD | none — trivial one-liners need no test |
 | Review | none |
 | Execution | session, one-shot (no subagent needed) |

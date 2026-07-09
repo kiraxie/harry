@@ -1,11 +1,11 @@
 ---
 name: writing-plans
-description: Use when a spec or clear requirements exist for a Standard- or Major-tier task and you are about to define the execution steps, before touching code. Skip for Trivial tasks (no plan).
+description: Use when an item's `## Why / What` or clear requirements exist for a Standard- or Major-tier task and you are about to define the execution steps, before touching code. Skip for Trivial tasks (no plan).
 ---
 
 # Writing Plans
 
-Turn a spec into an execution plan a fresh engineer with zero codebase context could run without guessing. Depth follows the task's tier (HARRY.md §3) — do not over-build a plan for a Standard task, do not under-spec a Major one.
+Turn a design (the item's `## Why / What`) into an execution plan a fresh engineer with zero codebase context could run without guessing. Depth follows the task's tier (HARRY.md §3) — do not over-build a plan for a Standard task, do not under-spec a Major one.
 
 ## Tier-aware depth
 
@@ -121,9 +121,9 @@ Never write any of these — each is a defect, not a draft:
 
 ## Step 5 — Self-Review (run it yourself, no subagent)
 
-After the plan is complete, read the spec with fresh eyes and check:
+After the plan is complete, read the item's `## Why / What` with fresh eyes and check:
 
-1. **Spec coverage** — point each spec section/requirement to a task. List gaps; add a task for any uncovered requirement.
+1. **Coverage** — point each requirement in `## Why / What` to a task. List gaps; add a task for any uncovered requirement.
 2. **Placeholder scan** — grep your own plan for the patterns above. Fix every hit.
 3. **Type-name consistency** — a function is `clearLayers()` in Task 3 and `clearFullLayers()` in Task 7 ⇒ bug. Names and signatures across tasks must match the Interfaces blocks.
 
