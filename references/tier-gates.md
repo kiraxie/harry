@@ -11,8 +11,7 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 |------|---------|
 | Trigger | 1 file, mechanical, no branching logic, revert is one glance |
 | Brainstorm | skip |
-| Spec | none |
-| Plan | none |
+| Item | none |
 | TDD | none — trivial one-liners need no test |
 | Review | none |
 | Execution | session, one-shot (no subagent needed) |
@@ -24,8 +23,7 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 |------|---------|
 | Trigger | 2–5 files, real logic, single subsystem |
 | Brainstorm | compressed — confirm intent + approach in a few lines, no full exploration |
-| Spec | `*-design.md` in `.local/specs/` ONLY when a real design decision was weighed (alternatives existed); otherwise record the decision inline at the top of the plan |
-| Plan | bullet plan (`*-plan.md` in `.local/plans/`) |
+| Item | one `.local/items/<slug>.md`, `status: active` — `## Why / What` filled ONLY when a real design decision was weighed (alternatives existed); otherwise skip straight to `## Plan` and record the decision inline at its top. `## Plan` is always a bullet plan. |
 | TDD | one runnable check left behind (smallest thing that fails if the logic breaks); watch-it-fail encouraged, not mandatory |
 | Review | free subagent review — required (compensates for inline execution) |
 | Execution | session (inline), in an isolated worktree per §5 |
@@ -37,8 +35,7 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 |------|---------|
 | Trigger | 6+ files, cross-subsystem, **or any red line (see below)** |
 | Brainstorm | full — explore intent, requirements, design before any code |
-| Spec | full `*-design.md` in `.local/specs/` with decision records (Discussion → Decision → considered-but-rejected) |
-| Plan | full `*-plan.md` in `.local/plans/`, step-by-step |
+| Item | one `.local/items/<slug>.md`, `status: active` — `## Why / What` is a full decision record (Discussion → Decision → considered-but-rejected), `## Plan` is full step-by-step. If the work spans several items, add a `type: milestone` item linking them. |
 | TDD | full red-green-refactor, **watch-it-fail mandatory** (`references/red-green.md`) |
 | Review | `/review` |
 | Execution | subagent (parallelize independent units in isolated worktrees) |
