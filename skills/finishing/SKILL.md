@@ -37,10 +37,12 @@ Implementation complete and tests green. How should I integrate this?
 The merge is the start of finishing, not the end. Completion evidence is CI green when the work was pushed, or the full local suite when the merge is local-only (HARRY.md §6).
 
 a. **Memory** — append ONE line for this unit to `.local/HISTORY.md` (create if absent, newest first): `- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> (or "local merge, no PR") · <one-line outcome>` (rotate HISTORY yearly per `references/doc-types.md` — if this is the first entry of a new year, move the prior year's entries to `.local/history/<year>.md` first). Then remove the unit's line from `.local/INDEX.md` `## In flight` so the work list tracks only active work. Do NOT paste review/audit detail or commit lists — that lives in git/PR; `HISTORY.md` is a thin pointer (HARRY.md §5).
-b. **Archive** — move the plan → `.local/plans/archived/`. Leave the spec in `.local/specs/`: it is a long-term, accumulating design record (incl. decisions) and is never archived (HARRY.md §5).
-c. **Cleanup** — delete the feature branch and its worktree. Prefer the harness's NATIVE worktree tooling. Only as fallback: `cd` to the main repo root first, then `git worktree remove <path>` and `git worktree prune`. Provenance rule: only clean up worktrees YOU created — never remove harness-owned ones.
-d. **Back to main** — `git checkout main && git pull`.
-e. **Completion evidence.** CI triggers on push, not on a local merge — so the evidence depends on where the merge landed:
+b. **Flush Follow-ups** — read the item's `## Follow-ups` section (before moving the file). For each line, create a new `.local/items/<new-slug>.md` with `status: backlog`, a title derived from the line, and a `## Notes` section quoting it; add one `.local/INDEX.md` line per new item. Then clear the source item's `## Follow-ups` section.
+c. **Archive the item** — set the item's frontmatter `status: done` and move `.local/items/<slug>.md` → `.local/archive/<slug>.md` (content otherwise unchanged). Archive is **read-only** from here on — never edit it again; extending the idea later means opening a new `.local/items/` item that links back to this archive path (`references/doc-types.md`).
+d. **Milestone membership** — if the item's frontmatter has `milestone: <slug>`, open that milestone item (`.local/items/<slug>.md`) and move this item's link from its `## Members` to its `## Delivered` section.
+e. **Cleanup** — delete the feature branch and its worktree. Prefer the harness's NATIVE worktree tooling. Only as fallback: `cd` to the main repo root first, then `git worktree remove <path>` and `git worktree prune`. Provenance rule: only clean up worktrees YOU created — never remove harness-owned ones.
+f. **Back to main** — `git checkout main && git pull`.
+g. **Completion evidence.** CI triggers on push, not on a local merge — so the evidence depends on where the merge landed:
    - **Pushed (or a PR merged):** watch the CI run to completion and report green or red. If red, handle it — do NOT claim done at the merge moment.
    - **Local-only merge:** CI will NOT run. Run the full local suite as the completion evidence, read the output (exit code, failures), then claim. Offer to push (outward-facing — needs the user's consent; don't push unasked).
 
@@ -75,3 +77,4 @@ Show what will be lost (branch, commit list, worktree path), then require a type
 - `gh pr create` before the body draft is approved; merging a PR with unresolved review/CodeRabbit items.
 - Removing a harness-owned worktree, or running `git worktree remove` from inside the worktree.
 - Discarding without the typed `discard` confirmation.
+- Editing a `.local/archive/` item after it lands there, or reopening it in place instead of linking to it from a new `.local/items/` item (`references/doc-types.md`).
