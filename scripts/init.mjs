@@ -17,7 +17,7 @@ import { applyMarkerBlock, stripMarkerBlock } from "./lib/markers.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
-// Per project dir: local scratch (specs/plans/backlog, INDEX.md with its
+// Per project dir: local scratch (items/, archive/, INDEX.md with its
 // in-flight work list, HISTORY.md, tmp/ handoff files), worktree sandboxes,
 // and the user's per-project specialization rules. All non-versioned.
 const ENTRIES = [".local/", "*worktrees/", "CLAUDE.local.md"];
