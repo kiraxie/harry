@@ -43,7 +43,7 @@ A task is the **smallest unit that carries its own test cycle and is worth a fre
 
 ## Step 3 — Global Constraints block
 
-Copy the spec's §5 Constraints **verbatim** into a block at the top of the plan, one line each (version floors, dependency limits, naming/copy rules, platform requirements). Every task implicitly includes this block — state that once, here, instead of repeating it per task.
+Copy the item's `## Why / What` → `### 5. Constraints` **verbatim** into a block at the top of the `## Plan` section, one line each (version floors, dependency limits, naming/copy rules, platform requirements). Every task implicitly includes this block — state that once, here, instead of repeating it per task.
 
 ## Step 4 — Write the tasks
 
@@ -131,6 +131,11 @@ Fix inline; no re-review.
 
 ## Save & hand off
 
-Save to `.local/plans/YYYY-MM-DD-<feature>-plan.md` (gitignored, not committed). Naming per HARRY.md §5.
+Append the plan as a `## Plan` section to the same item brainstorming used
+(`.local/items/<slug>.md`, gitignored, not committed) — do not create a
+separate plan file. For a Standard task with no `## Why / What` (brainstorming
+skipped writing one because no real decision was weighed), create the item
+now with `status: active` and just the `## Plan` section (plus the one-line
+decision noted inline at its top, if brainstorming flagged one).
 
-Then hand off to the **executing** skill — it auto-selects session vs subagent mode by tier. Do **not** present a mode-choice menu; state which plan was saved and pass control.
+Then hand off to the **executing** skill — it auto-selects session vs subagent mode by tier. Do **not** present a mode-choice menu; state which item was updated and pass control.
