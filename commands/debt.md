@@ -10,12 +10,11 @@ Optional `$ARGUMENTS` scopes the scan to the given path(s); default is the whole
 
 ## 1. Reconcile the sources into one view
 
-Deferrals — and open backlog — hide in four places. Collect all of them — this command is the single overview specs alone can't give (specs are scattered per-feature).
+Deferrals — and open backlog — hide in two places. Collect both — this command is the single overview items alone can't give (items are scattered per-feature).
 
 - **Code markers.** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- $ARGUMENTS` (drop `-- $ARGUMENTS` when no path given). `DEBT:` is the sanctioned marker from HARRY.md §4 and carries a ceiling + upgrade path; TODO/FIXME/HACK are unsanctioned debt — flag them as `unmarked` (a violation per §4).
-- **Spec Non-Goals.** Read the `## 4. Scope & Non-Goals` section of every `*-design.md` under `.local/specs/` (`Glob: .local/specs/**/*-design.md`). Each "不做 / 移除 / 丟棄 / 延後 / Non-Goal" bullet is one deferral.
-- **Plan deferrals.** Read `*-plan.md` / `*-followup.md` under `.local/plans/` for explicit "do later / 延後 / out of scope / follow-up" lines.
-- **Backlog items.** Read every `*-backlog.md` under `.local/backlog/` (`Glob: .local/backlog/**/*-backlog.md`). Each item is one entry — unlike the other three sources, nothing here was ever decided (HARRY.md §5).
+- **Item deferrals.** Read the `## Why / What` → `### 4. Scope & Non-Goals` subsection and the `## Plan` section of every `status: active` item under `.local/items/` (`Glob: .local/items/**/*.md`, keep only files whose frontmatter has `status: active`). Each "不做 / 移除 / 丟棄 / 延後 / Non-Goal" bullet in Scope & Non-Goals, and each "do later / 延後 / out of scope / follow-up" line in Plan, is one deferral.
+- **Backlog items.** Read every item under `.local/items/` whose frontmatter has `status: backlog` (`Glob: .local/items/**/*.md`, filter by frontmatter). Each item is one entry — unlike item deferrals, nothing here was ever decided (HARRY.md §5).
 
 ## 2. Freshness verdict — is the landmine now armed, or is the question still open?
 
@@ -49,10 +48,10 @@ Each gets exactly one verdict:
 
 Group by urgency: `now-risky` and `now-urgent` first, then `now-relevant`, then `still-safe` and `still-open`, then `stale` last (these are ready to delete, not landmines). One row per deferral or backlog item:
 
-`<verdict> · <source: code|spec|plan|backlog> · <file>:<line or section> — <what was deferred / still open>. premise: <the condition it assumed, or "n/a (backlog)">. now: <what changed, or "holds"/"still open">.`
+`<verdict> · <source: code|item|backlog> · <file>:<line or section> — <what was deferred / still open>. premise: <the condition it assumed, or "n/a (backlog)">. now: <what changed, or "holds"/"still open">.`
 
 For `now-relevant` / `now-risky` / `now-urgent` rows, add a **promotion suggestion**: the Non-Goal, shortcut, or backlog item whose situation changed → one line naming the task/decision it should become. For `stale` rows, add a **prune suggestion**: name the file/item to delete.
 
 End with: `<N> items: <a> risky/urgent, <b> relevant, <c> safe/open, <d> stale. <u> unmarked.` Nothing found: `No tracked debt. Clean ledger.`
 
-Reads and reports only. To persist, the user must ask.
+Reads and reports only. To persist, on request: write each `now-risky` / `now-relevant` / `now-urgent` row as a new `status: backlog` item under `.local/items/` (title + a `## Notes` line quoting the row and its source location), then clear the originating marker/section at its source (delete the `DEBT:`-style comment content, or remove the Non-Goal/deferral bullet from the item) so `status: backlog` stays the single outstanding-work source. `stale` rows persist as a deletion of the named backlog item/file instead.
