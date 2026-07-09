@@ -66,7 +66,12 @@ Doubles as the decision record: Discussion → Decision → considered-but-rejec
 Architecture / Components / Data flow / Error handling / Testing
 
 ### 4. Scope & Non-Goals (YAGNI)
-What is deliberately not built.
+What is deliberately not built. A Non-Goal is a scope boundary, not a to-do —
+it does not survive archiving (`/debt` only re-checks `status: active` items,
+and finishing's flush only carries `## Follow-ups`). If a Non-Goal is
+something you genuinely expect to revisit later, also add it as a line under
+`## Follow-ups` (or open a `status: backlog` item now) — otherwise it is
+silently lost the moment this item is archived.
 
 ### 5. Constraints
 Version floors / deps / naming / exact values — feeds the plan's Global Constraints.

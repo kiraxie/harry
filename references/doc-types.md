@@ -121,6 +121,15 @@ still open. `status: backlog` is the **only** deferred-work source read from
 those cases now live as `## Notes` inside a backlog or active item. See
 `/debt`'s own definition for the verdict vocabulary.
 
+**Non-Goals do not survive archiving.** `/debt` only scans `status: active`
+items, and finishing's flush (below) only carries `## Follow-ups` forward —
+a Scope & Non-Goals bullet in an item that reaches `status: done` is gone
+the moment it's archived, with nothing left to re-judge it. This is a
+deliberate discipline, not an automated sweep: a Non-Goal worth revisiting
+later must be copied into `## Follow-ups` (or promoted straight to its own
+`status: backlog` item) before the item is archived — do not rely on `/debt`
+or finishing to catch it for you.
+
 ## Global index `.local/INDEX.md`
 
 Unchanged in role: a live, content-oriented map, one line per item:
