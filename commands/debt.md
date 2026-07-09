@@ -1,5 +1,5 @@
 ---
-description: Re-judge deferred decisions and open backlog items (DEBT: markers, spec Non-Goals, plan deferrals, backlog entries) into one triaged ledger with a freshness verdict per row.
+description: Re-judge deferred decisions and open backlog items (DEBT: markers, item deferrals, backlog entries) into one triaged ledger with a freshness verdict per row.
 argument-hint: '[path...]'
 allowed-tools: Read, Glob, Grep, Bash(git log:*), Bash(git grep:*)
 ---
@@ -18,12 +18,12 @@ Deferrals — and open backlog — hide in two places. Collect both — this com
 
 ## 2. Freshness verdict — is the landmine now armed, or is the question still open?
 
-For code markers, spec Non-Goals, and plan deferrals, judge whether the original premise still holds. For backlog items, there is no premise — judge instead whether the item is still open. Use the cheap checks below, then light judgment. This is the part grep can't do.
+For code markers and item deferrals, judge whether the original premise still holds. For backlog items, there is no premise — judge instead whether the item is still open. Use the cheap checks below, then light judgment. This is the part grep can't do.
 
-### Premise check (code markers / spec Non-Goals / plan deferrals)
+### Premise check (code markers / item deferrals)
 
 - **Referenced symbol/file changed or gone?** If a marker or Non-Goal names a symbol or path, confirm it still exists (`Glob`/`Grep`) and check recent churn (`git log --oneline -5 -- <file>`). Gone or heavily rewritten → premise likely broken.
-- **A later spec contradicts an earlier Non-Goal?** Compare Non-Goals against newer specs by date in the filename. A thing deferred in an old spec but required by a newer one is now in scope.
+- **A later item contradicts an earlier Non-Goal?** Items carry no date in the filename (`references/doc-types.md`) — compare by last-touched date instead: `git log -1 --format=%ad --date=short -- <file>` per candidate, or check `.local/HISTORY.md` for a more recently completed item covering the same ground. A thing deferred in an older item but required by a newer one is now in scope.
 - **A `DEBT:` ceiling now breached?** Read the named ceiling (e.g. "O(n^2), swap if N > a few thousand") and check whether reality crossed it — call sites multiplied, data grew, the cheap path is now hot.
 
 Each gets exactly one verdict:
@@ -34,7 +34,7 @@ Each gets exactly one verdict:
 
 ### Openness check (backlog items)
 
-- **Already settled elsewhere?** Check newer specs/plans (by filename date) for a decision that covers the same ground. Settled → the item should have graduated and been deleted; flag it.
+- **Already settled elsewhere?** Check other items for a decision that covers the same ground — no date in the filename, so compare by last-touched date (`git log -1 --format=%ad --date=short -- <file>`) or check `.local/HISTORY.md`/`.local/archive/` for a more recently completed item. Settled → the item should have graduated and been deleted; flag it.
 - **Context still exists?** If the item names a file/feature/symbol, confirm it's still there. Gone → the item is moot.
 - **Stakes changed?** Anything land recently (a new spec, an incident, a changed constraint) that raises or removes the urgency of deciding this now?
 
