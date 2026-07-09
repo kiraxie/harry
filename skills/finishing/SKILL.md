@@ -28,7 +28,7 @@ Implementation complete and tests green. How should I integrate this?
 
 (Detached HEAD / externally-managed workspace: drop option 1 — merge isn't yours to make.)
 
-**Pre-decided integration path.** If the user already chose the path (e.g. "commit & merge", "just open the PR"), skip the menu — do NOT re-ask. But a pre-decided path is NOT a shortcut past finishing: still run the §1 verify gate first, then the FULL tail of the chosen option (for merge, every step a–e below). A bare `git merge` that stops at the merge skips the wind-down and is a §6 violation.
+**Pre-decided integration path.** If the user already chose the path (e.g. "commit & merge", "just open the PR"), skip the menu — do NOT re-ask. But a pre-decided path is NOT a shortcut past finishing: still run the §1 verify gate first, then the FULL tail of the chosen option (for merge, every step a–g below). A bare `git merge` that stops at the merge skips the wind-down and is a §6 violation.
 
 ## 3. Execute the choice
 
