@@ -1,6 +1,6 @@
 {
   "name": "harry",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
   "type": "module",
   "license": "MIT",

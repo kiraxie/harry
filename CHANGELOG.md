@@ -5,6 +5,39 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-09
+
+### Changed
+
+- **Converged the `.local/` doc model**: harry's five parallel doc types
+  (spec/plan/backlog/milestone/research, each its own directory) collapse into
+  one status-driven item store. Each work unit is a single `.local/items/<slug>.md`
+  file moving through `status: backlog → active → done` in place — `active`
+  holds both the former spec (`## Why / What`) and plan (`## Plan`) content.
+  Milestones are `type: milestone` items linking to members/deliverables
+  instead of a separate folder; completed items move to `.local/archive/`
+  (read-only). `references/doc-types.md` is the rewritten canonical taxonomy;
+  `HARRY.md`, `references/tier-gates.md`, the four pipeline skills,
+  `commands/debt.md` + its codex mirror, and `commands/init.md` + its codex
+  mirror (which now also migrates a repo's pre-existing docs into the new
+  layout) all updated to match.
+- Re-pinned the Major-tier implementer's default model to a literal `opus` in
+  `skills/executing/SKILL.md` — a prior revision had softened this into "pick
+  the current top tier at dispatch time," which in practice stopped reliably
+  resolving to `opus`.
+
+### Fixed
+
+- `/harry:debt`'s freshness checks referenced comparing items "by date in the
+  filename" — a structure the item model no longer has (no date prefix;
+  `status` is the temporal signal). Switched to git last-touched date /
+  `.local/HISTORY.md`.
+- A milestone item never closed itself out once every member was delivered;
+  it would sit `active` forever. Finishing now archives a milestone the same
+  way as any other item once its `## Members` list empties out.
+- A stale `.local/STATUS.md` reference in `CLAUDE.local.md` (superseded by
+  `.local/INDEX.md`).
+
 ## [0.8.0] - 2026-07-07
 
 ### Added
