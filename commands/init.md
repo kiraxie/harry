@@ -38,7 +38,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs" $ARGUMENTS
 
 What it does:
 
-- Appends a marker-wrapped block (`# >>> harry >>>` … `# <<< harry <<<`) to the target project's `.gitignore` listing the paths harry keeps out of version control: `.local/` (specs, plans, backlog, milestones, research, `tmp/` scratch, `INDEX.md`/`HISTORY.md`), `*worktrees/` (worktree sandboxes, at any depth — covers both `.worktrees/` and `.claude/worktrees/`), and `CLAUDE.local.md` (the user's per-project specialization rules).
+- Appends a marker-wrapped block (`# >>> harry >>>` … `# <<< harry <<<`) to the target project's `.gitignore` listing the paths harry keeps out of version control: `.local/` (`items/`, `archive/`, `tmp/` scratch, `INDEX.md`/`HISTORY.md`), `*worktrees/` (worktree sandboxes, at any depth — covers both `.worktrees/` and `.claude/worktrees/`), and `CLAUDE.local.md` (the user's per-project specialization rules).
 - Idempotent — re-running replaces the block in place rather than duplicating it.
 - `--remove` strips the block cleanly, leaving the rest of `.gitignore` untouched.
 
@@ -57,13 +57,51 @@ owns nothing deterministically — every move is gated on the user's answers.
 - If `$ARGUMENTS` contains `--remove`, STOP here — do not scan or migrate.
   (Uninstalling harry must not migrate anything. `--remove` wins over `--force`.)
 
+**Step A0 — Migrate harry's own pre-convergence layout, if present.** Before
+the generic scan below, check for the old per-type `.local/` directories this
+project may already have from before the item-store model:
+`.local/specs/`, `.local/plans/` (+ `.local/plans/archived/`),
+`.local/backlog/`, `.local/research/`, `.local/milestones/` (+
+`.local/milestones/archived/`). If none exist, skip to Step A.
+
+For each topic found, using the filename's `<topic>` slug to match across
+directories:
+
+1. **Spec + matching plan** (same topic) → merge into one
+   `.local/items/<topic>.md`: `## Why / What` = the spec's §1-§5 content
+   (reworked into the Task 1 subsection numbering), `## Plan` = the plan's
+   content. `status: active` if the plan is in `.local/plans/` (not yet
+   archived), `status: done` if the plan is in `.local/plans/archived/` (and
+   write straight to `.local/archive/<topic>.md` instead).
+2. **Spec alone** (no matching plan) → `.local/items/<topic>.md` with just
+   `## Why / What`, `status: active`.
+3. **Backlog or research file** (any topic under `.local/backlog/` or
+   `.local/research/`) → `.local/items/<topic>.md`, `status: backlog`, its
+   content becomes `## Notes` verbatim (research's tracked-milestones list,
+   if any, becomes a `## Notes` bullet list of links instead of being
+   dropped).
+4. **Milestone** (`.local/milestones/` or `.local/milestones/archived/`) →
+   `.local/items/<topic>.md`, `type: milestone`, `status: active` (or
+   `done` → write to `.local/archive/<topic>.md` instead) — carry the
+   existing member list into `## Members` (rewriting each member's old path
+   to its new `.local/items/` or `.local/archive/` path), and leave
+   `## Delivered` empty unless the source already distinguished completed
+   members.
+
+Never fabricate content — a section with nothing to carry over gets
+`_(not present in source)_`. Present the full topic→target mapping as a
+table (same shape as Step B below) and fold it into the same Step C
+approval question — one combined migrate/keep/delete decision for both this
+harry-native set and the generic candidates from Step A.
+
 **Step A — Scan for candidates.** In the target directory, look for legacy
 design/plan artifacts. Default candidate set:
 
 - spec-class: `docs/**/*design*.md`, `SPEC.md`, `DESIGN.md`, `ADR*/`, `RFC*/`, `decisions/`
 - plan-class: `PLAN.md`, `TODO.md`, `ROADMAP.md`, `tasks/`, `planning/`
-- misnamed `.local/` files: present under `.local/specs` or `.local/plans` but
-  NOT matching `YYYY-MM-DD-<topic>-<design|plan>.md`.
+- misnamed `.local/` files: present under `.local/items` or `.local/archive`
+  but missing the `id:`/`status:` frontmatter the item schema requires
+  (`references/doc-types.md`).
 
 Exclude: already-conformant `.local/` files, `.references/`, `node_modules/`,
 `.git/`, vendored dirs, and clearly non-design docs (`README.md`,
@@ -78,9 +116,9 @@ overwrite their `.local` targets.
 **If no candidates remain:** print one line (e.g. "No legacy spec/plan content to
 migrate.") and stop. Do not prompt.
 
-**Step B — Classify & propose.** For each candidate, decide spec vs plan and
-propose a target path `.local/specs/` or `.local/plans/` named
-`YYYY-MM-DD-<topic>-<design|plan>.md`:
+**Step B — Classify & propose.** For each candidate, decide item vs milestone
+and propose a target path `.local/items/<topic>.md` (or `.local/archive/<topic>.md`
+if already complete):
 
 - Date: first git commit touching the file
   (`git log --diff-filter=A --follow --format=%ad --date=short -1 -- <file>`),
@@ -97,12 +135,14 @@ Present the full candidate list as a table (source → proposed kind → target 
 
 **Step D — Execute.** For each SELECTED candidate:
 
-1. Rewrite its content into harry format, faithfully — never fabricate decisions
-   or content. spec → Context (SCQA) / Approaches Considered / Design / Scope &
-   Non-Goals / Constraints. plan → harry step format. Where the source lacks a
-   section, write `_(not present in source)_` rather than invent.
-2. Write the new file at its target path (create `.local/specs` / `.local/plans`
-   as needed). With `--force`, overwrite an existing target.
+1. Rewrite its content into harry's item format, faithfully — never fabricate
+   decisions or content. spec-class → the item's `## Why / What` (Context (SCQA)
+   / Approaches Considered / Design / Scope & Non-Goals / Constraints
+   subsections). plan-class → the item's `## Plan` in harry step format. Where
+   the source lacks a section, write `_(not present in source)_` rather than
+   invent.
+2. Write the new file at its target path (create `.local/items` /
+   `.local/archive` as needed). With `--force`, overwrite an existing target.
 3. Per Q_B: keep the original untouched, or delete it ONLY after its new file is
    successfully written.
 
