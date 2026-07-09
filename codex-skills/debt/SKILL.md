@@ -14,20 +14,20 @@ The user may scope the scan to specific path(s); default is the whole repo.
 
 ## 1. Reconcile the sources into one view
 
-Deferrals — and open backlog — hide in four places. Collect all of them.
+Deferrals — and open backlog — hide in two places. Collect both.
 
 - **Code markers.** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- <path...>` (drop the
   path filter when none given). `DEBT:` is the sanctioned marker from HARRY.md §4
   and carries a ceiling + upgrade path; TODO/FIXME/HACK are unsanctioned debt — flag
   them as `unmarked` (a violation per §4).
-- **Spec Non-Goals.** Read the `## 4. Scope & Non-Goals` section of every
-  `*-design.md` under `.local/specs/`. Each "不做 / 移除 / 丟棄 / 延後 / Non-Goal"
-  bullet is one deferral.
-- **Plan deferrals.** Read `*-plan.md` / `*-followup.md` under `.local/plans/` for
-  explicit "do later / 延後 / out of scope / follow-up" lines.
-- **Backlog items.** Read every `*-backlog.md` under `.local/backlog/`. Each item is
-  one entry — unlike the other three sources, nothing here was ever decided
-  (HARRY.md §5).
+- **Item deferrals.** Read the `## Why / What` → `### 4. Scope & Non-Goals`
+  subsection and the `## Plan` section of every `status: active` item under
+  `.local/items/` (filter by frontmatter). Each "不做 / 移除 / 丟棄 / 延後 /
+  Non-Goal" bullet in Scope & Non-Goals, and each "do later / 延後 / out of scope /
+  follow-up" line in Plan, is one deferral.
+- **Backlog items.** Read every item under `.local/items/` whose frontmatter has
+  `status: backlog`. Each item is one entry — unlike item deferrals, nothing here
+  was ever decided (HARRY.md §5).
 
 ## 2. Freshness verdict — is the landmine now armed, or is the question still open?
 
@@ -73,7 +73,7 @@ Group by urgency: `now-risky` and `now-urgent` first, then `now-relevant`, then
 `still-safe` and `still-open`, then `stale` last (these are ready to delete, not
 landmines). One row per deferral or backlog item:
 
-`<verdict> · <source: code|spec|plan|backlog> · <file>:<line or section> — <what
+`<verdict> · <source: code|item|backlog> · <file>:<line or section> — <what
 was deferred / still open>. premise: <the condition it assumed, or "n/a
 (backlog)">. now: <what changed, or "holds"/"still open">.`
 
@@ -85,4 +85,8 @@ suggestion**: name the file/item to delete.
 End with: `<N> items: <a> risky/urgent, <b> relevant, <c> safe/open, <d> stale. <u>
 unmarked.` Nothing found: `No tracked debt. Clean ledger.`
 
-Reads and reports only. To persist, the user must ask.
+Reads and reports only. To persist, on request: write each `now-risky` /
+`now-relevant` / `now-urgent` row as a new `status: backlog` item under
+`.local/items/` (title + a `## Notes` line quoting the row and its source
+location), then clear the originating marker/section at its source. `stale`
+rows persist as a deletion of the named backlog item/file instead.
