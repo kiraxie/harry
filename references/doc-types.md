@@ -57,10 +57,17 @@ status: active
 ```
 
 `## References` and `## Members` hold only links (an `id` or a relative
-path) — pointers always go **downward** (milestone → item); an item never
-records which milestone it belongs to except via its own optional
-`milestone:` frontmatter key. Adding or removing a member is a one-line edit
-to `## Members`; `archive/` is never touched by a milestone edit.
+path) — the content lives **downward** (milestone → item): a milestone knows
+its members, a member does not need to enumerate its milestones. The one
+exception is a lightweight index key pointing back **up**: an item may carry
+an optional `milestone: <slug>` frontmatter key so finishing can find the
+right milestone in O(1) without a repo-wide search. This caps an item at
+**one** milestone at a time (many-to-many was deliberately not supported —
+see the spec this model was built from) and creates a small sync obligation:
+the `milestone:` key and that milestone's `## Members` list must agree, kept
+in lockstep by finishing's membership step below. Adding or removing a
+member is a one-line edit to `## Members`; `archive/` is never touched by a
+milestone edit.
 
 ## Naming & location
 
@@ -88,6 +95,12 @@ to `## Members`; `archive/` is never touched by a milestone edit.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.
+- **Milestone self-archival**: after that move, if the milestone's
+  `## Members` is now empty (every member delivered), archive the milestone
+  itself the same way as any other item — `status: done`, move
+  `.local/items/<slug>.md` → `.local/archive/<slug>.md`. A milestone with an
+  empty `## Members` and no `status: done` is a bug: it means every unit of
+  work toward that goal finished but nobody closed the goal.
 - **Never reopen archive.** Extending an already-`done` item means opening
   a **new** `.local/items/` item and linking back to the old item's archive
   path in the new item's `## Notes` — archive is immutable history, not a
