@@ -14,26 +14,8 @@
 import { getCodexAuthStatus } from "../codex/auth.ts";
 import type { CodexTurnEvent } from "../codex/turn.ts";
 import { runCodexTurn } from "../codex/turn.ts";
-import type {
-  AuthSummary,
-  CodexSession,
-  ReasoningEffort,
-  RunOpts,
-  RunResult,
-} from "../provider.ts";
+import type { AuthSummary, CodexSession, RunOpts, RunResult } from "../provider.ts";
 import { resolveStateDir, writeCodexRateLimits } from "../state.ts";
-
-/**
- * Translate the neutral {@link ReasoningEffort} into codex's app-server effort
- * enum (`minimal | low | medium | high`). Codex has no `xhigh`, and `review`
- * defaults every codex lane to `xhigh`, so without this map the most common
- * path would send an effort codex may reject. `xhigh` clamps to codex's
- * strongest tier, `high`.
- */
-export function toCodexEffort(reasoning?: ReasoningEffort): string | undefined {
-  if (reasoning === undefined) return undefined;
-  return reasoning === "xhigh" ? "high" : reasoning;
-}
 
 export class CodexProvider implements CodexSession {
   /**
@@ -89,8 +71,9 @@ export class CodexProvider implements CodexSession {
    * for visibility (never throwing on a stream event), then maps the
    * {@link CodexTurnResult} onto the neutral {@link RunResult}.
    *
-   * `opts.reasoning` is mapped to codex's effort enum via {@link toCodexEffort}
-   * (xhigh→high, since codex has no xhigh). `opts.model` is passed through as-is;
+   * `opts.reasoning` is passed straight through as codex's effort value (the
+   * app-server accepts `low | medium | high | xhigh`, verified against the
+   * installed codex CLI binary). `opts.model` is passed through as-is;
    * undefined stays undefined so ~/.codex config picks the model.
    */
   async run(opts: RunOpts): Promise<RunResult> {
@@ -150,7 +133,7 @@ export class CodexProvider implements CodexSession {
       // separate system slot; turn.ts rides them as a leading input block).
       instructions: opts.systemMessage,
       model: opts.model,
-      effort: toCodexEffort(opts.reasoning),
+      effort: opts.reasoning,
       readOnly: opts.readOnly,
       env: process.env,
       onItem,

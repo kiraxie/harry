@@ -85,7 +85,7 @@ Claude-native or local scripts.
 
 | Command | What it does |
 |---------|--------------|
-| `/harry:review [--adversarial] [--fix]` | Multi-model code review (gpt-5.3-codex defect; `--adversarial` gpt-5.5 design challenge; `--fix` Claude-judged repair) |
+| `/harry:review [--adversarial] [--fix]` | Multi-model code review (gpt-5.6-terra defect; `--adversarial` gpt-5.6-sol design challenge; `--fix` Claude-judged repair) |
 | `/harry:ask "<prompt>"` | One read-only prompt to Codex |
 | `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
 | `/harry:status` | Codex rate-limit snapshot + background jobs |
@@ -102,7 +102,7 @@ The agent commands (`ask`, `review`, `review --fix`) all run through the OpenAI 
 CLI (spawned as a subprocess, JSON-RPC over stdio). No SDK dependency — only the `codex`
 binary on `PATH`.
 
-`ask` and `fix` default to a capable model (`gpt-5.5`) rather than inheriting
+`ask` and `fix` default to a capable model (`gpt-5.6-sol`) rather than inheriting
 whatever `~/.codex/config.toml` happens to set — applying vetted findings and
 answering a one-shot prompt are judgment tasks (HARRY.md §5); pass `--model` to
 override. `review`'s three lanes (standard/adversarial/simplify) each pin their own

@@ -1278,10 +1278,6 @@ function renderCodexBlock(rl, capturedAt) {
 }
 
 // src/lib/providers/codex.ts
-function toCodexEffort(reasoning) {
-  if (reasoning === void 0) return void 0;
-  return reasoning === "xhigh" ? "high" : reasoning;
-}
 var CodexProvider = class {
   /**
    * Abort handle for the in-flight turn, so {@link forceStop} (driven by the
@@ -1331,8 +1327,9 @@ var CodexProvider = class {
    * for visibility (never throwing on a stream event), then maps the
    * {@link CodexTurnResult} onto the neutral {@link RunResult}.
    *
-   * `opts.reasoning` is mapped to codex's effort enum via {@link toCodexEffort}
-   * (xhigh→high, since codex has no xhigh). `opts.model` is passed through as-is;
+   * `opts.reasoning` is passed straight through as codex's effort value (the
+   * app-server accepts `low | medium | high | xhigh`, verified against the
+   * installed codex CLI binary). `opts.model` is passed through as-is;
    * undefined stays undefined so ~/.codex config picks the model.
    */
   async run(opts) {
@@ -1376,7 +1373,7 @@ var CodexProvider = class {
       // separate system slot; turn.ts rides them as a leading input block).
       instructions: opts.systemMessage,
       model: opts.model,
-      effort: toCodexEffort(opts.reasoning),
+      effort: opts.reasoning,
       readOnly: opts.readOnly,
       env: process.env,
       onItem,
@@ -1524,7 +1521,7 @@ function formatCodexUsage(u) {
 }
 
 // src/commands/ask.ts
-var DEFAULT_MODEL = "gpt-5.5";
+var DEFAULT_MODEL = "gpt-5.6-sol";
 var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
 var DEFAULT_EFFORT = "high";
 async function runAsk(cwd, options) {
@@ -2282,9 +2279,9 @@ function buildReviewPrompt(kind, vars) {
 
 // src/commands/review.ts
 var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
-var DEFAULT_MODEL_STANDARD = "gpt-5.3-codex";
-var DEFAULT_MODEL_ADVERSARIAL = "gpt-5.5";
-var DEFAULT_MODEL_SIMPLIFY = "gpt-5.3-codex";
+var DEFAULT_MODEL_STANDARD = "gpt-5.6-terra";
+var DEFAULT_MODEL_ADVERSARIAL = "gpt-5.6-sol";
+var DEFAULT_MODEL_SIMPLIFY = "gpt-5.6-terra";
 var DEFAULT_EFFORT_STANDARD = "xhigh";
 var DEFAULT_EFFORT_ADVERSARIAL = "xhigh";
 var DEFAULT_EFFORT_SIMPLIFY = "xhigh";
@@ -2541,7 +2538,7 @@ async function runWorker(jobId, cwd) {
 var import_node_child_process6 = require("node:child_process");
 var import_node_fs4 = require("node:fs");
 var import_node_path4 = require("node:path");
-var DEFAULT_MODEL2 = "gpt-5.5";
+var DEFAULT_MODEL2 = "gpt-5.6-sol";
 var DEFAULT_EFFORT2 = "high";
 var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
 function tryGit(args, cwd) {

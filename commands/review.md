@@ -1,5 +1,5 @@
 ---
-description: Run a code review against local git state. Read-only unless a fix backend is requested. Review angle is standard (gpt-5.3-codex defects), --adversarial (gpt-5.5 design), --simplify (gpt-5.3-codex cleanups + a parallel CC-native over-engineering & readability lane, consolidated into one table), or --full (adversarial + simplify + CC /code-review max, consolidated). Apply findings with --fix (Claude Code applies) or --harry-fix (isolated Codex fix session).
+description: Run a code review against local git state. Read-only unless a fix backend is requested. Review angle is standard (gpt-5.6-terra defects), --adversarial (gpt-5.6-sol design), --simplify (gpt-5.6-terra cleanups + a parallel CC-native over-engineering & readability lane, consolidated into one table), or --full (adversarial + simplify + CC /code-review max, consolidated). Apply findings with --fix (Claude Code applies) or --harry-fix (isolated Codex fix session).
 argument-hint: '[--adversarial|--simplify|--full] [--fix|--harry-fix] [--wait|--background] [--base <ref>] [--scope auto|working-tree|branch] [--context <text|@file|@->] [--model <id>] [--reasoning <effort>] [focus...]'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Agent, SlashCommand, Bash(node:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(git symbolic-ref:*), Bash(git show-ref:*), Bash(git ls-files:*), Bash(git branch:*), Bash(git add:*), Bash(git commit:*), AskUserQuestion
@@ -29,9 +29,9 @@ is present:
 ## Review angle (what produces findings)
 
 Mutually exclusive:
-- default → standard defect review, `gpt-5.3-codex`.
-- `--adversarial` → design-challenge review, `gpt-5.5` — questions the approach.
-- `--simplify` → cleanup review: `gpt-5.3-codex` behavior-preserving reuse /
+- default → standard defect review, `gpt-5.6-terra`.
+- `--adversarial` → design-challenge review, `gpt-5.6-sol` — questions the approach.
+- `--simplify` → cleanup review: `gpt-5.6-terra` behavior-preserving reuse /
   simplification / efficiency pass, run in parallel with a Claude-Code-native
   over-engineering & readability lane (see **The simplify dual-lane** below) and
   consolidated into one table. NOT bugs.
@@ -121,8 +121,8 @@ CLI — never forward them. Skip the execution-mode ask: full always fans out in
 background and joins across turns. A bare `--full` is RO; `--full --fix`/
 `--full --harry-fix` is RW (apply step at the end).
 
-Tell the user up-front: full consumes Codex token quota for the `gpt-5.3-codex`
-simplify pass plus the adversarial `gpt-5.5` request, plus your `/code-review max`
+Tell the user up-front: full consumes Codex token quota for the `gpt-5.6-terra`
+simplify pass plus the adversarial `gpt-5.6-sol` request, plus your `/code-review max`
 compute and the simplify Lane B `Agent` dispatch.
 
 ### Stage 1 — Fan out four lanes in parallel
@@ -241,7 +241,7 @@ You apply the approved findings yourself, with full conversation context.
    in step 1; it excludes their pre-existing *tracked* WIP — pre-existing *untracked*
    files may still appear, so warn the user before they commit the staged changes).
 
-## Apply: `--harry-fix` (isolated Codex fix session, gpt-5.5/xhigh)
+## Apply: `--harry-fix` (isolated Codex fix session, gpt-5.6-sol/xhigh)
 
 A fresh write-enabled Codex session applies the findings — it cannot see this
 conversation, so carry context explicitly.

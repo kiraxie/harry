@@ -49,11 +49,15 @@ export interface ReviewOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-const DEFAULT_MODEL_STANDARD = "gpt-5.3-codex";
-const DEFAULT_MODEL_ADVERSARIAL = "gpt-5.5";
+// gpt-5.3-codex is deprecated by OpenAI for ChatGPT-signed-in Codex sessions;
+// gpt-5.6-terra is its balanced-tier successor (GPT-5.5-competitive, lower cost).
+const DEFAULT_MODEL_STANDARD = "gpt-5.6-terra";
+// Adversarial wants the deepest scrutiny available, so it gets the flagship tier.
+const DEFAULT_MODEL_ADVERSARIAL = "gpt-5.6-sol";
 // Cleanup lane: codex's code specialization is well-suited to behavior-preserving
-// simplification, and keeping it off gpt-5.5 leaves the design lane distinct.
-const DEFAULT_MODEL_SIMPLIFY = "gpt-5.3-codex";
+// simplification, and keeping it off the adversarial model leaves the design
+// lane distinct.
+const DEFAULT_MODEL_SIMPLIFY = "gpt-5.6-terra";
 const DEFAULT_EFFORT_STANDARD: ReasoningEffort = "xhigh";
 const DEFAULT_EFFORT_ADVERSARIAL: ReasoningEffort = "xhigh";
 const DEFAULT_EFFORT_SIMPLIFY: ReasoningEffort = "xhigh";

@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Ask a single frontier model one prompt (read-only) via harry's companion runtime, and print the answer verbatim. Use when the user wants a one-shot answer from a specific model (e.g. gpt-5.5) with no filesystem, shell, or URL access.
+description: Ask a single frontier model one prompt (read-only) via harry's companion runtime, and print the answer verbatim. Use when the user wants a one-shot answer from a specific model (e.g. gpt-5.6-sol) with no filesystem, shell, or URL access.
 ---
 
 # Ask
@@ -9,7 +9,7 @@ Ask one frontier model a single prompt and return its answer. Read-only — the 
 touches no filesystem, shell, or URLs.
 
 Parse the user's request into: the prompt text, an optional `--model <id>` (default
-is the runtime's frontier model, gpt-5.5), and an optional
+is the runtime's frontier model, gpt-5.6-sol), and an optional
 `--reasoning <low|medium|high>`.
 
 Run:

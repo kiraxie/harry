@@ -19,9 +19,9 @@
  * only supplies the prompt/options and its single JSON-envelope stdout
  * contract. Best-effort: findings the model could not apply are reported under
  * `skipped` rather than failing the whole run. Defaults to a capable model
- * (gpt-5.5) rather than leaving it to `~/.codex/config.toml` — applying vetted
- * findings is a judgment task, same principle as the implementer/fixer model
- * routing in HARRY.md §5.
+ * (gpt-5.6-sol) rather than leaving it to `~/.codex/config.toml` — applying
+ * vetted findings is a judgment task, same principle as the implementer/fixer
+ * model routing in HARRY.md §5.
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -55,7 +55,7 @@ export interface FixOptions {
 // Capable-by-default model: applying vetted findings is a judgment task, same
 // principle as the implementer/fixer model routing in HARRY.md §5 — don't let
 // it silently inherit whatever ~/.codex/config.toml happens to default to.
-const DEFAULT_MODEL = "gpt-5.5";
+const DEFAULT_MODEL = "gpt-5.6-sol";
 const DEFAULT_EFFORT: ReasoningEffort = "high";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 

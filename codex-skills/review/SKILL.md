@@ -1,6 +1,6 @@
 ---
 name: review
-description: Run a code review against local git state via harry's companion runtime. Read-only by default; read-write only when the user explicitly asks to apply fixes. Angles are standard (gpt-5.3-codex defects), design-challenge, or cleanup (gpt-5.3-codex cleanups run in parallel with a sub-agent over-engineering & readability lane, consolidated into one table); full runs design + the cleanup dual-lane together. Use when the user asks for a code review, or to review and fix.
+description: Run a code review against local git state via harry's companion runtime. Read-only by default; read-write only when the user explicitly asks to apply fixes. Angles are standard (gpt-5.6-terra defects), design-challenge, or cleanup (gpt-5.6-terra cleanups run in parallel with a sub-agent over-engineering & readability lane, consolidated into one table); full runs design + the cleanup dual-lane together. Use when the user asks for a code review, or to review and fix.
 ---
 
 # Review
@@ -32,9 +32,9 @@ not "no writes at all."
 ## Review angle (what produces findings)
 
 Mutually exclusive:
-- default → standard defect review, `gpt-5.3-codex`.
-- adversarial (design-challenge review, `gpt-5.5`) — questions the approach.
-- simplify (cleanup review): `gpt-5.3-codex` behavior-preserving reuse /
+- default → standard defect review, `gpt-5.6-terra`.
+- adversarial (design-challenge review, `gpt-5.6-sol`) — questions the approach.
+- simplify (cleanup review): `gpt-5.6-terra` behavior-preserving reuse /
   simplification / efficiency pass, run in parallel with a sub-agent
   over-engineering & readability lane (see **The simplify dual-lane** below) and
   consolidated into one table. NOT bugs.

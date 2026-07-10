@@ -1,5 +1,5 @@
 ---
-description: Three frontier models (opus, gpt-5.5, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
+description: Three frontier models (opus, gpt-5.6-sol, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
 argument-hint: '"<topic>" [--context <text|@file|@->]'
 allowed-tools: Read, Agent, Bash(node:*), Bash(agy:*), AskUserQuestion
 ---

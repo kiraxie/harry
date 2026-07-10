@@ -1,5 +1,5 @@
 ---
-description: Ask a single frontier model one prompt (read-only) and print the answer. This is the gpt-5.5 backend used by /debate.
+description: Ask a single frontier model one prompt (read-only) and print the answer. This is the gpt-5.6-sol backend used by /debate.
 argument-hint: '"<prompt>" [--model <id>] [--reasoning <low|medium|high>]'
 allowed-tools: Bash(node:*)
 ---
@@ -14,6 +14,6 @@ Execute:
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask $ARGUMENTS
 ```
 
-- The first quoted argument is the prompt. `--model <id>` (default is the runtime's frontier model, gpt-5.5 for debate use) and `--reasoning <low|medium|high>` override defaults; forward all of `$ARGUMENTS` verbatim.
+- The first quoted argument is the prompt. `--model <id>` (default is the runtime's frontier model, gpt-5.6-sol for debate use) and `--reasoning <low|medium|high>` override defaults; forward all of `$ARGUMENTS` verbatim.
 - Return the command stdout verbatim, exactly as-is. Do not paraphrase, summarize, or add commentary before or after it (HARRY.md §6).
 - If `status` is `failed`, surface the message and stop.

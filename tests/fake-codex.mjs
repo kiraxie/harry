@@ -208,7 +208,12 @@ rl.on("line", (line) => {
           .join("\\n");
         const turnId = nextTurnId(state);
         thread.updatedAt = now();
-        state.lastTurnStart = { threadId: message.params.threadId, turnId, prompt };
+        state.lastTurnStart = {
+          threadId: message.params.threadId,
+          turnId,
+          prompt,
+          effort: message.params.effort
+        };
         saveState(state);
 
         if (BEHAVIOR === "task-no-turnid") {

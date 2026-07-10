@@ -40,7 +40,7 @@ This is the single definition; every call site below just says "run the simplify
 - **Claude Code build:** by default means: the invoking args minus the slash-level fix/execution flags (`--fix`, `--harry-fix`, `--wait`, `--background`), keeping `--base`/`--scope`/`--context`/focus. Never let a raw `--harry-fix` reach the node CLI: it throws ("--harry-fix is a /review fix-backend selector, not a CLI flag", `src/companion.ts`). **Exception:** Full mode's Stage 1 already computes its own wider "Forwarded args" (it also strips `--full`/`--adversarial`/`--simplify`/`--model`/`--reasoning`, since `--full` alone would crash the node CLI the same way) — when the dual-lane runs as part of `--full`, use that value instead, not this one.
 - **Codex build:** means: the base/scope/context/focus args the user gave, keeping `--base`/`--scope`/`--context`/focus and dropping the angle keyword itself (`--simplify`) plus any model/reasoning override — Lane A's own node call already supplies `--simplify --fix` explicitly, so forwarding those again would be redundant, and this build has no separate apply-request flag to strip (RW is decided by whether the user asked to apply, not a CLI flag). **Exception:** Full mode's Stage 1 already computes its own wider "Forwarded args" (it also strips `--full`/`--adversarial`, since the node CLI has no `--full` concept and would error on it) — when the dual-lane runs as part of full, use that value instead, not this one.
 
-**Lane A — Codex cleanup review** (`gpt-5.3-codex`, behavior-preserving reuse /
+**Lane A — Codex cleanup review** (`gpt-5.6-terra`, behavior-preserving reuse /
 simplification / efficiency — NOT bugs):
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --simplify --fix <forwarded>

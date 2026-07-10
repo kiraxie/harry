@@ -7,8 +7,8 @@
  * The whole agent lifecycle (auth, run) is delegated to {@link runAgentSession};
  * `ask` only supplies the prompt/options and the stdout contract (the verbatim
  * model answer, which `/debate` depends on). Defaults to a capable model
- * (gpt-5.5) rather than leaving it to `~/.codex/config.toml` — same principle
- * as `fix`'s model default (HARRY.md §5).
+ * (gpt-5.6-sol) rather than leaving it to `~/.codex/config.toml` — same
+ * principle as `fix`'s model default (HARRY.md §5).
  */
 
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
@@ -26,7 +26,7 @@ export interface AskOptions {
   jobId?: string;
 }
 
-const DEFAULT_MODEL = "gpt-5.5";
+const DEFAULT_MODEL = "gpt-5.6-sol";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_EFFORT: ReasoningEffort = "high";
 
