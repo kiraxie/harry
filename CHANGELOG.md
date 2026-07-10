@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-10
+
+### Changed
+
+- **Codex model defaults bumped to the GPT-5.6 family**, replacing
+  `gpt-5.3-codex` (now deprecated by OpenAI for ChatGPT-signed-in Codex
+  sessions) and `gpt-5.5` (superseded). `/review`'s standard and `--simplify`
+  lanes now default to `gpt-5.6-terra` (balanced tier); `--adversarial`,
+  `ask`, and `fix` now default to `gpt-5.6-sol` (flagship tier, matching
+  HARRY.md §5's "capable-by-default" judgment-task principle). Updated every
+  doc that names the defaults (README, `commands/*.md`,
+  `codex-skills/*/SKILL.md`, `references/review-orchestration.md`).
+
+### Fixed
+
+- Removed `CodexProvider`'s stale `xhigh`→`high` reasoning-effort clamp
+  (`src/lib/providers/codex.ts`). It existed because codex's app-server
+  previously had no `xhigh` tier; verified against the installed codex CLI
+  binary that `xhigh` is now a supported effort value, so every codex lane
+  defaulting to `xhigh` (`/review`'s three lanes) was being silently
+  downgraded to `high`. `opts.reasoning` now passes through unmodified.
+
 ## [0.10.0] - 2026-07-10
 
 ### Changed
