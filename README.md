@@ -78,8 +78,9 @@ shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
 
-`review`, `ask`, and `debate` run through Codex, on your Codex/ChatGPT subscription — no
-per-call premium quota. The rest are Claude-native or local scripts.
+`review`, `ask`, and `debate` run through Codex, on your Codex/ChatGPT subscription —
+token-quota consumption, not a per-call premium-request count. The rest are
+Claude-native or local scripts.
 
 | Command | What it does |
 |---------|--------------|

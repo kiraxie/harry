@@ -1,5 +1,5 @@
 ---
-description: Run a code review against local git state. Read-only unless a fix backend is requested. Review angle is standard (gpt-5.3-codex defects), --adversarial (gpt-5.5 design), --simplify (gpt-5.3-codex cleanups + a parallel CC-native over-engineering lane, consolidated into one table), or --full (adversarial + simplify + CC /code-review max, consolidated). Apply findings with --fix (Claude Code applies) or --harry-fix (isolated Codex fix session).
+description: Run a code review against local git state. Read-only unless a fix backend is requested. Review angle is standard (gpt-5.3-codex defects), --adversarial (gpt-5.5 design), --simplify (gpt-5.3-codex cleanups + a parallel CC-native over-engineering & readability lane, consolidated into one table), or --full (adversarial + simplify + CC /code-review max, consolidated). Apply findings with --fix (Claude Code applies) or --harry-fix (isolated Codex fix session).
 argument-hint: '[--adversarial|--simplify|--full] [--fix|--harry-fix] [--wait|--background] [--base <ref>] [--scope auto|working-tree|branch] [--context <text|@file|@->] [--model <id>] [--reasoning <effort>] [focus...]'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Agent, SlashCommand, Bash(node:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(git symbolic-ref:*), Bash(git show-ref:*), Bash(git ls-files:*), Bash(git branch:*), Bash(git add:*), Bash(git commit:*), AskUserQuestion
@@ -33,12 +33,12 @@ Mutually exclusive:
 - `--adversarial` → design-challenge review, `gpt-5.5` — questions the approach.
 - `--simplify` → cleanup review: `gpt-5.3-codex` behavior-preserving reuse /
   simplification / efficiency pass, run in parallel with a Claude-Code-native
-  over-engineering lane (see **The simplify dual-lane** below) and consolidated
-  into one table. NOT bugs.
+  over-engineering & readability lane (see **The simplify dual-lane** below) and
+  consolidated into one table. NOT bugs.
 - `--full` → orchestrate four non-overlapping lanes — `--adversarial` (design),
   the simplify dual-lane (`--simplify`'s Codex cleanup pass + a CC-native
-  over-engineering pass), and CC `/code-review max` (defects) — in parallel, then
-  consolidate into one deduped table (see **Full mode**).
+  over-engineering & readability pass), and CC `/code-review max` (defects) — in
+  parallel, then consolidate into one deduped table (see **Full mode**).
 
 **Shared overrides:** `--base <ref>` sets a base-branch review. `--context
 <text|@file|@->` injects extra reviewer intent. `--model` / `--reasoning` override
@@ -121,9 +121,9 @@ CLI — never forward them. Skip the execution-mode ask: full always fans out in
 background and joins across turns. A bare `--full` is RO; `--full --fix`/
 `--full --harry-fix` is RW (apply step at the end).
 
-Tell the user up-front: full spends ~1 premium (`gpt-5.3-codex` simplify) + the
-adversarial `gpt-5.5` request, plus your `/code-review max` compute and the simplify
-Lane B `Agent` dispatch (no extra Codex quota — same cost class as `/code-review max`).
+Tell the user up-front: full consumes Codex token quota for the `gpt-5.3-codex`
+simplify pass plus the adversarial `gpt-5.5` request, plus your `/code-review max`
+compute and the simplify Lane B `Agent` dispatch.
 
 ### Stage 1 — Fan out four lanes in parallel
 Forwarded args = `$ARGUMENTS` minus `--full`, `--adversarial`, `--simplify`, `--fix`,
@@ -136,9 +136,9 @@ Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --advers
        description: "review (adversarial/design)", run_in_background: true })
 ```
 2. **The simplify dual-lane** (defined above) — Lane A (Codex `--simplify --fix`,
-   background) and Lane B (CC `Agent` over-engineering dispatch, foreground) both
-   count as their own lanes here; do not consolidate them yet — Stage 2 below merges
-   all four lanes together in one pass. Lane A here uses *this Stage 1 preamble's*
+   background) and Lane B (CC `Agent` over-engineering & readability dispatch,
+   foreground) both count as their own lanes here; do not consolidate them yet —
+   Stage 2 below merges all four lanes together in one pass. Lane A here uses *this Stage 1 preamble's*
    "Forwarded args" (computed just above, which already strips `--full` too) — not
    the dual-lane definition's own narrower `<forwarded>` rule, which only strips
    `--fix`/`--harry-fix`/`--wait`/`--background` and would let a bare `--full` reach
@@ -155,7 +155,7 @@ Wait until ALL FOUR have produced output before Stage 2.
   findings — record it as a failed source and continue; never abort the whole
   consolidation for one bad leg. Adversarial design-level notes live in
   `reviewMarkdown`'s `## Design Concerns`; simplify findings are cleanups, not bugs.
-- Simplify Lane B (CC over-engineering) returns plain `tag: what. replacement.`
+- Simplify Lane B (CC over-engineering & readability) returns plain `tag: what. replacement.`
   lines — map each to a finding: `tag`→severity-ish label, the line itself→title.
 - `/code-review max` returns `[{file,line,summary,failure_scenario}]` (≤15). Map
   lightly: `summary`→title, `failure_scenario`→rationale.

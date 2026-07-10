@@ -1,6 +1,6 @@
 ---
 name: review
-description: Run a code review against local git state via harry's companion runtime. Read-only by default; read-write only when the user explicitly asks to apply fixes. Angles are standard (gpt-5.3-codex defects), design-challenge, or cleanup (gpt-5.3-codex cleanups run in parallel with a sub-agent over-engineering lane, consolidated into one table); full runs design + the cleanup dual-lane together. Use when the user asks for a code review, or to review and fix.
+description: Run a code review against local git state via harry's companion runtime. Read-only by default; read-write only when the user explicitly asks to apply fixes. Angles are standard (gpt-5.3-codex defects), design-challenge, or cleanup (gpt-5.3-codex cleanups run in parallel with a sub-agent over-engineering & readability lane, consolidated into one table); full runs design + the cleanup dual-lane together. Use when the user asks for a code review, or to review and fix.
 ---
 
 # Review
@@ -36,11 +36,11 @@ Mutually exclusive:
 - adversarial (design-challenge review, `gpt-5.5`) — questions the approach.
 - simplify (cleanup review): `gpt-5.3-codex` behavior-preserving reuse /
   simplification / efficiency pass, run in parallel with a sub-agent
-  over-engineering lane (see **The simplify dual-lane** below) and consolidated
-  into one table. NOT bugs.
+  over-engineering & readability lane (see **The simplify dual-lane** below) and
+  consolidated into one table. NOT bugs.
 - full → orchestrate three dispatches — adversarial (design) and the simplify
   dual-lane's two lanes (the Codex cleanup pass and the sub-agent
-  over-engineering pass) — in parallel, then consolidate into one deduped table
+  over-engineering & readability pass) — in parallel, then consolidate into one deduped table
   (see **Full mode**). Unlike the Claude Code build, this does NOT include a
   fourth, self-review lane (its `/code-review max` equivalent) — Codex has no
   equivalent to invoke.
@@ -106,9 +106,9 @@ model-specialized); keep `--base`/`--scope`/`--context`/focus.
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --adversarial --fix <forwarded>
 ```
 2. **The simplify dual-lane** (defined above) — Lane A (Codex `--simplify --fix`)
-   and Lane B (the over-engineering sub-agent dispatch) both count as their own
-   lanes here; do not consolidate them yet — Stage 2 below merges all three
-   together in one pass. Lane A here uses *this Stage 1 preamble's* "Forwarded
+   and Lane B (the over-engineering & readability sub-agent dispatch) both count
+   as their own lanes here; do not consolidate them yet — Stage 2 below merges
+   all three together in one pass. Lane A here uses *this Stage 1 preamble's* "Forwarded
    args" (computed just above, which already strips `--full` too) — not the
    dual-lane definition's own narrower `<forwarded>` rule, which would let a bare
    `--full` reach the node CLI here, which it rejects.
@@ -122,7 +122,7 @@ Wait until all three have produced output before Stage 2.
   abort the whole consolidation for one bad leg. Adversarial design-level notes
   live in `reviewMarkdown`'s `## Design Concerns`; simplify findings are cleanups,
   not bugs.
-- Simplify Lane B (the over-engineering sub-agent) returns plain
+- Simplify Lane B (the over-engineering & readability sub-agent) returns plain
   `tag: what. replacement.` lines — map each to a finding: `tag`→severity-ish
   label, the line itself→title.
 - **Re-key ids across sources** before merging: prefix each by source (`adv-`/

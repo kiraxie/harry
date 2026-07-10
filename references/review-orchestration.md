@@ -47,10 +47,10 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --simplify --fix <forward
 ```
 Parse the structured envelope (see above).
 
-**Lane B — over-engineering lane.** The lane title and dispatch mechanism differ by build:
+**Lane B — over-engineering & readability lane.** The lane title and dispatch mechanism differ by build:
 
-- **Claude Code build:** **Lane B — CC-native over-engineering lane** (`Agent` tool, `model: sonnet` — a heuristic hunt, not a design judgment call, so it does not need the session's most capable model; no Codex backend, no extra Codex quota — same cost class as `--full`'s `/code-review max` lane)
-- **Codex build:** **Lane B — over-engineering lane** (a lightweight sub-agent — this is a heuristic hunt, not a design judgment call, so it doesn't need your most capable model; no Codex backend involved, no extra Codex quota consumed)
+- **Claude Code build:** **Lane B — CC-native over-engineering & readability lane** (`Agent` tool, `model: sonnet` — a heuristic hunt, not a design judgment call, so it does not need the session's most capable model; no Codex backend, no extra Codex quota — same cost class as `--full`'s `/code-review max` lane)
+- **Codex build:** **Lane B — over-engineering & readability lane** (a lightweight sub-agent — this is a heuristic hunt, not a design judgment call, so it doesn't need your most capable model; no Codex backend involved, no extra Codex quota consumed)
 
 Before dispatching, write the target diff to a file so Lane B can read it, matching
 this repo's own reviewer-handoff convention (`references/review-rubric.md`: "hand the
@@ -73,18 +73,30 @@ arg is named `--context`, differ by build):
 - **Codex build:** Then dispatch a sub-agent — it has no memory of this conversation, so hand it the file path explicitly — with this brief, substituting the actual file path and any context/focus text into the `Scope:` line:
 
 ```
-You are a lazy senior engineer reviewing for ONE thing: over-engineering. The
-best outcome is the code getting shorter. Find what to cut. Do not duplicate
-correctness/security/performance findings — those are out of scope here.
+You are a lazy senior engineer reviewing for TWO things: over-engineering and
+poor readability. The best outcome is code that is shorter where it can be cut,
+and clearer where it can't. Do not duplicate correctness/security/performance
+findings — those are out of scope here.
 
 Scope: Read the diff at <substitute the actual temp file path here>. <If context/
 focus text was given, append it here.> Cite real file paths and line numbers from
 within that diff.
 
-Hunt: reinvented stdlib, deps the platform already ships, single-implementation
+Hunt (cut): reinvented stdlib, deps the platform already ships, single-implementation
 interfaces, factories with one product, wrappers that only delegate, config for
 a value that never changes, dead flags, speculative "for later" scaffolding,
 files exporting one thing.
+
+Hunt (clarify — same behavior, clearer expression, not deletion): nested ternary
+operators that should be an if/else chain or switch, deeply nested conditionals
+that should early-return, a name that hides what a variable/function actually
+holds or does, tangled boolean logic that should be a named intermediate.
+
+The over-simplification brake — do not suggest a rewrite that trades clarity for
+fewer lines: don't collapse multiple concerns into one function/component, don't
+propose a denser one-liner over explicit code, don't remove an abstraction that
+is actually carrying its weight. If a "clarify" fix would make the diff harder to
+read than it already is, don't suggest it.
 
 The red-line carve-out — DO NOT flag these as over-engineering. Before
 suggesting a deletion, apply the drift test: "if these two copies silently
@@ -99,8 +111,10 @@ Return one finding per line: <file>:L<line>: <tag> <what>. <replacement>.
 Tags: delete: (dead code/speculative feature), stdlib: (hand-rolled thing the
 standard library ships -- name the function), native: (dependency or code the
 platform already does -- name the feature), yagni: (abstraction with one
-implementation, config for a constant, layer with one caller).
-If there is nothing to cut, say so plainly and return no findings.
+implementation, config for a constant, layer with one caller), readab: (same
+behavior, clearer expression -- nested ternary, deep nesting, unclear naming,
+tangled conditional).
+If there is nothing to cut or clarify, say so plainly and return no findings.
 ```
 
 **Consolidate (always runs once both lanes return):**

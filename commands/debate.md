@@ -13,9 +13,9 @@ synthesize. The structure is **fixed at two rounds**; do not add or skip rounds.
 Raw slash-command arguments:
 `$ARGUMENTS` (the topic, plus optional `--context`).
 
-Cost note: gpt runs on your Codex/ChatGPT subscription (no premium-request quota
-involved). opus runs on your Claude subscription, gemini on your Google subscription
-via `agy`.
+Cost note: gpt runs on your Codex/ChatGPT subscription (token-quota consumption,
+not a per-request charge). opus runs on your Claude subscription, gemini on your
+Google subscription via `agy`.
 
 ## The three voices (fixed routing — do not substitute)
 
