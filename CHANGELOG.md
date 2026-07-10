@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-10
+
+### Changed
+
+- **Renamed `/harry:init` to `/harry:sync`** (breaking: update any muscle
+  memory / scripts invoking the old name). The command is re-run far more
+  often than it's run once — every time HARRY.md or the plugin updates,
+  across every repo the laws are wired into — so "init" undersold its actual
+  job; "sync" matches the resync semantics already documented for its Phase 1
+  (laws snapshot re-deploy). Renamed `commands/init.md` -> `commands/sync.md`
+  and `codex-skills/init/` -> `codex-skills/sync/`; updated all prose
+  cross-references. `scripts/init.mjs` (the Phase 2 gitignore-block script,
+  and its `init-ignore` pnpm alias) is unchanged — that one genuinely is a
+  per-project one-time setup action, distinct from the laws resync.
+
 ## [0.9.1] - 2026-07-10
 
 ### Fixed
