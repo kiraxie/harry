@@ -64,12 +64,12 @@ harry's customized version when pulling in changes.
 ## Plugin content (`HARRY.md`, `skills/`, `commands/`, `references/`)
 
 `HARRY.md` is the resident law file. `scripts/install.mjs` (`pnpm run install-laws` / the plugin's
-own `/init` command) **deploys a snapshot** of it to `~/.claude/harry/HARRY.md` and `@`-imports that
+own `/sync` command) **deploys a snapshot** of it to `~/.claude/harry/HARRY.md` and `@`-imports that
 deployed copy into a consumer's global `~/.claude/CLAUDE.md`, so it applies every session without
 needing a keyword. The import points at the deployed snapshot, NOT the live plugin checkout: editing
 `HARRY.md` (even uncommitted) does not change installed behavior until you re-run install-laws /
-`/init`, which re-deploys the snapshot and rewrites the import block (migrating any older
-direct-repo-path import). "Release" = re-run init — the same resync model as the Codex build
+`/sync`, which re-deploys the snapshot and rewrites the import block (migrating any older
+direct-repo-path import). "Release" = re-run sync — the same resync model as the Codex build
 (`scripts/install-codex.mjs`), so both builds converge on one mental model.
 
 The four pipeline skills (`skills/brainstorming`, `skills/writing-plans`, `skills/executing`,
@@ -112,7 +112,7 @@ guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the mechanical/read-only
 `commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `review`,
-`init`, `audit`) — Codex's plugin manifest has no `commands`/`prompts`
+`sync`, `audit`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 
@@ -131,7 +131,7 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   `references/audit/` reference bundle and `report-schema.json`/
   `validate-findings.cjs` as the Claude Code `/audit` command via
   `${CLAUDE_PLUGIN_ROOT}`.
-- `init`'s law-wiring (`scripts/install-codex.mjs`) inlines HARRY.md's content into
+- `sync`'s law-wiring (`scripts/install-codex.mjs`) inlines HARRY.md's content into
   `~/.codex/AGENTS.md` as a snapshot (Codex has no `@`-import syntax) — re-run
   after HARRY.md changes to resync, unlike Claude Code's always-live import.
 

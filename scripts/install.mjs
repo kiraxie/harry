@@ -9,8 +9,8 @@
 // path derives from its directory). This is a snapshot, NOT a live reference to
 // the plugin checkout: editing the plugin's HARRY.md (even uncommitted) does not
 // change installed behavior until you re-run this — "release" = re-run
-// `pnpm run install-laws` / `/harry:init`. This mirrors the Codex build
-// (install-codex.mjs), so both builds share one mental model: re-run init to
+// `pnpm run install-laws` / `/harry:sync`. This mirrors the Codex build
+// (install-codex.mjs), so both builds share one mental model: re-run sync to
 // resync laws after updating.
 //
 // Re-running re-deploys the snapshot and rewrites the marker block idempotently,

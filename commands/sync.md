@@ -1,5 +1,5 @@
 ---
-description: Set harry up here — wire the resident laws into your global instructions, add the .gitignore block, and offer to migrate legacy spec/plan docs. --remove strips this project's .gitignore block (laws stay).
+description: Set up or resync harry here — wire the resident laws into your global instructions, add the .gitignore block, and offer to migrate legacy spec/plan docs. Re-run after updating the plugin or editing HARRY.md to resync. --remove strips this project's .gitignore block (laws stay).
 argument-hint: '[--remove] [--force] [targetDir]'
 allowed-tools: Bash(node:*), Bash(git log:*), Glob, Grep, Read, Write, Edit, AskUserQuestion
 ---
@@ -11,7 +11,7 @@ Raw slash-command arguments: `$ARGUMENTS`
 Wire harry's resident laws (`HARRY.md`, which ships with the plugin) into your
 global instructions file so they apply every session. **Skip this phase when
 `$ARGUMENTS` contains `--remove`** — laws are global/per-machine, so a per-project
-`/init --remove` must NOT unwire them. (To unwire laws explicitly, run
+`/sync --remove` must NOT unwire them. (To unwire laws explicitly, run
 `node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs" --remove`.)
 
 Otherwise execute:

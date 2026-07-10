@@ -33,27 +33,28 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 ```
 /plugin marketplace add kiraxie/harry   # GitHub owner/repo
 /plugin install harry@kiraxie           # <plugin>@<marketplace> — "harry, published by kiraxie"
-/harry:init                             # wire the resident laws + set up this project
+/harry:sync                             # wire the resident laws + set up this project
 ```
 
 harry's commands share the `/harry:` namespace. The ones whose bare name collides
-with a Claude Code built-in — `/harry:init`, `/harry:review`, `/harry:status` —
+with a Claude Code built-in — `/harry:review`, `/harry:status` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
-(`/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`)
+(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`)
 accept the bare name when unambiguous.
 
-`/harry:init` does three things: deploys harry's resident laws (`HARRY.md`, which
+`/harry:sync` does three things: deploys harry's resident laws (`HARRY.md`, which
 ships with the plugin) as a snapshot to `~/.claude/harry/HARRY.md` and wires an
 `@`-import to it into your global `~/.claude/CLAUDE.md` so they apply every
 session; adds harry's `.gitignore` block to this project; and offers to migrate
-any legacy spec/plan docs into harry's format. Run it once per project — the laws
-step is idempotent, so re-runs elsewhere are no-ops. (`/harry:init --remove`
-strips this project's `.gitignore` block; the global laws stay.)
+any legacy spec/plan docs into harry's format. Run it once per project to set up,
+and again any time the plugin updates or `HARRY.md` changes — the laws step is
+idempotent, so re-runs elsewhere are no-ops. (`/harry:sync --remove` strips this
+project's `.gitignore` block; the global laws stay.)
 
 The laws are a **snapshot**, not a live reference to the plugin checkout: after
-updating the plugin (or editing `HARRY.md`), re-run `/harry:init` (or
+updating the plugin (or editing `HARRY.md`), re-run `/harry:sync` (or
 `pnpm run install-laws`) to re-deploy and resync — same model as the Codex build
-below. "Release" = re-run init.
+below. "Release" = re-run sync.
 
 Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
 
@@ -73,7 +74,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `status`, `result`,
-`debt`, `review`, `init`, `audit`); the four pipeline skills and the runtime are
+`debt`, `review`, `sync`, `audit`); the four pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -91,7 +92,7 @@ Claude-native or local scripts.
 | `/harry:result [job-id]` | Fetch a completed background job's output |
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
-| `/harry:init [--remove] [--force]` | Set harry up here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
+| `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
 Cheap-first smoke test: `/harry:status` → `/harry:ask` → `/harry:review`/`/harry:debate`.
 
@@ -122,8 +123,8 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · writing-plans · executing · finishing (shared, both builds)
-commands/           review · ask · status · result · debate · debt · init · audit (Claude Code)
-codex-skills/       ask · status · result · debt · review · init · audit (Codex CLI)
+commands/           review · ask · status · result · debate · debt · sync · audit (Claude Code)
+codex-skills/       ask · status · result · debt · review · sync · audit (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        agent runtime — Codex provider (bundled via build.mjs, shared, both builds)
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs

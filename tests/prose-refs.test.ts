@@ -31,7 +31,7 @@ const proseFiles = [
 // Two reference shapes:
 // 1. `${CLAUDE_PLUGIN_ROOT}/<path>` — path is everything after the prefix. Checked
 //    everywhere (fenced or not) — this is how the plugin's own docs express real
-//    runtime invocations (e.g. commands/init.md's `node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"`).
+//    runtime invocations (e.g. commands/sync.md's `node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"`).
 // 2. Bare repo-relative mentions of known top-level dirs, with a recognized file
 //    extension. Checked only OUTSIDE fenced code blocks — inside fences these are
 //    frequently fabricated illustration (e.g. writing-plans/SKILL.md's fictional

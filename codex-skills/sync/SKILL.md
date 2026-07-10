@@ -1,9 +1,9 @@
 ---
-name: init
-description: Set harry up for Codex CLI here — wire the resident laws into ~/.codex/AGENTS.md, add the .gitignore block, and offer to migrate legacy spec/plan docs. Use when the user asks to initialize or set up harry in a project under Codex CLI.
+name: sync
+description: Set up or resync harry for Codex CLI here — wire the resident laws into ~/.codex/AGENTS.md, add the .gitignore block, and offer to migrate legacy spec/plan docs. Use when the user asks to initialize, set up, or resync harry in a project under Codex CLI (e.g. after HARRY.md changes).
 ---
 
-# Init (Codex)
+# Sync (Codex)
 
 ## Phase 1 — Resident laws
 
@@ -24,7 +24,7 @@ It inlines HARRY.md's content into a marker-wrapped block in `~/.codex/AGENTS.md
 about stale global entries harry supersedes).
 
 **Snapshot semantics (shared with the Claude Code build):** this embeds
-HARRY.md's content as of the moment `/init` ran — a snapshot, not a live
+HARRY.md's content as of the moment `/sync` ran — a snapshot, not a live
 reference. The Claude Code build now works the same way: it deploys a HARRY.md
 snapshot and `@`-imports that copy, rather than the live plugin checkout. The only
 difference is form — Codex inlines the content (no `@`-import syntax), Claude Code

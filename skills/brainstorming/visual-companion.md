@@ -55,7 +55,7 @@ without repeating it.
 
 **Finding connection info:** The server writes its startup JSON to `$STATE_DIR/server-info`. If you launched the server in the background and didn't capture stdout, read that file to get the URL and port. When using `--project-dir`, check `<project>/.local/brainstorm/` for the session directory.
 
-**Note:** Pass the project root as `--project-dir` so mockups persist in `.local/brainstorm/` and survive server restarts. Without it, files go to `/tmp` and get cleaned up. harry already gitignores `.local/` (via `/init`), so mockups stay out of version control automatically.
+**Note:** Pass the project root as `--project-dir` so mockups persist in `.local/brainstorm/` and survive server restarts. Without it, files go to `/tmp` and get cleaned up. harry already gitignores `.local/` (via `/sync`), so mockups stay out of version control automatically.
 
 **Launching the server by platform:**
 
