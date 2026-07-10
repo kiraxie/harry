@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-10
+
+### Fixed
+
+- Reworded Codex cost notes in `commands/debate.md`, `commands/review.md`,
+  and `README.md` from Copilot-era "premium-request quota" language to
+  token-quota consumption, now that the Copilot backend is gone.
+
+### Changed
+
+- `/review --simplify`'s Lane B (over-engineering hunt) gained a second
+  dimension: readability (nested ternaries, deep nesting, unclear naming)
+  plus an over-simplification brake, and a new `readab:` finding tag.
+  Renamed the lane to "over-engineering & readability lane" consistently
+  across `references/review-orchestration.md`, `commands/review.md`, and
+  `codex-skills/review/SKILL.md`.
+
 ## [0.9.0] - 2026-07-09
 
 ### Changed
