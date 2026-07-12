@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-12
+
+### Added
+
+- **New law: "Optimize on evidence, never on imagination" (HARRY.md §1)** —
+  the performance-axis counterpart to YAGNI that the law set was missing. No
+  cache/index/memoization/micro-optimization/clever rewrite without a
+  profile or benchmark naming *this* path on a *real* workload; "should be
+  faster" is a §6 banned claim. The simple version is the default, carrying a
+  §4 `DEBT:` ceiling when one is worth naming. Three explicit carve-outs keep
+  it from forbidding legitimate perf work: design-time scale decisions (data
+  model, asymptotic class, round-trip/query shape against a *known* workload),
+  an explicit perf budget or SLO (a §2 requested behavior), and declining
+  gratuitous pessimization (take the equally-clear-but-faster idiom).
+  `references/review-rubric.md` #3 extended to flag premature optimization
+  alongside premature generality.
+
 ## [0.11.0] - 2026-07-10
 
 ### Changed
