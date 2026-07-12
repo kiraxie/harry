@@ -19,7 +19,8 @@ or HEAD mutation.
    where the language offers it; integrates cleanly with surrounding code.
 3. **YAGNI / altitude** (HARRY.md §1–§2). Speculative abstraction (interface with
    one impl, factory for one product, config for a constant), premature
-   generality, dead scaffolding → flag for deletion. **Counter-constraint:**
+   generality or optimization (a cache/index/clever rewrite with no measured
+   bottleneck — §1), dead scaffolding → flag for deletion. **Counter-constraint:**
    grep-unused is necessary but NOT sufficient to cut — run the drift test first.
    A cross-boundary contract, trust-boundary validation, or correctness
    infrastructure stays even if currently uncalled (§2). Do not YAGNI away a
