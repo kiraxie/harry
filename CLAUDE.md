@@ -90,8 +90,9 @@ writing roles leaf, CC↔Codex role-set parity). The three writing roles are lea
 alias, so it routes on effort only) at the path the Codex distribution spike confirms
 (item `subagent-control-hardening`). Two build-specific notes: `harry-security`'s off-frontier
 routing is Anthropic-safety-classifier-specific and **moot on Codex**; capturing the
-*auto-invoked* Explore path (vs. explicit `harry-scout` dispatch) is an optional user-level
-`~/.claude/agents/Explore.md` override that `/sync` installs, not a plugin agent. Note plugin
+*auto-invoked* Explore path (vs. explicit `harry-scout` dispatch) is a *planned* optional
+user-level `~/.claude/agents/Explore.md` override for `/sync` to install (item Task 9b, not yet
+built), not a plugin agent. Note plugin
 agent changes need `/reload-plugins` or a restart (not live like SKILL.md), and are discovered
 from a **real install**, not a hand-edited plugin cache.
 

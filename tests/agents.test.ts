@@ -64,8 +64,16 @@ test("every CC role agent binds an alias model, a valid effort, and leaf-ness wh
       );
       assert.match(denied, /Workflow/, `${role}: disallowedTools includes Workflow`);
     } else {
-      // recon is read-only: a positive tools allowlist, no write capability
+      // recon is read-only: a positive tools allowlist that grants no write or
+      // fan-out capability (a bare truthy check would let a future edit slip Write in).
       assert.ok(fm.tools, `${role}: read-only recon must declare a tools allowlist`);
+      const granted = (fm.tools ?? "").split(",").map((s) => s.trim());
+      for (const forbidden of ["Write", "Edit", "NotebookEdit", "Bash", "Agent", "Workflow"]) {
+        assert.ok(
+          !granted.includes(forbidden),
+          `${role}: read-only role must not grant ${forbidden} (tools: ${fm.tools})`,
+        );
+      }
     }
   }
 });
@@ -103,7 +111,8 @@ test("Codex role agents pin effort only (no model) and mirror the CC role set â€
     "Codex role set must match the CC role set (no drift)",
   );
   for (const role of ROLES) {
-    const fm = readToml(path.join(dir, `${role}.toml`));
+    const file = path.join(dir, `${role}.toml`);
+    const fm = readToml(file);
     assert.equal(fm.name, role, `${role}.toml: name must equal the role`);
     assert.ok(fm.description, `${role}.toml: description required`);
     assert.ok(fm.developer_instructions, `${role}.toml: developer_instructions required`);
@@ -111,6 +120,14 @@ test("Codex role agents pin effort only (no model) and mirror the CC role set â€
       CODEX_EFFORTS.has(fm.model_reasoning_effort ?? ""),
       `${role}.toml: model_reasoning_effort invalid: "${fm.model_reasoning_effort}"`,
     );
-    assert.ok(!("model" in fm), `${role}.toml: must OMIT model (effort-only routing on Codex)`);
+    // Value-agnostic: catch a top-level `model` key in ANY TOML syntax (quoted,
+    // unquoted, single-quoted) â€” readToml only parses double-quoted values, so
+    // relying on it here would let a pinned model slip through the parity guard.
+    const rawToml = readFileSync(file, "utf-8");
+    assert.doesNotMatch(
+      rawToml,
+      /^\s*model\s*=/m,
+      `${role}.toml: must OMIT model (effort-only routing on Codex)`,
+    );
   }
 });
