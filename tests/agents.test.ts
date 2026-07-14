@@ -17,7 +17,16 @@ const ROLES = ["harry-scout", "harry-mech", "harry-writer", "harry-security"];
 const WRITING_ROLES = new Set(["harry-mech", "harry-writer", "harry-security"]);
 const MODEL_ALIASES = new Set(["haiku", "sonnet", "opus"]);
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
-const CODEX_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh", "max", "ultra", "none"]);
+const CODEX_EFFORTS = new Set([
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra",
+  "none",
+]);
 
 // Flat `key: value` YAML frontmatter (all agent frontmatter is flat scalars).
 function readFrontmatter(file: string): Record<string, string> {
@@ -48,7 +57,11 @@ test("every CC role agent binds an alias model, a valid effort, and leaf-ness wh
     assert.ok(EFFORTS.has(fm.effort ?? ""), `${role}: effort must be one of ${[...EFFORTS]}`);
     if (WRITING_ROLES.has(role)) {
       const denied = fm.disallowedTools ?? "";
-      assert.match(denied, /Agent/, `${role}: writing role must be leaf (disallowedTools includes Agent)`);
+      assert.match(
+        denied,
+        /Agent/,
+        `${role}: writing role must be leaf (disallowedTools includes Agent)`,
+      );
       assert.match(denied, /Workflow/, `${role}: disallowedTools includes Workflow`);
     } else {
       // recon is read-only: a positive tools allowlist, no write capability
@@ -76,7 +89,9 @@ test("Codex role agents pin effort only (no model) and mirror the CC role set â€
     (d) => existsSync(d) && readdirSync(d).some((f) => f.endsWith(".toml")),
   );
   if (!dir) {
-    t.skip("Codex .toml agents not authored yet (pending the Codex distribution spike, item Task 2)");
+    t.skip(
+      "Codex .toml agents not authored yet (pending the Codex distribution spike, item Task 2)",
+    );
     return;
   }
   const codexRoles = readdirSync(dir)
