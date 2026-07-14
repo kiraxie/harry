@@ -78,6 +78,23 @@ how much process a task gets. `references/` holds on-demand tables/techniques th
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
 skill files themselves short.
 
+`agents/` holds four **durable-routing role agents** — `harry-scout` (recon, haiku/low,
+read-only), `harry-mech` (mechanical edits, sonnet/low), `harry-writer` (prose/docs,
+sonnet/medium), `harry-security` (security-sensitive, opus/high). Each binds model+effort
+**once** in frontmatter so predictable work self-routes instead of being specified at every
+dispatch (HARRY.md §5); `tests/agents.test.ts` enforces the invariants (alias models only,
+writing roles leaf, CC↔Codex role-set parity). The three writing roles are leaf
+(`disallowedTools: Agent, Workflow`). **Dual-format, both builds:** CC reads `agents/*.md`
+(YAML frontmatter, `effort:`); the Codex build authors the same roles as `*.toml`
+(`model_reasoning_effort`, **model omitted** — Codex has one frontier tier and no stable
+alias, so it routes on effort only) at the path the Codex distribution spike confirms
+(item `subagent-control-hardening`). Two build-specific notes: `harry-security`'s off-frontier
+routing is Anthropic-safety-classifier-specific and **moot on Codex**; capturing the
+*auto-invoked* Explore path (vs. explicit `harry-scout` dispatch) is an optional user-level
+`~/.claude/agents/Explore.md` override that `/sync` installs, not a plugin agent. Note plugin
+agent changes need `/reload-plugins` or a restart (not live like SKILL.md), and are discovered
+from a **real install**, not a hand-edited plugin cache.
+
 `/audit` (`commands/audit.md`) is a whole-codebase structure/architecture audit — a six-round,
 iterative workflow distinct from the four pipeline skills above (it's user-invoked via slash
 command, not tier-triggered). Its round-by-round methodology, JSON schema, and validator script
