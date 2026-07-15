@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-07-15
+
+### Added
+
+- **Durable model+effort routing via role agents.** Four subagents — `scout`
+  (recon, haiku), `mech` (mechanical edits, sonnet), `writer` (prose/docs,
+  sonnet · medium effort), and `security` (security-sensitive, opus · high
+  effort) — each bind their model and reasoning effort once in frontmatter, so
+  predictable work self-routes to the right tier instead of being named at every
+  dispatch. They ship for both builds: Claude Code reads `agents/*.md` (dispatched
+  as `harry:scout` … `harry:security`), and the Codex build carries the same roles
+  as `codex-agents/*.toml` (effort-only, since Codex has a single frontier tier).
+  A new test guards the frontmatter invariants (alias models only, read-only recon,
+  leaf writing roles) and keeps the two builds' role sets from drifting apart.
+- **Opt-in Explore override (`/harry:sync --explore`).** Installs a user-level
+  `~/.claude/agents/Explore.md` that pins the built-in Explore agent to a fast,
+  cheap model, so auto-invoked searches don't inherit an expensive main-session
+  model. It carries a marker line, so `--remove` only ever deletes harry's own
+  copy — never a hand-written Explore.
+
+### Changed
+
+- **HARRY.md §5 routing rule** flips from "specify a `model` at every subagent
+  dispatch" to "route predictable work to a role (which owns its model+effort);
+  specify `model`/`effort` inline only for ad-hoc judgment work." The executing
+  skill routes the same way.
+
 ## [0.12.0] - 2026-07-12
 
 ### Added
