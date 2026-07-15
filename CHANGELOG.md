@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-07-15
+
+### Removed
+
+- The experimental `codex-agents/*.toml` role agents, **verified non-functional
+  against Codex CLI 0.144.4**. Codex has no per-subagent model/effort mechanism: its
+  CLI exposes no subagent dispatch, its plugin `agents/` are frontmatter-less
+  persona/interface cards (no `model`/`effort`), and model/effort is session-level
+  (config profiles). They were authored from web docs that don't match the shipping
+  Codex, so they never routed anything — removed rather than left as dead weight.
+
+### Changed
+
+- The durable model+effort role routing is documented as **Claude Code only**.
+  On the Codex build, HARRY.md §5 (inlined into `~/.codex/AGENTS.md`) routes by task
+  *nature* at the session model — there is no cheap-tier role to bind. `tests/agents.test.ts`
+  is now Claude-Code-only.
+
 ## [0.13.0] - 2026-07-15
 
 ### Added
