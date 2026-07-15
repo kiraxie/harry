@@ -29,6 +29,10 @@ node_modules
 # OS / editor cruft
 .DS_Store
 
+# One-time backups the install scripts drop next to a rewritten file (init.mjs /
+# install.mjs safeWrite); they land in this repo only when harry syncs itself.
+*.bak
+
 # dist/ is intentionally committed — the plugin ships without a build step, so it
 # is deliberately NOT ignored here (see CLAUDE.md). build.mjs writes only
 # dist/companion.cjs.
