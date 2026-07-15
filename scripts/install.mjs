@@ -69,6 +69,16 @@ function explorePath() {
 
 function deployExplore() {
   const dest = explorePath();
+  // Symmetric with removeExplore: never silently clobber a user's own Explore.md.
+  // Overwrite only our own marked file (idempotent redeploy); if an UNMARKED file
+  // exists, it's the user's — leave it and warn instead.
+  if (existsSync(dest) && !readFileSync(dest, "utf8").includes(EXPLORE_MARKER)) {
+    console.warn(
+      `\n  ${dest} already exists and isn't harry's — leaving it untouched.` +
+        `\n  Delete it yourself first if you want harry's Explore override.`,
+    );
+    return;
+  }
   mkdirSync(dirname(dest), { recursive: true });
   safeWrite(dest, readFileSync(EXPLORE_SOURCE, "utf8"));
 }

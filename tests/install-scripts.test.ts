@@ -7,7 +7,7 @@
 // init's explicit target-dir argument.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -238,6 +238,28 @@ test("install.mjs: a plain install does NOT deploy the Explore override (opt-in)
     assert.ok(
       !existsSync(path.join(dir, "agents", "Explore.md")),
       "no Explore override without --explore",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("install.mjs: --explore does NOT overwrite a user's own (unmarked) Explore.md", () => {
+  const dir = tmpDir("harry-install-test-");
+  try {
+    const g = path.join(dir, "CLAUDE.md");
+    writeFileSync(g, "# My rules\n");
+    const explore = path.join(dir, "agents", "Explore.md");
+    const mine = "---\nname: Explore\nmodel: opus\n---\nmy own explore\n";
+    mkdirSync(path.dirname(explore), { recursive: true });
+    writeFileSync(explore, mine);
+
+    withGlobal(g, () => installRun({ explore: true }));
+
+    assert.equal(
+      readFileSync(explore, "utf8"),
+      mine,
+      "an existing unmarked Explore is left untouched, not silently clobbered",
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
