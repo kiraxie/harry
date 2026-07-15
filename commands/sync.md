@@ -12,21 +12,35 @@ Wire harry's resident laws (`HARRY.md`, which ships with the plugin) into your
 global instructions file so they apply every session. **Skip this phase when
 `$ARGUMENTS` contains `--remove`** — laws are global/per-machine, so a per-project
 `/sync --remove` must NOT unwire them. (To unwire laws explicitly, run
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs" --remove`.)
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs" --remove` — that also removes the
+optional Explore override below.)
 
-Otherwise execute:
+Otherwise:
+
+1. **Ask (AskUserQuestion) whether to also install the Explore override.** It's a
+   user-level `~/.claude/agents/Explore.md` that shadows the built-in Explore so
+   *auto-invoked* recon runs on a cheap model (haiku) instead of inheriting your
+   main-session model — the same routing philosophy as the `scout` role, applied to
+   the search path Claude Code triggers on its own. It is **opt-in** because it
+   overrides a built-in agent globally (and a custom Explore loads your user memory,
+   which the built-in skips). Recommend yes for anyone routing recon through harry.
+2. **Run** — add `--explore` only if they opted in:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"            # laws only
+# …or, if they opted into the Explore override:
+node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs" --explore  # laws + Explore override
 ```
 
 It deploys a snapshot of the plugin's current `HARRY.md` to
 `~/.claude/harry/HARRY.md` and inserts a marker-wrapped `@~/.claude/harry/HARRY.md`
 import into `~/.claude/CLAUDE.md` (idempotent — re-running in another project is a
-harmless no-op; it also warns about stale global entries harry supersedes). This
-is a **snapshot**, not a live reference to the plugin checkout: after the plugin
-is updated (or `HARRY.md` is edited), re-run this to re-deploy and resync — same
-resync model as the Codex build. Return its output verbatim.
+harmless no-op; it also warns about stale global entries harry supersedes). With
+`--explore` it additionally writes `~/.claude/agents/Explore.md` (a marked file
+`--remove` can safely strip). This is a **snapshot**, not a live reference to the
+plugin checkout: after the plugin is updated (or `HARRY.md` is edited), re-run this
+to re-deploy and resync — same resync model as the Codex build. Return its output
+verbatim.
 
 ## Phase 2 — Gitignore
 

@@ -105,19 +105,19 @@ test("Codex role agents pin effort only (no model) and mirror the CC role set â€
     // Field-targeted regexes rather than a line parser: developer_instructions is a
     // TOML triple-quoted multiline string, which a single-line `key = "value"` parser
     // would miss.
-    const raw = readFileSync(path.join(dir, `${role}.toml`), "utf-8");
-    const name = raw.match(/^name\s*=\s*"(.+?)"/m);
-    assert.equal(name?.[1], role, `${role}.toml: name must equal the role`);
+    const raw: string = readFileSync(path.join(dir, `${role}.toml`), "utf-8");
+    const nameMatch = raw.match(/^name\s*=\s*"(.+?)"/m);
+    assert.equal(nameMatch?.[1], role, `${role}.toml: name must equal the role`);
     assert.match(raw, /^description\s*=/m, `${role}.toml: description required`);
     assert.match(
       raw,
       /^developer_instructions\s*=/m,
       `${role}.toml: developer_instructions required`,
     );
-    const effort = raw.match(/^model_reasoning_effort\s*=\s*"([^"]+)"/m);
+    const effortMatch = raw.match(/^model_reasoning_effort\s*=\s*"([^"]+)"/m);
     assert.ok(
-      CODEX_EFFORTS.has(effort?.[1] ?? ""),
-      `${role}.toml: model_reasoning_effort invalid: "${effort?.[1]}"`,
+      CODEX_EFFORTS.has(effortMatch?.[1] ?? ""),
+      `${role}.toml: model_reasoning_effort invalid: "${effortMatch?.[1]}"`,
     );
     // Value-agnostic: catch a top-level `model` key in ANY TOML syntax (quoted,
     // unquoted, single-quoted) so a pinned model can't slip through the parity guard.

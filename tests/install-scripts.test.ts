@@ -210,6 +210,69 @@ test("install.mjs: migrates an old direct-repo import to the deployed snapshot o
   }
 });
 
+test("install.mjs: --explore deploys the user-level Explore override (haiku, marked)", () => {
+  const dir = tmpDir("harry-install-test-");
+  try {
+    const g = path.join(dir, "CLAUDE.md");
+    writeFileSync(g, "# My rules\n");
+    const explore = path.join(dir, "agents", "Explore.md");
+
+    withGlobal(g, () => installRun({ explore: true }));
+
+    assert.ok(existsSync(explore), "Explore override written under the fake HOME's agents/");
+    const body = readFileSync(explore, "utf8");
+    assert.ok(body.includes("harry:explore-override"), "carries the harry marker line");
+    assert.ok(body.includes("model: haiku"), "pins the override to haiku");
+    assert.ok(body.includes("name: Explore"), "named Explore to shadow the built-in");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("install.mjs: a plain install does NOT deploy the Explore override (opt-in)", () => {
+  const dir = tmpDir("harry-install-test-");
+  try {
+    const g = path.join(dir, "CLAUDE.md");
+    writeFileSync(g, "# My rules\n");
+    withGlobal(g, () => installRun());
+    assert.ok(
+      !existsSync(path.join(dir, "agents", "Explore.md")),
+      "no Explore override without --explore",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("install.mjs: --remove deletes harry's Explore override but never a user's own", () => {
+  const dir = tmpDir("harry-install-test-");
+  try {
+    const g = path.join(dir, "CLAUDE.md");
+    writeFileSync(g, "# My rules\n");
+    const explore = path.join(dir, "agents", "Explore.md");
+
+    withGlobal(g, () => {
+      // harry's own override → --remove deletes it
+      installRun({ explore: true });
+      assert.ok(existsSync(explore), "override present after --explore");
+      installRun({ remove: true });
+      assert.ok(!existsSync(explore), "--remove deletes harry's marked override");
+
+      // a user's hand-written Explore (no marker) → --remove must NOT touch it
+      const mine = "---\nname: Explore\nmodel: opus\n---\nmy own explore\n";
+      writeFileSync(explore, mine);
+      installRun({ remove: true });
+      assert.equal(
+        readFileSync(explore, "utf8"),
+        mine,
+        "--remove leaves an unmarked user Explore intact",
+      );
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("init.mjs: writes the .gitignore block with a .bak and byte-preserves trailing user bytes", () => {
   const dir = tmpDir("harry-init-test-");
   try {

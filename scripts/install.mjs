@@ -22,7 +22,8 @@
 //
 // Usage:
 //   node scripts/install.mjs            # deploy the snapshot + wire the @ import
-//   node scripts/install.mjs --remove   # uninstall the import block
+//   node scripts/install.mjs --explore  # also deploy the user-level Explore override
+//   node scripts/install.mjs --remove   # uninstall the import block + harry's Explore override
 //   node scripts/install.mjs --selftest # runnable check
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -54,6 +55,31 @@ export function applyImport(existing, { remove = false, importPath = snapshotPat
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
 }
 
+// Optional user-level Explore override (opt-in, `--explore`). A same-name
+// `~/.claude/agents/Explore.md` shadows the built-in Explore so *auto-invoked*
+// recon runs on a cheap model instead of inheriting the main-session model. It's a
+// whole standalone agent file (not a marker block), so its marker is a line inside
+// the file — `--remove` only deletes an Explore.md bearing it, never a user's own.
+const EXPLORE_MARKER = "harry:explore-override";
+const EXPLORE_SOURCE = join(pluginRoot, "scripts", "assets", "explore-override.md");
+
+function explorePath() {
+  return join(dirname(globalPath()), "agents", "Explore.md");
+}
+
+function deployExplore() {
+  const dest = explorePath();
+  mkdirSync(dirname(dest), { recursive: true });
+  safeWrite(dest, readFileSync(EXPLORE_SOURCE, "utf8"));
+}
+
+function removeExplore() {
+  const dest = explorePath();
+  if (existsSync(dest) && readFileSync(dest, "utf8").includes(EXPLORE_MARKER)) {
+    rmSync(dest);
+  }
+}
+
 function warnStale(text) {
   const hits = STALE.filter((s) => s.pattern.test(text));
   if (hits.length) {
@@ -64,16 +90,19 @@ function warnStale(text) {
   }
 }
 
-export function run({ remove = false } = {}) {
+export function run({ remove = false, explore = false } = {}) {
   const path = globalPath();
   const snapshot = snapshotPath();
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
-  if (!remove) {
+  if (remove) {
+    removeExplore();
+  } else {
     warnStale(existing);
     // Deploy: copy the plugin's current HARRY.md into the snapshot location, so
     // the wired-in @ import reads a frozen copy — not the live plugin checkout.
     mkdirSync(dirname(snapshot), { recursive: true });
     safeWrite(snapshot, readFileSync(join(pluginRoot, "HARRY.md"), "utf8"));
+    if (explore) deployExplore();
   }
   mkdirSync(dirname(path), { recursive: true });
   safeWrite(path, applyImport(existing, { remove, importPath: snapshot }));
@@ -105,10 +134,19 @@ function selftest() {
       run();
       out = readFileSync(g, "utf8");
       assert(out.split(BEGIN).length === 2, "idempotent on second run");
+      // --explore deploys the user-level Explore override; --remove deletes it.
+      const explore = join(dir, "agents", "Explore.md");
+      run({ explore: true });
+      assert(existsSync(explore), "--explore deploys the Explore override");
+      assert(
+        readFileSync(explore, "utf8").includes(EXPLORE_MARKER),
+        "Explore override carries the marker",
+      );
       run({ remove: true });
       out = readFileSync(g, "utf8");
       assert(!out.includes(BEGIN), "remove strips the block");
       assert(out.includes("Use TDD."), "remove keeps existing content");
+      assert(!existsSync(explore), "remove deletes harry's Explore override");
     } finally {
       if (env === undefined) delete process.env.HARRY_GLOBAL;
       else process.env.HARRY_GLOBAL = env;
@@ -126,9 +164,14 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (args.includes("--selftest")) {
     selftest();
   } else {
-    const path = run({ remove: args.includes("--remove") });
-    console.log(
-      `${args.includes("--remove") ? "Removed harry import from" : "Wired HARRY.md into"} ${path}`,
-    );
+    const remove = args.includes("--remove");
+    const explore = args.includes("--explore");
+    const path = run({ remove, explore });
+    const what = remove
+      ? "Removed harry import from"
+      : explore
+        ? "Wired HARRY.md + deployed Explore override into"
+        : "Wired HARRY.md into";
+    console.log(`${what} ${path}`);
   }
 }
