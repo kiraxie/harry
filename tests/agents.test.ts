@@ -83,15 +83,6 @@ test("every CC role agent binds an alias model, a valid effort, and leaf-ness wh
 // green); it activates the moment a Codex agents dir appears, guarding CC/Codex drift.
 const CODEX_DIR_CANDIDATES = ["codex-agents", "agents"];
 
-function readToml(file: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of readFileSync(file, "utf-8").split("\n")) {
-    const kv = line.match(/^([A-Za-z_]+)\s*=\s*"(.*)"\s*$/);
-    if (kv) out[kv[1] as string] = kv[2] as string;
-  }
-  return out;
-}
-
 test("Codex role agents pin effort only (no model) and mirror the CC role set — or are pending", (t) => {
   const dir = CODEX_DIR_CANDIDATES.map((d) => path.join(repoRoot, d)).find(
     (d) => existsSync(d) && readdirSync(d).some((f) => f.endsWith(".toml")),
@@ -111,23 +102,29 @@ test("Codex role agents pin effort only (no model) and mirror the CC role set �
     "Codex role set must match the CC role set (no drift)",
   );
   for (const role of ROLES) {
-    const file = path.join(dir, `${role}.toml`);
-    const fm = readToml(file);
-    assert.equal(fm.name, role, `${role}.toml: name must equal the role`);
-    assert.ok(fm.description, `${role}.toml: description required`);
-    assert.ok(fm.developer_instructions, `${role}.toml: developer_instructions required`);
+    // Field-targeted regexes rather than a line parser: developer_instructions is a
+    // TOML triple-quoted multiline string, which a single-line `key = "value"` parser
+    // would miss.
+    const raw = readFileSync(path.join(dir, `${role}.toml`), "utf-8");
+    const name = raw.match(/^name\s*=\s*"(.+?)"/m);
+    assert.equal(name?.[1], role, `${role}.toml: name must equal the role`);
+    assert.match(raw, /^description\s*=/m, `${role}.toml: description required`);
+    assert.match(
+      raw,
+      /^developer_instructions\s*=/m,
+      `${role}.toml: developer_instructions required`,
+    );
+    const effort = raw.match(/^model_reasoning_effort\s*=\s*"([^"]+)"/m);
     assert.ok(
-      CODEX_EFFORTS.has(fm.model_reasoning_effort ?? ""),
-      `${role}.toml: model_reasoning_effort invalid: "${fm.model_reasoning_effort}"`,
+      CODEX_EFFORTS.has(effort?.[1] ?? ""),
+      `${role}.toml: model_reasoning_effort invalid: "${effort?.[1]}"`,
     );
     // Value-agnostic: catch a top-level `model` key in ANY TOML syntax (quoted,
-    // unquoted, single-quoted) — readToml only parses double-quoted values, so
-    // relying on it here would let a pinned model slip through the parity guard.
-    const rawToml = readFileSync(file, "utf-8");
+    // unquoted, single-quoted) so a pinned model can't slip through the parity guard.
     assert.doesNotMatch(
-      rawToml,
+      raw,
       /^\s*model\s*=/m,
-      `${role}.toml: must OMIT model (effort-only routing on Codex)`,
+      `${role}.toml: must OMIT model (effort-only on Codex)`,
     );
   }
 });

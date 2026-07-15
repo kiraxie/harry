@@ -85,9 +85,10 @@ sonnet/medium), `harry-security` (security-sensitive, opus/high). Each binds mod
 dispatch (HARRY.md §5); `tests/agents.test.ts` enforces the invariants (alias models only,
 writing roles leaf, CC↔Codex role-set parity). The three writing roles are leaf
 (`disallowedTools: Agent, Workflow`). **Dual-format, both builds:** CC reads `agents/*.md`
-(YAML frontmatter, `effort:`); the Codex build authors the same roles as `*.toml`
+(YAML frontmatter, `effort:`); the Codex build carries the same roles as `codex-agents/*.toml`
 (`model_reasoning_effort`, **model omitted** — Codex has one frontier tier and no stable
-alias, so it routes on effort only) at the path the Codex distribution spike confirms
+alias, so it routes on effort only). Whether Codex discovers that dir automatically or needs a
+`.codex-plugin/plugin.json` field, plus live discoverability, is pending the distribution spike
 (item `subagent-control-hardening`). Two build-specific notes: `harry-security`'s off-frontier
 routing is Anthropic-safety-classifier-specific and **moot on Codex**; capturing the
 *auto-invoked* Explore path (vs. explicit `harry-scout` dispatch) is a *planned* optional
