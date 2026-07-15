@@ -82,22 +82,26 @@ skill files themselves short.
 read-only), `mech` (mechanical edits, sonnet/low), `writer` (prose/docs,
 sonnet/medium), `security` (security-sensitive, opus/high). CC namespaces plugin agents,
 so they dispatch as `harry:scout` … `harry:security` (the bare frontmatter `name` avoids
-a redundant `harry:harry-*`). Each binds model+effort
-**once** in frontmatter so predictable work self-routes instead of being specified at every
-dispatch (HARRY.md §5); `tests/agents.test.ts` enforces the invariants (alias models only,
-writing roles leaf, CC↔Codex role-set parity). The three writing roles are leaf
-(`disallowedTools: Agent, Workflow`). **Dual-format, both builds:** CC reads `agents/*.md`
-(YAML frontmatter, `effort:`); the Codex build carries the same roles as `codex-agents/*.toml`
-(`model_reasoning_effort`, **model omitted** — Codex has one frontier tier and no stable
-alias, so it routes on effort only). Whether Codex discovers that dir automatically or needs a
-`.codex-plugin/plugin.json` field, plus live discoverability, is pending the distribution spike
-(item `subagent-control-hardening`). Two build-specific notes: `security`'s off-frontier
-routing is Anthropic-safety-classifier-specific and **moot on Codex**; capturing the
-*auto-invoked* Explore path (vs. explicit `scout` dispatch) is a *planned* optional
-user-level `~/.claude/agents/Explore.md` override for `/sync` to install (item Task 9b, not yet
-built), not a plugin agent. Note plugin
-agent changes need `/reload-plugins` or a restart (not live like SKILL.md), and are discovered
-from a **real install**, not a hand-edited plugin cache.
+a redundant `harry:harry-*`). Each binds model+effort **once** in frontmatter so predictable
+work self-routes instead of being specified at every dispatch (HARRY.md §5);
+`tests/agents.test.ts` enforces the invariants (alias models only, read-only recon grants no
+write/spawn tools, writing roles leaf via `disallowedTools: Agent, Workflow`).
+
+**Claude Code only — verified against live Codex 0.144.4.** Codex has no per-subagent
+model/effort mechanism: `codex --help` exposes no subagent dispatch, its plugin `agents/`
+are frontmatter-less persona/interface cards (no `model`/`effort`), and `codex debug
+prompt-input` shows harry contributing skills + AGENTS.md laws but **no agents**. Model/effort
+on Codex is session-level (config profiles / `--profile`). So the routing is **prose-only on
+Codex** — HARRY.md §5 (inlined into `~/.codex/AGENTS.md` by `install-codex.mjs`) tells the
+orchestrator to route by *nature*, but there is no cheap-tier role to bind. (An earlier draft
+shipped `codex-agents/*.toml` with `model_reasoning_effort`, based on web docs that don't match
+0.144.4 — removed as non-functional.)
+
+The *auto-invoked* Explore path (vs. explicit `scout` dispatch) is captured on CC by an
+opt-in user-level `~/.claude/agents/Explore.md` override that `/harry:sync --explore` installs
+(marker-guarded so `--remove` never deletes a user's own). Note plugin agent changes need
+`/reload-plugins` or a restart (not live like SKILL.md), and are discovered from a **real
+install** (or `claude plugin update`), not a hand-edited plugin cache.
 
 `/audit` (`commands/audit.md`) is a whole-codebase structure/architecture audit — a six-round,
 iterative workflow distinct from the four pipeline skills above (it's user-invoked via slash

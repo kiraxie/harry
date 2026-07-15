@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// harry ships four durable-routing role agents. Each binds model+effort ONCE in
-// frontmatter so predictable work self-routes (see .local item
-// subagent-control-hardening). Nothing else enforces these invariants, so this test
-// is the enforcement: model must be a churn-safe alias (never a pinned ID), writing
-// roles must be leaf (can't recursively fan out), and the CC/Codex role sets must not
-// drift apart.
+// harry ships four durable-routing role agents (Claude Code only — Codex has no
+// per-subagent model/effort binding; its routing is prose-only via HARRY.md §5).
+// Each binds model+effort ONCE in frontmatter so predictable work self-routes.
+// Nothing else enforces these invariants, so this test is the enforcement: model
+// must be a churn-safe alias (never a pinned ID), and writing roles must be leaf
+// (can't recursively fan out).
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -17,16 +17,6 @@ const ROLES = ["scout", "mech", "writer", "security"];
 const WRITING_ROLES = new Set(["mech", "writer", "security"]);
 const MODEL_ALIASES = new Set(["haiku", "sonnet", "opus"]);
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
-const CODEX_EFFORTS = new Set([
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-  "ultra",
-  "none",
-]);
 
 // Flat `key: value` YAML frontmatter (all agent frontmatter is flat scalars).
 function readFrontmatter(file: string): Record<string, string> {
@@ -75,56 +65,5 @@ test("every CC role agent binds an alias model, a valid effort, and leaf-ness wh
         );
       }
     }
-  }
-});
-
-// Codex .toml agents are authored per the Codex distribution spike (item Task 2), at a
-// path that spike confirms. Until they exist this test SKIPS (announced, not silently
-// green); it activates the moment a Codex agents dir appears, guarding CC/Codex drift.
-const CODEX_DIR_CANDIDATES = ["codex-agents", "agents"];
-
-test("Codex role agents pin effort only (no model) and mirror the CC role set — or are pending", (t) => {
-  const dir = CODEX_DIR_CANDIDATES.map((d) => path.join(repoRoot, d)).find(
-    (d) => existsSync(d) && readdirSync(d).some((f) => f.endsWith(".toml")),
-  );
-  if (!dir) {
-    t.skip(
-      "Codex .toml agents not authored yet (pending the Codex distribution spike, item Task 2)",
-    );
-    return;
-  }
-  const codexRoles = readdirSync(dir)
-    .filter((f) => f.endsWith(".toml"))
-    .map((f) => f.replace(/\.toml$/, ""));
-  assert.deepEqual(
-    [...codexRoles].sort(),
-    [...ROLES].sort(),
-    "Codex role set must match the CC role set (no drift)",
-  );
-  for (const role of ROLES) {
-    // Field-targeted regexes rather than a line parser: developer_instructions is a
-    // TOML triple-quoted multiline string, which a single-line `key = "value"` parser
-    // would miss.
-    const raw: string = readFileSync(path.join(dir, `${role}.toml`), "utf-8");
-    const nameMatch = raw.match(/^name\s*=\s*"(.+?)"/m);
-    assert.equal(nameMatch?.[1], role, `${role}.toml: name must equal the role`);
-    assert.match(raw, /^description\s*=/m, `${role}.toml: description required`);
-    assert.match(
-      raw,
-      /^developer_instructions\s*=/m,
-      `${role}.toml: developer_instructions required`,
-    );
-    const effortMatch = raw.match(/^model_reasoning_effort\s*=\s*"([^"]+)"/m);
-    assert.ok(
-      CODEX_EFFORTS.has(effortMatch?.[1] ?? ""),
-      `${role}.toml: model_reasoning_effort invalid: "${effortMatch?.[1]}"`,
-    );
-    // Value-agnostic: catch a top-level `model` key in ANY TOML syntax (quoted,
-    // unquoted, single-quoted) so a pinned model can't slip through the parity guard.
-    assert.doesNotMatch(
-      raw,
-      /^\s*model\s*=/m,
-      `${role}.toml: must OMIT model (effort-only on Codex)`,
-    );
   }
 });
