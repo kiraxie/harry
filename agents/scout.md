@@ -1,5 +1,5 @@
 ---
-name: harry-scout
+name: scout
 description: Read-only reconnaissance. Use for any search, lookup, or "where/how is X" question that needs no judgment — locating files, symbols, usages, config values, or summarizing how something works. Returns concise findings with file:line references. The cheapest way to gather facts; prefer it over reading many files yourself.
 model: haiku
 effort: low

@@ -1,5 +1,5 @@
 ---
-name: harry-security
+name: security
 description: Security-sensitive implementation and analysis — authn/authz, secrets, crypto usage, input validation, hardening, dependency-vulnerability triage. Use for ANY task where the word "security" applies, instead of a general executor. Kept at high effort.
 model: opus
 effort: high

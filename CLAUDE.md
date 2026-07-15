@@ -78,9 +78,11 @@ how much process a task gets. `references/` holds on-demand tables/techniques th
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
 skill files themselves short.
 
-`agents/` holds four **durable-routing role agents** — `harry-scout` (recon, haiku/low,
-read-only), `harry-mech` (mechanical edits, sonnet/low), `harry-writer` (prose/docs,
-sonnet/medium), `harry-security` (security-sensitive, opus/high). Each binds model+effort
+`agents/` holds four **durable-routing role agents** — `scout` (recon, haiku/low,
+read-only), `mech` (mechanical edits, sonnet/low), `writer` (prose/docs,
+sonnet/medium), `security` (security-sensitive, opus/high). CC namespaces plugin agents,
+so they dispatch as `harry:scout` … `harry:security` (the bare frontmatter `name` avoids
+a redundant `harry:harry-*`). Each binds model+effort
 **once** in frontmatter so predictable work self-routes instead of being specified at every
 dispatch (HARRY.md §5); `tests/agents.test.ts` enforces the invariants (alias models only,
 writing roles leaf, CC↔Codex role-set parity). The three writing roles are leaf
@@ -89,9 +91,9 @@ writing roles leaf, CC↔Codex role-set parity). The three writing roles are lea
 (`model_reasoning_effort`, **model omitted** — Codex has one frontier tier and no stable
 alias, so it routes on effort only). Whether Codex discovers that dir automatically or needs a
 `.codex-plugin/plugin.json` field, plus live discoverability, is pending the distribution spike
-(item `subagent-control-hardening`). Two build-specific notes: `harry-security`'s off-frontier
+(item `subagent-control-hardening`). Two build-specific notes: `security`'s off-frontier
 routing is Anthropic-safety-classifier-specific and **moot on Codex**; capturing the
-*auto-invoked* Explore path (vs. explicit `harry-scout` dispatch) is a *planned* optional
+*auto-invoked* Explore path (vs. explicit `scout` dispatch) is a *planned* optional
 user-level `~/.claude/agents/Explore.md` override for `/sync` to install (item Task 9b, not yet
 built), not a plugin agent. Note plugin
 agent changes need `/reload-plugins` or a restart (not live like SKILL.md), and are discovered

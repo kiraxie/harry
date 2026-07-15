@@ -13,8 +13,8 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const ROLES = ["harry-scout", "harry-mech", "harry-writer", "harry-security"];
-const WRITING_ROLES = new Set(["harry-mech", "harry-writer", "harry-security"]);
+const ROLES = ["scout", "mech", "writer", "security"];
+const WRITING_ROLES = new Set(["mech", "writer", "security"]);
 const MODEL_ALIASES = new Set(["haiku", "sonnet", "opus"]);
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const CODEX_EFFORTS = new Set([

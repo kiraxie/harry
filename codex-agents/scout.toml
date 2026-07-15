@@ -1,4 +1,4 @@
-name = "harry-scout"
+name = "scout"
 description = "Read-only reconnaissance — any search, lookup, or 'where/how is X' question that needs no judgment. Returns concise findings with file:line references."
 model_reasoning_effort = "low"
 developer_instructions = """
