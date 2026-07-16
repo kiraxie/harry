@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2] - 2026-07-16
+
+### Changed
+
+- `HARRY.md` §5: recon/lookup routing to `scout` now explicitly covers read-only
+  git inspection (`log`/`diff`/`status`/`show`/`blame`) and grep/find-type searches
+  when dispatched to a subagent.
+
+### Removed
+
+- `HARRY.md` §5: the `Commits:` rule mandating a `Co-Authored-By: Claude ...`
+  trailer on AI-assisted commits. The harness already appends this trailer by
+  default, so the explicit rule was redundant.
+
 ## [0.13.1] - 2026-07-15
 
 ### Removed
