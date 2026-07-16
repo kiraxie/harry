@@ -295,26 +295,29 @@ test("install.mjs: --remove deletes harry's Explore override but never a user's 
   }
 });
 
-test("init.mjs: writes the .gitignore block with a .bak and byte-preserves trailing user bytes", () => {
+test("init.mjs: appends plain ignore entries (no harry branding) with a .bak", () => {
   const dir = tmpDir("harry-init-test-");
   try {
     const gi = path.join(dir, ".gitignore");
-    const original = "node_modules/\n\n\n"; // trailing blank lines the user chose
+    const original = "node_modules/\n";
     writeFileSync(gi, original);
 
     initRun(dir);
 
-    assert.ok(readFileSync(gi, "utf8").includes(BEGIN), "block added");
+    const out = readFileSync(gi, "utf8");
+    assert.ok(out.includes(".local/"), "entry added");
+    assert.ok(out.includes("*worktrees/"), "entry added");
+    assert.ok(out.includes("CLAUDE.local.md"), "entry added");
+    assert.ok(!out.includes("harry"), "no harry branding written to the shared .gitignore");
     assert.ok(existsSync(`${gi}.bak`), "one-time .bak created");
     assert.equal(readFileSync(`${gi}.bak`, "utf8"), original, ".bak holds the pristine original");
     assert.ok(!existsSync(`${gi}.tmp`), "no .tmp residue");
 
     initRun(dir, { remove: true });
-    assert.equal(
-      readFileSync(gi, "utf8"),
-      original,
-      "install + remove round-trips to the original bytes exactly",
-    );
+    const removed = readFileSync(gi, "utf8");
+    assert.ok(removed.includes("node_modules/"), "unrelated entries kept");
+    assert.ok(!removed.includes("*worktrees/"), "remove strips harry's entries");
+    assert.ok(!removed.includes("CLAUDE.local.md"), "remove strips harry's entries");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

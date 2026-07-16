@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.3] - 2026-07-16
+
+### Changed
+
+- `scripts/init.mjs` (the `.gitignore` initializer) no longer wraps its entries
+  in a `# >>> harry >>>` … `# <<< harry <<<` marker block. `.gitignore` is a
+  team-shared, git-tracked file, and the harry branding there confused
+  teammates who don't use the plugin. It now just checks each of the three
+  entries (`.local/`, `*worktrees/`, `CLAUDE.local.md`) for an exact-match line
+  anywhere in the file and appends whatever is missing — plain ignore rules,
+  no tool-name comment. Trade-off: `--remove` now strips any line that exactly
+  matches one of those three entries, even one the user typed in by hand,
+  since there is no marker left to distinguish origin. The global-file
+  installers (`install.mjs` for `~/.claude/CLAUDE.md`, `install-codex.mjs` for
+  `~/.codex/AGENTS.md`) are unaffected — those files are per-machine, not
+  shared with a team, so the marker block stays there.
+
 ## [0.13.2] - 2026-07-16
 
 ### Changed

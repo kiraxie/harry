@@ -44,18 +44,21 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs" [--remove] [--force] [targetDir]
 
 What it does:
 
-- Appends a marker-wrapped block to the target project's `.gitignore` listing the
+- Appends plain entries (no marker block, no tool-name comment — `.gitignore` is
+  shared with the whole team) to the target project's `.gitignore` listing the
   paths harry keeps out of version control: `.local/` (`items/`, `archive/`,
   `tmp/` scratch, `INDEX.md`/`HISTORY.md`),
   `*worktrees/` (worktree sandboxes, at any depth — covers both `.worktrees/`
   and `.claude/worktrees/`), and `CLAUDE.local.md` (the user's per-project
   specialization rules — same file harry uses for Claude Code, still
   gitignored the same way here).
-- Idempotent — re-running replaces the block in place rather than duplicating it.
-- `--remove` strips the block cleanly, leaving the rest of `.gitignore` untouched.
+- Idempotent per entry — an entry already present anywhere in the file (exact
+  line match) is never duplicated.
+- `--remove` strips any line matching one of those three entries. Trade-off: with
+  no marker to distinguish origin, this also removes a line the user typed in by
+  hand that happens to match exactly.
 
-Return the command output verbatim. Do not edit `.gitignore` by hand — the script
-owns that block.
+Return the command output verbatim.
 
 ## Phase 3 — Legacy migration
 
