@@ -142,9 +142,13 @@ field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 
 - `debate` has no Codex skill (its "self" voice is Claude/opus by design).
-- Codex `review --full` drops the CC self-review leg (no `SlashCommand` tool on
-  Codex) and drops `--harry-fix` (redundant when the orchestrator already is
-  Codex) — only `--fix` remains.
+- `review --full` never had a CC `/code-review max` leg on either build: that
+  command sets `disable-model-invocation`, which blocks both the `SlashCommand`
+  and `Skill` tools from invoking it programmatically — no agent can drive it,
+  on Codex or Claude Code, regardless of project settings. Both builds' `--full`
+  run the same three lanes (adversarial + simplify dual-lane). Codex also drops
+  `--harry-fix` (redundant when the orchestrator already is Codex) — only
+  `--fix` remains there.
 - `review`'s RO/RW boundary is instruction-only on **both** builds. Claude
   Code's `allowed-tools` frontmatter is a single static allowlist that must
   include the write tools (`Edit`/`git add`/`git commit`) for the RW `--fix`

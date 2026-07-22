@@ -30,7 +30,7 @@ envelope — never parse a leg's output as JSON without first checking it succee
 
 The triggering condition (when the active angle runs as two lanes) is worded per build:
 
-- **Claude Code build:** Whenever the active angle is `--simplify` — standalone, under a fix backend, or as two of `--full`'s four lanes — it runs as **two lanes**, not one.
+- **Claude Code build:** Whenever the active angle is `--simplify` — standalone, under a fix backend, or as two of `--full`'s three lanes — it runs as **two lanes**, not one.
 - **Codex build:** Whenever the active angle is simplify — standalone, under an apply request, or as two of full's three dispatches — it runs as **two lanes**, not one.
 
 This is the single definition; every call site below just says "run the simplify dual-lane."
@@ -49,7 +49,7 @@ Parse the structured envelope (see above).
 
 **Lane B — over-engineering & readability lane.** The lane title and dispatch mechanism differ by build:
 
-- **Claude Code build:** **Lane B — CC-native over-engineering & readability lane** (`Agent` tool, `model: sonnet` — a heuristic hunt, not a design judgment call, so it does not need the session's most capable model; no Codex backend, no extra Codex quota — same cost class as `--full`'s `/code-review max` lane)
+- **Claude Code build:** **Lane B — CC-native over-engineering & readability lane** (`Agent` tool, `model: sonnet` — a heuristic hunt, not a design judgment call, so it does not need the session's most capable model; no Codex backend, no extra Codex quota)
 - **Codex build:** **Lane B — over-engineering & readability lane** (a lightweight sub-agent — this is a heuristic hunt, not a design judgment call, so it doesn't need your most capable model; no Codex backend involved, no extra Codex quota consumed)
 
 Before dispatching, write the target diff to a file so Lane B can read it, matching
