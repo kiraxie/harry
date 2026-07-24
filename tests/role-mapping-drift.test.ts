@@ -60,7 +60,7 @@ test("A1 · HARRY.md §5 'Route by role' bullet names exactly the canonical role
   }
   assert.ok(
     !CODEX_MODEL_RE.test(bullet),
-    "Route-by-role bullet must not name a Codex model id (gpt-5.6-*)",
+    "Route-by-role bullet must not name a Codex model id (gpt-<major>[.<minor>]-<name>)",
   );
 });
 
