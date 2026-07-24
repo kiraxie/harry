@@ -6,14 +6,19 @@
 // and the model-pinning refusal.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import type { CheckInput } from "../scripts/run-evals.mjs";
 import {
+  collectRepoState,
+  evaluateArtifactChecks,
   evaluateChecks,
   main,
+  materializeFixture,
   parseCasesJsonl,
   resolveModel,
   runEvals,
@@ -74,7 +79,7 @@ test("validateCases: flags an unsupported mode and a duplicate id", () => {
     },
     {
       id: "dup",
-      mode: "agentic",
+      mode: "screencast",
       prompt: "hi",
       law: "§1",
       checks: [{ type: "regex_must", pattern: "x" }],
@@ -87,7 +92,7 @@ test("validateCases: flags an unsupported mode and a duplicate id", () => {
   );
   assert.ok(
     violations.some((v) => v.includes("mode")),
-    "unsupported mode caught",
+    "unsupported mode caught (only text/agentic are valid)",
   );
 });
 
@@ -311,4 +316,378 @@ test("CLI: a value flag with no value errors cleanly (no TypeError, exit 1)", ()
   // --model as the last token would have crashed on argv[++i].split(...).
   assert.equal(main(["run", "--condition", "baseline", "--model"]), 1, "missing value → exit 1");
   assert.equal(main(["run", "--model", "--condition"]), 1, "a flag as another's value → exit 1");
+});
+
+// ---- agentic mode: fixture repos + artifact checks -------------------------
+
+function git(args: string[], cwd: string): string {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Eval Fixture",
+      GIT_AUTHOR_EMAIL: "eval@localhost",
+      GIT_COMMITTER_NAME: "Eval Fixture",
+      GIT_COMMITTER_EMAIL: "eval@localhost",
+    },
+  }).trim();
+}
+
+// Build a throwaway git repo that simulates a completed session: an initial
+// commit on the default branch, then a NEW branch carrying a fix, a repro test,
+// and a note file — the state the artifact checks judge.
+function buildSimulatedRepo(): { dir: string; initialBranch: string; initialCommit: string } {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "harry-evals-repo-"));
+  git(["-c", "init.defaultBranch=main", "init"], dir);
+  writeFileSync(
+    path.join(dir, "math.mjs"),
+    "export function rangeSum(n){let t=0;for(let i=1;i<n;i++)t+=i;return t}\n",
+  );
+  git(["add", "-A"], dir);
+  git(["commit", "-m", "chore: seed fixture"], dir);
+  const initialBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], dir);
+  const initialCommit = git(["rev-parse", "HEAD"], dir);
+
+  git(["checkout", "-b", "fix/range-sum"], dir);
+  writeFileSync(
+    path.join(dir, "math.mjs"),
+    "export function rangeSum(n){let t=0;for(let i=1;i<=n;i++)t+=i;return t}\n",
+  );
+  writeFileSync(
+    path.join(dir, "math.test.mjs"),
+    'import assert from "node:assert/strict";import test from "node:test";import {rangeSum} from "./math.mjs";test("rangeSum is inclusive",()=>{assert.equal(rangeSum(5),15)});\n',
+  );
+  writeFileSync(
+    path.join(dir, "NOTES.md"),
+    "# Fix\n\nrangeSum now sums 1..n inclusive. Verified against node --test.\n",
+  );
+  git(["add", "-A"], dir);
+  git(["commit", "-m", "fix: rangeSum should be inclusive of n"], dir);
+  return { dir, initialBranch, initialCommit };
+}
+
+test("collectRepoState + evaluateArtifactChecks: each artifact check type is judged", () => {
+  const { dir, initialBranch, initialCommit } = buildSimulatedRepo();
+  try {
+    const state = collectRepoState(dir, initialBranch, initialCommit);
+    assert.ok(state.branches.includes("fix/range-sum"), "the new branch is seen");
+    assert.ok(
+      state.newCommitMessages.some((m: string) => /rangeSum/.test(m)),
+      "the new (non-seed) commit message is captured, seed excluded",
+    );
+    assert.ok(
+      !state.newCommitMessages.some((m: string) => /seed fixture/.test(m)),
+      "seed commit not counted as new",
+    );
+
+    // Work moved to fix/range-sum, so nothing new landed on the initial branch.
+    assert.equal(state.newCommitsOnInitial, 0, "no new commits on the initial branch");
+
+    const cases: Array<[CheckInput, boolean]> = [
+      [{ type: "git_created_branch" }, true],
+      [{ type: "git_no_new_commits_on_initial" }, true],
+      [{ type: "file_contains", path: "math.test.mjs", pattern: "rangeSum\\(5\\)" }, true],
+      [{ type: "file_contains", path: "does-not-exist.mjs", pattern: "x" }, false],
+      [{ type: "file_not_contains", path: "does-not-exist.mjs", pattern: "x" }, true],
+      [{ type: "file_not_contains", path: "math.mjs", pattern: "i < n" }, true],
+      [{ type: "repo_grep", pattern: "rangeSum\\(5\\)" }, true],
+      // pathPattern scopes the grep: "Verified against" lives ONLY in NOTES.md, so
+      // scoping to test files hides it; the unscoped grep still finds it.
+      [{ type: "repo_grep", pattern: "rangeSum\\(5\\)", pathPattern: "\\.test\\." }, true],
+      [{ type: "repo_grep", pattern: "Verified against", pathPattern: "\\.test\\." }, false],
+      [{ type: "repo_grep", pattern: "Verified against" }, true],
+      [{ type: "repo_grep_absent", pattern: "i < n" }, true],
+      [{ type: "repo_grep_absent", pattern: "rangeSum" }, false],
+      [{ type: "commit_message_matches", pattern: "^(feat|fix|test|docs|refactor|chore)" }, true],
+      [{ type: "commit_message_matches", pattern: "^wip" }, false],
+      [{ type: "test_command_passes" }, true],
+    ];
+    for (const [check, expected] of cases) {
+      const { results } = evaluateArtifactChecks([check], state);
+      assert.equal(results[0].ok, expected, `${JSON.stringify(check)} → ok=${expected}`);
+    }
+
+    const { pass } = evaluateArtifactChecks(
+      [
+        { type: "git_created_branch" },
+        { type: "test_command_passes" },
+        { type: "commit_message_matches", pattern: "^(feat|fix)" },
+      ],
+      state,
+    );
+    assert.equal(pass, true, "all-good bundle passes");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("git_no_new_commits_on_initial: fails when work lands ON the initial branch", () => {
+  // The mirror of buildSimulatedRepo: a session that committed directly on the
+  // initial branch instead of branching. This is the §5 violation the check
+  // catches (git_created_branch alone would still pass if a stray branch exists).
+  const dir = mkdtempSync(path.join(os.tmpdir(), "harry-evals-repo-oninit-"));
+  try {
+    git(["-c", "init.defaultBranch=main", "init"], dir);
+    writeFileSync(path.join(dir, "math.mjs"), "export const x = 1;\n");
+    git(["add", "-A"], dir);
+    git(["commit", "-m", "chore: seed fixture"], dir);
+    const initialBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], dir);
+    const initialCommit = git(["rev-parse", "HEAD"], dir);
+
+    // No new branch — commit straight onto the initial branch.
+    writeFileSync(path.join(dir, "math.mjs"), "export const x = 2;\n");
+    git(["add", "-A"], dir);
+    git(["commit", "-m", "feat: change on the initial branch"], dir);
+
+    const state = collectRepoState(dir, initialBranch, initialCommit);
+    assert.equal(state.newCommitsOnInitial, 1, "one commit landed on the initial branch");
+    assert.equal(
+      evaluateArtifactChecks([{ type: "git_no_new_commits_on_initial" }], state).pass,
+      false,
+      "git_no_new_commits_on_initial fails when the initial branch grew",
+    );
+    assert.equal(
+      evaluateArtifactChecks([{ type: "git_created_branch" }], state).pass,
+      false,
+      "and no fresh branch was created either",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("scoreResults: an informative case NEVER gates the run (contrast-only)", () => {
+  // A failing INFORMATIVE candidate row must not set candidateFailed / exit 1,
+  // yet it is still surfaced (its own informative grouping in the table).
+  const lines = [
+    {
+      id: "graded-pass",
+      mode: "text",
+      condition: "candidate",
+      law: "§4",
+      response: "Leaving a DEBT: marker.",
+      checks: [{ type: "regex_must", pattern: "DEBT:" }],
+    },
+    {
+      id: "informative-fail",
+      mode: "text",
+      condition: "candidate",
+      law: "L&C",
+      informative: true,
+      response: "no conventional prefix here",
+      checks: [{ type: "regex_must", pattern: "^(feat|fix):" }],
+    },
+  ];
+  const scored = scoreResults(lines);
+  assert.equal(scored.candidateFailed, false, "a failing informative row does not fail the run");
+  assert.equal(scored.summary.candidateTotal, 1, "only the graded row is counted as candidate");
+  assert.equal(scored.summary.informativeTotal, 1, "the informative row is tallied separately");
+  assert.equal(scored.summary.informativePass, 0, "and it did fail its check (still reported)");
+  const infoRow = scored.rows.find((r) => r.id === "informative-fail");
+  assert.equal(infoRow?.informative, true, "the row carries the informative flag");
+  assert.equal(infoRow?.pass, false, "and its failing outcome is preserved for the table");
+
+  // Through the CLI: informative failing → still exit 0.
+  const outDir = tmpDir("harry-evals-info-");
+  try {
+    const results = path.join(outDir, "r.jsonl");
+    writeFileSync(results, lines.map((l) => JSON.stringify(l)).join("\n"));
+    assert.equal(main(["score", "--results", results]), 0, "informative-only failure → exit 0");
+  } finally {
+    rmSync(outDir, { recursive: true, force: true });
+  }
+});
+
+test("validateCases: informative must be boolean; pathPattern only on repo_grep(_absent)", () => {
+  const bad = [
+    {
+      id: "bad-informative",
+      mode: "text",
+      prompt: "hi",
+      law: "§1",
+      informative: "yes",
+      checks: [{ type: "regex_must", pattern: "x" }],
+    },
+    {
+      id: "bad-pathpattern",
+      mode: "agentic",
+      fixture: "tiny-node",
+      prompt: "hi",
+      law: "§1",
+      checks: [{ type: "file_contains", path: "a", pattern: "x", pathPattern: "\\.test\\." }],
+    },
+  ];
+  const violations = validateCases(bad);
+  assert.ok(
+    violations.some((v) => v.includes("bad-informative") && v.includes("informative")),
+    "non-boolean informative is a violation",
+  );
+  assert.ok(
+    violations.some((v) => v.includes("bad-pathpattern") && v.includes("pathPattern")),
+    "pathPattern on a non-grep check is a violation",
+  );
+});
+
+test("materializeFixture: copies a committed fixture into an isolated repo, seed test green", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "harry-evals-fx-root-"));
+  try {
+    const { dir, initialBranch, initialCommit } = materializeFixture("tiny-node", root);
+    assert.ok(dir.startsWith(root), "fixture materialized under the temp root, not the repo");
+    assert.ok(existsSync(path.join(dir, ".git")), "a git repo was initialized in the copy");
+    assert.ok(existsSync(path.join(dir, "math.mjs")), "fixture files were copied");
+    assert.ok(initialBranch && initialCommit, "initial branch + commit captured");
+    // No branch other than the initial one yet, and the seed test passes.
+    const state = collectRepoState(dir, initialBranch, initialCommit);
+    assert.ok(
+      !state.branches.some((b: string) => b !== initialBranch),
+      "only the initial branch exists",
+    );
+    assert.equal(
+      evaluateArtifactChecks([{ type: "git_created_branch" }], state).pass,
+      false,
+      "git_created_branch is false on a fresh fixture",
+    );
+    assert.equal(
+      evaluateArtifactChecks([{ type: "test_command_passes" }], state).pass,
+      true,
+      "the seeded fixture's node --test passes",
+    );
+    // The real repo/worktree was never git-init'd or copied into.
+    assert.ok(!dir.startsWith(pluginRoot), "materialized dir is outside the plugin repo");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("materializeFixture: refuses an unknown fixture name", () => {
+  assert.throws(() => materializeFixture("no-such-fixture", os.tmpdir()), /unknown fixture/);
+});
+
+// ---- agentic run: --agentic gating + shim-scripted session -----------------
+
+test("runEvals: agentic cases are skipped (with a notice) on a text-only run", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = { ...process.env, EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
+    const out = path.join(binDir, "out.jsonl");
+    // Full run, no --agentic: text cases run, agentic ones are skipped.
+    const { lines, skipped } = runEvals({ condition: "candidate", model: "m", out }, env);
+    assert.ok(skipped.length >= 1, "at least one agentic case was skipped");
+    assert.ok(
+      lines.every((l: Record<string, unknown>) => l.mode === "text"),
+      "no agentic line was produced without --agentic",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: explicitly selecting an agentic case without --agentic is refused", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = { ...process.env, EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
+    assert.throws(
+      () =>
+        runEvals(
+          {
+            condition: "candidate",
+            model: "m",
+            cases: ["agentic-isolate-branch"],
+            out: path.join(binDir, "o.jsonl"),
+          },
+          env,
+        ),
+      /--agentic/,
+      "naming an agentic case by id without --agentic is a hard refusal (release gate)",
+    );
+    assert.equal(readCalls(binDir).length, 0, "no session was launched");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --agentic: a shim-scripted session materializes, edits, commits; checks score", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
+  try {
+    // A tiny session script the shim runs IN the fixture cwd: create a branch,
+    // fix the bug, add a repro test, drop a DEBT marker + honest note, commit.
+    const sessionScript = path.join(binDir, "session.mjs");
+    writeFileSync(
+      sessionScript,
+      [
+        'import { execFileSync } from "node:child_process";',
+        'import { writeFileSync } from "node:fs";',
+        "const g = (a) => execFileSync('git', a, { stdio: 'ignore' });",
+        "g(['checkout', '-b', 'fix/range-sum']);",
+        'writeFileSync("math.mjs", "export function rangeSum(n){let t=0;for(let i=1;i<=n;i++)t+=i;return t}\\n");',
+        'writeFileSync("math.test.mjs", `import assert from "node:assert/strict";import test from "node:test";import {rangeSum} from "./math.mjs";test("rangeSum inclusive",()=>{assert.equal(rangeSum(5),15)});\\n`);',
+        'writeFileSync("NOTES.md", "# Fix\\n\\nrangeSum sums 1..n inclusive now. DEBT: none.\\n");',
+        "g(['add', '-A']);",
+        "g(['commit', '-m', 'fix: rangeSum inclusive of n']);",
+      ].join("\n"),
+    );
+    installFakeClaude(binDir);
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      FAKE_CLAUDE_SCRIPT: sessionScript,
+      EVALS_FIXTURE_ROOT: fxRoot,
+    };
+    const out = path.join(binDir, "agentic.jsonl");
+    const { lines } = runEvals(
+      { condition: "candidate", model: "m", cases: ["agentic-bugfix-repro"], out, agentic: true },
+      env,
+    );
+    assert.equal(lines.length, 1, "one agentic line written");
+    const line = lines[0];
+    assert.equal(line.mode, "agentic");
+    assert.ok(Array.isArray(line.checkOutcomes), "per-check outcomes recorded on the line");
+    assert.ok(
+      line.checkOutcomes.every((o: { ok: boolean }) => o.ok),
+      "the scripted session satisfies every artifact check",
+    );
+
+    // The shim was invoked in agentic form: tools NOT disabled, permission mode set.
+    const calls = readCalls(binDir);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].allowedTools, undefined, "agentic run does NOT pass --allowedTools ''");
+    assert.equal(
+      calls[0].permissionMode,
+      "acceptEdits",
+      "agentic run sets --permission-mode acceptEdits",
+    );
+    // The session cwd is the materialized fixture dir (temp, isolated). Match by
+    // the fixture-dir name prefix — macOS symlinks /var → /private/var, so a raw
+    // startsWith(fxRoot) is unreliable.
+    assert.ok(
+      calls[0].cwd?.includes("harry-evals-fx-tiny-node"),
+      "session ran in the isolated materialized fixture dir",
+    );
+    assert.notEqual(calls[0].cwd, pluginRoot, "session did not run in the repo root");
+
+    // Score reads the recorded outcomes offline (fixture temp dir is gone).
+    const scored = scoreResults(lines);
+    assert.equal(scored.candidateFailed, false, "candidate passes on the scripted lawful session");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
+  }
+});
+
+test("the shipped agentic cases validate and reference existing fixtures", () => {
+  const text = readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf8");
+  const { cases } = parseCasesJsonl(text);
+  const agentic = cases.filter((c) => c.mode === "agentic");
+  assert.ok(agentic.length >= 5, "at least 5 agentic cases shipped");
+  assert.deepEqual(validateCases(cases), [], "all shipped cases (text + agentic) are schema-valid");
+  for (const c of agentic) {
+    assert.ok(
+      existsSync(path.join(pluginRoot, "evals", "fixtures", c.fixture)),
+      `case "${c.id}" references an existing fixture "${c.fixture}"`,
+    );
+  }
 });

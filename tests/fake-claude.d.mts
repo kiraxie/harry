@@ -2,6 +2,7 @@ export interface FakeClaudeCall {
   prompt?: string;
   model?: string;
   allowedTools?: string;
+  permissionMode?: string;
   configDir: string | null;
   cwd: string;
   cwdHasClaudeMd: boolean;

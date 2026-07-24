@@ -1,0 +1,10 @@
+{
+  "name": "tiny-node-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Eval fixture: a tiny module with a seeded off-by-one bug and a passing test.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

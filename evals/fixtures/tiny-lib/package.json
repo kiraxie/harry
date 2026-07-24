@@ -1,0 +1,10 @@
+{
+  "name": "tiny-lib-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Eval fixture: a small correct module + passing test, for feature-addition cases.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

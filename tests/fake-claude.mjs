@@ -24,6 +24,7 @@ export function installFakeClaude(binDir, reply = "A neutral reply with no tier 
   const source = `#!/usr/bin/env node
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 
 const CALLS_PATH = ${JSON.stringify(callsPath)};
 const REPLY = ${JSON.stringify(reply)};
@@ -44,6 +45,7 @@ const call = {
   prompt: flag("-p"),
   model: flag("--model"),
   allowedTools: argv.includes("--allowedTools") ? flag("--allowedTools") : undefined,
+  permissionMode: argv.includes("--permission-mode") ? flag("--permission-mode") : undefined,
   configDir,
   cwd: process.cwd(),
   cwdHasClaudeMd: fs.existsSync(path.join(process.cwd(), "CLAUDE.md")),
@@ -53,6 +55,15 @@ const call = {
 const calls = fs.existsSync(CALLS_PATH) ? JSON.parse(fs.readFileSync(CALLS_PATH, "utf8")) : [];
 calls.push(call);
 fs.writeFileSync(CALLS_PATH, JSON.stringify(calls, null, 2));
+
+// Agentic script mode: when FAKE_CLAUDE_SCRIPT names a .mjs, run it IN the
+// current cwd (the materialized fixture repo) to simulate a session's tool use
+// — branch/edit/commit — so a test can exercise the artifact checks with no
+// real claude. Text-mode tests leave it unset and this is skipped.
+const scriptPath = process.env.FAKE_CLAUDE_SCRIPT;
+if (scriptPath) {
+  execFileSync(process.execPath, [scriptPath], { cwd: process.cwd(), stdio: "inherit" });
+}
 
 process.stdout.write(
   JSON.stringify({ type: "result", subtype: "success", is_error: false, result: REPLY }) + "\\n",
