@@ -40,9 +40,7 @@ test("A1 · HARRY.md §5 'Route by role' bullet names exactly the canonical role
   // (Other backticked tokens in the bullet — `log`, `model`, `agents/*.md` … — are not
   // preceded by an arrow, so they're excluded.) Assert set equality both directions, so
   // an added clause like "orchestration → `driver`" fails, not just a missing role.
-  const routedRoles = new Set(
-    [...bullet.matchAll(/→\s*`([\w-]+)`/g)].map((m) => m[1] as string),
-  );
+  const routedRoles = new Set([...bullet.matchAll(/→\s*`([\w-]+)`/g)].map((m) => m[1] as string));
   assert.deepEqual(
     [...routedRoles].sort(),
     [...CANONICAL_ROLES].sort(),
@@ -70,9 +68,7 @@ test("A2 · agents/*.md frontmatter name-set equals the canonical role set", () 
   const names = new Set<string>();
   for (const entry of readdirSync(path.join(repoRoot, "agents"))) {
     if (!entry.endsWith(".md")) continue;
-    const m = readFileSync(path.join(repoRoot, "agents", entry), "utf-8").match(
-      /^name:\s*(.+)$/m,
-    );
+    const m = readFileSync(path.join(repoRoot, "agents", entry), "utf-8").match(/^name:\s*(.+)$/m);
     assert.ok(m, `agents/${entry}: no 'name:' in frontmatter`);
     names.add((m[1] as string).trim());
   }
