@@ -42,3 +42,6 @@ node_modules
 .local/
 *worktrees/
 CLAUDE.local.md
+
+# Behavioral-eval run artifacts — real API-spend outputs, kept local, not committed.
+evals/results/
