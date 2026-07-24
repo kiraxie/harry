@@ -18,7 +18,7 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 // (hoist closure, HARRY.md §2: no per-assertion re-listing).
 const CANONICAL_ROLES = new Set(["scout", "mech", "writer", "security"]);
 const MODEL_ALIASES = ["haiku", "sonnet", "opus"];
-const CODEX_MODEL_RE = /gpt-5\.6-/i;
+const CODEX_MODEL_RE = /gpt-\d+(\.\d+)?-[a-z]+/i;
 const CODEX_EFFORTS = new Set(["low", "medium", "high", "xhigh"]);
 
 function read(rel: string): string {
@@ -40,7 +40,10 @@ test("A1 · HARRY.md §5 'Route by role' bullet names exactly the canonical role
   // (Other backticked tokens in the bullet — `log`, `model`, `agents/*.md` … — are not
   // preceded by an arrow, so they're excluded.) Assert set equality both directions, so
   // an added clause like "orchestration → `driver`" fails, not just a missing role.
-  const routedRoles = new Set([...bullet.matchAll(/→\s*`([\w-]+)`/g)].map((m) => m[1] as string));
+  // Backticks are optional in the capture — an unquoted routed role (e.g. a stray
+  // "orchestration → driver" clause) must still land in the set and fail the
+  // equality check below, not silently evade extraction.
+  const routedRoles = new Set([...bullet.matchAll(/→\s*`?([\w-]+)`?/g)].map((m) => m[1] as string));
   assert.deepEqual(
     [...routedRoles].sort(),
     [...CANONICAL_ROLES].sort(),
@@ -90,9 +93,13 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
       .split("|")
       .slice(1, -1)
       .map((c) => c.trim());
-    if (cells.length < 4) continue;
+    const firstCell = cells[0] ?? "";
+    if (firstCell === "role" || /^-+$/.test(firstCell)) continue; // header / separator
+    assert.ok(
+      cells.length >= 4,
+      `codex-role-mapping: malformed table row (expected 4 cells, got ${cells.length}): "${line.trim()}"`,
+    );
     const [role, , model, effort] = cells as [string, string, string, string];
-    if (role === "role" || /^-+$/.test(role)) continue; // header / separator
     // Collect EVERY data row (no canonical-set filter) so an extra `driver` row is
     // caught by the set-equality assert below — and its model/effort validated too.
     roles.add(role);
