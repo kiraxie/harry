@@ -30,7 +30,17 @@ function globalPath() {
 }
 
 export function applyImport(existing, { remove = false, root = pluginRoot } = {}) {
-  const body = remove ? "" : readFileSync(join(root, "HARRY.md"), "utf8").replace(/\s+$/, "");
+  let body = "";
+  if (!remove) {
+    const laws = readFileSync(join(root, "HARRY.md"), "utf8").replace(/\s+$/, "");
+    // Codex binds §5's roles to model+effort via this map; inline it into the same
+    // block since Codex has no @-import (unlike Claude Code's agents/*.md frontmatter).
+    const roleMap = readFileSync(join(root, "references", "codex-role-mapping.md"), "utf8").replace(
+      /\s+$/,
+      "",
+    );
+    body = `${laws}\n\n${roleMap}`;
+  }
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
 }
 
@@ -68,6 +78,8 @@ function selftest() {
       let out = readFileSync(g, "utf8");
       assert(out.includes("# My rules"), "preserves existing content");
       assert(out.includes("Resident Engineering Laws"), "inlines HARRY.md content");
+      assert(out.includes("gpt-5.6-luna"), "inlines the Codex role map");
+      assert(out.includes("scout"), "role map names a role");
       assert(out.split(BEGIN).length === 2, "one block after first run");
       run();
       out = readFileSync(g, "utf8");

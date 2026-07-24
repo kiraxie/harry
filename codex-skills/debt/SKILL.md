@@ -41,7 +41,7 @@ the item is still open.
   recent churn (`git log --oneline -5 -- <file>`). Gone or heavily rewritten →
   premise likely broken.
 - **A later item contradicts an earlier Non-Goal?** Items carry no date in the
-  filename — compare by last-touched date instead (`git log -1 --format=%ad
+  filename (`references/doc-types.md`) — compare by last-touched date instead (`git log -1 --format=%ad
   --date=short -- <file>` per candidate, or check `.local/HISTORY.md` for a more
   recently completed item covering the same ground).
 - **A `DEBT:` ceiling now breached?** Check whether reality crossed the named

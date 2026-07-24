@@ -337,6 +337,12 @@ test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
       const out = readFileSync(g, "utf8");
       assert.ok(out.includes(BEGIN), "marker block present");
       assert.ok(out.includes("Resident Engineering Laws"), "HARRY.md content inlined");
+      for (const role of ["scout", "mech", "writer", "security"]) {
+        assert.ok(out.includes(role), `role map names ${role}`);
+      }
+      for (const model of ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]) {
+        assert.ok(out.includes(model), `role map binds ${model}`);
+      }
       assert.ok(existsSync(`${g}.bak`), "one-time .bak created");
       assert.equal(readFileSync(`${g}.bak`, "utf8"), original, ".bak holds the pristine original");
       assert.ok(!existsSync(`${g}.tmp`), "no .tmp residue");

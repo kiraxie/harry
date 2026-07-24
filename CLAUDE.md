@@ -87,15 +87,16 @@ work self-routes instead of being specified at every dispatch (HARRY.md §5);
 `tests/agents.test.ts` enforces the invariants (alias models only, read-only recon grants no
 write/spawn tools, writing roles leaf via `disallowedTools: Agent, Workflow`).
 
-**Claude Code only — verified against live Codex 0.144.4.** Codex has no per-subagent
-model/effort mechanism: `codex --help` exposes no subagent dispatch, its plugin `agents/`
-are frontmatter-less persona/interface cards (no `model`/`effort`), and `codex debug
-prompt-input` shows harry contributing skills + AGENTS.md laws but **no agents**. Model/effort
-on Codex is session-level (config profiles / `--profile`). So the routing is **prose-only on
-Codex** — HARRY.md §5 (inlined into `~/.codex/AGENTS.md` by `install-codex.mjs`) tells the
-orchestrator to route by *nature*, but there is no cheap-tier role to bind. (An earlier draft
-shipped `codex-agents/*.toml` with `model_reasoning_effort`, based on web docs that don't match
-0.144.4 — removed as non-functional.)
+**Dispatch mechanism is Claude Code only — verified against live Codex 0.144.4.** Codex has
+no per-subagent model/effort mechanism: `codex --help` exposes no subagent dispatch, its
+plugin `agents/` are frontmatter-less persona/interface cards (no `model`/`effort`), and
+`codex debug prompt-input` shows harry contributing skills + AGENTS.md laws but **no
+agents**. (An earlier draft shipped `codex-agents/*.toml` with `model_reasoning_effort`,
+based on web docs that don't match 0.144.4 — removed as non-functional: it claimed working
+dispatch config and wasn't.) The role→model *bindings* now exist for Codex too, though —
+`references/codex-role-mapping.md` is an advisory table that `install-codex.mjs` inlines
+into `~/.codex/AGENTS.md` alongside HARRY.md, applied via session profile / `-m` plus
+reasoning-effort config rather than dispatch, since there is still no subagent to route to.
 
 The *auto-invoked* Explore path (vs. explicit `scout` dispatch) is captured on CC by an
 opt-in user-level `~/.claude/agents/Explore.md` override that `/harry:sync --explore` installs
@@ -161,8 +162,9 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   `validate-findings.cjs` as the Claude Code `/audit` command via
   `${CLAUDE_PLUGIN_ROOT}`.
 - `sync`'s law-wiring (`scripts/install-codex.mjs`) inlines HARRY.md's content into
-  `~/.codex/AGENTS.md` as a snapshot (Codex has no `@`-import syntax) — re-run
-  after HARRY.md changes to resync, unlike Claude Code's always-live import.
+  `~/.codex/AGENTS.md` as a snapshot (Codex has no `@`-import syntax), appending the
+  advisory Codex role-map table (`references/codex-role-mapping.md`) to the same block —
+  re-run after HARRY.md or the role map changes to resync, unlike Claude Code's always-live import.
 
 See `.local/specs/2026-07-03-codex-compat-design.md` for the full design record
 (gitignored, not committed — this section is the durable summary).
