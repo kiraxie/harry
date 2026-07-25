@@ -653,6 +653,16 @@ export function runEvals(opts, env = process.env) {
           line.checkOutcomes = results.map((r) => ({ check: r.check, ok: r.ok, detail: r.detail }));
         } else {
           line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
+          // Record per-check outcomes (same shape as agentic lines) so an
+          // inspector can see WHICH check failed without re-scoring. Scoring
+          // still re-evaluates text lines from `response`, so these are
+          // informational and never the source of truth.
+          const { results } = evaluateChecks(c.checks, line.response);
+          line.checkOutcomes = results.map((r) => ({
+            check: r.check,
+            ok: r.ok,
+            detail: r.matched ? "pattern matched" : "pattern did not match",
+          }));
         }
       } catch (err) {
         line.response = "";

@@ -822,6 +822,59 @@ test("runEvals: an is_error result (e.g. 'Not logged in') lands as a case error,
   }
 });
 
+test("runEvals: text lines record per-check outcomes (same shape as agentic)", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    // A lawful reply that satisfies debt-shortcut's DEBT: check.
+    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
+    const env = { ...process.env, EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["debt-shortcut"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      env,
+    );
+    const outcomes = lines[0].checkOutcomes;
+    assert.ok(
+      Array.isArray(outcomes),
+      "text lines carry checkOutcomes so an inspector sees which check failed",
+    );
+    assert.equal(outcomes.length, 1, "one outcome per check");
+    assert.ok(
+      "check" in outcomes[0] && "ok" in outcomes[0] && "detail" in outcomes[0],
+      "same {check,ok,detail} shape",
+    );
+    assert.equal(outcomes[0].ok, true, "the DEBT: check passed against this reply");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("text cases are tautology-free: no regex_must literal appears in its own prompt", () => {
+  // The I2 rule: a check may not be satisfiable by the prompt echoing its own
+  // token. Extract the plain word-stems (>=4 chars) from each regex_must pattern
+  // and assert none appear in that case's prompt. (Positive checks only — a
+  // regex_must_not token in the prompt is harmless, the check judges the reply.)
+  const text = readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf8");
+  const { cases } = parseCasesJsonl(text);
+  for (const c of cases.filter((x) => x.mode === "text")) {
+    const prompt = String(c.prompt).toLowerCase();
+    for (const check of c.checks as Array<{ type: string; pattern: string }>) {
+      if (check.type !== "regex_must") continue;
+      const words = check.pattern.toLowerCase().match(/[a-z]{4,}/g) ?? [];
+      for (const w of words) {
+        assert.ok(
+          !prompt.includes(w),
+          `case "${c.id}": must-pattern literal "${w}" leaks into its own prompt (tautology)`,
+        );
+      }
+    }
+  }
+});
+
 test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message", () => {
   const binDir = tmpDir("harry-evals-bin-");
   const opCfg = fakeOperatorConfig(true);
