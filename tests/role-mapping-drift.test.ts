@@ -43,8 +43,9 @@ test("A1 · HARRY.md §5 'Route by role' bullet names exactly the canonical role
   // Wrapping punctuation is optional in the capture — an unquoted routed role (e.g. a
   // stray "orchestration → driver" clause) or one wrapped in other markup (`→
   // **driver**`, `→ "driver"`, `→ *driver*`, `→ 'driver'`) must still land in the set
-  // and fail the equality check below, not silently evade extraction. `\*\*` must
-  // precede `\*` in the alternation so a bold wrapper isn't consumed as two italics.
+  // and fail the equality check below, not silently evade extraction. `\*\*` is listed
+  // before `\*` in the alternation (backtracking would recover either way; the order
+  // just matches the bold wrapper directly).
   const routedRoles = new Set(
     [...bullet.matchAll(/→\s*(?:`|\*\*|\*|"|')?([\w-]+)(?:`|\*\*|\*|"|')?/g)].map(
       (m) => m[1] as string,
@@ -103,7 +104,10 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
     // Separator rows may carry alignment colons (`|:---|:---:|---:|`), not just plain
     // `---` — check every cell, not just the first, so an alignment-colon separator
     // skips cleanly instead of surfacing as a malformed-row / model-shape failure.
-    if (firstCell === "role" || cells.every((c) => /^:?-+:?$/.test(c))) continue; // header / separator
+    // header / separator (cells.length guard: a degenerate `|`-only line yields [] and
+    // a vacuous every() would skip it — let it fall through to the malformed-row assert)
+    if (firstCell === "role" || (cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c))))
+      continue;
     assert.ok(
       cells.length >= 4,
       `codex-role-mapping: malformed table row (expected 4 cells, got ${cells.length}): "${line.trim()}"`,
