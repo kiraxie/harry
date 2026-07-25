@@ -31,7 +31,7 @@ Hitting any red line auto-promotes the task to **Major** (§3), regardless of fi
 
 ## §3 Complexity threshold (the master switch)
 
-Classify every non-trivial task. Take the highest tier whose trigger is hit (when in doubt, go higher). Any red line (§2) → Major unconditionally. Any branching logic upgrades Trivial → Standard. State the classification before acting — name the tier, and for Standard/Major the plan, out loud even in a one-shot or headless session where nothing prompts for it; an unstated tier is a silent skip (§7).
+Classify every non-trivial task. Take the highest tier whose trigger is hit (when in doubt, go higher). Any red line (§2) → Major unconditionally. Any branching logic upgrades Trivial → Standard. State the classification before acting — name the tier out loud (a Trivial call included), even in a one-shot or headless session where nothing prompts for it, and there — where the whole flow compresses into one reply — the plan too; an unstated tier is a silent skip (§7).
 
 | Tier | Trigger | brainstorm | item | TDD | review | execution |
 |------|---------|:--:|:--:|:--:|:--:|:--:|
