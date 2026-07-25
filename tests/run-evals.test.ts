@@ -957,8 +957,8 @@ test("runEvals --agentic: a shim-scripted session materializes, edits, commits; 
     assert.equal(calls.length, 1);
     assert.equal(
       calls[0].allowedTools,
-      "Bash(git:*),Bash(node:*)",
-      "agentic run allowlists exactly git + node Bash calls (not '' — tools enabled)",
+      "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git branch:*),Bash(git checkout:*),Bash(git switch:*),Bash(node:*)",
+      "agentic run allowlists per-subcommand git + node (not '' — tools enabled)",
     );
     assert.equal(
       calls[0].permissionMode,

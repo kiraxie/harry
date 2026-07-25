@@ -607,21 +607,44 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
 // The Bash commands an agentic session is allowed to run, comma-joined into one
 // `--allowedTools` value (`claude --help`: "Comma or space-separated list of tool
 // names to allow"; a single comma-separated arg avoids the variadic `<tools...>`
-// swallowing later flags). WHY exactly these two: the artifact checks assert on
-// git state (git_created_branch, git_no_new_commits_on_initial, commit messages)
-// and on test runs (test_command_passes), so `git` and `node` MUST be executable
-// or those checks are structurally unsatisfiable and test-running behavior is
-// blocked mid-task. Everything else stays denied — headless `-p` is deny-by-
-// default, and we widen it to just these two rather than opening all of Bash.
-const AGENTIC_ALLOWED_TOOLS = ["Bash(git:*)", "Bash(node:*)"].join(",");
+// swallowing later flags). WHY these: the artifact checks assert on git state
+// (git_created_branch, git_no_new_commits_on_initial, commit messages) and on
+// test runs (test_command_passes), so the session MUST be able to branch/commit
+// and run `node`, or those checks are structurally unsatisfiable.
+//
+// The git leg is granted per SUBCOMMAND (following commands/review.md's own
+// convention), not a blanket `Bash(git:*)`: this drops `git push`, `git config`,
+// and the `git -c alias.x='!sh'` shell-escape at zero cost to the checks. The
+// node leg stays broad (`Bash(node:*)`) because a session must AUTHOR then RUN a
+// test file — narrowing to `Bash(node --test:*)` would gain little, since it
+// would still execute model-authored files. This narrows the surface; it does
+// NOT sandbox a misbehaving session: `Bash(node:*)` is arbitrary code execution,
+// including network, so a session that wants to exfiltrate or reach out still
+// can. Containment is out of scope here (see the DEBT marker).
+//
+// DEBT: node grants arbitrary exec and the seeded .credentials.json is reachable
+// from the session env — acceptable for a maintainer-run local gate; scrub/scope
+// the credential (scratch token or post-run revoke) before this ever runs
+// unattended or on untrusted prompts.
+const AGENTIC_ALLOWED_TOOLS = [
+  "Bash(git status:*)",
+  "Bash(git diff:*)",
+  "Bash(git log:*)",
+  "Bash(git add:*)",
+  "Bash(git commit:*)",
+  "Bash(git branch:*)",
+  "Bash(git checkout:*)",
+  "Bash(git switch:*)",
+  "Bash(node:*)",
+].join(",");
 
 // Invoke the claude CLI for one AGENTIC case: a full headless session in the
 // fixture repo. `--permission-mode acceptEdits` auto-approves file edits; the
-// `--allowedTools` allowlist additionally auto-approves exactly `git` and `node`
-// Bash calls (see AGENTIC_ALLOWED_TOOLS) so the session can branch, commit, and
-// run the test suite the artifact checks judge. Both flags verified present in
+// `--allowedTools` allowlist additionally auto-approves the git subcommands and
+// `node` the artifact checks depend on (see AGENTIC_ALLOWED_TOOLS) so the session
+// can branch, commit, and run the test suite. Both flags verified present in
 // `claude --help`; not empty like the text kill-switch — here tools are enabled,
-// just narrowed to the two commands the checks depend on.
+// narrowed to the commands the checks need (a surface reduction, not a sandbox).
 function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
   const args = [
     "-p",

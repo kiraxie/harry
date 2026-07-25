@@ -120,8 +120,8 @@ say. The runner:
    commit. This never happens inside the repo/worktree — the copy lands under the
    OS temp dir (override with `EVALS_FIXTURE_ROOT`).
 2. **Runs a full session** in that dir: `claude -p <prompt> --model <id>
-   --output-format json --permission-mode acceptEdits --allowedTools
-   "Bash(git:*),Bash(node:*)"`. See the permission model below.
+   --output-format json --permission-mode acceptEdits --allowedTools "<git
+   subcommands>,Bash(node:*)"`. See the permission model below.
 3. **Judges artifacts** — evaluates the case's checks against the resulting repo
    state and records per-check outcomes on the result line (so `score` reads them
    offline; the temp fixture is gone by then).
@@ -134,20 +134,32 @@ two permissions and nothing more:
 
 - `--permission-mode acceptEdits` — auto-approves **file edits** (create/modify)
   without an interactive prompt, which a headless run can't answer.
-- `--allowedTools "Bash(git:*),Bash(node:*)"` — auto-approves exactly two Bash
-  commands: **`git`** and **`node`**. Everything else (other Bash, network, etc.)
-  stays denied.
+- `--allowedTools "<git subcommands>,Bash(node:*)"` — auto-approves the specific
+  git subcommands a session needs (`git status/diff/log/add/commit/branch/
+  checkout/switch`, each as `Bash(git commit:*)` etc.) plus `Bash(node:*)`.
+  Everything else stays deny-by-default.
 
-Why exactly those two: the artifact checks assert on **git state**
-(`git_created_branch`, `git_no_new_commits_on_initial`, `commit_message_matches`)
-and on **test runs** (`test_command_passes`, default `node --test`). If `git` and
-`node` weren't executable, those checks would be *structurally unsatisfiable* — a
-lawful session that wants to branch, commit, and run the suite would be walled off
-mid-task (a real batch showed sessions editing files, making zero commits, and
-their response tails literally asking for approval to run `node`). The allowlist
-is deliberately narrow — just the commands the checks depend on — rather than
-opening all of Bash. `--allowedTools` is a single comma-separated value here
-(`claude --help`: "Comma or space-separated list of tool names to allow").
+Why: the artifact checks assert on **git state** (`git_created_branch`,
+`git_no_new_commits_on_initial`, `commit_message_matches`) and on **test runs**
+(`test_command_passes`, default `node --test`). If a session couldn't branch,
+commit, and run `node`, those checks would be *structurally unsatisfiable* — a
+lawful session that wants to do exactly that would be walled off mid-task (a real
+batch showed sessions editing files, making zero commits, and their response
+tails literally asking for approval to run `node`).
+
+The git leg is granted per **subcommand**, not a blanket `Bash(git:*)` (following
+`commands/review.md`'s own convention), so `git push`, `git config`, and the
+`git -c alias.x='!sh'` shell-escape are all still denied at no cost to the checks.
+`--allowedTools` is a single comma-separated value here (`claude --help`: "Comma
+or space-separated list of tool names to allow").
+
+**This narrows the attack surface; it does not contain a misbehaving session.**
+`Bash(node:*)` is arbitrary code execution — including network — so a session
+that wants to reach out or exfiltrate still can, and the seeded
+`.credentials.json` (see above) is reachable from its environment. That is an
+accepted trade for a **maintainer-run, local** release gate on trusted prompts;
+it is **not** safe to run unattended or on untrusted input without first scoping
+the credential (a scratch token, or revoke it post-run) and containing exec.
 
 ### Fixture anatomy
 
