@@ -32,6 +32,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -399,56 +400,112 @@ export function evaluateArtifactChecks(checks, state) {
   return { pass: results.every((r) => r.ok), results };
 }
 
-// Score a whole results array. Each result carries its own checks (embedded at
-// run time) so scoring is self-contained and never drifts from a mutated cases
-// file. Returns per-(id,condition) rows plus a summary; candidateFailed drives
-// the CLI exit code (candidate must pass; baseline is only contrast).
-export function scoreResults(lines) {
-  const rows = lines.map((line) => {
-    // Agentic lines can't be re-judged offline (the fixture temp dir is gone),
-    // so the run recorded per-check outcomes; text lines re-evaluate the
-    // response so scoring stays independent of a later-edited cases file.
-    const { pass, results } =
-      line.mode === "agentic"
-        ? {
-            pass: (line.checkOutcomes ?? []).every((o) => o.ok),
-            results: (line.checkOutcomes ?? []).map((o) => ({ check: o.check, ok: o.ok })),
-          }
-        : evaluateChecks(line.checks, line.response);
-    const passed = line.error ? false : pass;
-    return {
-      id: line.id,
-      condition: line.condition,
-      trial: line.trial ?? 0,
-      law: line.law,
-      informative: line.informative === true,
-      pass: passed,
-      error: line.error ?? null,
-      failures: results.filter((r) => !r.ok).map((r) => r.check),
-    };
-  });
-  // Informative rows are contrast-only: split them out so they never gate the
-  // run, and the gating counts (and exit code) consider only the graded rows.
-  const graded = rows.filter((r) => !r.informative);
-  const candidate = graded.filter((r) => r.condition === "candidate");
-  const baseline = graded.filter((r) => r.condition === "baseline");
-  const informative = rows.filter((r) => r.informative);
+// Score one result line to a single-trial pass. Each result carries its own
+// checks (embedded at run time) so scoring is self-contained and never drifts
+// from a mutated cases file. A legacy line with no `trial` field is trial 1.
+function scoreTrial(line) {
+  // Agentic lines can't be re-judged offline (the fixture temp dir is gone), so
+  // the run recorded per-check outcomes; text lines re-evaluate the response so
+  // scoring stays independent of a later-edited cases file.
+  const pass =
+    line.mode === "agentic"
+      ? (line.checkOutcomes ?? []).every((o) => o.ok)
+      : evaluateChecks(line.checks, line.response).pass;
   return {
-    rows,
+    id: line.id,
+    condition: line.condition,
+    trial: line.trial ?? 1,
+    law: line.law,
+    informative: line.informative === true,
+    pass: line.error ? false : pass,
+    error: line.error ?? null,
+  };
+}
+
+// Score a whole results array. Trials are POOLED per (id, condition) group —
+// every line for a group counts, whether it came from one --trials N run or
+// several appended runs of the same condition (that is the documented way to
+// add trials post-hoc). A group's verdict is a STRICT MAJORITY of its trials:
+// it passes iff more than half passed (2/3, 2/2 — a 1/2 tie FAILS). An errored
+// trial counts as a failing trial. candidateFailed (the CLI exit code) derives
+// only from graded (non-informative) candidate GROUP verdicts; informative
+// groups are tallied separately and never gate.
+export function scoreResults(lines) {
+  const groupMap = new Map();
+  for (const line of lines) {
+    const t = scoreTrial(line);
+    // JSON-array key: an unambiguous (id, condition) tuple that can never
+    // collide regardless of what characters an id contains.
+    const key = JSON.stringify([t.id, t.condition]);
+    let g = groupMap.get(key);
+    if (!g) {
+      g = {
+        id: t.id,
+        condition: t.condition,
+        law: t.law,
+        informative: t.informative,
+        trials: 0,
+        passCount: 0,
+        errors: 0,
+      };
+      groupMap.set(key, g);
+    }
+    g.trials += 1;
+    if (t.pass) g.passCount += 1;
+    if (t.error) g.errors += 1;
+    // Backfill law/informative from any trial that carries them (a legacy line
+    // may omit law; a later trial may supply it).
+    if (!g.law && t.law) g.law = t.law;
+    if (t.informative) g.informative = true;
+  }
+  const groups = [...groupMap.values()].map((g) => ({
+    ...g,
+    // Strict majority: passCount > trials/2  ⇔  2*passCount > trials.
+    pass: g.passCount * 2 > g.trials,
+  }));
+
+  // Informative groups are contrast-only: split them out so they never gate the
+  // run, and the gating counts (and exit code) consider only the graded groups.
+  const graded = groups.filter((g) => !g.informative);
+  const candidate = graded.filter((g) => g.condition === "candidate");
+  const baseline = graded.filter((g) => g.condition === "baseline");
+  const informative = groups.filter((g) => g.informative);
+  return {
+    rows: groups,
+    groups,
     summary: {
-      total: rows.length,
-      candidatePass: candidate.filter((r) => r.pass).length,
+      total: groups.length,
+      trials: lines.length,
+      candidatePass: candidate.filter((g) => g.pass).length,
       candidateTotal: candidate.length,
-      baselinePass: baseline.filter((r) => r.pass).length,
+      baselinePass: baseline.filter((g) => g.pass).length,
       baselineTotal: baseline.length,
-      informativePass: informative.filter((r) => r.pass).length,
+      informativePass: informative.filter((g) => g.pass).length,
       informativeTotal: informative.length,
     },
-    candidateFailed: candidate.some((r) => !r.pass),
+    candidateFailed: candidate.some((g) => !g.pass),
   };
 }
 
 // ---- run helpers -----------------------------------------------------------
+
+// Resolve the trial count, or throw. Default 1. Must be a positive integer —
+// a fractional or non-numeric --trials is a user error we refuse cleanly rather
+// than silently coerce (a coerced "2.5"→2 or "abc"→1 would run a silently-wrong
+// number of trials). Each selected case runs this many independent sessions.
+export function resolveTrials(opts) {
+  const raw = opts.trials;
+  if (raw === undefined || raw === null) return 1;
+  // Accept a plain positive integer ONLY: a string must be all digits (rejects
+  // "", " 2", "2.5", "1e1", "0x2"); a number must itself be a positive integer.
+  // No silent default on blank/garbage — that would run a wrong trial count.
+  const isPlainInt = typeof raw === "string" ? /^\d+$/.test(raw) : Number.isInteger(raw);
+  const n = Number(raw);
+  if (!isPlainInt || !Number.isInteger(n) || n < 1) {
+    throw new Error(`--trials must be a positive integer (got "${raw}")`);
+  }
+  return n;
+}
 
 // Resolve the pinned model, or throw. Pinning is a hard rule: an unattributable
 // result is worse than no result.
@@ -466,16 +523,27 @@ export function resolveModel(opts, env) {
 // CLAUDE.md inlining the laws; baseline gets an empty dir (no CLAUDE.md).
 //
 // A fresh config dir also strips login credentials, so `claude -p` returns
-// {"is_error":true,"result":"Not logged in · ..."}. We seed ONLY
-// `.credentials.json` from the operator's real config dir (env.CLAUDE_CONFIG_DIR
-// or ~/.claude) so the child is authenticated — and nothing else, because memory
-// isolation (no leaked global CLAUDE.md) is the whole point. Absent (keychain or
-// API-key auth) → proceed without it, don't fail. The copy is chmod 0600.
+// {"is_error":true,"result":"Not logged in · ..."}. Two auth paths:
+//
+//   1. SCRATCH TOKEN (preferred, containment): if `EVALS_ANTHROPIC_API_KEY` is
+//      set we seed NO credential file at all — invokeClaude passes the key to the
+//      child as `ANTHROPIC_API_KEY`. A console API key is independently
+//      revocable, and nothing lands on disk to leak into a session's fs.
+//   2. SEEDED CREDENTIAL (fallback): otherwise we copy ONLY `.credentials.json`
+//      from the operator's real config dir (env.CLAUDE_CONFIG_DIR or ~/.claude),
+//      chmod 0600 — and nothing else, because memory isolation (no leaked global
+//      CLAUDE.md) is the whole point. runEvals scrubs this copy post-run.
+//
+// Precedence: EVALS_ANTHROPIC_API_KEY > seeded credentials. Absent both (keychain
+// auth) → proceed without either, don't fail.
 export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = process.env) {
   const dir = mkdtempSync(join(root, `harry-evals-${condition}-`));
   if (condition === "candidate") {
     writeFileSync(join(dir, "CLAUDE.md"), lawsText);
   }
+  // API-key mode authenticates via the child env (invokeClaude), so there is no
+  // credential file to seed — the containment win is that nothing is on disk.
+  if (env.EVALS_ANTHROPIC_API_KEY) return dir;
   const realConfigDir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
   const credSrc = join(realConfigDir, ".credentials.json");
   if (existsSync(credSrc)) {
@@ -484,6 +552,13 @@ export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = 
     chmodSync(credDst, 0o600);
   }
   return dir;
+}
+
+// Delete a seeded `.credentials.json` from a config dir, if present. The config
+// dir itself may stay (post-hoc inspection value) — but never with a live
+// credential inside it. Idempotent and missing-safe (force).
+function scrubCredential(configDir) {
+  rmSync(join(configDir, ".credentials.json"), { force: true });
 }
 
 // Extract the assistant text from `claude -p --output-format json` output. A
@@ -505,10 +580,23 @@ function extractResponse(stdout) {
 // child still printed one, otherwise attach stdout/stderr tails so a failing
 // line carries a real diagnostic instead of a bare "Command failed".
 function invokeClaude(bin, args, cwd, configDir, env) {
+  const childEnv = { ...env, CLAUDE_CONFIG_DIR: configDir };
+  // Auth is deterministic and opt-in. EVALS_ANTHROPIC_API_KEY (the scratch-token
+  // path) is the ONLY thing that activates API-key auth for the child. We
+  // deliberately do NOT honor a bare `ANTHROPIC_API_KEY` inherited from the
+  // operator's shell — requiring the EVALS_ prefix means an unrelated key sitting
+  // in the environment can never be billed by accident. So: set it from the
+  // EVALS_ var when present, otherwise STRIP any inherited one so seeded-
+  // credential auth is what's actually used.
+  if (env.EVALS_ANTHROPIC_API_KEY) {
+    childEnv.ANTHROPIC_API_KEY = env.EVALS_ANTHROPIC_API_KEY;
+  } else {
+    delete childEnv.ANTHROPIC_API_KEY;
+  }
   try {
     const stdout = execFileSync(bin, args, {
       cwd,
-      env: { ...env, CLAUDE_CONFIG_DIR: configDir },
+      env: childEnv,
       encoding: "utf8",
       maxBuffer: 32 * 1024 * 1024,
     });
@@ -548,10 +636,49 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
   return invokeClaude(bin, args, workDir, configDir, env);
 }
 
+// The Bash commands an agentic session is allowed to run, comma-joined into one
+// `--allowedTools` value (`claude --help`: "Comma or space-separated list of tool
+// names to allow"; a single comma-separated arg avoids the variadic `<tools...>`
+// swallowing later flags). WHY these: the artifact checks assert on git state
+// (git_created_branch, git_no_new_commits_on_initial, commit messages) and on
+// test runs (test_command_passes), so the session MUST be able to branch/commit
+// and run `node`, or those checks are structurally unsatisfiable.
+//
+// The git leg is granted per SUBCOMMAND (following commands/review.md's own
+// convention), not a blanket `Bash(git:*)`: this drops `git push`, `git config`,
+// and the `git -c alias.x='!sh'` shell-escape at zero cost to the checks. The
+// node leg stays broad (`Bash(node:*)`) because a session must AUTHOR then RUN a
+// test file — narrowing to `Bash(node --test:*)` would gain little, since it
+// would still execute model-authored files. This narrows the surface; it does
+// NOT sandbox a misbehaving session: `Bash(node:*)` is arbitrary code execution,
+// including network, so a session that wants to exfiltrate or reach out still
+// can. The credential exposure is now bounded (see below), but exec is not.
+//
+// DEBT: during a live agentic session the seeded credential (when API-key mode is
+// off) is readable by session-spawned processes and node grants arbitrary exec —
+// the window is now session-lifetime only (runEvals scrubs the copy post-run) and
+// avoidable entirely via EVALS_ANTHROPIC_API_KEY (a revocable scratch token, no
+// file on disk); full containment needs an OS sandbox (no-network, fs-jail) if
+// this ever runs unattended or on untrusted prompts.
+const AGENTIC_ALLOWED_TOOLS = [
+  "Bash(git status:*)",
+  "Bash(git diff:*)",
+  "Bash(git log:*)",
+  "Bash(git add:*)",
+  "Bash(git commit:*)",
+  "Bash(git branch:*)",
+  "Bash(git checkout:*)",
+  "Bash(git switch:*)",
+  "Bash(node:*)",
+].join(",");
+
 // Invoke the claude CLI for one AGENTIC case: a full headless session in the
-// fixture repo with tools ENABLED (no `--allowedTools ""` kill-switch) and
-// `--permission-mode acceptEdits` for non-interactive file edits (a flag
-// verified present in `claude --help`; the artifact checks judge what it did).
+// fixture repo. `--permission-mode acceptEdits` auto-approves file edits; the
+// `--allowedTools` allowlist additionally auto-approves the git subcommands and
+// `node` the artifact checks depend on (see AGENTIC_ALLOWED_TOOLS) so the session
+// can branch, commit, and run the test suite. Both flags verified present in
+// `claude --help`; not empty like the text kill-switch — here tools are enabled,
+// narrowed to the commands the checks need (a surface reduction, not a sandbox).
 function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
   const args = [
     "-p",
@@ -562,6 +689,8 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
     "json",
     "--permission-mode",
     "acceptEdits",
+    "--allowedTools",
+    AGENTIC_ALLOWED_TOOLS,
   ];
   return invokeClaude(bin, args, fixtureDir, configDir, env);
 }
@@ -575,7 +704,7 @@ export function runEvals(opts, env = process.env) {
   }
   const model = resolveModel(opts, env);
   const bin = env.EVALS_CLAUDE_BIN || "claude";
-  const trials = Math.max(1, Number(opts.trials) || 1);
+  const trials = resolveTrials(opts);
 
   const { cases, errors } = parseCasesJsonl(readFileSync(casesPath(), "utf8"));
   if (errors.length) throw new Error(`cases.jsonl parse errors:\n${errors.join("\n")}`);
@@ -610,72 +739,92 @@ export function runEvals(opts, env = process.env) {
   // separate EMPTY dir used as the child's cwd for every case, so no project
   // CLAUDE.md (this repo's included) is discoverable by walking up from it.
   const configDir = prepareConditionDir(condition, lawsText, tmpdir(), env);
-  const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
+  // Everything after the config dir exists runs inside try/finally so the seeded
+  // credential is scrubbed no matter how we leave — normal return, a per-trial
+  // error (those are caught and recorded), or a thrown exception mid-run. The
+  // credential's on-disk exposure is thus bounded to the session lifetime.
+  try {
+    const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
 
-  const outPath =
-    opts.out ||
-    join(pluginRoot, "evals", "results", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
-  mkdirSync(dirname(outPath), { recursive: true });
+    const outPath =
+      opts.out ||
+      join(
+        pluginRoot,
+        "evals",
+        "results",
+        `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`,
+      );
+    mkdirSync(dirname(outPath), { recursive: true });
 
-  const fixtureRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
-  const written = [];
-  for (const c of runnable) {
-    if (!SUPPORTED_MODES.has(c.mode)) throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
-    for (let trial = 0; trial < trials; trial++) {
-      const line = {
-        id: c.id,
-        mode: c.mode,
-        condition,
-        trial,
-        model,
-        law: c.law,
-        informative: c.informative === true,
-        prompt: c.prompt,
-        checks: c.checks,
-        configDir,
-        workDir,
-        timestamp: new Date().toISOString(),
-      };
-      try {
-        // mode dispatch: text judges first-response prose; agentic materializes a
-        // throwaway fixture repo, runs a full session in it, then judges artifacts.
-        if (c.mode === "agentic") {
-          const fx = materializeFixture(c.fixture, fixtureRoot, env);
-          line.fixture = c.fixture;
-          line.fixtureDir = fx.dir;
-          line.initialBranch = fx.initialBranch;
-          line.initialCommit = fx.initialCommit;
-          line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env);
-          // Evaluate now, while the fixture dir exists, and record per-check
-          // outcomes so `score` can judge offline (matching text mode's shape).
-          const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);
-          const { results } = evaluateArtifactChecks(c.checks, state);
-          line.checkOutcomes = results.map((r) => ({ check: r.check, ok: r.ok, detail: r.detail }));
-        } else {
-          line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
-          // Record per-check outcomes (same shape as agentic lines) so an
-          // inspector can see WHICH check failed without re-scoring. Scoring
-          // still re-evaluates text lines from `response`, so these are
-          // informational and never the source of truth.
-          const { results } = evaluateChecks(c.checks, line.response);
-          line.checkOutcomes = results.map((r) => ({
-            check: r.check,
-            ok: r.ok,
-            detail: r.matched ? "pattern matched" : "pattern did not match",
-          }));
+    const fixtureRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
+    const written = [];
+    for (const c of runnable) {
+      if (!SUPPORTED_MODES.has(c.mode))
+        throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
+      // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
+      // with no `trial` field as trial 1, so the two formats pool coherently.
+      for (let trial = 1; trial <= trials; trial++) {
+        const line = {
+          id: c.id,
+          mode: c.mode,
+          condition,
+          trial,
+          model,
+          law: c.law,
+          informative: c.informative === true,
+          prompt: c.prompt,
+          checks: c.checks,
+          configDir,
+          workDir,
+          timestamp: new Date().toISOString(),
+        };
+        try {
+          // mode dispatch: text judges first-response prose; agentic materializes a
+          // throwaway fixture repo, runs a full session in it, then judges artifacts.
+          if (c.mode === "agentic") {
+            const fx = materializeFixture(c.fixture, fixtureRoot, env);
+            line.fixture = c.fixture;
+            line.fixtureDir = fx.dir;
+            line.initialBranch = fx.initialBranch;
+            line.initialCommit = fx.initialCommit;
+            line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env);
+            // Evaluate now, while the fixture dir exists, and record per-check
+            // outcomes so `score` can judge offline (matching text mode's shape).
+            const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);
+            const { results } = evaluateArtifactChecks(c.checks, state);
+            line.checkOutcomes = results.map((r) => ({
+              check: r.check,
+              ok: r.ok,
+              detail: r.detail,
+            }));
+          } else {
+            line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
+            // Record per-check outcomes (same shape as agentic lines) so an
+            // inspector can see WHICH check failed without re-scoring. Scoring
+            // still re-evaluates text lines from `response`, so these are
+            // informational and never the source of truth.
+            const { results } = evaluateChecks(c.checks, line.response);
+            line.checkOutcomes = results.map((r) => ({
+              check: r.check,
+              ok: r.ok,
+              detail: r.matched ? "pattern matched" : "pattern did not match",
+            }));
+          }
+        } catch (err) {
+          line.response = "";
+          line.error = err.message;
         }
-      } catch (err) {
-        line.response = "";
-        line.error = err.message;
+        // Append (never truncate): the documented flow runs baseline and candidate
+        // as two separate invocations into the SAME --out file, so score can
+        // contrast both conditions. Truncating would keep only the last run.
+        appendFileSync(outPath, `${JSON.stringify(line)}\n`);
+        written.push(line);
       }
-      // Append (never truncate): the documented flow runs baseline and candidate
-      // as two separate invocations into the SAME --out file, so score can
-      // contrast both conditions. Truncating would keep only the last run.
-      appendFileSync(outPath, `${JSON.stringify(line)}\n`);
-      written.push(line);
     }
+    return { outPath, configDir, workDir, lines: written, skipped };
+  } finally {
+    scrubCredential(configDir);
   }
-  return { outPath, configDir, workDir, lines: written, skipped };
 }
 
 // ---- CLI -------------------------------------------------------------------
@@ -754,31 +903,45 @@ function cmdScore(opts) {
     for (const e of errors) console.error(`  - ${e}`);
     return 1;
   }
-  const { rows, summary, candidateFailed } = scoreResults(lines);
+  const { groups, summary, candidateFailed } = scoreResults(lines);
   const pad = (s, n) => String(s).padEnd(n);
-  // Graded rows gate the run; informative rows are printed separately below and
-  // never affect the exit code.
-  const graded = rows.filter((r) => !r.informative);
-  const informative = rows.filter((r) => r.informative);
-  console.log(`${pad("case", 32)}${pad("condition", 12)}${pad("law", 8)}result`);
-  for (const r of graded) {
-    const mark = r.pass ? "PASS" : r.error ? "ERROR" : "FAIL";
-    console.log(`${pad(r.id, 32)}${pad(r.condition, 12)}${pad(r.law ?? "", 8)}${mark}`);
+  // A group is one (case, condition): its verdict is a strict majority of its
+  // pooled trials, shown as a tally, e.g. PASS (2/3) / FAIL (1/3). Graded groups
+  // gate the run; informative groups are printed separately and never affect the
+  // exit code.
+  const graded = groups.filter((g) => !g.informative);
+  const informative = groups.filter((g) => g.informative);
+  // An errored trial counts as a failing trial (it is in the denominator); when
+  // any trial errored, surface the count so `FAIL (0/3, 3 error)` is legible as
+  // "all errored", not "all genuinely non-compliant".
+  const verdict = (g) =>
+    `${g.pass ? "PASS" : "FAIL"} (${g.passCount}/${g.trials}${g.errors ? `, ${g.errors} error` : ""})`;
+  // Column width spans EVERY printed id — graded AND informative — plus the
+  // "case" header, so a long informative id can't overflow into the condition
+  // column of either section (both use the same width). +2 for breathing room.
+  const idWidth = Math.max(4, ...groups.map((g) => g.id.length), "case".length) + 2;
+  const row = (g) =>
+    `${pad(g.id, idWidth)}${pad(g.condition, 12)}${pad(g.law ?? "", 8)}${verdict(g)}`;
+  console.log(`${pad("case", idWidth)}${pad("condition", 12)}${pad("law", 8)}result`);
+  for (const g of graded) {
+    console.log(row(g));
   }
   if (informative.length) {
     console.log("\ninformative (contrast-only — does NOT gate the run):");
-    for (const r of informative) {
-      const mark = r.pass ? "PASS" : r.error ? "ERROR" : "FAIL";
-      console.log(`${pad(r.id, 32)}${pad(r.condition, 12)}${pad(r.law ?? "", 8)}${mark}`);
+    for (const g of informative) {
+      console.log(row(g));
     }
   }
   const informativeLine = summary.informativeTotal
-    ? ` · informative: ${summary.informativePass}/${summary.informativeTotal} passed (ungated)`
+    ? ` · informative: ${summary.informativePass}/${summary.informativeTotal} groups passed (ungated)`
     : "";
+  // Counts are GROUPS (case × condition), each a strict-majority verdict over
+  // its pooled trials — the trailing count is how many raw trial lines pooled.
   console.log(
-    `\ncandidate: ${summary.candidatePass}/${summary.candidateTotal} passed` +
-      ` · baseline (contrast): ${summary.baselinePass}/${summary.baselineTotal} passed` +
-      informativeLine,
+    `\ncandidate: ${summary.candidatePass}/${summary.candidateTotal} groups passed` +
+      ` · baseline (contrast): ${summary.baselinePass}/${summary.baselineTotal} groups passed` +
+      informativeLine +
+      ` · (${summary.trials} trial line(s) pooled)`,
   );
   return candidateFailed ? 1 : 0;
 }

@@ -8,6 +8,8 @@ export interface FakeClaudeCall {
   cwdHasClaudeMd: boolean;
   hasClaudeMd: boolean;
   lawsPresent: boolean;
+  hasCredentials: boolean;
+  apiKey: string | null;
 }
 
 export function installFakeClaude(

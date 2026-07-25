@@ -31,17 +31,34 @@ global `CLAUDE.md` leaked into the baseline, the baseline would already be
 "lawful" and the measured delta would collapse to nothing. The empty baseline
 dir is what keeps the comparison honest.
 
-### Credential seeding (the one thing copied in)
+### Authentication (two paths) and the post-run scrub
 
 A fresh config dir is also *logged out* — `claude -p` returns
-`{"is_error":true,"result":"Not logged in · ..."}`. So the runner copies exactly
-one file into each fresh dir: `.credentials.json`, read from your real config dir
-(`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod `0600`. Nothing else is copied —
-**no `CLAUDE.md`, no settings, no memory** — so the isolation that keeps the
-baseline honest is preserved; only the login token rides along. If that file
-doesn't exist (keychain-auth or API-key setups) the runner proceeds without it.
-The token lands in a world-unreadable temp copy that is left under the temp root
-with the rest of the run artifacts — prune the temp dir if that bothers you.
+`{"is_error":true,"result":"Not logged in · ..."}`. Two ways to authenticate the
+child, in precedence order:
+
+1. **Scratch token (preferred)** — set `EVALS_ANTHROPIC_API_KEY` to a console API
+   key. The runner passes it to the child as `ANTHROPIC_API_KEY` and seeds **no
+   credential file at all** — nothing lands on disk for a session to read, and a
+   console key is independently revocable. This is the recommended mode for the
+   agentic gate (see the permission model). Note the runner honors **only** the
+   `EVALS_`-prefixed variable — a bare `ANTHROPIC_API_KEY` sitting in your shell is
+   deliberately **not** used (and is stripped from the child env), so an unrelated
+   key can never be billed by accident.
+2. **Seeded credential (fallback)** — if `EVALS_ANTHROPIC_API_KEY` is unset, the
+   runner copies exactly one file into each fresh dir: `.credentials.json`, read
+   from your real config dir (`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod
+   `0600`. Nothing else is copied — **no `CLAUDE.md`, no settings, no memory** — so
+   the isolation that keeps the baseline honest is preserved; only the login token
+   rides along. If that file doesn't exist (keychain auth) the runner proceeds
+   without it.
+
+**Post-run scrub:** in the seeded-credential path, the runner **deletes** every
+copied `.credentials.json` in a `finally` block — on success, on error, and on a
+thrown exception mid-run. The config dirs themselves stay under the temp root for
+post-hoc inspection, but **never with a live credential inside**: the token's
+on-disk exposure is bounded to the session lifetime. (The scratch-token path never
+writes one in the first place, so there is nothing to scrub.)
 
 The child also runs with its **cwd set to a fresh empty dir**, not the repo root.
 `claude` reads *project* memory by walking up from the working directory, so
@@ -57,12 +74,49 @@ to run without one. A behavioral result is only meaningful when it is
 attributable to a known model; different models behave differently, so an
 unpinned run is worse than no run.
 
+## Trials (repeat runs + majority verdict)
+
+A single first-response is noisy — a model may happen to say "root cause" one run
+and skip it the next. `--trials N` (default `1`, a positive integer — anything
+else is a clean error) runs each selected case **N** times, recording `trial:
+1..N` on each result line. `score` then **groups** all lines by (case id,
+condition) and gives the group **one** verdict by *strict majority*: it passes iff
+**more than half** its trials passed. So 2/3 and 2/2 pass; a 1/2 **tie fails**
+(strict means `> half`, never `>=`). The `score` table shows the tally, e.g.
+`PASS (2/3)` / `FAIL (1/3)`, and only the graded candidate **groups** gate the run
+(informative groups keep their own section, tallied but never gating). An
+**errored** trial (auth failure, a crashed session) counts as a *failing* trial —
+it stays in the denominator, and when a group has any, the tally spells it out,
+e.g. `FAIL (0/3, 3 error)`, so an all-errored group is legible as such rather than
+looking like three genuine non-compliances.
+
+```sh
+# Run each case three times; the majority verdict rides out one-off noise.
+node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+  --trials 3 --out evals/results/run.jsonl
+```
+
+A legacy result line from before multi-trial support — one with **no** `trial`
+field, or the old 0-based `trial: 0` — pools into its group just like any other
+(grouping is by (case id, condition); the trial number itself is only a label),
+so old and new result files mix coherently.
+
+### Adding trials post-hoc (duplicate accumulation)
+
+`run` **appends**, and `score` pools every line for a group — so running the same
+condition into the same `--out` file again simply **adds** its trials to the pool.
+This is the intended way to add trials after the fact: if a candidate group came
+back `FAIL (1/2)` and you want a third opinion, run one more trial into the same
+file and re-score — the group is now judged over all three. (This is the same
+append-merge mechanism that lets baseline and candidate share one file.)
+
 ## Cost
 
 Every `run` is **real API spend** — one `claude -p` call per (case, condition,
-trial). With ~12 cases and two conditions that is ~24 calls per pass. Only run it
-when you mean to. The `validate` and `score` subcommands are free (they touch no
-API). Tests use a fake shim and never spend.
+trial). With ~12 cases and two conditions at `--trials 1` that is ~24 calls per
+pass; `--trials 3` triples it. Only run it when you mean to. The `validate` and
+`score` subcommands are free (they touch no API). Tests use a fake shim and never
+spend.
 
 **Text cases** are cheap-ish: the prompt goes in, the first response comes back
 with tools disabled, and regex checks judge the prose. **Agentic cases are much
@@ -83,13 +137,51 @@ say. The runner:
    commit. This never happens inside the repo/worktree — the copy lands under the
    OS temp dir (override with `EVALS_FIXTURE_ROOT`).
 2. **Runs a full session** in that dir: `claude -p <prompt> --model <id>
-   --output-format json --permission-mode acceptEdits`. Tools are **enabled**
-   (agentic mode does *not* pass the text-mode `--allowedTools ""` kill-switch);
-   `acceptEdits` is the non-interactive permission mode (verified in
-   `claude --help`).
+   --output-format json --permission-mode acceptEdits --allowedTools "<git
+   subcommands>,Bash(node:*)"`. See the permission model below.
 3. **Judges artifacts** — evaluates the case's checks against the resulting repo
    state and records per-check outcomes on the result line (so `score` reads them
    offline; the temp fixture is gone by then).
+
+### Permission model (what the session may do)
+
+A headless `-p` session is **deny-by-default**. Text cases keep it fully denied
+(`--allowedTools ""`), but an agentic session must actually *act*, so it runs with
+two permissions and nothing more:
+
+- `--permission-mode acceptEdits` — auto-approves **file edits** (create/modify)
+  without an interactive prompt, which a headless run can't answer.
+- `--allowedTools "<git subcommands>,Bash(node:*)"` — auto-approves the specific
+  git subcommands a session needs (`git status/diff/log/add/commit/branch/
+  checkout/switch`, each as `Bash(git commit:*)` etc.) plus `Bash(node:*)`.
+  Everything else stays deny-by-default.
+
+Why: the artifact checks assert on **git state** (`git_created_branch`,
+`git_no_new_commits_on_initial`, `commit_message_matches`) and on **test runs**
+(`test_command_passes`, default `node --test`). If a session couldn't branch,
+commit, and run `node`, those checks would be *structurally unsatisfiable* — a
+lawful session that wants to do exactly that would be walled off mid-task (a real
+batch showed sessions editing files, making zero commits, and their response
+tails literally asking for approval to run `node`).
+
+The git leg is granted per **subcommand**, not a blanket `Bash(git:*)` (following
+`commands/review.md`'s own convention), so `git push`, `git config`, and the
+`git -c alias.x='!sh'` shell-escape are all still denied at no cost to the checks.
+`--allowedTools` is a single comma-separated value here (`claude --help`: "Comma
+or space-separated list of tool names to allow").
+
+**This narrows the attack surface; it does not contain a misbehaving session.**
+`Bash(node:*)` is arbitrary code execution — including network — so a session that
+wants to reach out or exfiltrate still can. The **credential** exposure, though,
+is now bounded on two axes (see [Authentication](#authentication-two-paths-and-the-post-run-scrub)):
+use `EVALS_ANTHROPIC_API_KEY` (a revocable scratch token) and **no credential is
+written to disk at all**; in the fallback seeded-credential path the copy is
+**scrubbed post-run**, so its window is the session lifetime only. What remains
+unbounded is *exec* — during a live session the credential (in seeded mode) is
+readable by session-spawned processes, and node can run anything. That is an
+accepted trade for a **maintainer-run, local** release gate on **trusted prompts**;
+running it unattended or on untrusted input still needs an OS sandbox (no-network,
+fs-jail) on top, plus the scratch-token mode.
 
 ### Fixture anatomy
 
@@ -153,9 +245,11 @@ rather than a silent skip, so you never spend on one by accident.
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
-# Include agentic cases (real, heavier spend — release gate):
+# Release gate: include agentic cases AND repeat each 3× so the majority verdict
+# rides out one-off noise (real, heavier spend — this is the gate you run before
+# shipping a HARRY.md change):
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
-  --agentic --out evals/results/run.jsonl
+  --agentic --trials 3 --out evals/results/run.jsonl
 ```
 
 Each materialized fixture (and each condition's config/work dir) is left in place

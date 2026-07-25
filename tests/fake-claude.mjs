@@ -40,6 +40,11 @@ const claudeMd = configDir ? path.join(configDir, "CLAUDE.md") : null;
 const hasClaudeMd = Boolean(claudeMd && fs.existsSync(claudeMd));
 const lawsPresent =
   hasClaudeMd && fs.readFileSync(claudeMd, "utf8").includes("Resident Engineering Laws");
+// Whether a seeded credential is present in the config dir AT SESSION TIME — the
+// scrub test asserts this is true during the run and gone after. Also record the
+// ANTHROPIC_API_KEY the child received (the scratch-token path), so a test can
+// prove API-key mode reaches the child and seeds no file.
+const hasCredentials = Boolean(configDir && fs.existsSync(path.join(configDir, ".credentials.json")));
 
 const call = {
   prompt: flag("-p"),
@@ -51,10 +56,28 @@ const call = {
   cwdHasClaudeMd: fs.existsSync(path.join(process.cwd(), "CLAUDE.md")),
   hasClaudeMd,
   lawsPresent,
+  hasCredentials,
+  apiKey: process.env.ANTHROPIC_API_KEY ?? null,
 };
 const calls = fs.existsSync(CALLS_PATH) ? JSON.parse(fs.readFileSync(CALLS_PATH, "utf8")) : [];
 calls.push(call);
 fs.writeFileSync(CALLS_PATH, JSON.stringify(calls, null, 2));
+
+// Multi-trial seam: the calls file IS the per-call counter, so callNumber is
+// this invocation's 1-based index (invocations are synchronous/sequential).
+// FAKE_CLAUDE_FAIL_ON_NTH is a comma list of 1-based call numbers whose reply
+// is swapped for FAKE_CLAUDE_FAIL_REPLY (a check-missing string), letting a test
+// script exactly which trial of an N-trial run fails.
+const callNumber = calls.length;
+const failOnNth = (process.env.FAKE_CLAUDE_FAIL_ON_NTH || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .map(Number);
+const failThisCall = failOnNth.includes(callNumber);
+const reply = failThisCall
+  ? (process.env.FAKE_CLAUDE_FAIL_REPLY || "A non-matching reply: no lawful marker here.")
+  : REPLY;
 
 // Agentic script mode: when FAKE_CLAUDE_SCRIPT names a .mjs, run it IN the
 // current cwd (the materialized fixture repo) to simulate a session's tool use
@@ -79,7 +102,7 @@ process.stdout.write(
     type: "result",
     subtype: isError ? "error_during_execution" : "success",
     is_error: isError,
-    result: REPLY,
+    result: reply,
   }) + "\\n",
 );
 `;
