@@ -571,6 +571,53 @@ test("score table: an all-errored group reads FAIL (0/N, N error), not a bare 0/
   }
 });
 
+test("score table: a long informative id does not overflow the condition column", () => {
+  // The case-column width spans ALL printed ids (graded + informative), so a long
+  // informative id can't shove its condition into the previous column.
+  const outDir = tmpDir("harry-evals-wide-");
+  try {
+    const results = path.join(outDir, "r.jsonl");
+    const longId = "a-very-long-informative-case-identifier-xyz";
+    writeFileSync(
+      results,
+      [
+        JSON.stringify({
+          id: "tier",
+          condition: "candidate",
+          law: "§3",
+          response: "a tier note",
+          checks: [{ type: "regex_must", pattern: "tier", flags: "i" }],
+        }),
+        JSON.stringify({
+          id: longId,
+          condition: "candidate",
+          law: "L&C",
+          informative: true,
+          response: "whatever",
+          checks: [{ type: "regex_must", pattern: "nope" }],
+        }),
+      ].join("\n"),
+    );
+    // Graded candidate passes → exit 0, so execFileSync does not throw.
+    const stdout = execFileSync(
+      process.execPath,
+      [path.join(pluginRoot, "scripts", "run-evals.mjs"), "score", "--results", results],
+      { encoding: "utf8" },
+    ).toString();
+
+    const dataRows = stdout
+      .split("\n")
+      .filter((l) => l.includes("candidate") && (l.includes("tier") || l.includes(longId)));
+    assert.equal(dataRows.length, 2, "both the graded and informative rows printed");
+    // "candidate" begins at the same column in every section, past the longest id.
+    const cols = dataRows.map((l) => l.indexOf("candidate"));
+    assert.equal(cols[0], cols[1], "the condition column aligns across both sections");
+    assert.ok(cols[0] > longId.length, "the long id does not run into the condition column");
+  } finally {
+    rmSync(outDir, { recursive: true, force: true });
+  }
+});
+
 // ---- agentic mode: fixture repos + artifact checks -------------------------
 
 function git(args: string[], cwd: string): string {
@@ -904,10 +951,15 @@ test("runEvals --agentic: a shim-scripted session materializes, edits, commits; 
       "the scripted session satisfies every artifact check",
     );
 
-    // The shim was invoked in agentic form: tools NOT disabled, permission mode set.
+    // The shim was invoked in agentic form: tools are ENABLED but narrowed to
+    // git + node (not the text-mode '' kill-switch), and the permission mode is set.
     const calls = readCalls(binDir);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].allowedTools, undefined, "agentic run does NOT pass --allowedTools ''");
+    assert.equal(
+      calls[0].allowedTools,
+      "Bash(git:*),Bash(node:*)",
+      "agentic run allowlists exactly git + node Bash calls (not '' — tools enabled)",
+    );
     assert.equal(
       calls[0].permissionMode,
       "acceptEdits",

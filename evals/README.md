@@ -120,13 +120,34 @@ say. The runner:
    commit. This never happens inside the repo/worktree — the copy lands under the
    OS temp dir (override with `EVALS_FIXTURE_ROOT`).
 2. **Runs a full session** in that dir: `claude -p <prompt> --model <id>
-   --output-format json --permission-mode acceptEdits`. Tools are **enabled**
-   (agentic mode does *not* pass the text-mode `--allowedTools ""` kill-switch);
-   `acceptEdits` is the non-interactive permission mode (verified in
-   `claude --help`).
+   --output-format json --permission-mode acceptEdits --allowedTools
+   "Bash(git:*),Bash(node:*)"`. See the permission model below.
 3. **Judges artifacts** — evaluates the case's checks against the resulting repo
    state and records per-check outcomes on the result line (so `score` reads them
    offline; the temp fixture is gone by then).
+
+### Permission model (what the session may do)
+
+A headless `-p` session is **deny-by-default**. Text cases keep it fully denied
+(`--allowedTools ""`), but an agentic session must actually *act*, so it runs with
+two permissions and nothing more:
+
+- `--permission-mode acceptEdits` — auto-approves **file edits** (create/modify)
+  without an interactive prompt, which a headless run can't answer.
+- `--allowedTools "Bash(git:*),Bash(node:*)"` — auto-approves exactly two Bash
+  commands: **`git`** and **`node`**. Everything else (other Bash, network, etc.)
+  stays denied.
+
+Why exactly those two: the artifact checks assert on **git state**
+(`git_created_branch`, `git_no_new_commits_on_initial`, `commit_message_matches`)
+and on **test runs** (`test_command_passes`, default `node --test`). If `git` and
+`node` weren't executable, those checks would be *structurally unsatisfiable* — a
+lawful session that wants to branch, commit, and run the suite would be walled off
+mid-task (a real batch showed sessions editing files, making zero commits, and
+their response tails literally asking for approval to run `node`). The allowlist
+is deliberately narrow — just the commands the checks depend on — rather than
+opening all of Bash. `--allowedTools` is a single comma-separated value here
+(`claude --help`: "Comma or space-separated list of tool names to allow").
 
 ### Fixture anatomy
 

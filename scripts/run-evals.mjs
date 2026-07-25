@@ -604,10 +604,24 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
   return invokeClaude(bin, args, workDir, configDir, env);
 }
 
+// The Bash commands an agentic session is allowed to run, comma-joined into one
+// `--allowedTools` value (`claude --help`: "Comma or space-separated list of tool
+// names to allow"; a single comma-separated arg avoids the variadic `<tools...>`
+// swallowing later flags). WHY exactly these two: the artifact checks assert on
+// git state (git_created_branch, git_no_new_commits_on_initial, commit messages)
+// and on test runs (test_command_passes), so `git` and `node` MUST be executable
+// or those checks are structurally unsatisfiable and test-running behavior is
+// blocked mid-task. Everything else stays denied — headless `-p` is deny-by-
+// default, and we widen it to just these two rather than opening all of Bash.
+const AGENTIC_ALLOWED_TOOLS = ["Bash(git:*)", "Bash(node:*)"].join(",");
+
 // Invoke the claude CLI for one AGENTIC case: a full headless session in the
-// fixture repo with tools ENABLED (no `--allowedTools ""` kill-switch) and
-// `--permission-mode acceptEdits` for non-interactive file edits (a flag
-// verified present in `claude --help`; the artifact checks judge what it did).
+// fixture repo. `--permission-mode acceptEdits` auto-approves file edits; the
+// `--allowedTools` allowlist additionally auto-approves exactly `git` and `node`
+// Bash calls (see AGENTIC_ALLOWED_TOOLS) so the session can branch, commit, and
+// run the test suite the artifact checks judge. Both flags verified present in
+// `claude --help`; not empty like the text kill-switch — here tools are enabled,
+// just narrowed to the two commands the checks depend on.
 function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
   const args = [
     "-p",
@@ -618,6 +632,8 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
     "json",
     "--permission-mode",
     "acceptEdits",
+    "--allowedTools",
+    AGENTIC_ALLOWED_TOOLS,
   ];
   return invokeClaude(bin, args, fixtureDir, configDir, env);
 }
@@ -825,14 +841,20 @@ function cmdScore(opts) {
   // "all errored", not "all genuinely non-compliant".
   const verdict = (g) =>
     `${g.pass ? "PASS" : "FAIL"} (${g.passCount}/${g.trials}${g.errors ? `, ${g.errors} error` : ""})`;
-  console.log(`${pad("case", 32)}${pad("condition", 12)}${pad("law", 8)}result`);
+  // Column width spans EVERY printed id — graded AND informative — plus the
+  // "case" header, so a long informative id can't overflow into the condition
+  // column of either section (both use the same width). +2 for breathing room.
+  const idWidth = Math.max(4, ...groups.map((g) => g.id.length), "case".length) + 2;
+  const row = (g) =>
+    `${pad(g.id, idWidth)}${pad(g.condition, 12)}${pad(g.law ?? "", 8)}${verdict(g)}`;
+  console.log(`${pad("case", idWidth)}${pad("condition", 12)}${pad("law", 8)}result`);
   for (const g of graded) {
-    console.log(`${pad(g.id, 32)}${pad(g.condition, 12)}${pad(g.law ?? "", 8)}${verdict(g)}`);
+    console.log(row(g));
   }
   if (informative.length) {
     console.log("\ninformative (contrast-only — does NOT gate the run):");
     for (const g of informative) {
-      console.log(`${pad(g.id, 32)}${pad(g.condition, 12)}${pad(g.law ?? "", 8)}${verdict(g)}`);
+      console.log(row(g));
     }
   }
   const informativeLine = summary.informativeTotal
