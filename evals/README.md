@@ -204,7 +204,10 @@ minimal set of exceptions:
   defensively).
 - **read-only:** the `claude` and `node` runtime install trees, resolved at run time
   via `which` + `realpath` (a runtime under `$HOME` — nvm node, the `~/.local`
-  claude install — must stay readable for the child to start).
+  claude install — must stay readable for the child to start). Note this grants the
+  whole **containing directory** of each runtime, read-only — sibling files in those
+  `bin`/install dirs become readable too; it is a coarse, read-only allow, not a
+  single-file grant.
 
 So the session keeps working in the fixture, but reads of ssh keys, other
 credentials, and documents elsewhere under `$HOME`, and writes anywhere outside the
@@ -214,11 +217,16 @@ it can still commit without the jail having to re-open `~/.gitconfig`.
 
 **What it does NOT contain:**
 
-- **Network** — deliberately left open; the session must reach the model API, and
-  the honest ceiling is that credentials in flight can't be hidden from it. This is
-  fs-containment, **not** a no-exfiltration boundary.
-- **The env-held API key** — visible to the session by design (see the DEBT note in
-  `scripts/run-evals.mjs`); use the revocable scratch token.
+- **Network** — deliberately left open; the session must reach the model API. This
+  is fs-containment, **not** a no-exfiltration boundary.
+- **The whole inherited environment** — the child inherits the operator's entire
+  shell env, not just the API key: any `GITHUB_TOKEN`, `AWS_*`, or other secret
+  present is visible to the session, and no OS sandbox can hide an env var from its
+  own child processes. Combined with open network, a hostile session could
+  exfiltrate any of them. The honest ceiling: run this only on **trusted prompts**,
+  with a **revocable scratch key** (`EVALS_ANTHROPIC_API_KEY`), from a shell that
+  isn't carrying secrets you'd mind exposing. See the DEBT note in
+  `scripts/run-evals.mjs`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
   dependency.

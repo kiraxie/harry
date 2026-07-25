@@ -147,6 +147,11 @@ export function buildSeatbeltProfile(opts: {
   allowWrite?: string[];
   allowRead?: string[];
 }): string;
+export function buildAgenticSandboxProfile(opts: {
+  home: string;
+  allowWrite?: string[];
+  bin: string;
+}): string;
 export function wrapWithSandbox(
   sandboxExec: string,
   profile: string,

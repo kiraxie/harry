@@ -14,6 +14,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -22,6 +23,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import type { CheckInput } from "../scripts/run-evals.mjs";
 import {
+  buildAgenticSandboxProfile,
   buildSeatbeltProfile,
   collectRepoState,
   evaluateArtifactChecks,
@@ -1495,6 +1497,53 @@ test("wrapWithSandbox: wraps `bin args...` as `sandbox-exec -p <profile> bin arg
     ["-p", "PROFILE", "claude", "-p", "hi", "--model", "m"],
     "the profile is passed via -p, then the original bin and its args unchanged",
   );
+});
+
+test("buildAgenticSandboxProfile: a symlinked $HOME is canonicalized (I-1: jails the real path)", () => {
+  // I-1 regression lock: seatbelt matches the kernel-canonical path. If the jail
+  // root is left un-normalized, a symlinked $HOME's deny rule silently fails to
+  // match — $HOME is un-jailed with no error while the run reports "sandboxed".
+  // buildAgenticSandboxProfile must realpath the root so the deny lands on the REAL
+  // path (and thus holds through the symlink).
+  const real = realpathSync(tmpDir("harry-sb-realhome-"));
+  const linkParent = tmpDir("harry-sb-link-");
+  const link = path.join(linkParent, "homelink");
+  try {
+    symlinkSync(real, link);
+    const profile = buildAgenticSandboxProfile({
+      home: link,
+      allowWrite: [],
+      bin: process.execPath,
+    });
+    assert.ok(
+      profile.includes(`(deny file-read* file-write* (subpath "${real}"))`),
+      "the deny root is the canonical (realpath) home, not the symlink",
+    );
+    assert.ok(
+      !profile.includes(`(subpath "${link}")`),
+      "the un-normalized symlink path never appears (it would silently fail to match)",
+    );
+
+    if (process.platform === "darwin") {
+      // The deny holds THROUGH the symlink: a canary opened via the symlinked home
+      // path canonicalizes to the jailed real path and is denied by the kernel.
+      writeFileSync(path.join(real, "secret.txt"), "SECRET\n");
+      let denied = false;
+      try {
+        execFileSync("sandbox-exec", ["-p", profile, "cat", path.join(link, "secret.txt")], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+      } catch {
+        denied = true;
+      }
+      assert.ok(denied, "reading the canary through the symlinked home path is denied");
+    }
+  } finally {
+    rmSync(link, { force: true });
+    rmSync(linkParent, { recursive: true, force: true });
+    rmSync(real, { recursive: true, force: true });
+  }
 });
 
 test("requireSandboxSupport: refuses non-macOS and a missing sandbox-exec; passes on both present", () => {
