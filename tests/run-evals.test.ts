@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -1059,7 +1059,7 @@ function fakeOperatorConfig(withCreds: boolean): string {
   return dir;
 }
 
-test("prepareConditionDir: seeds ONLY .credentials.json; baseline still has no CLAUDE.md", () => {
+test("runEvals: seeds a credential FOR the session, then scrubs it; CLAUDE.md isolation holds", () => {
   const binDir = tmpDir("harry-evals-bin-");
   const opCfg = fakeOperatorConfig(true);
   try {
@@ -1091,23 +1091,32 @@ test("prepareConditionDir: seeds ONLY .credentials.json; baseline still has no C
       env,
     );
 
-    // Both fresh config dirs are authenticated via the seeded credentials...
+    // The credential was present DURING each session (the shim stat'd it via
+    // CLAUDE_CONFIG_DIR) — else `claude -p` would be "Not logged in"...
+    const calls = readCalls(binDir);
+    assert.equal(calls.length, 2, "two sessions ran");
     assert.ok(
-      existsSync(path.join(baseline.configDir, ".credentials.json")),
-      "baseline config dir gets the seeded credentials (else claude -p is 'Not logged in')",
+      calls.every((c) => c.hasCredentials === true),
+      "the seeded credential was readable during each session",
+    );
+    // ...but it is SCRUBBED once runEvals returns — the config dir may stay for
+    // inspection, but never with a live credential inside it.
+    assert.ok(
+      !existsSync(path.join(baseline.configDir, ".credentials.json")),
+      "baseline credential scrubbed post-run",
     );
     assert.ok(
-      existsSync(path.join(candidate.configDir, ".credentials.json")),
-      "candidate config dir gets the seeded credentials too",
+      !existsSync(path.join(candidate.configDir, ".credentials.json")),
+      "candidate credential scrubbed post-run",
     );
-    // ...but nothing else leaks: baseline still has no CLAUDE.md (memory isolation).
+    // Memory isolation still holds: baseline never got a CLAUDE.md, candidate did.
     assert.ok(
       !existsSync(path.join(baseline.configDir, "CLAUDE.md")),
       "baseline stays law-free — only credentials were copied, not memory",
     );
     assert.ok(
       existsSync(path.join(candidate.configDir, "CLAUDE.md")),
-      "candidate still has its laws",
+      "candidate still has its laws (CLAUDE.md is not scrubbed)",
     );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
@@ -1139,6 +1148,118 @@ test("prepareConditionDir: no credentials present → proceeds without failing",
       "no credentials copied when the operator dir has none",
     );
     assert.equal(run.lines.length, 1, "the run still completes (no throw on missing creds)");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: EVALS_ANTHROPIC_API_KEY authenticates the child and seeds NO credential file", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(true); // creds exist, but API-key mode must win
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-scratch-token",
+    };
+    const run = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      env,
+    );
+    // API-key mode: NO credential file is ever written (precedence over seeding),
+    // so there is nothing on disk to leak — during the session or after.
+    assert.ok(
+      !existsSync(path.join(run.configDir, ".credentials.json")),
+      "no credential file seeded in API-key mode",
+    );
+    const calls = readCalls(binDir);
+    assert.equal(calls[0].hasCredentials, false, "no credential file present during the session");
+    assert.equal(
+      calls[0].apiKey,
+      "sk-ant-scratch-token",
+      "the scratch key reached the child as ANTHROPIC_API_KEY",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: a bare operator ANTHROPIC_API_KEY is NOT passed to the child (EVALS_ prefix required)", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(true);
+  try {
+    installFakeClaude(binDir);
+    // A stray key in the operator env must never be billed by accident — only the
+    // EVALS_-prefixed var opts in. The child should see it stripped.
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+      ANTHROPIC_API_KEY: "sk-ant-unrelated-operator-key",
+    };
+    delete (env as Record<string, string>).EVALS_ANTHROPIC_API_KEY;
+    runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      env,
+    );
+    const calls = readCalls(binDir);
+    assert.equal(calls[0].apiKey, null, "the inherited bare key was stripped from the child env");
+    assert.equal(calls[0].hasCredentials, true, "auth fell back to the seeded credential instead");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: seeded credential is scrubbed even when the run throws mid-way", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(true);
+  try {
+    installFakeClaude(binDir);
+    // Force a throw AFTER the session ran (so the credential existed and the shim
+    // recorded the config dir): make --out a directory, so the post-session
+    // appendFileSync throws EISDIR and escapes runEvals.
+    const outDir = path.join(binDir, "out-is-a-dir");
+    mkdirSync(outDir);
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+    };
+    assert.throws(
+      () =>
+        runEvals(
+          {
+            condition: "candidate",
+            model: "m",
+            cases: ["destructive-confirmation"],
+            out: outDir,
+          },
+          env,
+        ),
+      "the write to a directory path throws out of runEvals",
+    );
+    const calls = readCalls(binDir);
+    assert.equal(calls.length, 1, "the session ran before the throw");
+    assert.equal(calls[0].hasCredentials, true, "the credential existed during the session");
+    assert.ok(
+      !existsSync(path.join(calls[0].configDir as string, ".credentials.json")),
+      "the finally block scrubbed the credential despite the mid-run throw",
+    );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
     rmSync(opCfg, { recursive: true, force: true });

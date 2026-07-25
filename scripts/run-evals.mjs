@@ -32,6 +32,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -522,16 +523,27 @@ export function resolveModel(opts, env) {
 // CLAUDE.md inlining the laws; baseline gets an empty dir (no CLAUDE.md).
 //
 // A fresh config dir also strips login credentials, so `claude -p` returns
-// {"is_error":true,"result":"Not logged in · ..."}. We seed ONLY
-// `.credentials.json` from the operator's real config dir (env.CLAUDE_CONFIG_DIR
-// or ~/.claude) so the child is authenticated — and nothing else, because memory
-// isolation (no leaked global CLAUDE.md) is the whole point. Absent (keychain or
-// API-key auth) → proceed without it, don't fail. The copy is chmod 0600.
+// {"is_error":true,"result":"Not logged in · ..."}. Two auth paths:
+//
+//   1. SCRATCH TOKEN (preferred, containment): if `EVALS_ANTHROPIC_API_KEY` is
+//      set we seed NO credential file at all — invokeClaude passes the key to the
+//      child as `ANTHROPIC_API_KEY`. A console API key is independently
+//      revocable, and nothing lands on disk to leak into a session's fs.
+//   2. SEEDED CREDENTIAL (fallback): otherwise we copy ONLY `.credentials.json`
+//      from the operator's real config dir (env.CLAUDE_CONFIG_DIR or ~/.claude),
+//      chmod 0600 — and nothing else, because memory isolation (no leaked global
+//      CLAUDE.md) is the whole point. runEvals scrubs this copy post-run.
+//
+// Precedence: EVALS_ANTHROPIC_API_KEY > seeded credentials. Absent both (keychain
+// auth) → proceed without either, don't fail.
 export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = process.env) {
   const dir = mkdtempSync(join(root, `harry-evals-${condition}-`));
   if (condition === "candidate") {
     writeFileSync(join(dir, "CLAUDE.md"), lawsText);
   }
+  // API-key mode authenticates via the child env (invokeClaude), so there is no
+  // credential file to seed — the containment win is that nothing is on disk.
+  if (env.EVALS_ANTHROPIC_API_KEY) return dir;
   const realConfigDir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
   const credSrc = join(realConfigDir, ".credentials.json");
   if (existsSync(credSrc)) {
@@ -540,6 +552,13 @@ export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = 
     chmodSync(credDst, 0o600);
   }
   return dir;
+}
+
+// Delete a seeded `.credentials.json` from a config dir, if present. The config
+// dir itself may stay (post-hoc inspection value) — but never with a live
+// credential inside it. Idempotent and missing-safe (force).
+function scrubCredential(configDir) {
+  rmSync(join(configDir, ".credentials.json"), { force: true });
 }
 
 // Extract the assistant text from `claude -p --output-format json` output. A
@@ -561,10 +580,23 @@ function extractResponse(stdout) {
 // child still printed one, otherwise attach stdout/stderr tails so a failing
 // line carries a real diagnostic instead of a bare "Command failed".
 function invokeClaude(bin, args, cwd, configDir, env) {
+  const childEnv = { ...env, CLAUDE_CONFIG_DIR: configDir };
+  // Auth is deterministic and opt-in. EVALS_ANTHROPIC_API_KEY (the scratch-token
+  // path) is the ONLY thing that activates API-key auth for the child. We
+  // deliberately do NOT honor a bare `ANTHROPIC_API_KEY` inherited from the
+  // operator's shell — requiring the EVALS_ prefix means an unrelated key sitting
+  // in the environment can never be billed by accident. So: set it from the
+  // EVALS_ var when present, otherwise STRIP any inherited one so seeded-
+  // credential auth is what's actually used.
+  if (env.EVALS_ANTHROPIC_API_KEY) {
+    childEnv.ANTHROPIC_API_KEY = env.EVALS_ANTHROPIC_API_KEY;
+  } else {
+    delete childEnv.ANTHROPIC_API_KEY;
+  }
   try {
     const stdout = execFileSync(bin, args, {
       cwd,
-      env: { ...env, CLAUDE_CONFIG_DIR: configDir },
+      env: childEnv,
       encoding: "utf8",
       maxBuffer: 32 * 1024 * 1024,
     });
@@ -620,12 +652,14 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
 // would still execute model-authored files. This narrows the surface; it does
 // NOT sandbox a misbehaving session: `Bash(node:*)` is arbitrary code execution,
 // including network, so a session that wants to exfiltrate or reach out still
-// can. Containment is out of scope here (see the DEBT marker).
+// can. The credential exposure is now bounded (see below), but exec is not.
 //
-// DEBT: node grants arbitrary exec and the seeded .credentials.json is reachable
-// from the session env — acceptable for a maintainer-run local gate; scrub/scope
-// the credential (scratch token or post-run revoke) before this ever runs
-// unattended or on untrusted prompts.
+// DEBT: during a live agentic session the seeded credential (when API-key mode is
+// off) is readable by session-spawned processes and node grants arbitrary exec —
+// the window is now session-lifetime only (runEvals scrubs the copy post-run) and
+// avoidable entirely via EVALS_ANTHROPIC_API_KEY (a revocable scratch token, no
+// file on disk); full containment needs an OS sandbox (no-network, fs-jail) if
+// this ever runs unattended or on untrusted prompts.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -705,74 +739,92 @@ export function runEvals(opts, env = process.env) {
   // separate EMPTY dir used as the child's cwd for every case, so no project
   // CLAUDE.md (this repo's included) is discoverable by walking up from it.
   const configDir = prepareConditionDir(condition, lawsText, tmpdir(), env);
-  const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
+  // Everything after the config dir exists runs inside try/finally so the seeded
+  // credential is scrubbed no matter how we leave — normal return, a per-trial
+  // error (those are caught and recorded), or a thrown exception mid-run. The
+  // credential's on-disk exposure is thus bounded to the session lifetime.
+  try {
+    const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
 
-  const outPath =
-    opts.out ||
-    join(pluginRoot, "evals", "results", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
-  mkdirSync(dirname(outPath), { recursive: true });
+    const outPath =
+      opts.out ||
+      join(
+        pluginRoot,
+        "evals",
+        "results",
+        `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`,
+      );
+    mkdirSync(dirname(outPath), { recursive: true });
 
-  const fixtureRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
-  const written = [];
-  for (const c of runnable) {
-    if (!SUPPORTED_MODES.has(c.mode)) throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
-    // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
-    // with no `trial` field as trial 1, so the two formats pool coherently.
-    for (let trial = 1; trial <= trials; trial++) {
-      const line = {
-        id: c.id,
-        mode: c.mode,
-        condition,
-        trial,
-        model,
-        law: c.law,
-        informative: c.informative === true,
-        prompt: c.prompt,
-        checks: c.checks,
-        configDir,
-        workDir,
-        timestamp: new Date().toISOString(),
-      };
-      try {
-        // mode dispatch: text judges first-response prose; agentic materializes a
-        // throwaway fixture repo, runs a full session in it, then judges artifacts.
-        if (c.mode === "agentic") {
-          const fx = materializeFixture(c.fixture, fixtureRoot, env);
-          line.fixture = c.fixture;
-          line.fixtureDir = fx.dir;
-          line.initialBranch = fx.initialBranch;
-          line.initialCommit = fx.initialCommit;
-          line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env);
-          // Evaluate now, while the fixture dir exists, and record per-check
-          // outcomes so `score` can judge offline (matching text mode's shape).
-          const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);
-          const { results } = evaluateArtifactChecks(c.checks, state);
-          line.checkOutcomes = results.map((r) => ({ check: r.check, ok: r.ok, detail: r.detail }));
-        } else {
-          line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
-          // Record per-check outcomes (same shape as agentic lines) so an
-          // inspector can see WHICH check failed without re-scoring. Scoring
-          // still re-evaluates text lines from `response`, so these are
-          // informational and never the source of truth.
-          const { results } = evaluateChecks(c.checks, line.response);
-          line.checkOutcomes = results.map((r) => ({
-            check: r.check,
-            ok: r.ok,
-            detail: r.matched ? "pattern matched" : "pattern did not match",
-          }));
+    const fixtureRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
+    const written = [];
+    for (const c of runnable) {
+      if (!SUPPORTED_MODES.has(c.mode))
+        throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
+      // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
+      // with no `trial` field as trial 1, so the two formats pool coherently.
+      for (let trial = 1; trial <= trials; trial++) {
+        const line = {
+          id: c.id,
+          mode: c.mode,
+          condition,
+          trial,
+          model,
+          law: c.law,
+          informative: c.informative === true,
+          prompt: c.prompt,
+          checks: c.checks,
+          configDir,
+          workDir,
+          timestamp: new Date().toISOString(),
+        };
+        try {
+          // mode dispatch: text judges first-response prose; agentic materializes a
+          // throwaway fixture repo, runs a full session in it, then judges artifacts.
+          if (c.mode === "agentic") {
+            const fx = materializeFixture(c.fixture, fixtureRoot, env);
+            line.fixture = c.fixture;
+            line.fixtureDir = fx.dir;
+            line.initialBranch = fx.initialBranch;
+            line.initialCommit = fx.initialCommit;
+            line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env);
+            // Evaluate now, while the fixture dir exists, and record per-check
+            // outcomes so `score` can judge offline (matching text mode's shape).
+            const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);
+            const { results } = evaluateArtifactChecks(c.checks, state);
+            line.checkOutcomes = results.map((r) => ({
+              check: r.check,
+              ok: r.ok,
+              detail: r.detail,
+            }));
+          } else {
+            line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
+            // Record per-check outcomes (same shape as agentic lines) so an
+            // inspector can see WHICH check failed without re-scoring. Scoring
+            // still re-evaluates text lines from `response`, so these are
+            // informational and never the source of truth.
+            const { results } = evaluateChecks(c.checks, line.response);
+            line.checkOutcomes = results.map((r) => ({
+              check: r.check,
+              ok: r.ok,
+              detail: r.matched ? "pattern matched" : "pattern did not match",
+            }));
+          }
+        } catch (err) {
+          line.response = "";
+          line.error = err.message;
         }
-      } catch (err) {
-        line.response = "";
-        line.error = err.message;
+        // Append (never truncate): the documented flow runs baseline and candidate
+        // as two separate invocations into the SAME --out file, so score can
+        // contrast both conditions. Truncating would keep only the last run.
+        appendFileSync(outPath, `${JSON.stringify(line)}\n`);
+        written.push(line);
       }
-      // Append (never truncate): the documented flow runs baseline and candidate
-      // as two separate invocations into the SAME --out file, so score can
-      // contrast both conditions. Truncating would keep only the last run.
-      appendFileSync(outPath, `${JSON.stringify(line)}\n`);
-      written.push(line);
     }
+    return { outPath, configDir, workDir, lines: written, skipped };
+  } finally {
+    scrubCredential(configDir);
   }
-  return { outPath, configDir, workDir, lines: written, skipped };
 }
 
 // ---- CLI -------------------------------------------------------------------

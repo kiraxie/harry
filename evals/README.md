@@ -31,17 +31,34 @@ global `CLAUDE.md` leaked into the baseline, the baseline would already be
 "lawful" and the measured delta would collapse to nothing. The empty baseline
 dir is what keeps the comparison honest.
 
-### Credential seeding (the one thing copied in)
+### Authentication (two paths) and the post-run scrub
 
 A fresh config dir is also *logged out* — `claude -p` returns
-`{"is_error":true,"result":"Not logged in · ..."}`. So the runner copies exactly
-one file into each fresh dir: `.credentials.json`, read from your real config dir
-(`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod `0600`. Nothing else is copied —
-**no `CLAUDE.md`, no settings, no memory** — so the isolation that keeps the
-baseline honest is preserved; only the login token rides along. If that file
-doesn't exist (keychain-auth or API-key setups) the runner proceeds without it.
-The token lands in a world-unreadable temp copy that is left under the temp root
-with the rest of the run artifacts — prune the temp dir if that bothers you.
+`{"is_error":true,"result":"Not logged in · ..."}`. Two ways to authenticate the
+child, in precedence order:
+
+1. **Scratch token (preferred)** — set `EVALS_ANTHROPIC_API_KEY` to a console API
+   key. The runner passes it to the child as `ANTHROPIC_API_KEY` and seeds **no
+   credential file at all** — nothing lands on disk for a session to read, and a
+   console key is independently revocable. This is the recommended mode for the
+   agentic gate (see the permission model). Note the runner honors **only** the
+   `EVALS_`-prefixed variable — a bare `ANTHROPIC_API_KEY` sitting in your shell is
+   deliberately **not** used (and is stripped from the child env), so an unrelated
+   key can never be billed by accident.
+2. **Seeded credential (fallback)** — if `EVALS_ANTHROPIC_API_KEY` is unset, the
+   runner copies exactly one file into each fresh dir: `.credentials.json`, read
+   from your real config dir (`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod
+   `0600`. Nothing else is copied — **no `CLAUDE.md`, no settings, no memory** — so
+   the isolation that keeps the baseline honest is preserved; only the login token
+   rides along. If that file doesn't exist (keychain auth) the runner proceeds
+   without it.
+
+**Post-run scrub:** in the seeded-credential path, the runner **deletes** every
+copied `.credentials.json` in a `finally` block — on success, on error, and on a
+thrown exception mid-run. The config dirs themselves stay under the temp root for
+post-hoc inspection, but **never with a live credential inside**: the token's
+on-disk exposure is bounded to the session lifetime. (The scratch-token path never
+writes one in the first place, so there is nothing to scrub.)
 
 The child also runs with its **cwd set to a fresh empty dir**, not the repo root.
 `claude` reads *project* memory by walking up from the working directory, so
@@ -154,12 +171,17 @@ The git leg is granted per **subcommand**, not a blanket `Bash(git:*)` (followin
 or space-separated list of tool names to allow").
 
 **This narrows the attack surface; it does not contain a misbehaving session.**
-`Bash(node:*)` is arbitrary code execution — including network — so a session
-that wants to reach out or exfiltrate still can, and the seeded
-`.credentials.json` (see above) is reachable from its environment. That is an
-accepted trade for a **maintainer-run, local** release gate on trusted prompts;
-it is **not** safe to run unattended or on untrusted input without first scoping
-the credential (a scratch token, or revoke it post-run) and containing exec.
+`Bash(node:*)` is arbitrary code execution — including network — so a session that
+wants to reach out or exfiltrate still can. The **credential** exposure, though,
+is now bounded on two axes (see [Authentication](#authentication-two-paths-and-the-post-run-scrub)):
+use `EVALS_ANTHROPIC_API_KEY` (a revocable scratch token) and **no credential is
+written to disk at all**; in the fallback seeded-credential path the copy is
+**scrubbed post-run**, so its window is the session lifetime only. What remains
+unbounded is *exec* — during a live session the credential (in seeded mode) is
+readable by session-spawned processes, and node can run anything. That is an
+accepted trade for a **maintainer-run, local** release gate on **trusted prompts**;
+running it unattended or on untrusted input still needs an OS sandbox (no-network,
+fs-jail) on top, plus the scratch-token mode.
 
 ### Fixture anatomy
 
