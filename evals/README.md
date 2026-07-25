@@ -57,12 +57,49 @@ to run without one. A behavioral result is only meaningful when it is
 attributable to a known model; different models behave differently, so an
 unpinned run is worse than no run.
 
+## Trials (repeat runs + majority verdict)
+
+A single first-response is noisy — a model may happen to say "root cause" one run
+and skip it the next. `--trials N` (default `1`, a positive integer — anything
+else is a clean error) runs each selected case **N** times, recording `trial:
+1..N` on each result line. `score` then **groups** all lines by (case id,
+condition) and gives the group **one** verdict by *strict majority*: it passes iff
+**more than half** its trials passed. So 2/3 and 2/2 pass; a 1/2 **tie fails**
+(strict means `> half`, never `>=`). The `score` table shows the tally, e.g.
+`PASS (2/3)` / `FAIL (1/3)`, and only the graded candidate **groups** gate the run
+(informative groups keep their own section, tallied but never gating). An
+**errored** trial (auth failure, a crashed session) counts as a *failing* trial —
+it stays in the denominator, and when a group has any, the tally spells it out,
+e.g. `FAIL (0/3, 3 error)`, so an all-errored group is legible as such rather than
+looking like three genuine non-compliances.
+
+```sh
+# Run each case three times; the majority verdict rides out one-off noise.
+node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+  --trials 3 --out evals/results/run.jsonl
+```
+
+A legacy result line from before multi-trial support — one with **no** `trial`
+field, or the old 0-based `trial: 0` — pools into its group just like any other
+(grouping is by (case id, condition); the trial number itself is only a label),
+so old and new result files mix coherently.
+
+### Adding trials post-hoc (duplicate accumulation)
+
+`run` **appends**, and `score` pools every line for a group — so running the same
+condition into the same `--out` file again simply **adds** its trials to the pool.
+This is the intended way to add trials after the fact: if a candidate group came
+back `FAIL (1/2)` and you want a third opinion, run one more trial into the same
+file and re-score — the group is now judged over all three. (This is the same
+append-merge mechanism that lets baseline and candidate share one file.)
+
 ## Cost
 
 Every `run` is **real API spend** — one `claude -p` call per (case, condition,
-trial). With ~12 cases and two conditions that is ~24 calls per pass. Only run it
-when you mean to. The `validate` and `score` subcommands are free (they touch no
-API). Tests use a fake shim and never spend.
+trial). With ~12 cases and two conditions at `--trials 1` that is ~24 calls per
+pass; `--trials 3` triples it. Only run it when you mean to. The `validate` and
+`score` subcommands are free (they touch no API). Tests use a fake shim and never
+spend.
 
 **Text cases** are cheap-ish: the prompt goes in, the first response comes back
 with tools disabled, and regex checks judge the prose. **Agentic cases are much
@@ -153,9 +190,11 @@ rather than a silent skip, so you never spend on one by accident.
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
-# Include agentic cases (real, heavier spend — release gate):
+# Release gate: include agentic cases AND repeat each 3× so the majority verdict
+# rides out one-off noise (real, heavier spend — this is the gate you run before
+# shipping a HARRY.md change):
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
-  --agentic --out evals/results/run.jsonl
+  --agentic --trials 3 --out evals/results/run.jsonl
 ```
 
 Each materialized fixture (and each condition's config/work dir) is left in place

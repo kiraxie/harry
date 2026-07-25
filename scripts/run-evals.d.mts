@@ -56,21 +56,27 @@ export interface RepoState {
   env?: Record<string, string | undefined>;
 }
 
-export interface ScoreRow {
+// One (case id, condition) group: all its trial lines pooled (from a --trials N
+// run and/or several appended runs of the same condition). Its verdict is a
+// STRICT MAJORITY of the pooled trials — `pass` is true iff passCount*2 > trials.
+export interface ScoreGroup {
   id: string;
   condition: string;
-  trial: number;
   law?: string;
   informative: boolean;
+  trials: number;
+  passCount: number;
+  errors: number;
   pass: boolean;
-  error: string | null;
-  failures: CheckInput[];
 }
 
 export interface ScoreSummary {
-  rows: ScoreRow[];
+  // `rows` is an alias of `groups`, kept for callers that read `rows`.
+  rows: ScoreGroup[];
+  groups: ScoreGroup[];
   summary: {
     total: number;
+    trials: number;
     candidatePass: number;
     candidateTotal: number;
     baselinePass: number;
@@ -99,6 +105,7 @@ export function evaluateChecks(
   responseText: string | undefined,
 ): { pass: boolean; results: CheckOutcome[] };
 export function scoreResults(lines: EvalRecord[]): ScoreSummary;
+export function resolveTrials(opts: { trials?: string | number | null }): number;
 export function resolveModel(
   opts: { model?: string },
   env: Record<string, string | undefined>,

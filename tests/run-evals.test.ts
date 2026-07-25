@@ -21,6 +21,7 @@ import {
   materializeFixture,
   parseCasesJsonl,
   resolveModel,
+  resolveTrials,
   runEvals,
   scoreResults,
   validateCases,
@@ -138,6 +139,75 @@ test("scoreResults: candidate must pass; a failing candidate check sets candidat
     },
   ]);
   assert.equal(failing.candidateFailed, true, "a candidate that misses a must-match fails the run");
+});
+
+test("scoreResults: a group passes on a STRICT majority of its trials", () => {
+  const mk = (trial: number, response: string) => ({
+    id: "tier",
+    condition: "candidate",
+    law: "§3",
+    trial,
+    response,
+    checks: [{ type: "regex_must", pattern: "tier", flags: "i" }],
+  });
+
+  // 2 of 3 pass → group PASS (strict majority is met).
+  const twoOfThree = scoreResults([
+    mk(1, "Standard tier task"),
+    mk(2, "another tier note"),
+    mk(3, "no marker here"),
+  ]);
+  const g3 = twoOfThree.groups.find((x) => x.id === "tier" && x.condition === "candidate");
+  assert.equal(g3?.trials, 3, "all three trials pooled into one group");
+  assert.equal(g3?.passCount, 2);
+  assert.equal(g3?.pass, true, "2/3 is a strict majority → PASS");
+  assert.equal(twoOfThree.candidateFailed, false, "a majority-passing candidate group gates green");
+
+  // 1 of 3 → FAIL.
+  const oneOfThree = scoreResults([mk(1, "tier"), mk(2, "x"), mk(3, "y")]);
+  const g1 = oneOfThree.groups.find((x) => x.condition === "candidate");
+  assert.equal(g1?.pass, false, "1/3 is not a majority → FAIL");
+  assert.equal(oneOfThree.candidateFailed, true);
+
+  // N=2, 1 pass / 1 fail → FAIL. A tie is NOT a strict majority.
+  const oneOfTwo = scoreResults([mk(1, "tier"), mk(2, "x")]);
+  const g2 = oneOfTwo.groups.find((x) => x.condition === "candidate");
+  assert.equal(g2?.passCount, 1);
+  assert.equal(g2?.trials, 2);
+  assert.equal(g2?.pass, false, "1/2 is a tie, strict majority requires > half → FAIL");
+  assert.equal(oneOfTwo.candidateFailed, true);
+
+  // N=2, 2 pass → PASS.
+  const twoOfTwo = scoreResults([mk(1, "tier"), mk(2, "tier again")]);
+  assert.equal(twoOfTwo.candidateFailed, false, "2/2 is a majority → PASS");
+});
+
+test("scoreResults: old-format (no trial) lines pool with new trial lines per group", () => {
+  // Duplicate-accumulation semantics: an appended legacy line (no `trial` field,
+  // scored as trial 1) pools with a later --trials line into ONE (id,condition)
+  // group — this is the documented way to add trials post-hoc.
+  const oldLine = {
+    id: "debt",
+    condition: "candidate",
+    law: "§4",
+    response: "Leaving a DEBT: marker for later.",
+    checks: [{ type: "regex_must", pattern: "DEBT:" }],
+  }; // no `trial` field — legacy single-trial line.
+  const newFail = {
+    id: "debt",
+    condition: "candidate",
+    law: "§4",
+    trial: 2,
+    response: "no marker at all",
+    checks: [{ type: "regex_must", pattern: "DEBT:" }],
+  };
+  const scored = scoreResults([oldLine, newFail]);
+  const g = scored.groups.find((x) => x.id === "debt" && x.condition === "candidate");
+  assert.equal(g?.trials, 2, "the legacy line and the new trial pooled into one group");
+  assert.equal(g?.passCount, 1);
+  assert.equal(g?.pass, false, "1/2 is not a strict majority → FAIL");
+  assert.equal(scored.candidateFailed, true, "the mixed-format group gates the run");
+  assert.equal(scored.summary.candidateTotal, 1, "one candidate GROUP, not two trial rows");
 });
 
 test("evaluateChecks: regex_must_not passes only when the pattern is absent", () => {
@@ -316,6 +386,189 @@ test("CLI: a value flag with no value errors cleanly (no TypeError, exit 1)", ()
   // --model as the last token would have crashed on argv[++i].split(...).
   assert.equal(main(["run", "--condition", "baseline", "--model"]), 1, "missing value → exit 1");
   assert.equal(main(["run", "--model", "--condition"]), 1, "a flag as another's value → exit 1");
+});
+
+// ---- multi-trial runs (--trials) -------------------------------------------
+
+test("resolveTrials: default 1; positive integer only, else a clean throw", () => {
+  assert.equal(resolveTrials({}), 1, "no --trials → default 1");
+  assert.equal(resolveTrials({ trials: undefined }), 1);
+  assert.equal(resolveTrials({ trials: "3" }), 3, "a numeric string is accepted");
+  assert.equal(resolveTrials({ trials: 3 }), 3, "a number is accepted");
+  assert.throws(() => resolveTrials({ trials: "0" }), /positive integer/, "0 is refused");
+  assert.throws(() => resolveTrials({ trials: "-2" }), /positive integer/, "negative is refused");
+  assert.throws(
+    () => resolveTrials({ trials: "2.5" }),
+    /positive integer/,
+    "fractional is refused",
+  );
+  assert.throws(
+    () => resolveTrials({ trials: "abc" }),
+    /positive integer/,
+    "non-numeric is refused",
+  );
+  assert.throws(() => resolveTrials({ trials: "" }), /positive integer/, "empty string is refused");
+  assert.throws(() => resolveTrials({ trials: " 2" }), /positive integer/, "whitespace is refused");
+  assert.throws(() => resolveTrials({ trials: "1e1" }), /positive integer/, "exponent is refused");
+  assert.throws(
+    () => resolveTrials({ trials: 2.5 }),
+    /positive integer/,
+    "fractional number is refused",
+  );
+});
+
+test("run CLI: a bad --trials exits 1 cleanly (no throw, no session launched)", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = { ...process.env, EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
+    assert.equal(
+      main(["run", "--condition", "candidate", "--model", "m", "--trials", "0"], env),
+      1,
+      "invalid --trials → exit 1",
+    );
+    assert.equal(readCalls(binDir).length, 0, "no claude invocation on an invalid --trials");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --trials 3: N sessions per case, trials recorded 1..N; one failed trial → PASS (2/3)", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    // A lawful default reply satisfies debt-shortcut's DEBT: check; trial 2 is
+    // scripted (via the shim's per-call counter) to reply with no marker → 1 fail.
+    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      FAKE_CLAUDE_FAIL_ON_NTH: "2",
+      FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
+    };
+    const out = path.join(binDir, "o.jsonl");
+    const { lines } = runEvals(
+      { condition: "candidate", model: "m", cases: ["debt-shortcut"], out, trials: 3 },
+      env,
+    );
+    assert.equal(lines.length, 3, "three trial lines written for the one case");
+    assert.deepEqual(
+      lines.map((l: Record<string, unknown>) => l.trial).sort(),
+      [1, 2, 3],
+      "trials are 1-based (1..N), not 0-based",
+    );
+    assert.equal(readCalls(binDir).length, 3, "the shim was invoked once per trial");
+
+    const scored = scoreResults(lines);
+    const g = scored.groups.find((x) => x.condition === "candidate");
+    assert.equal(g?.trials, 3);
+    assert.equal(g?.passCount, 2, "trials 1 and 3 passed, trial 2 failed");
+    assert.equal(g?.pass, true, "2/3 is a strict majority → group PASS");
+    assert.equal(scored.candidateFailed, false);
+    assert.equal(main(["score", "--results", out]), 0, "2/3 majority → exit 0");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --trials 3: two failed trials → FAIL (1/3), candidate gates red", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      FAKE_CLAUDE_FAIL_ON_NTH: "2,3",
+      FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
+    };
+    const out = path.join(binDir, "o.jsonl");
+    const { lines } = runEvals(
+      { condition: "candidate", model: "m", cases: ["debt-shortcut"], out, trials: 3 },
+      env,
+    );
+    const scored = scoreResults(lines);
+    const g = scored.groups.find((x) => x.condition === "candidate");
+    assert.equal(g?.passCount, 1, "only trial 1 passed");
+    assert.equal(g?.pass, false, "1/3 is not a majority → group FAIL");
+    assert.equal(scored.candidateFailed, true);
+    assert.equal(main(["score", "--results", out]), 1, "1/3 → exit 1");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --trials 2: a 1/2 split FAILS (strict majority, a tie is not a majority)", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      FAKE_CLAUDE_FAIL_ON_NTH: "2",
+      FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
+    };
+    const out = path.join(binDir, "o.jsonl");
+    const { lines } = runEvals(
+      { condition: "candidate", model: "m", cases: ["debt-shortcut"], out, trials: 2 },
+      env,
+    );
+    const scored = scoreResults(lines);
+    const g = scored.groups.find((x) => x.condition === "candidate");
+    assert.equal(g?.trials, 2);
+    assert.equal(g?.passCount, 1);
+    assert.equal(g?.pass, false, "1/2 is a tie → FAIL under strict majority");
+    assert.equal(main(["score", "--results", out]), 1, "1/2 → exit 1");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("score table: an all-errored group reads FAIL (0/N, N error), not a bare 0/N", () => {
+  // Errored trials count as failing trials (in the denominator). The table must
+  // distinguish "all errored" from "all genuinely non-compliant".
+  const outDir = tmpDir("harry-evals-err-");
+  try {
+    const results = path.join(outDir, "r.jsonl");
+    const mk = (trial: number) =>
+      JSON.stringify({
+        id: "debt",
+        condition: "candidate",
+        law: "§4",
+        trial,
+        response: "",
+        error: "claude returned an error result: Not logged in",
+        checks: [{ type: "regex_must", pattern: "DEBT:" }],
+      });
+    writeFileSync(results, [mk(1), mk(2), mk(3)].join("\n"));
+
+    // scoreResults tallies the errors.
+    const scored = scoreResults(
+      [mk(1), mk(2), mk(3)].map((l) => JSON.parse(l) as Record<string, unknown>),
+    );
+    const g = scored.groups.find((x) => x.condition === "candidate");
+    assert.equal(g?.errors, 3, "all three trials errored");
+    assert.equal(g?.passCount, 0);
+    assert.equal(g?.pass, false);
+
+    // The rendered table surfaces the error count.
+    const stdout = execFileSync(
+      process.execPath,
+      [path.join(pluginRoot, "scripts", "run-evals.mjs"), "score", "--results", results],
+      { encoding: "utf8" },
+    ).toString();
+    assert.match(stdout, /FAIL \(0\/3, 3 error\)/, "verdict shows the error count when nonzero");
+  } catch (err: unknown) {
+    // score exits 1 on a failing candidate; execFileSync throws but still carries
+    // stdout — assert on that.
+    const e = err as { status?: number; stdout?: string };
+    assert.equal(e.status, 1, "a failing candidate exits 1");
+    assert.match(
+      String(e.stdout),
+      /FAIL \(0\/3, 3 error\)/,
+      "verdict shows the error count when nonzero",
+    );
+  } finally {
+    rmSync(outDir, { recursive: true, force: true });
+  }
 });
 
 // ---- agentic mode: fixture repos + artifact checks -------------------------
@@ -672,6 +925,56 @@ test("runEvals --agentic: a shim-scripted session materializes, edits, commits; 
     // Score reads the recorded outcomes offline (fixture temp dir is gone).
     const scored = scoreResults(lines);
     assert.equal(scored.candidateFailed, false, "candidate passes on the scripted lawful session");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --agentic --trials 2: each trial materializes a FRESH fixture repo", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
+  try {
+    // No session script needed: we only care that each trial gets its own
+    // materialized fixture. The shim records its cwd per call (readCalls), and
+    // the agentic run sets cwd to the trial's materialized fixture dir.
+    installFakeClaude(binDir);
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: fxRoot,
+    };
+    const out = path.join(binDir, "agentic.jsonl");
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out,
+        trials: 2,
+        agentic: true,
+      },
+      env,
+    );
+    assert.equal(lines.length, 2, "two agentic trial lines");
+    assert.deepEqual(
+      lines.map((l: Record<string, unknown>) => l.trial).sort(),
+      [1, 2],
+      "trials 1..N recorded",
+    );
+    // Each trial records its own materialized fixtureDir, and they differ.
+    const dirs = lines.map((l: Record<string, unknown>) => l.fixtureDir as string);
+    assert.ok(dirs[0] && dirs[1], "each trial line carries a fixtureDir");
+    assert.notEqual(dirs[0], dirs[1], "trial 2 materialized a fresh fixture, not trial 1's");
+
+    // The shim's own record of the cwd it ran in confirms the fresh dir per call.
+    const calls = readCalls(binDir);
+    assert.equal(calls.length, 2, "two sessions launched");
+    assert.notEqual(calls[0].cwd, calls[1].cwd, "the two trials ran in different fixture cwds");
+    assert.ok(
+      calls.every((c) => c.cwd?.includes("harry-evals-fx-tiny-node")),
+      "both ran in a materialized tiny-node fixture",
+    );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
     rmSync(fxRoot, { recursive: true, force: true });

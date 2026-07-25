@@ -399,56 +399,112 @@ export function evaluateArtifactChecks(checks, state) {
   return { pass: results.every((r) => r.ok), results };
 }
 
-// Score a whole results array. Each result carries its own checks (embedded at
-// run time) so scoring is self-contained and never drifts from a mutated cases
-// file. Returns per-(id,condition) rows plus a summary; candidateFailed drives
-// the CLI exit code (candidate must pass; baseline is only contrast).
-export function scoreResults(lines) {
-  const rows = lines.map((line) => {
-    // Agentic lines can't be re-judged offline (the fixture temp dir is gone),
-    // so the run recorded per-check outcomes; text lines re-evaluate the
-    // response so scoring stays independent of a later-edited cases file.
-    const { pass, results } =
-      line.mode === "agentic"
-        ? {
-            pass: (line.checkOutcomes ?? []).every((o) => o.ok),
-            results: (line.checkOutcomes ?? []).map((o) => ({ check: o.check, ok: o.ok })),
-          }
-        : evaluateChecks(line.checks, line.response);
-    const passed = line.error ? false : pass;
-    return {
-      id: line.id,
-      condition: line.condition,
-      trial: line.trial ?? 0,
-      law: line.law,
-      informative: line.informative === true,
-      pass: passed,
-      error: line.error ?? null,
-      failures: results.filter((r) => !r.ok).map((r) => r.check),
-    };
-  });
-  // Informative rows are contrast-only: split them out so they never gate the
-  // run, and the gating counts (and exit code) consider only the graded rows.
-  const graded = rows.filter((r) => !r.informative);
-  const candidate = graded.filter((r) => r.condition === "candidate");
-  const baseline = graded.filter((r) => r.condition === "baseline");
-  const informative = rows.filter((r) => r.informative);
+// Score one result line to a single-trial pass. Each result carries its own
+// checks (embedded at run time) so scoring is self-contained and never drifts
+// from a mutated cases file. A legacy line with no `trial` field is trial 1.
+function scoreTrial(line) {
+  // Agentic lines can't be re-judged offline (the fixture temp dir is gone), so
+  // the run recorded per-check outcomes; text lines re-evaluate the response so
+  // scoring stays independent of a later-edited cases file.
+  const pass =
+    line.mode === "agentic"
+      ? (line.checkOutcomes ?? []).every((o) => o.ok)
+      : evaluateChecks(line.checks, line.response).pass;
   return {
-    rows,
+    id: line.id,
+    condition: line.condition,
+    trial: line.trial ?? 1,
+    law: line.law,
+    informative: line.informative === true,
+    pass: line.error ? false : pass,
+    error: line.error ?? null,
+  };
+}
+
+// Score a whole results array. Trials are POOLED per (id, condition) group —
+// every line for a group counts, whether it came from one --trials N run or
+// several appended runs of the same condition (that is the documented way to
+// add trials post-hoc). A group's verdict is a STRICT MAJORITY of its trials:
+// it passes iff more than half passed (2/3, 2/2 — a 1/2 tie FAILS). An errored
+// trial counts as a failing trial. candidateFailed (the CLI exit code) derives
+// only from graded (non-informative) candidate GROUP verdicts; informative
+// groups are tallied separately and never gate.
+export function scoreResults(lines) {
+  const groupMap = new Map();
+  for (const line of lines) {
+    const t = scoreTrial(line);
+    // JSON-array key: an unambiguous (id, condition) tuple that can never
+    // collide regardless of what characters an id contains.
+    const key = JSON.stringify([t.id, t.condition]);
+    let g = groupMap.get(key);
+    if (!g) {
+      g = {
+        id: t.id,
+        condition: t.condition,
+        law: t.law,
+        informative: t.informative,
+        trials: 0,
+        passCount: 0,
+        errors: 0,
+      };
+      groupMap.set(key, g);
+    }
+    g.trials += 1;
+    if (t.pass) g.passCount += 1;
+    if (t.error) g.errors += 1;
+    // Backfill law/informative from any trial that carries them (a legacy line
+    // may omit law; a later trial may supply it).
+    if (!g.law && t.law) g.law = t.law;
+    if (t.informative) g.informative = true;
+  }
+  const groups = [...groupMap.values()].map((g) => ({
+    ...g,
+    // Strict majority: passCount > trials/2  ⇔  2*passCount > trials.
+    pass: g.passCount * 2 > g.trials,
+  }));
+
+  // Informative groups are contrast-only: split them out so they never gate the
+  // run, and the gating counts (and exit code) consider only the graded groups.
+  const graded = groups.filter((g) => !g.informative);
+  const candidate = graded.filter((g) => g.condition === "candidate");
+  const baseline = graded.filter((g) => g.condition === "baseline");
+  const informative = groups.filter((g) => g.informative);
+  return {
+    rows: groups,
+    groups,
     summary: {
-      total: rows.length,
-      candidatePass: candidate.filter((r) => r.pass).length,
+      total: groups.length,
+      trials: lines.length,
+      candidatePass: candidate.filter((g) => g.pass).length,
       candidateTotal: candidate.length,
-      baselinePass: baseline.filter((r) => r.pass).length,
+      baselinePass: baseline.filter((g) => g.pass).length,
       baselineTotal: baseline.length,
-      informativePass: informative.filter((r) => r.pass).length,
+      informativePass: informative.filter((g) => g.pass).length,
       informativeTotal: informative.length,
     },
-    candidateFailed: candidate.some((r) => !r.pass),
+    candidateFailed: candidate.some((g) => !g.pass),
   };
 }
 
 // ---- run helpers -----------------------------------------------------------
+
+// Resolve the trial count, or throw. Default 1. Must be a positive integer —
+// a fractional or non-numeric --trials is a user error we refuse cleanly rather
+// than silently coerce (a coerced "2.5"→2 or "abc"→1 would run a silently-wrong
+// number of trials). Each selected case runs this many independent sessions.
+export function resolveTrials(opts) {
+  const raw = opts.trials;
+  if (raw === undefined || raw === null) return 1;
+  // Accept a plain positive integer ONLY: a string must be all digits (rejects
+  // "", " 2", "2.5", "1e1", "0x2"); a number must itself be a positive integer.
+  // No silent default on blank/garbage — that would run a wrong trial count.
+  const isPlainInt = typeof raw === "string" ? /^\d+$/.test(raw) : Number.isInteger(raw);
+  const n = Number(raw);
+  if (!isPlainInt || !Number.isInteger(n) || n < 1) {
+    throw new Error(`--trials must be a positive integer (got "${raw}")`);
+  }
+  return n;
+}
 
 // Resolve the pinned model, or throw. Pinning is a hard rule: an unattributable
 // result is worse than no result.
@@ -575,7 +631,7 @@ export function runEvals(opts, env = process.env) {
   }
   const model = resolveModel(opts, env);
   const bin = env.EVALS_CLAUDE_BIN || "claude";
-  const trials = Math.max(1, Number(opts.trials) || 1);
+  const trials = resolveTrials(opts);
 
   const { cases, errors } = parseCasesJsonl(readFileSync(casesPath(), "utf8"));
   if (errors.length) throw new Error(`cases.jsonl parse errors:\n${errors.join("\n")}`);
@@ -621,7 +677,9 @@ export function runEvals(opts, env = process.env) {
   const written = [];
   for (const c of runnable) {
     if (!SUPPORTED_MODES.has(c.mode)) throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
-    for (let trial = 0; trial < trials; trial++) {
+    // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
+    // with no `trial` field as trial 1, so the two formats pool coherently.
+    for (let trial = 1; trial <= trials; trial++) {
       const line = {
         id: c.id,
         mode: c.mode,
@@ -754,31 +812,39 @@ function cmdScore(opts) {
     for (const e of errors) console.error(`  - ${e}`);
     return 1;
   }
-  const { rows, summary, candidateFailed } = scoreResults(lines);
+  const { groups, summary, candidateFailed } = scoreResults(lines);
   const pad = (s, n) => String(s).padEnd(n);
-  // Graded rows gate the run; informative rows are printed separately below and
-  // never affect the exit code.
-  const graded = rows.filter((r) => !r.informative);
-  const informative = rows.filter((r) => r.informative);
+  // A group is one (case, condition): its verdict is a strict majority of its
+  // pooled trials, shown as a tally, e.g. PASS (2/3) / FAIL (1/3). Graded groups
+  // gate the run; informative groups are printed separately and never affect the
+  // exit code.
+  const graded = groups.filter((g) => !g.informative);
+  const informative = groups.filter((g) => g.informative);
+  // An errored trial counts as a failing trial (it is in the denominator); when
+  // any trial errored, surface the count so `FAIL (0/3, 3 error)` is legible as
+  // "all errored", not "all genuinely non-compliant".
+  const verdict = (g) =>
+    `${g.pass ? "PASS" : "FAIL"} (${g.passCount}/${g.trials}${g.errors ? `, ${g.errors} error` : ""})`;
   console.log(`${pad("case", 32)}${pad("condition", 12)}${pad("law", 8)}result`);
-  for (const r of graded) {
-    const mark = r.pass ? "PASS" : r.error ? "ERROR" : "FAIL";
-    console.log(`${pad(r.id, 32)}${pad(r.condition, 12)}${pad(r.law ?? "", 8)}${mark}`);
+  for (const g of graded) {
+    console.log(`${pad(g.id, 32)}${pad(g.condition, 12)}${pad(g.law ?? "", 8)}${verdict(g)}`);
   }
   if (informative.length) {
     console.log("\ninformative (contrast-only — does NOT gate the run):");
-    for (const r of informative) {
-      const mark = r.pass ? "PASS" : r.error ? "ERROR" : "FAIL";
-      console.log(`${pad(r.id, 32)}${pad(r.condition, 12)}${pad(r.law ?? "", 8)}${mark}`);
+    for (const g of informative) {
+      console.log(`${pad(g.id, 32)}${pad(g.condition, 12)}${pad(g.law ?? "", 8)}${verdict(g)}`);
     }
   }
   const informativeLine = summary.informativeTotal
-    ? ` · informative: ${summary.informativePass}/${summary.informativeTotal} passed (ungated)`
+    ? ` · informative: ${summary.informativePass}/${summary.informativeTotal} groups passed (ungated)`
     : "";
+  // Counts are GROUPS (case × condition), each a strict-majority verdict over
+  // its pooled trials — the trailing count is how many raw trial lines pooled.
   console.log(
-    `\ncandidate: ${summary.candidatePass}/${summary.candidateTotal} passed` +
-      ` · baseline (contrast): ${summary.baselinePass}/${summary.baselineTotal} passed` +
-      informativeLine,
+    `\ncandidate: ${summary.candidatePass}/${summary.candidateTotal} groups passed` +
+      ` · baseline (contrast): ${summary.baselinePass}/${summary.baselineTotal} groups passed` +
+      informativeLine +
+      ` · (${summary.trials} trial line(s) pooled)`,
   );
   return candidateFailed ? 1 : 0;
 }

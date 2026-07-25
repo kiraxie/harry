@@ -56,6 +56,22 @@ const calls = fs.existsSync(CALLS_PATH) ? JSON.parse(fs.readFileSync(CALLS_PATH,
 calls.push(call);
 fs.writeFileSync(CALLS_PATH, JSON.stringify(calls, null, 2));
 
+// Multi-trial seam: the calls file IS the per-call counter, so callNumber is
+// this invocation's 1-based index (invocations are synchronous/sequential).
+// FAKE_CLAUDE_FAIL_ON_NTH is a comma list of 1-based call numbers whose reply
+// is swapped for FAKE_CLAUDE_FAIL_REPLY (a check-missing string), letting a test
+// script exactly which trial of an N-trial run fails.
+const callNumber = calls.length;
+const failOnNth = (process.env.FAKE_CLAUDE_FAIL_ON_NTH || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .map(Number);
+const failThisCall = failOnNth.includes(callNumber);
+const reply = failThisCall
+  ? (process.env.FAKE_CLAUDE_FAIL_REPLY || "A non-matching reply: no lawful marker here.")
+  : REPLY;
+
 // Agentic script mode: when FAKE_CLAUDE_SCRIPT names a .mjs, run it IN the
 // current cwd (the materialized fixture repo) to simulate a session's tool use
 // — branch/edit/commit — so a test can exercise the artifact checks with no
@@ -79,7 +95,7 @@ process.stdout.write(
     type: "result",
     subtype: isError ? "error_during_execution" : "success",
     is_error: isError,
-    result: REPLY,
+    result: reply,
   }) + "\\n",
 );
 `;
