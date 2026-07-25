@@ -25,6 +25,8 @@
 import { execFileSync } from "node:child_process";
 import {
   appendFileSync,
+  chmodSync,
+  copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -32,7 +34,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -462,19 +464,70 @@ export function resolveModel(opts, env) {
 
 // Create an isolated CLAUDE_CONFIG_DIR for a condition. candidate gets a
 // CLAUDE.md inlining the laws; baseline gets an empty dir (no CLAUDE.md).
-export function prepareConditionDir(condition, lawsText, root = tmpdir()) {
+//
+// A fresh config dir also strips login credentials, so `claude -p` returns
+// {"is_error":true,"result":"Not logged in · ..."}. We seed ONLY
+// `.credentials.json` from the operator's real config dir (env.CLAUDE_CONFIG_DIR
+// or ~/.claude) so the child is authenticated — and nothing else, because memory
+// isolation (no leaked global CLAUDE.md) is the whole point. Absent (keychain or
+// API-key auth) → proceed without it, don't fail. The copy is chmod 0600.
+export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = process.env) {
   const dir = mkdtempSync(join(root, `harry-evals-${condition}-`));
   if (condition === "candidate") {
     writeFileSync(join(dir, "CLAUDE.md"), lawsText);
   }
+  const realConfigDir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+  const credSrc = join(realConfigDir, ".credentials.json");
+  if (existsSync(credSrc)) {
+    const credDst = join(dir, ".credentials.json");
+    copyFileSync(credSrc, credDst);
+    chmodSync(credDst, 0o600);
+  }
   return dir;
 }
 
-// Extract the assistant text from `claude -p --output-format json` output.
+// Extract the assistant text from `claude -p --output-format json` output. A
+// result with `is_error: true` (e.g. "Not logged in") can still arrive on a
+// zero exit, so it is treated as a case error carrying the `result` text rather
+// than being scored as a genuine response.
 function extractResponse(stdout) {
   const parsed = JSON.parse(stdout);
+  if (parsed.is_error === true) {
+    const detail = typeof parsed.result === "string" ? parsed.result : JSON.stringify(parsed);
+    throw new Error(`claude returned an error result: ${detail}`);
+  }
   if (typeof parsed.result === "string") return parsed.result;
   return JSON.stringify(parsed);
+}
+
+// Run the claude CLI and decode its response. On an execFileSync failure
+// (nonzero exit or spawn error), surface a structured {is_error} stdout if the
+// child still printed one, otherwise attach stdout/stderr tails so a failing
+// line carries a real diagnostic instead of a bare "Command failed".
+function invokeClaude(bin, args, cwd, configDir, env) {
+  try {
+    const stdout = execFileSync(bin, args, {
+      cwd,
+      env: { ...env, CLAUDE_CONFIG_DIR: configDir },
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    return extractResponse(stdout);
+  } catch (err) {
+    const stdout = err?.stdout ? String(err.stdout) : "";
+    if (stdout.trim().startsWith("{")) {
+      // The child exited nonzero but still emitted a JSON result — decode it
+      // (this rethrows the readable is_error message when present).
+      return extractResponse(stdout);
+    }
+    const tail = (s) => (s ? String(s).trim().slice(-800) : "");
+    const parts = [err?.message ?? "claude invocation failed"];
+    const out = tail(err?.stdout);
+    const errOut = tail(err?.stderr);
+    if (out) parts.push(`stdout: ${out}`);
+    if (errOut) parts.push(`stderr: ${errOut}`);
+    throw new Error(parts.join("\n"));
+  }
 }
 
 // Invoke the claude CLI for one text case under one condition.
@@ -492,13 +545,7 @@ function extractResponse(stdout) {
 // is the sibling isolation to CLAUDE_CONFIG_DIR (global memory).
 function runTextCase(bin, model, prompt, configDir, workDir, env) {
   const args = ["-p", prompt, "--model", model, "--output-format", "json", "--allowedTools", ""];
-  const stdout = execFileSync(bin, args, {
-    cwd: workDir,
-    env: { ...env, CLAUDE_CONFIG_DIR: configDir },
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
-  });
-  return extractResponse(stdout);
+  return invokeClaude(bin, args, workDir, configDir, env);
 }
 
 // Invoke the claude CLI for one AGENTIC case: a full headless session in the
@@ -516,13 +563,7 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
     "--permission-mode",
     "acceptEdits",
   ];
-  const stdout = execFileSync(bin, args, {
-    cwd: fixtureDir,
-    env: { ...env, CLAUDE_CONFIG_DIR: configDir },
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
-  });
-  return extractResponse(stdout);
+  return invokeClaude(bin, args, fixtureDir, configDir, env);
 }
 
 // ---- run (side-effecting) --------------------------------------------------
@@ -568,7 +609,7 @@ export function runEvals(opts, env = process.env) {
   // post-hoc inspection — each `run` makes at most one dir). The workDir is a
   // separate EMPTY dir used as the child's cwd for every case, so no project
   // CLAUDE.md (this repo's included) is discoverable by walking up from it.
-  const configDir = prepareConditionDir(condition, lawsText);
+  const configDir = prepareConditionDir(condition, lawsText, tmpdir(), env);
   const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
 
   const outPath =

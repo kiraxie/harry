@@ -31,6 +31,18 @@ global `CLAUDE.md` leaked into the baseline, the baseline would already be
 "lawful" and the measured delta would collapse to nothing. The empty baseline
 dir is what keeps the comparison honest.
 
+### Credential seeding (the one thing copied in)
+
+A fresh config dir is also *logged out* — `claude -p` returns
+`{"is_error":true,"result":"Not logged in · ..."}`. So the runner copies exactly
+one file into each fresh dir: `.credentials.json`, read from your real config dir
+(`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod `0600`. Nothing else is copied —
+**no `CLAUDE.md`, no settings, no memory** — so the isolation that keeps the
+baseline honest is preserved; only the login token rides along. If that file
+doesn't exist (keychain-auth or API-key setups) the runner proceeds without it.
+The token lands in a world-unreadable temp copy that is left under the temp root
+with the rest of the run artifacts — prune the temp dir if that bothers you.
+
 The child also runs with its **cwd set to a fresh empty dir**, not the repo root.
 `claude` reads *project* memory by walking up from the working directory, so
 running from this checkout would pull in the repo's own `CLAUDE.md` (which

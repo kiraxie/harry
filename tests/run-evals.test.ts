@@ -691,3 +691,165 @@ test("the shipped agentic cases validate and reference existing fixtures", () =>
     );
   }
 });
+
+// ---- auth: credential seeding + error surfacing ----------------------------
+
+// A fake operator config dir carrying only a .credentials.json, used as the
+// resolved source (env.CLAUDE_CONFIG_DIR) so tests don't touch the real ~/.claude.
+function fakeOperatorConfig(withCreds: boolean): string {
+  const dir = tmpDir("harry-evals-opcfg-");
+  if (withCreds) {
+    writeFileSync(path.join(dir, ".credentials.json"), '{"fake":"token"}');
+  }
+  return dir;
+}
+
+test("prepareConditionDir: seeds ONLY .credentials.json; baseline still has no CLAUDE.md", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(true);
+  try {
+    installFakeClaude(binDir);
+    // env.CLAUDE_CONFIG_DIR points at the fake operator dir → that is where the
+    // runner reads .credentials.json from before overriding it per-child.
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+    };
+
+    const baseline = runEvals(
+      {
+        condition: "baseline",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "b.jsonl"),
+      },
+      env,
+    );
+    const candidate = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "c.jsonl"),
+      },
+      env,
+    );
+
+    // Both fresh config dirs are authenticated via the seeded credentials...
+    assert.ok(
+      existsSync(path.join(baseline.configDir, ".credentials.json")),
+      "baseline config dir gets the seeded credentials (else claude -p is 'Not logged in')",
+    );
+    assert.ok(
+      existsSync(path.join(candidate.configDir, ".credentials.json")),
+      "candidate config dir gets the seeded credentials too",
+    );
+    // ...but nothing else leaks: baseline still has no CLAUDE.md (memory isolation).
+    assert.ok(
+      !existsSync(path.join(baseline.configDir, "CLAUDE.md")),
+      "baseline stays law-free — only credentials were copied, not memory",
+    );
+    assert.ok(
+      existsSync(path.join(candidate.configDir, "CLAUDE.md")),
+      "candidate still has its laws",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+test("prepareConditionDir: no credentials present → proceeds without failing", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(false); // keychain/API-key setup: no file
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+    };
+    const run = runEvals(
+      {
+        condition: "baseline",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "b.jsonl"),
+      },
+      env,
+    );
+    assert.ok(
+      !existsSync(path.join(run.configDir, ".credentials.json")),
+      "no credentials copied when the operator dir has none",
+    );
+    assert.equal(run.lines.length, 1, "the run still completes (no throw on missing creds)");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: an is_error result (e.g. 'Not logged in') lands as a case error, not a response", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(true);
+  try {
+    installFakeClaude(binDir, "Not logged in · Please run /login");
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+      FAKE_CLAUDE_IS_ERROR: "1",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      env,
+    );
+    const line = lines[0];
+    assert.ok(line.error, "an is_error:true result is recorded as a case error");
+    assert.match(line.error, /Not logged in/, "the error carries the readable result text");
+    assert.equal(line.response, "", "and is NOT scored as a genuine response");
+    // Scoring: an errored candidate fails the run (exit 1 territory).
+    assert.equal(scoreResults(lines).candidateFailed, true, "an auth error fails the candidate");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(true);
+  try {
+    installFakeClaude(binDir, "boom: some diagnostic on stderr");
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+      FAKE_CLAUDE_FAIL: "1",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      env,
+    );
+    assert.ok(lines[0].error, "a crashing claude is a case error");
+    assert.match(
+      lines[0].error,
+      /boom: some diagnostic on stderr/,
+      "stderr tail is surfaced, not a bare 'Command failed'",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});

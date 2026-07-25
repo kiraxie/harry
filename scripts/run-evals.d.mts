@@ -103,7 +103,12 @@ export function resolveModel(
   opts: { model?: string },
   env: Record<string, string | undefined>,
 ): string;
-export function prepareConditionDir(condition: string, lawsText: string, root?: string): string;
+export function prepareConditionDir(
+  condition: string,
+  lawsText: string,
+  root?: string,
+  env?: Record<string, string | undefined>,
+): string;
 export function materializeFixture(
   name: string,
   root?: string,

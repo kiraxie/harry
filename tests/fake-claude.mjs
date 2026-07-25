@@ -65,8 +65,22 @@ if (scriptPath) {
   execFileSync(process.execPath, [scriptPath], { cwd: process.cwd(), stdio: "inherit" });
 }
 
+// Failure simulations for the auth/error-surfacing tests:
+//  FAKE_CLAUDE_FAIL — exit nonzero with REPLY on stderr (spawn/crash path).
+//  FAKE_CLAUDE_IS_ERROR — exit 0 but emit an is_error:true JSON result (the
+//    real "Not logged in" shape: structured error on a zero exit).
+if (process.env.FAKE_CLAUDE_FAIL) {
+  process.stderr.write(REPLY + "\\n");
+  process.exit(1);
+}
+const isError = Boolean(process.env.FAKE_CLAUDE_IS_ERROR);
 process.stdout.write(
-  JSON.stringify({ type: "result", subtype: "success", is_error: false, result: REPLY }) + "\\n",
+  JSON.stringify({
+    type: "result",
+    subtype: isError ? "error_during_execution" : "success",
+    is_error: isError,
+    result: REPLY,
+  }) + "\\n",
 );
 `;
   writeExecutable(scriptPath, source);
