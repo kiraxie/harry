@@ -29,7 +29,7 @@ milestone: <slug>      # optional key — omit entirely if standalone
                         used to be a separate "research" doc -->
 ## Why / What      <!-- filled when promoted to active — what a spec used to hold -->
 ## Plan            <!-- filled when promoted to active — what a plan used to hold -->
-## Follow-ups      <!-- filled during execution; flushed to new backlog items at finish -->
+## Follow-ups      <!-- filled at brainstorming step 6 or during execution; flushed to new backlog items at finish -->
 ```
 
 Sections accumulate — never delete an earlier section when filling a later

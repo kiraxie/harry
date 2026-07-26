@@ -18,12 +18,12 @@ Classify the task first, then take the matching path. Do NOT pop a mode-choice p
 | Tier | Brainstorming |
 |------|---------------|
 | Trivial | **Skip** — go straight to the work. |
-| Standard | **Compressed path**: grill (compressed) → design (one approach proposal is enough) → lite residue manifest → approve → write the item's `## Why / What` ONLY when a real design decision was weighed (alternatives existed); otherwise skip it and record the decision inline at the top of the item's `## Plan`. |
+| Standard | **Compressed path**: understand → design (one approach proposal is enough) → lite residue manifest → approve → write the item's `## Why / What` ONLY when a real design decision was weighed (alternatives existed); otherwise skip it and record the decision inline at the top of the item's `## Plan`. |
 | Major | **Full flow** below. |
 
 A red line hit (HARRY.md §2) auto-promotes to Major.
 
-**`/grill` handoff — no re-interview.** If a `/grill` session already ran on this idea, its settled decisions and residue manifest replace the interview (Full Flow steps 1-2 / the compressed path's grill step) — do not re-ask what it settled; proceed from its manifest (per `references/grilling.md`'s Handoff).
+**`/grill` handoff — no re-interview.** If a `/grill` session already ran on this idea, its settled decisions and residue manifest replace the interview (Full Flow steps 1-2 / the compressed path's understand step) — do not re-ask what it settled; proceed from its manifest (per `references/grilling.md`'s Handoff).
 
 ## Full Flow (Major)
 
@@ -39,7 +39,7 @@ Complete these in order:
 8. **User reviews the item** — ask, wait, revise if needed.
 9. **Transition** — invoke `writing-plans`. It is the ONLY next skill.
 
-The compressed Standard path runs steps 1 → grill (compressed, per `references/grilling.md`) → (one approach) → present → **lite residue manifest** (one message, the same three parts compressed: resolved / deferred-with-disposition / assumptions) → approve → then step 6 (write the item's `## Why / What`) **only when a real design decision was weighed** (alternatives existed); otherwise skip 6-8 and go straight to step 9 (invoke `writing-plans`), noting the decision inline at the top of the item's `## Plan` section. The lite manifest's deferred lines land the same way as the Full Flow's — the Standard path already writes a Plan-bearing item, so create `## Follow-ups` on it when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items.
+The compressed Standard path runs steps 1 → (one approach) → present → **lite residue manifest** (one message — the exit gate's three parts, compressed; per `references/grilling.md`) → approve → then step 6 (write the item's `## Why / What`) **only when a real design decision was weighed** (alternatives existed); otherwise skip 6-8 and go straight to step 9 (invoke `writing-plans`), noting the decision inline at the top of the item's `## Plan` section. The lite manifest's deferred lines land the same way as the Full Flow's — the Standard path already writes a Plan-bearing item, so create `## Follow-ups` on it when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items.
 
 ## Decision Aids (opt-in, cost quota)
 

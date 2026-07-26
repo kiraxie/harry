@@ -98,6 +98,6 @@ What the user approves is **design + manifest**. Nothing raised may evaporate.
 
 ## Handoff
 
-When a `/grill` session produced buildable work and the user agrees to proceed, the
+When a grilling session produced buildable work and the user agrees to proceed, the
 settled decisions and the manifest **carry into the brainstorming pipeline** — the
 interview is **not** re-run there.
