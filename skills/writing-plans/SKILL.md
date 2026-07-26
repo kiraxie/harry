@@ -138,6 +138,8 @@ skipped writing one because no real decision was weighed), create the item
 now with `status: active` and just the `## Plan` section (plus the one-line
 decision noted inline at its top, if brainstorming flagged one). After
 creating the item, add its one-line entry to `.local/INDEX.md` `## Items`
-(topic · path · summary · active).
+(topic · path · summary · active). Exception: if brainstorming already
+force-created the item to hold a residue line, it exists and is indexed —
+append `## Plan` to it and skip both creation and the INDEX add.
 
 Then hand off to the **executing** skill — it auto-selects session vs subagent mode by tier. Do **not** present a mode-choice menu; state which item was updated and pass control.

@@ -18,26 +18,28 @@ Classify the task first, then take the matching path. Do NOT pop a mode-choice p
 | Tier | Brainstorming |
 |------|---------------|
 | Trivial | **Skip** — go straight to the work. |
-| Standard | **Compressed 3-step**: understand → design (one approach proposal is enough) → write the item's `## Why / What` ONLY when a real design decision was weighed (alternatives existed); otherwise skip it and record the decision inline at the top of the item's `## Plan`. |
+| Standard | **Compressed path**: understand → design (one approach proposal is enough) → lite residue manifest → approve → write the item's `## Why / What` ONLY when a real design decision was weighed (alternatives existed); otherwise skip it and record the decision inline at the top of the item's `## Plan`. |
 | Major | **Full flow** below. |
 
 A red line hit (HARRY.md §2) auto-promotes to Major.
+
+**`/grill` handoff — no re-interview.** If a `/grill` session already ran on this idea, its settled decisions and residue manifest replace the interview (Full Flow steps 1-2 / the compressed path's understand step) — do not re-ask what it settled; proceed from its manifest (per `references/grilling.md`'s Handoff).
 
 ## Full Flow (Major)
 
 Complete these in order:
 
 1. **Explore context** — files, docs, recent commits, existing patterns. If the request is really several independent subsystems, flag it and decompose first; each sub-project gets its own item → execute cycle.
-2. **Ask clarifying questions** — ONE at a time, its own message. Prefer multiple-choice. Focus on purpose, constraints, success criteria. Break a fat topic into several single questions.
+2. **Grill the idea** — run the adversarial interview per `references/grilling.md`. Diverge first (destination pinning, adversarial probing, code cross-examination, live scope labeling), then converge (AskUserQuestion frontier rounds). Follow the reference's rules; do not re-derive them here. The interview closes on the residue manifest at step 5.
 3. **Propose 2-3 approaches** — with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here.
 4. **Present the design** — section by section, scaled to complexity; ask after each whether it holds. Cover architecture, components, data flow, error handling, testing. Break the system into small units each with one clear purpose and a defined interface.
-5. **Get approval** — revise and re-present until the user approves. Only then proceed.
-6. **Write the item** (template below) → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What`, set `status: active`. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
+5. **Get approval** — first present the residue manifest per `references/grilling.md`'s exit gate: resolved decisions, raised-but-deferred (each with a disposition), silent assumptions. What the user approves is **design + manifest**. The manifest's dispositions are *commitments* recorded here but discharged at step 6, because the item file does not exist yet: deferred-in-scope lines land in a `## Follow-ups` section created on the item at step 6; destination-outside lines become new `status: backlog` items (the manifest approval is the user's nod for each). Revise and re-present until the user approves. Only then proceed.
+6. **Write the item** (template below) → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
 7. **Item self-review** — fix inline (see below).
 8. **User reviews the item** — ask, wait, revise if needed.
 9. **Transition** — invoke `writing-plans`. It is the ONLY next skill.
 
-The compressed Standard path runs steps 1 → (one approach) → present → approve → then step 6 (write the item's `## Why / What`) **only when a real design decision was weighed** (alternatives existed); otherwise skip 6-8 and go straight to step 9 (invoke `writing-plans`), noting the decision inline at the top of the item's `## Plan` section.
+The compressed Standard path runs steps 1 → (one approach) → present → **lite residue manifest** (one message — the exit gate's three parts, compressed; per `references/grilling.md`) → approve → then step 6 (write the item's `## Why / What`) **only when a real design decision was weighed** (alternatives existed); otherwise skip 6-8 and go straight to step 9 (invoke `writing-plans`), noting the decision inline at the top of the item's `## Plan` section. The lite manifest's deferred lines land the same way as the Full Flow's — the Standard path already writes a Plan-bearing item, so create `## Follow-ups` on it when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items. On the no-decision sub-path (item not yet written), a deferred-in-scope line forces the item into existence now — create it with a `## Follow-ups` section holding the line, add its `.local/INDEX.md` `## Items` line, and let `writing-plans` fill `## Plan` in place as usual; residue never waits for `writing-plans`.
 
 ## Decision Aids (opt-in, cost quota)
 
@@ -77,8 +79,9 @@ silently lost the moment this item is archived.
 Version floors / deps / naming / exact values — feeds the plan's Global Constraints.
 ```
 
-`## Plan` and `## Follow-ups` are added later, by `writing-plans` and
-`executing` respectively — do not write them here.
+`## Plan` is added later by `writing-plans` — do not write it here. `## Follow-ups`
+MAY be created here at step 6 to hold the residue manifest's deferred-in-scope lines;
+otherwise it is `executing`'s to add during the build.
 
 ## Item Self-Review (fix inline, no re-review)
 
@@ -97,7 +100,7 @@ Wait. On requested changes, revise and re-run self-review. On approval, invoke `
 
 ## Principles
 
-- One question at a time. Multiple-choice preferred.
+- Phase-dependent format (per `references/grilling.md`): free text while diverging, batched AskUserQuestion frontier rounds (≤4, recommended option first) while converging.
 - YAGNI ruthlessly — cut features that don't earn their place.
 - Always 2-3 approaches with a recommendation before settling (Standard: one is fine).
 - Incremental validation — present, approve, then advance.

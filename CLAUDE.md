@@ -136,13 +136,17 @@ mirror `.claude-plugin/marketplace.json`'s shape — verified live against an
 authenticated Codex CLI install (0.128.0) via `codex debug prompt-input`, not
 guessed from web docs.
 
-`codex-skills/` holds Codex-only conversions of the mechanical/read-only
+`codex-skills/` holds Codex-only conversions of the portable
 `commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `review`,
-`sync`, `audit`) — Codex's plugin manifest has no `commands`/`prompts`
+`sync`, `audit`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 
 - `debate` has no Codex skill (its "self" voice is Claude/opus by design).
+- `grill`'s convergence phase batches questions via AskUserQuestion on Claude
+  Code; Codex has no structured picker, so its skill falls back to the numbered
+  text rounds defined in `references/grilling.md` — same technique file,
+  different delivery.
 - `review --full` never had a CC `/code-review max` leg on either build: that
   command sets `disable-model-invocation`, which blocks both the `SlashCommand`
   and `Skill` tools from invoking it programmatically — no agent can drive it,

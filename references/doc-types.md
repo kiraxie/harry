@@ -29,7 +29,7 @@ milestone: <slug>      # optional key — omit entirely if standalone
                         used to be a separate "research" doc -->
 ## Why / What      <!-- filled when promoted to active — what a spec used to hold -->
 ## Plan            <!-- filled when promoted to active — what a plan used to hold -->
-## Follow-ups      <!-- filled during execution; flushed to new backlog items at finish -->
+## Follow-ups      <!-- filled at brainstorming step 6 or during execution; flushed to new backlog items at finish -->
 ```
 
 Sections accumulate — never delete an earlier section when filling a later
@@ -103,7 +103,11 @@ milestone edit.
   `## Follow-ups` becomes its own new `status: backlog` item in
   `.local/items/` (title + a `## Notes` line quoting the follow-up), then
   the source item's `## Follow-ups` section is cleared. This is the only
-  place new backlog items get created from execution output.
+  place new backlog items get created from execution output; brainstorming's
+  residue manifest also creates backlog items directly, at design time.
+  `## Follow-ups` entries come from two sources — brainstorming's residue
+  manifest (deferred discussion items) and executing (follow-on work found
+  mid-build) — and the flush treats both identically.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.
