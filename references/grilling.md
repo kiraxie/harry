@@ -89,9 +89,11 @@ Before any approval or close, re-scan the **whole** conversation and present the
 manifest:
 
 1. **Resolved decisions** — one line each.
-2. **Raised-but-deferred items** — each given a **disposition on the spot**: a line in
-   the item's `## Follow-ups` (pipeline context) or a backlog item (standalone context).
-   Never left only in chat history.
+2. **Raised-but-deferred items** — each given a **disposition on the spot**, keyed by
+   scope (see Live scope labeling): deferred-in-scope → the item's `## Follow-ups`
+   (pipeline) or a backlog item (standalone, with the user's nod); destination-outside
+   → a backlog item. The manifest is the floor: nothing raised may drop out of it into
+   mere chat history.
 3. **Silent assumptions** — laid open.
 
 What the user approves is **design + manifest**. Nothing raised may evaporate.
