@@ -5,6 +5,39 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-07-26
+
+### Added
+
+- Behavioral-evals harness (`scripts/run-evals.mjs` + `evals/`): baseline-vs-candidate
+  law-adherence probes with a pinned model, `--trials` strict-majority scoring, an
+  informative-vs-graded case split, agentic fixture cases with artifact checks,
+  credential seeding/scrub, and an opt-in `EVALS_SANDBOX=1` macOS seatbelt jail.
+- Durable role agents (`agents/`): `scout`, `mech`, `writer`, `security` bind
+  model+effort once in frontmatter so predictable work self-routes (HARRY.md §5);
+  `references/codex-role-mapping.md` ships the advisory Codex twin, inlined into
+  `~/.codex/AGENTS.md` by the Codex law install.
+- Grilling interview subsystem: `references/grilling.md` (decision-tree dependency
+  order, facts-vs-decisions, destination pinning, live scope labeling,
+  divergence/convergence phases, residue-manifest exit gate), the `/grill` command
+  and its Codex skill twin, and brainstorming's residue-manifest approval gates
+  (full for Major, lite for Standard).
+- Drift guards: `tests/role-mapping-drift.test.ts` locks the role set across
+  HARRY.md, `agents/`, and the Codex role map, plus CC↔Codex command/skill
+  reference-path parity.
+
+### Changed
+
+- HARRY.md laws: harness-priority layer (§0), pre-send check and tightened evidence
+  discipline (§6), lawful-exit declaration regime (§7), role routing by nature (§5),
+  out-loud tier declaration (§3), the unified 9-trigger red-line list with
+  design-gate scaling (§2), a user-declared-only incident lane, and the `.local/`
+  main-checkout resolution rule; `references/tier-gates.md` aligned.
+- Pipeline skills: executing gains a frontier-review fallback, per-task worktree
+  mechanics, and a genuine-ambiguity stop rule; finishing gains the PR wind-down and
+  discard-disposition tails; writing-plans settles item ownership with the new
+  brainstorming residue flow.
+
 ## [0.13.4] - 2026-07-22
 
 ### Fixed
