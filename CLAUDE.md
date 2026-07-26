@@ -13,7 +13,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    backs the `review`, `ask`, and `fix` slash commands, talking to a Codex backend.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
-required to install it. Only rebuild `dist/` when changing `src/`.
+required to install it. Rebuild `dist/` when changing `src/` **or `package.json`** —
+the bundle inlines `package.json`, so every version bump needs a rebuild (CI's dist
+drift gate fails otherwise).
 
 ## Commands
 
