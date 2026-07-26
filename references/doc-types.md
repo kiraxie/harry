@@ -71,6 +71,14 @@ milestone edit.
 
 ## Naming & location
 
+- **One store per repo, resolved via the git common dir.** `.local/` lives in
+  the MAIN checkout only. From inside any linked worktree, resolve the store
+  root as the parent directory of `git rev-parse --git-common-dir` — worktrees
+  share the main repo's `.git`, so this lands every worktree (and every
+  subagent dispatched into one) on the same `.local/` without configuration
+  or absolute-path conventions. Never create a `.local/` inside a worktree;
+  if one exists there, it is a stray — merge its content back and delete it.
+
 - File: `.local/items/<slug>.md` (backlog or active). `<slug>` is kebab-case,
   derived from the title — **no date prefix**: `status` is now the temporal
   signal, not the filename.
