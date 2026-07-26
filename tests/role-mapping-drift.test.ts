@@ -40,10 +40,17 @@ test("A1 · HARRY.md §5 'Route by role' bullet names exactly the canonical role
   // (Other backticked tokens in the bullet — `log`, `model`, `agents/*.md` … — are not
   // preceded by an arrow, so they're excluded.) Assert set equality both directions, so
   // an added clause like "orchestration → `driver`" fails, not just a missing role.
-  // Backticks are optional in the capture — an unquoted routed role (e.g. a stray
-  // "orchestration → driver" clause) must still land in the set and fail the
-  // equality check below, not silently evade extraction.
-  const routedRoles = new Set([...bullet.matchAll(/→\s*`?([\w-]+)`?/g)].map((m) => m[1] as string));
+  // Wrapping punctuation is optional in the capture — an unquoted routed role (e.g. a
+  // stray "orchestration → driver" clause) or one wrapped in other markup (`→
+  // **driver**`, `→ "driver"`, `→ *driver*`, `→ 'driver'`) must still land in the set
+  // and fail the equality check below, not silently evade extraction. `\*\*` is listed
+  // before `\*` in the alternation (backtracking would recover either way; the order
+  // just matches the bold wrapper directly).
+  const routedRoles = new Set(
+    [...bullet.matchAll(/→\s*(?:`|\*\*|\*|"|')?([\w-]+)(?:`|\*\*|\*|"|')?/g)].map(
+      (m) => m[1] as string,
+    ),
+  );
   assert.deepEqual(
     [...routedRoles].sort(),
     [...CANONICAL_ROLES].sort(),
@@ -94,7 +101,13 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
       .slice(1, -1)
       .map((c) => c.trim());
     const firstCell = cells[0] ?? "";
-    if (firstCell === "role" || /^-+$/.test(firstCell)) continue; // header / separator
+    // Separator rows may carry alignment colons (`|:---|:---:|---:|`), not just plain
+    // `---` — check every cell, not just the first, so an alignment-colon separator
+    // skips cleanly instead of surfacing as a malformed-row / model-shape failure.
+    // header / separator (cells.length guard: a degenerate `|`-only line yields [] and
+    // a vacuous every() would skip it — let it fall through to the malformed-row assert)
+    if (firstCell === "role" || (cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c))))
+      continue;
     assert.ok(
       cells.length >= 4,
       `codex-role-mapping: malformed table row (expected 4 cells, got ${cells.length}): "${line.trim()}"`,
