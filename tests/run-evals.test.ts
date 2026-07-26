@@ -7,24 +7,37 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import type { CheckInput } from "../scripts/run-evals.mjs";
 import {
+  buildAgenticSandboxProfile,
+  buildSeatbeltProfile,
   collectRepoState,
   evaluateArtifactChecks,
   evaluateChecks,
   main,
   materializeFixture,
   parseCasesJsonl,
+  requireSandboxSupport,
   resolveModel,
   resolveTrials,
   runEvals,
   scoreResults,
   validateCases,
+  wrapWithSandbox,
 } from "../scripts/run-evals.mjs";
 import { installFakeClaude, readCalls } from "./fake-claude.mjs";
 
@@ -1382,3 +1395,295 @@ test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message
     rmSync(opCfg, { recursive: true, force: true });
   }
 });
+
+// ---- opt-in OS sandbox (EVALS_SANDBOX=1, macOS seatbelt) --------------------
+
+const DARWIN_ONLY = { skip: process.platform !== "darwin" ? "macOS-only (seatbelt)" : false };
+// Mirror of AGENTIC_ALLOWED_TOOLS (not exported) — the args must pass through the
+// sandbox-exec wrapper unchanged, so the shim still sees this exact allowlist.
+const AGENTIC_TOOLS =
+  "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*)," +
+  "Bash(git branch:*),Bash(git checkout:*),Bash(git switch:*),Bash(node:*)";
+
+test("buildSeatbeltProfile: allows all, then jails $HOME, then re-allows the exceptions", () => {
+  const profile = buildSeatbeltProfile({
+    home: "/Users/op",
+    allowWrite: ["/var/folders/tmp", "/var/folders/tmp/cfg", "/var/folders/tmp/cfg"],
+    allowRead: ["/Users/op/.local/share/claude", "/opt/homebrew/bin"],
+  });
+  assert.match(profile, /^\(version 1\)/, "a v1 seatbelt profile");
+  assert.match(profile, /\(allow default\)/, "allow-everything baseline");
+  assert.match(
+    profile,
+    /\(deny file-read\* file-write\* \(subpath "\/Users\/op"\)\)/,
+    "the operator's $HOME is denied for both read and write",
+  );
+  // Ordering matters (SBPL is last-match-wins): the broad $HOME deny must precede
+  // the narrow allow exceptions, so the allows override the deny for their subpaths.
+  const denyIdx = profile.indexOf('(deny file-read* file-write* (subpath "/Users/op")');
+  const allowWriteIdx = profile.indexOf("(allow file-read* file-write*");
+  const allowReadIdx = profile.lastIndexOf("(allow file-read*");
+  assert.ok(denyIdx >= 0 && allowWriteIdx > denyIdx, "read+write allows come AFTER the $HOME deny");
+  assert.ok(allowReadIdx > denyIdx, "read-only allows come AFTER the $HOME deny");
+  // The exception paths are present as subpath allows (dedup collapses the repeat).
+  assert.match(profile, /\(subpath "\/var\/folders\/tmp"\)/, "temp root re-allowed for write");
+  assert.match(profile, /\(subpath "\/var\/folders\/tmp\/cfg"\)/, "config dir re-allowed");
+  assert.equal(
+    (profile.match(/\(subpath "\/var\/folders\/tmp\/cfg"\)/g) ?? []).length,
+    1,
+    "duplicate exception paths are collapsed",
+  );
+  assert.match(
+    profile,
+    /\(subpath "\/Users\/op\/.local\/share\/claude"\)/,
+    "the claude runtime tree under $HOME is re-allowed for read",
+  );
+});
+
+test("buildSeatbeltProfile: escapes quotes/backslashes so a path can't break the literal", () => {
+  const profile = buildSeatbeltProfile({ home: '/Users/o"p\\x', allowWrite: [], allowRead: [] });
+  assert.match(profile, /\(subpath "\/Users\/o\\"p\\\\x"\)/, "quote and backslash are escaped");
+});
+
+test(
+  "buildSeatbeltProfile jails $HOME under REAL sandbox-exec: canary denied, exception overrides",
+  DARWIN_ONLY,
+  () => {
+    // Self-contained: point the profile's `home` at a throwaway dir standing in for
+    // $HOME (realpath'd — seatbelt matches the kernel-canonical path and macOS
+    // symlinks /var → /private/var; the real homedir() is already canonical). A
+    // canary sits directly under it; an exception subdir sits INSIDE it. Prove
+    // sandbox-exec denies the canary yet allows the exception (last-match-wins allow
+    // overriding the broad $HOME deny) — the exact policy the real run applies.
+    const jail = realpathSync(tmpDir("harry-sb-jail-"));
+    try {
+      const exception = path.join(jail, "fixture");
+      mkdirSync(exception);
+      const canary = path.join(jail, "secret.txt");
+      writeFileSync(canary, "SECRET\n");
+      const okFile = path.join(exception, "ok.txt");
+      writeFileSync(okFile, "OK\n");
+      const profile = buildSeatbeltProfile({ home: jail, allowWrite: [exception], allowRead: [] });
+
+      const catUnder = (file: string): boolean => {
+        try {
+          execFileSync("sandbox-exec", ["-p", profile, "cat", file], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      assert.equal(catUnder(canary), false, "a canary directly under the jailed $HOME is denied");
+      assert.equal(catUnder(okFile), true, "the exception subdir allow overrides the $HOME deny");
+    } finally {
+      rmSync(jail, { recursive: true, force: true });
+    }
+  },
+);
+
+test("wrapWithSandbox: wraps `bin args...` as `sandbox-exec -p <profile> bin args...`", () => {
+  const wrapped = wrapWithSandbox("/usr/bin/sandbox-exec", "PROFILE", "claude", [
+    "-p",
+    "hi",
+    "--model",
+    "m",
+  ]);
+  assert.equal(wrapped.bin, "/usr/bin/sandbox-exec", "sandbox-exec becomes the executed binary");
+  assert.deepEqual(
+    wrapped.args,
+    ["-p", "PROFILE", "claude", "-p", "hi", "--model", "m"],
+    "the profile is passed via -p, then the original bin and its args unchanged",
+  );
+});
+
+test("buildAgenticSandboxProfile: a symlinked $HOME is canonicalized (I-1: jails the real path)", () => {
+  // I-1 regression lock: seatbelt matches the kernel-canonical path. If the jail
+  // root is left un-normalized, a symlinked $HOME's deny rule silently fails to
+  // match — $HOME is un-jailed with no error while the run reports "sandboxed".
+  // buildAgenticSandboxProfile must realpath the root so the deny lands on the REAL
+  // path (and thus holds through the symlink).
+  const real = realpathSync(tmpDir("harry-sb-realhome-"));
+  const linkParent = tmpDir("harry-sb-link-");
+  const link = path.join(linkParent, "homelink");
+  try {
+    symlinkSync(real, link);
+    const profile = buildAgenticSandboxProfile({
+      home: link,
+      allowWrite: [],
+      bin: process.execPath,
+    });
+    assert.ok(
+      profile.includes(`(deny file-read* file-write* (subpath "${real}"))`),
+      "the deny root is the canonical (realpath) home, not the symlink",
+    );
+    assert.ok(
+      !profile.includes(`(subpath "${link}")`),
+      "the un-normalized symlink path never appears (it would silently fail to match)",
+    );
+
+    if (process.platform === "darwin") {
+      // The deny holds THROUGH the symlink: a canary opened via the symlinked home
+      // path canonicalizes to the jailed real path and is denied by the kernel.
+      writeFileSync(path.join(real, "secret.txt"), "SECRET\n");
+      let denied = false;
+      try {
+        execFileSync("sandbox-exec", ["-p", profile, "cat", path.join(link, "secret.txt")], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+      } catch {
+        denied = true;
+      }
+      assert.ok(denied, "reading the canary through the symlinked home path is denied");
+    }
+  } finally {
+    rmSync(link, { force: true });
+    rmSync(linkParent, { recursive: true, force: true });
+    rmSync(real, { recursive: true, force: true });
+  }
+});
+
+test("requireSandboxSupport: refuses non-macOS and a missing sandbox-exec; passes on both present", () => {
+  assert.throws(
+    () => requireSandboxSupport("linux", "/usr/bin/sandbox-exec"),
+    /macOS-only/,
+    "non-darwin is a hard refusal (never silently unsandboxed)",
+  );
+  assert.throws(
+    () => requireSandboxSupport("win32", "/x"),
+    /refusing to run an agentic session unsandboxed/,
+    "any non-darwin platform is refused",
+  );
+  assert.throws(
+    () => requireSandboxSupport("darwin", null),
+    /sandbox-exec was not found/,
+    "darwin without sandbox-exec is a hard refusal",
+  );
+  assert.equal(
+    requireSandboxSupport("darwin", "/usr/bin/sandbox-exec"),
+    "/usr/bin/sandbox-exec",
+    "darwin + sandbox-exec present → the resolved path is returned",
+  );
+});
+
+test("runEvals: EVALS_SANDBOX=1 with an agentic case but no sandbox-exec is a hard refusal", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
+  try {
+    installFakeClaude(binDir);
+    // EVALS_SANDBOX_EXEC="" is the deterministic "sandbox-exec not found" seam, so
+    // this exercises the refusal on any platform (darwin → missing-binary branch;
+    // non-darwin → platform branch) — both refuse before any session launches.
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: fxRoot,
+      EVALS_SANDBOX: "1",
+      EVALS_SANDBOX_EXEC: "",
+    };
+    assert.throws(
+      () =>
+        runEvals(
+          {
+            condition: "candidate",
+            model: "m",
+            cases: ["agentic-isolate-branch"],
+            out: path.join(binDir, "o.jsonl"),
+            agentic: true,
+          },
+          env,
+        ),
+      /refusing to run an agentic session unsandboxed/,
+      "no way to sandbox + an agentic case queued → refuse, do not run unsandboxed",
+    );
+    assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: EVALS_SANDBOX=1 on a TEXT-only run is ignored (no exec surface, no refusal)", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    // Flag set, but no agentic case selected, and no sandbox-exec available: text
+    // mode has no exec surface, so the flag is ignored — the run must proceed
+    // normally and unwrapped rather than refuse.
+    const env = {
+      ...process.env,
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_SANDBOX: "1",
+      EVALS_SANDBOX_EXEC: "",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      env,
+    );
+    assert.equal(lines.length, 1, "the text case ran despite EVALS_SANDBOX=1 and no sandbox-exec");
+    const calls = readCalls(binDir);
+    assert.equal(calls.length, 1, "the shim was invoked directly");
+    assert.equal(
+      calls[0].allowedTools,
+      "",
+      "unwrapped: the text kill-switch allowlist, not sandboxed",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test(
+  "runEvals --agentic under EVALS_SANDBOX=1: the shim still executes through the real jail",
+  DARWIN_ONLY,
+  () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const fxRoot = tmpDir("harry-evals-fxroot-");
+    try {
+      installFakeClaude(binDir);
+      // Real sandbox-exec, fake shim (no API spend, no real claude session). Proves
+      // the wrapper resolves so the shim still runs under the jail AND that the
+      // original args pass through the sandbox-exec wrapper untouched.
+      const env = {
+        ...process.env,
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_FIXTURE_ROOT: fxRoot,
+        EVALS_SANDBOX: "1",
+      };
+      const { lines } = runEvals(
+        {
+          condition: "candidate",
+          model: "m",
+          cases: ["agentic-isolate-branch"],
+          out: path.join(binDir, "agentic.jsonl"),
+          agentic: true,
+        },
+        env,
+      );
+      assert.equal(lines.length, 1, "one agentic line written under the sandbox");
+      const calls = readCalls(binDir);
+      assert.equal(calls.length, 1, "the fake shim executed inside the seatbelt jail");
+      assert.equal(
+        calls[0].allowedTools,
+        AGENTIC_TOOLS,
+        "the git+node allowlist passed through the sandbox-exec wrapper intact",
+      );
+      assert.equal(calls[0].permissionMode, "acceptEdits", "permission mode survived the wrapper");
+      assert.ok(
+        calls[0].cwd?.includes("harry-evals-fx-tiny-node"),
+        "the sandboxed session ran in the materialized fixture dir",
+      );
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(fxRoot, { recursive: true, force: true });
+    }
+  },
+);

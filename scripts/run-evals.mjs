@@ -32,6 +32,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -649,17 +650,27 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
 // and the `git -c alias.x='!sh'` shell-escape at zero cost to the checks. The
 // node leg stays broad (`Bash(node:*)`) because a session must AUTHOR then RUN a
 // test file — narrowing to `Bash(node --test:*)` would gain little, since it
-// would still execute model-authored files. This narrows the surface; it does
-// NOT sandbox a misbehaving session: `Bash(node:*)` is arbitrary code execution,
-// including network, so a session that wants to exfiltrate or reach out still
-// can. The credential exposure is now bounded (see below), but exec is not.
+// would still execute model-authored files. This narrows the surface; the
+// allowlist alone does NOT contain a misbehaving session: `Bash(node:*)` is
+// arbitrary code execution, including network. Exec containment is the opt-in
+// EVALS_SANDBOX=1 seatbelt jail (see buildSeatbeltProfile / sandboxContext),
+// which denies the session reads/writes across the operator's wider $HOME.
 //
-// DEBT: during a live agentic session the seeded credential (when API-key mode is
-// off) is readable by session-spawned processes and node grants arbitrary exec —
-// the window is now session-lifetime only (runEvals scrubs the copy post-run) and
-// avoidable entirely via EVALS_ANTHROPIC_API_KEY (a revocable scratch token, no
-// file on disk); full containment needs an OS sandbox (no-network, fs-jail) if
-// this ever runs unattended or on untrusted prompts.
+// DEBT: two residuals remain by accepted design, both scoped to a maintainer-run,
+// local release gate on trusted prompts. (1) The child inherits the operator's WHOLE
+// environment (the API credential — the revocable scratch key EVALS_ANTHROPIC_API_KEY,
+// preferred, nothing on disk, or the fallback seeded credential scrubbed post-run —
+// but also any GITHUB_TOKEN / AWS_* / other secret sitting in the shell). No OS
+// sandbox can hide an env var from the session's own processes, and network stays
+// OPEN under the jail (the session must reach the API), so a hostile session could
+// exfiltrate any of them. The seatbelt jail contains the FILESYSTEM ($HOME reads /
+// out-of-fixture writes), not the env or the network — this is fs-containment, not a
+// no-exfiltration boundary. The mitigation is scope: trusted prompts + a revocable
+// scratch key + a shell that doesn't carry secrets you'd mind. (2) EVALS_SANDBOX
+// relies on `sandbox-exec`, which Apple has deprecated but still ships and honors;
+// it is opt-in and macOS-only (a hard refusal, never a silent unsandboxed run,
+// elsewhere), so we accept the deprecated tool for this local use rather than take
+// on a container/VM dependency.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -679,7 +690,7 @@ const AGENTIC_ALLOWED_TOOLS = [
 // can branch, commit, and run the test suite. Both flags verified present in
 // `claude --help`; not empty like the text kill-switch — here tools are enabled,
 // narrowed to the commands the checks need (a surface reduction, not a sandbox).
-function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
+function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, sandbox = null) {
   const args = [
     "-p",
     prompt,
@@ -692,7 +703,194 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env) {
     "--allowedTools",
     AGENTIC_ALLOWED_TOOLS,
   ];
-  return invokeClaude(bin, args, fixtureDir, configDir, env);
+  if (!sandbox) {
+    return invokeClaude(bin, args, fixtureDir, configDir, env);
+  }
+  // Opt-in EVALS_SANDBOX: wrap the child in a seatbelt jail that denies fs access
+  // across the operator's wider $HOME (see sandboxContext for the refusal path).
+  // The jail root and the writable exceptions are canonicalized (realpath) — the
+  // throwaway config dir, the materialized fixture repo, and the OS temp roots they
+  // live under (normally outside $HOME; re-allowed defensively for a $HOME-based
+  // TMPDIR). The runtime read trees are resolved inside buildAgenticSandboxProfile.
+  const profile = buildAgenticSandboxProfile({
+    home: homedir(),
+    allowWrite: [configDir, fixtureDir, env.EVALS_FIXTURE_ROOT || tmpdir(), tmpdir()],
+    bin,
+  });
+  const wrapped = wrapWithSandbox(sandbox.sandboxExec, profile, bin, args);
+  // Pin a git identity + steer git off $HOME's global config, so the session can
+  // commit (the artifact checks require it) without the jail having to re-open
+  // ~/.gitconfig — keeping the $HOME fs-jail fully closed. GIT_CONFIG_GLOBAL points
+  // git at /dev/null (an empty global config) instead of ~/.gitconfig.
+  const sandboxEnv = { ...gitEnv(env), GIT_CONFIG_GLOBAL: "/dev/null" };
+  return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, sandboxEnv);
+}
+
+// ---- opt-in OS sandbox (macOS seatbelt) ------------------------------------
+
+// Build the seatbelt profile for an agentic session: the IO-doing wrapper around
+// the pure buildSeatbeltProfile. It CANONICALIZES paths (realpath) before handing
+// them to the generator, because seatbelt matches the kernel-canonical path — a
+// symlinked entry left un-normalized would silently FAIL to match its subpath rule:
+//   - I-1: an un-normalized $HOME jail root that doesn't match un-jails $HOME with
+//     NO error while still reporting "sandboxed". So $HOME is realpath'd HARD — if
+//     realpath throws (impossible in practice; $HOME must exist), the error
+//     propagates and the session never launches, rather than emitting a profile
+//     that doesn't actually jail (never a silent unsandboxed run).
+//   - M-1: the writable exceptions are realpath'd too (best-effort — a defensive
+//     re-allow that can't be resolved is dropped, safe-fail), so the documented
+//     re-allow for a $HOME-based TMPDIR matches real kernel paths. Deduped by the
+//     Set in buildSeatbeltProfile after normalization.
+// Read trees come from resolveRuntimeTrees, which already includes canonical
+// (dirname-of-realpath) forms.
+export function buildAgenticSandboxProfile({ home, allowWrite = [], bin }) {
+  const home_ = realpathSync(home); // HARD: refuse (throw) rather than un-jail silently.
+  const canonicalizeSafe = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return null; // unresolved defensive re-allow: drop it (safe-fail, jail stays closed)
+    }
+  };
+  const writes = allowWrite.map(canonicalizeSafe).filter(Boolean);
+  return buildSeatbeltProfile({
+    home: home_,
+    allowWrite: writes,
+    allowRead: resolveRuntimeTrees(bin),
+  });
+}
+
+// Generate a seatbelt (sandbox_init) profile as a string. Pure and unit-testable:
+// no IO, deterministic given its inputs. The policy is "allow everything, then jail
+// the operator's $HOME filesystem": a misbehaving or prompt-injected agentic
+// session can't read ssh keys / other credentials / documents under $HOME, nor
+// write outside the fixture. Network is intentionally NOT restricted — the session
+// must reach the model API, and the env-held key is visible by design (see DEBT).
+//
+// SBPL is last-match-wins: the broad `(deny ... (subpath HOME))` comes first, then
+// the narrow `(allow ...)` exceptions override it for their subpaths.
+export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [] }) {
+  // Escape backslashes and quotes so a path with either can't break out of the
+  // SBPL string literal (macOS paths rarely contain them, but never trust input).
+  const esc = (p) => p.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const subpaths = (paths) =>
+    [...new Set(paths.filter((p) => typeof p === "string" && p))].map(
+      (p) => `  (subpath "${esc(p)}")`,
+    );
+  const lines = [
+    "(version 1)",
+    ";; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).",
+    ";; Allow everything, then jail the operator's $HOME filesystem so a misbehaving",
+    ";; or prompt-injected session can't read ssh keys / other credentials /",
+    ";; documents, or write outside the fixture. Network stays allowed by design.",
+    "(allow default)",
+    `(deny file-read* file-write* (subpath "${esc(home)}"))`,
+  ];
+  const writes = subpaths(allowWrite);
+  if (writes.length) {
+    lines.push(
+      ";; read+write: throwaway config dir, materialized fixture repo, OS temp root.",
+      "(allow file-read* file-write*",
+      ...writes,
+      ")",
+    );
+  }
+  const reads = subpaths(allowRead);
+  if (reads.length) {
+    lines.push(
+      ";; read-only: claude + node runtime install trees (resolved via which+realpath).",
+      "(allow file-read*",
+      ...reads,
+      ")",
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+// Build the sandbox-exec argv that wraps the original `bin args...` under `profile`.
+// Pure, so a test can assert the exact wrapped shape without executing sandbox-exec.
+// `sandbox-exec -p <profile> <bin> <args...>` runs bin inside the seatbelt policy.
+export function wrapWithSandbox(sandboxExec, profile, bin, args) {
+  return { bin: sandboxExec, args: ["-p", profile, bin, ...args] };
+}
+
+// Resolve the claude + node runtime install trees that must stay readable under the
+// $HOME jail. For each: resolve the on-PATH launcher (which), follow symlinks
+// (realpath), and allow BOTH the launcher's dir and the resolved target's dir — a
+// launcher symlink and its real payload can live in different trees, and the kernel
+// reads both to exec. Trees outside $HOME (e.g. Homebrew node) are harmless no-ops.
+// Best-effort: a path that can't be resolved is simply skipped (the jail stays
+// closed; a genuinely-needed missing tree surfaces as a session failure, not a leak).
+function resolveRuntimeTrees(bin) {
+  const trees = new Set();
+  const addDirs = (p) => {
+    if (!p) return;
+    try {
+      trees.add(dirname(p));
+    } catch {
+      /* unresolved path: skip */
+    }
+    try {
+      trees.add(dirname(realpathSync(p)));
+    } catch {
+      /* broken symlink / missing: skip */
+    }
+  };
+  // node: the runtime that actually executes the session's `node` and claude's cli.
+  addDirs(process.execPath);
+  // claude: resolve a bare command name via `which`; an explicit path is used as-is.
+  let claudePath = bin;
+  if (bin && !bin.includes("/")) {
+    try {
+      claudePath = execFileSync("which", [bin], { encoding: "utf8" }).trim() || bin;
+    } catch {
+      /* not on PATH: fall through, addDirs will skip an unresolved bare name */
+    }
+  }
+  if (claudePath.includes("/")) addDirs(claudePath);
+  return [...trees];
+}
+
+// Pure gate: given the platform and the resolved sandbox-exec path, return the path
+// or THROW. The whole point is "never silently unsandboxed": if EVALS_SANDBOX=1 is
+// set but we can't sandbox (not macOS, or sandbox-exec absent), we refuse hard
+// BEFORE any session starts rather than run an agentic session in the open.
+export function requireSandboxSupport(platform, sandboxExecPath) {
+  if (platform !== "darwin") {
+    throw new Error(
+      `EVALS_SANDBOX=1 is macOS-only (seatbelt/sandbox-exec); refusing to run an ` +
+        `agentic session unsandboxed on "${platform}". Unset EVALS_SANDBOX to run without the jail.`,
+    );
+  }
+  if (!sandboxExecPath) {
+    throw new Error(
+      "EVALS_SANDBOX=1 is set but sandbox-exec was not found; refusing to run an agentic " +
+        "session unsandboxed. (Expected /usr/bin/sandbox-exec; override with EVALS_SANDBOX_EXEC.)",
+    );
+  }
+  return sandboxExecPath;
+}
+
+// Locate sandbox-exec. EVALS_SANDBOX_EXEC overrides (present-but-empty means "not
+// found", a deterministic test/refusal seam); otherwise probe PATH via `which`.
+function resolveSandboxExec(env) {
+  if (env.EVALS_SANDBOX_EXEC !== undefined) return env.EVALS_SANDBOX_EXEC || null;
+  try {
+    return execFileSync("which", ["sandbox-exec"], { encoding: "utf8" }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// Decide whether agentic sessions run inside the seatbelt jail, throwing on refusal.
+// Null (no wrapping) when the flag is off, or when there is no runnable agentic case
+// — text mode has no exec surface, so it ignores the flag entirely. When the flag is
+// on AND an agentic case will run, support is mandatory: requireSandboxSupport
+// refuses hard rather than silently run unsandboxed.
+function sandboxContext(env, runnable) {
+  if (env.EVALS_SANDBOX !== "1") return null;
+  if (!runnable.some((c) => c.mode === "agentic")) return null;
+  return { sandboxExec: requireSandboxSupport(process.platform, resolveSandboxExec(env)) };
 }
 
 // ---- run (side-effecting) --------------------------------------------------
@@ -732,6 +930,11 @@ export function runEvals(opts, env = process.env) {
     }
     runnable.push(c);
   }
+
+  // Resolve the opt-in seatbelt jail BEFORE any dir is created or session starts:
+  // if EVALS_SANDBOX=1 is set with a runnable agentic case but we can't sandbox,
+  // this throws (never a silent unsandboxed run). Null → run unwrapped as before.
+  const sandbox = sandboxContext(env, runnable);
 
   const lawsText = condition === "candidate" ? readFileSync(lawsPath(), "utf8") : "";
   // One config dir per condition, reused across cases (and left in place for
@@ -787,7 +990,7 @@ export function runEvals(opts, env = process.env) {
             line.fixtureDir = fx.dir;
             line.initialBranch = fx.initialBranch;
             line.initialCommit = fx.initialCommit;
-            line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env);
+            line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env, sandbox);
             // Evaluate now, while the fixture dir exists, and record per-check
             // outcomes so `score` can judge offline (matching text mode's shape).
             const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);

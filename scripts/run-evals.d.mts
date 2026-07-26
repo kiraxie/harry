@@ -142,4 +142,21 @@ export function runEvals(
   lines: EvalRecord[];
   skipped: string[];
 };
+export function buildSeatbeltProfile(opts: {
+  home: string;
+  allowWrite?: string[];
+  allowRead?: string[];
+}): string;
+export function buildAgenticSandboxProfile(opts: {
+  home: string;
+  allowWrite?: string[];
+  bin: string;
+}): string;
+export function wrapWithSandbox(
+  sandboxExec: string,
+  profile: string,
+  bin: string,
+  args: string[],
+): { bin: string; args: string[] };
+export function requireSandboxSupport(platform: string, sandboxExecPath: string | null): string;
 export function main(argv: string[], env?: Record<string, string | undefined>): number;

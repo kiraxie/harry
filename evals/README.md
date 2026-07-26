@@ -170,18 +170,80 @@ The git leg is granted per **subcommand**, not a blanket `Bash(git:*)` (followin
 `--allowedTools` is a single comma-separated value here (`claude --help`: "Comma
 or space-separated list of tool names to allow").
 
-**This narrows the attack surface; it does not contain a misbehaving session.**
-`Bash(node:*)` is arbitrary code execution — including network — so a session that
-wants to reach out or exfiltrate still can. The **credential** exposure, though,
-is now bounded on two axes (see [Authentication](#authentication-two-paths-and-the-post-run-scrub)):
-use `EVALS_ANTHROPIC_API_KEY` (a revocable scratch token) and **no credential is
-written to disk at all**; in the fallback seeded-credential path the copy is
-**scrubbed post-run**, so its window is the session lifetime only. What remains
-unbounded is *exec* — during a live session the credential (in seeded mode) is
-readable by session-spawned processes, and node can run anything. That is an
-accepted trade for a **maintainer-run, local** release gate on **trusted prompts**;
-running it unattended or on untrusted input still needs an OS sandbox (no-network,
-fs-jail) on top, plus the scratch-token mode.
+**The allowlist narrows the attack surface; it does not by itself contain a
+misbehaving session.** `Bash(node:*)` is arbitrary code execution — including
+network — so a session that wants to reach out or exfiltrate still can. Two
+containment layers address this:
+
+- **Credential exposure** is bounded on two axes (see
+  [Authentication](#authentication-two-paths-and-the-post-run-scrub)): use
+  `EVALS_ANTHROPIC_API_KEY` (a revocable scratch token) and **no credential is
+  written to disk at all**; in the fallback seeded-credential path the copy is
+  **scrubbed post-run**, so its window is the session lifetime only.
+- **Filesystem exposure** is bounded by the opt-in [OS sandbox](#os-sandbox-opt-in-evals_sandbox)
+  below: `EVALS_SANDBOX=1` jails the session out of the operator's wider `$HOME`.
+
+What remains unbounded even with both is *network* (the session must reach the API)
+and the **env-held API key** (no OS sandbox can hide an env var from the session's
+own processes — the mitigation is the scratch key's revocability). That residual is
+an accepted trade for a **maintainer-run, local** release gate on **trusted
+prompts**. Do not point this at untrusted input.
+
+### OS sandbox (opt-in, `EVALS_SANDBOX`)
+
+`EVALS_SANDBOX=1` wraps each **agentic** session in a macOS
+[seatbelt](https://developer.apple.com/) profile via `sandbox-exec`, so a
+misbehaving or prompt-injected session cannot read the operator's wider `$HOME`.
+
+**What it does:** the generated profile is `(allow default)` — everything permitted
+— then **denies all filesystem reads and writes under `$HOME`**, then re-allows a
+minimal set of exceptions:
+
+- **read+write:** the throwaway config dir, the materialized fixture repo, and the
+  OS temp root they live under (normally already outside `$HOME`, re-allowed
+  defensively).
+- **read-only:** the `claude` and `node` runtime install trees, resolved at run time
+  via `which` + `realpath` (a runtime under `$HOME` — nvm node, the `~/.local`
+  claude install — must stay readable for the child to start). Note this grants the
+  whole **containing directory** of each runtime, read-only — sibling files in those
+  `bin`/install dirs become readable too; it is a coarse, read-only allow, not a
+  single-file grant.
+
+So the session keeps working in the fixture, but reads of ssh keys, other
+credentials, and documents elsewhere under `$HOME`, and writes anywhere outside the
+fixture/tmp, are denied by the kernel. Under the jail the session's git identity is
+pinned via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`) so
+it can still commit without the jail having to re-open `~/.gitconfig`.
+
+**What it does NOT contain:**
+
+- **Network** — deliberately left open; the session must reach the model API. This
+  is fs-containment, **not** a no-exfiltration boundary.
+- **The whole inherited environment** — the child inherits the operator's entire
+  shell env, not just the API key: any `GITHUB_TOKEN`, `AWS_*`, or other secret
+  present is visible to the session, and no OS sandbox can hide an env var from its
+  own child processes. Combined with open network, a hostile session could
+  exfiltrate any of them. The honest ceiling: run this only on **trusted prompts**,
+  with a **revocable scratch key** (`EVALS_ANTHROPIC_API_KEY`), from a shell that
+  isn't carrying secrets you'd mind exposing. See the DEBT note in
+  `scripts/run-evals.mjs`.
+- **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
+  accepted here for a local maintainer tool rather than taking on a container/VM
+  dependency.
+
+**Refusal (never silently unsandboxed):** if `EVALS_SANDBOX=1` is set and an agentic
+case is queued to run but the platform is not macOS, or `sandbox-exec` is not found,
+the run **hard-errors before any session starts**. It never falls back to an
+unsandboxed agentic run. **Text mode ignores the flag** — a text case runs
+`claude -p` with all tools denied (`--allowedTools ""`), so it has no exec surface to
+jail; setting the flag on a text-only run is a no-op, not a refusal.
+
+```sh
+# Release gate, sandboxed: agentic cases jailed out of $HOME, scratch-token auth.
+EVALS_ANTHROPIC_API_KEY=sk-ant-… EVALS_SANDBOX=1 \
+  node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+  --agentic --trials 3 --out evals/results/run.jsonl
+```
 
 ### Fixture anatomy
 
