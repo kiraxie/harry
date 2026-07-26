@@ -67,7 +67,7 @@ Then settle the item — never leave it `status: active`. Ask the user which:
 - **Back to backlog** — set `status: backlog` and append a one-line `## Notes` entry (`implementation discarded <date>, <reason>`).
 - **Delete outright** — remove `.local/items/<slug>.md` (destructive; needs the user's call per HARRY.md's confirmation rule).
 
-Either way, remove the unit's `.local/INDEX.md` `## In flight` line.
+Either way, remove the unit's `.local/INDEX.md` `## In flight` line, and update its `## Items` line to match the disposition (delete the entry with a deleted item; flip its status to backlog with a kept one).
 
 ## Quick reference
 
