@@ -77,3 +77,38 @@ description: Use when executing implementation plans with independent tasks in t
 Write it in third person, lead with "Use when", pack in searchable keywords (error messages,
 symptoms, tool names), and name skills verb-first (`condition-based-waiting`, not
 `async-test-helpers`).
+
+## (e) Editorial vocabulary — how the prose is written
+
+Sections (a)–(d) verify a skill like code; this axis governs how its text is *written*. Both
+serve one end — **predictability**, the agent taking the same process every run. Sharpen the
+words *after* the baseline test is green, not instead of it.
+
+- **Invocation is a cost choice, not a default.** A model-invoked skill spends **context load** —
+  its description sits in the window every turn so the agent (or another skill) can reach it on
+  its own. A user-invoked skill (`disable-model-invocation: true`) spends **cognitive load**
+  instead: zero context, but *you* are the index that must remember it exists. Pick
+  model-invocation only when the agent or another skill must reach it autonomously; if it only
+  ever fires by hand, pay no context load. (Complements (d): that governs *what* a model-facing
+  description says; this governs *whether* to have one.)
+- **Leading words.** A compact concept already in the model's pretraining (*tight*, *relentless*,
+  *fog of war*, *tracer bullets*) anchors a whole region of behaviour in a few tokens by
+  recruiting priors the model already holds. Hunt restatements that collapse into one:
+  "fast, deterministic, low-overhead" → a *tight* loop. You win twice — fewer tokens *and* a
+  sharper hook. Assume every skill carries restatements a leading word would retire.
+- **The no-op test.** Sentence by sentence: does this line change behaviour versus the default? A
+  weak leading word (*be thorough*, when the agent is already thorough-ish) is a no-op — you pay
+  load to say nothing. Fix it with a stronger word (*relentless*), not more prose; when a sentence
+  fails the test, delete the whole sentence rather than trim words from it.
+- **Negation names the elephant.** *Don't think of an elephant* makes it more available, not less —
+  steering by prohibition backfires. Prompt the **positive**: state the target behaviour so the
+  banned one is never spoken. Keep a prohibition only as a hard guardrail you can't phrase
+  positively, and even then pair it with what to do instead. (This is the general form of (c)'s
+  "prohibitions backfire on output-shape problems.")
+- **Failure modes to name when a skill misbehaves.** *Premature completion* — a step ends before
+  it's done, attention slipping to being-done; sharpen the completion criterion first (cheap,
+  local), and split to hide later steps only if it stays fuzzy. *Sediment* — stale layers that
+  accrete because adding feels safe and removing feels risky, the default fate of any skill
+  without a pruning discipline. *Sprawl* — simply too long even when every line is live; cure with
+  **progressive disclosure**, pushing branch-specific reference behind context pointers so each
+  path carries only what it needs.
