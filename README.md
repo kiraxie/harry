@@ -5,7 +5,7 @@ A personal Claude Code plugin: the **Superpowers** workflow philosophy and **pon
 Two halves:
 
 - **Resident laws** (`HARRY.md`) — deployed as a snapshot into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
-- **A `brainstorm → plan → execute → finish` pipeline** — four skills, plus slash commands for review, debate, and over-engineering/debt audits.
+- **A `brainstorm → plan → execute → finish` pipeline** — four skills, plus slash commands for review, debate, adversarial grilling interviews, and over-engineering/debt audits.
 
 ## The three-tier threshold
 
@@ -39,7 +39,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 harry's commands share the `/harry:` namespace. The ones whose bare name collides
 with a Claude Code built-in — `/harry:review`, `/harry:status` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
-(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`)
+(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`, `/harry:grill`)
 accept the bare name when unambiguous.
 
 `/harry:sync` does three things: deploys harry's resident laws (`HARRY.md`, which
@@ -74,7 +74,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `status`, `result`,
-`debt`, `review`, `sync`, `audit`); the four pipeline skills and the runtime are
+`debt`, `review`, `sync`, `audit`, `grill`); the four pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -92,6 +92,7 @@ Claude-native or local scripts.
 | `/harry:result [job-id]` | Fetch a completed background job's output |
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
+| `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
 Cheap-first smoke test: `/harry:status` → `/harry:ask` → `/harry:review`/`/harry:debate`.
@@ -113,7 +114,7 @@ them. One-time setup: install the `codex` CLI, then `codex login`.
 
 These auto-trigger (no slash command); they are the pipeline:
 
-- **brainstorming** — turn an idea into an approved SCQA spec (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
+- **brainstorming** — turn an idea into an approved SCQA spec via the grilling interview (`references/grilling.md`), closing on a residue manifest (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
 - **writing-plans** — turn a spec into a tier-appropriate execution plan.
 - **executing** — run the plan; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
 - **finishing** — verify green, ask merge-vs-PR, then archive the plan, clean up the worktree, return to main, and verify completion (CI when pushed, the full local suite when the merge stays local).
@@ -123,8 +124,8 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · writing-plans · executing · finishing (shared, both builds)
-commands/           review · ask · status · result · debate · debt · sync · audit (Claude Code)
-codex-skills/       ask · status · result · debt · review · sync · audit (Codex CLI)
+commands/           review · ask · status · result · debate · debt · sync · audit · grill (Claude Code)
+codex-skills/       ask · status · result · debt · review · sync · audit · grill (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        agent runtime — Codex provider (bundled via build.mjs, shared, both builds)
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
