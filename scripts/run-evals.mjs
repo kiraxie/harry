@@ -264,6 +264,12 @@ export function materializeFixture(name, root = tmpdir(), env = process.env) {
   // `-b main` isn't portable to older git; set the default branch via config so
   // the initial branch name is deterministic. We still read it back below.
   git(["-c", "init.defaultBranch=main", "init"], dir, env);
+  // Pin the identity in the repo's LOCAL config: gitEnv() only shields the
+  // runner's own git calls, but the session under test commits with its own
+  // env, and a machine with no git identity (CI runners) fatals on
+  // auto-detect. Local config covers every committer in this repo.
+  git(["config", "user.name", "Eval Fixture"], dir, env);
+  git(["config", "user.email", "eval@localhost"], dir, env);
   git(["add", "-A"], dir, env);
   git(["commit", "-m", "chore: seed eval fixture"], dir, env);
   const initialBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], dir, env);
