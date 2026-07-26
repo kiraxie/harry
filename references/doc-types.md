@@ -104,6 +104,9 @@ milestone edit.
   `.local/items/` (title + a `## Notes` line quoting the follow-up), then
   the source item's `## Follow-ups` section is cleared. This is the only
   place new backlog items get created from execution output.
+  `## Follow-ups` entries come from two sources — brainstorming's residue
+  manifest (deferred discussion items) and executing (follow-on work found
+  mid-build) — and the flush treats both identically.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.
