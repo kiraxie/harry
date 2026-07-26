@@ -92,7 +92,9 @@ milestone edit.
 ## Lifecycle rules
 
 - **Backlog → active promotion**: brainstorming fills `## Why / What` and
-  sets `status: active` once the user approves the design — the file does
+  sets `status: active` once the user approves the design (Standard tier with
+  no real alternatives weighed skips `## Why / What` — the item may go active
+  with only a `## Plan`, per tier-gates) — the file does
   not move, same path, updated frontmatter + sections.
 - **Active → done (archive)**: on finishing (wired into the finishing
   skill), set `status: done` and move `.local/items/<slug>.md` →

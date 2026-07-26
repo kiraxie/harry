@@ -61,4 +61,5 @@ absent at one spot.
 ## The rule
 
 **Never fix just where the error appears.** Trace back to the original trigger. After 3 failed
-fixes, stop — it's a wrong design, not a failed hypothesis (HARRY.md §6).
+fixes — failures of the hypothesis, not infra flakes (a flaky CI run doesn't count) — stop — it's
+a wrong design, not a failed hypothesis (HARRY.md §6).

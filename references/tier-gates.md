@@ -15,7 +15,6 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 | TDD | none — trivial one-liners need no test |
 | Review | none |
 | Execution | session, one-shot (no subagent needed) |
-| Todos | none |
 
 ### Standard
 
@@ -27,7 +26,6 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 | TDD | one runnable check left behind (smallest thing that fails if the logic breaks); watch-it-fail encouraged, not mandatory |
 | Review | free subagent review — required (compensates for inline execution) |
 | Execution | session (inline), in an isolated worktree per §5 |
-| Todos | track the few units if the plan has more than one step |
 
 ### Major
 
@@ -39,7 +37,6 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 | TDD | full red-green-refactor, **watch-it-fail mandatory** (`references/red-green.md`) |
 | Review | `/review` |
 | Execution | subagent (parallelize independent units in isolated worktrees) |
-| Todos | one todo per plan unit, kept current |
 
 **Gate scaling on a red-line promotion.** When a red line — not file count — is what forces Major, the promotion exists to guarantee the **verification** gates: a failing-reproduction / red-green test with watch-it-fail, frontier `/review`, and full evidence discipline (§6), because the domain risk is exactly what those gates guard. The **design** gates scale with the change's actual design complexity — a mechanically-trivial red-line change (one-glance diff, no alternatives to weigh) takes a compressed brainstorm and a one-line `## Why / What`, not the full decision record. Scaling never reaches verification: a trivial-looking change in a red-line domain still ships red-green + review.
 
