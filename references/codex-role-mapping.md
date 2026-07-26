@@ -15,3 +15,7 @@ no cheap-tier subagent to route to.
 
 Judgment-heavy implementation has **no** role — use the most capable model
 (`gpt-5.6-sol`) with high reasoning.
+
+mech's effort is deliberately one notch above CC's binding (medium vs low, user-tuned
+2026-07-24): a Codex session has no orchestrator bounding it, so mechanical work carries its own
+verification.

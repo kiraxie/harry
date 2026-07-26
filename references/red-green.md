@@ -13,7 +13,8 @@ verifies nothing.
 | Major / any red line | **full red-green, watch-it-fail mandatory** |
 
 Full red-green below applies at Major / red-line tier. A bug fix starts with a failing
-reproduction test (tier permitting) — never fix a bug without a test reproducing it.
+reproduction test (tier permitting) — at Standard and above, never fix a bug without a test
+reproducing it.
 
 ## The cycle
 

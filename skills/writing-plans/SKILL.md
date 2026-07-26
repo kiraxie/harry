@@ -43,7 +43,7 @@ A task is the **smallest unit that carries its own test cycle and is worth a fre
 
 ## Step 3 — Global Constraints block
 
-Copy the item's `## Why / What` → `### 5. Constraints` **verbatim** into a block at the top of the `## Plan` section, one line each (version floors, dependency limits, naming/copy rules, platform requirements). Every task implicitly includes this block — state that once, here, instead of repeating it per task.
+Copy the item's `## Why / What` → `### 5. Constraints` **verbatim** into a block at the top of the `## Plan` section, one line each (version floors, dependency limits, naming/copy rules, platform requirements). Every task implicitly includes this block — state that once, here, instead of repeating it per task. (Item has no `## Why / What` — compressed-Standard path — state the task's one-line goal and any user-stated constraints as the block instead.)
 
 ## Step 4 — Write the tasks
 
@@ -136,6 +136,8 @@ Append the plan as a `## Plan` section to the same item brainstorming used
 separate plan file. For a Standard task with no `## Why / What` (brainstorming
 skipped writing one because no real decision was weighed), create the item
 now with `status: active` and just the `## Plan` section (plus the one-line
-decision noted inline at its top, if brainstorming flagged one).
+decision noted inline at its top, if brainstorming flagged one). After
+creating the item, add its one-line entry to `.local/INDEX.md` `## Items`
+(topic · path · summary · active).
 
 Then hand off to the **executing** skill — it auto-selects session vs subagent mode by tier. Do **not** present a mode-choice menu; state which item was updated and pass control.

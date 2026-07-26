@@ -52,6 +52,8 @@ g. **Completion evidence.** CI triggers on push, not on a local merge — so the
 - Push the branch and open the PR.
 - Before merging a PR — even when not asked — check its reviews, inline comments, and CodeRabbit status. Any unresolved actionable item → report and do NOT merge (unless the user says "force merge").
 - Keep the worktree alive — the user needs it to iterate on feedback.
+- **A PR-integrated unit is NOT finished at `gh pr create`.** Annotate the unit's `.local/INDEX.md` `## In flight` line with the PR number while it's open (e.g. `… · PR #12 open`) so the list stays truthful.
+- **On merge** — whether in this session or a later one, and whether you merged it or a human clicked merge on GitHub — finishing resumes: run Option 1's full tail a–g, EXCEPT the merge itself (already done). Evidence step g uses the CI run the push/PR already triggered. If you notice a merged PR whose item is still `status: active`, that's the trigger to run the tail now.
 
 ### Option 3 — Keep
 
@@ -61,14 +63,22 @@ Report the branch name and worktree path. Touch nothing.
 
 Show what will be lost (branch, commit list, worktree path), then require a typed `discard` to confirm. On confirmation: `cd` to main root, clean up the worktree (provenance rule), then `git branch -D <branch>`.
 
+Then settle the item — never leave it `status: active`. Ask the user which:
+- **Back to backlog** — set `status: backlog` and append a one-line `## Notes` entry (`implementation discarded <date>, <reason>`).
+- **Delete outright** — remove `.local/items/<slug>.md` (destructive; needs the user's call per HARRY.md's confirmation rule).
+
+Either way, remove the unit's `.local/INDEX.md` `## In flight` line, and update its `## Items` line to match the disposition (delete the entry with a deleted item; flip its status to backlog with a kept one).
+
 ## Quick reference
 
 | Option | Tests gate | Merge | Push/PR | Branch | Worktree |
 |--------|:--:|:--:|:--:|--------|----------|
 | 1. Merge | green required | yes | — | deleted after merge | removed (native tooling, provenance) |
-| 2. PR | green required | — | yes (draft approved first) | kept | **kept** (needed for iteration) |
+| 2. PR | green required | — | yes (draft approved first) | kept | **kept** (needed for iteration)¹ |
 | 3. Keep | green required | — | — | kept | kept |
 | 4. Discard | n/a | — | — | force-deleted (typed `discard`) | removed |
+
+¹ Not finished at `gh pr create` — on merge (this session or later), run Option 1's tail a–g minus the merge itself.
 
 ## Red flags
 
@@ -77,4 +87,5 @@ Show what will be lost (branch, commit list, worktree path), then require a type
 - `gh pr create` before the body draft is approved; merging a PR with unresolved review/CodeRabbit items.
 - Removing a harness-owned worktree, or running `git worktree remove` from inside the worktree.
 - Discarding without the typed `discard` confirmation.
+- Leaving a merged PR's item at `status: active` or its `.local/INDEX.md` In-flight line stale instead of running the wind-down tail.
 - Editing a `.local/archive/` item after it lands there, or reopening it in place instead of linking to it from a new `.local/items/` item (`references/doc-types.md`).
