@@ -48,7 +48,8 @@ The compressed Standard path runs steps 1 → (one approach) → present → **l
 - **Throwaway prototype** — when a state-model or logic question resists paper
   discussion (the answer needs to be *run*, not argued), offer a minimal throwaway
   prototype: one command to run, no polish, state printed after every action. It
-  lives on a throwaway branch — main keeps only the validated decision. Genuinely
+  lives on a throwaway branch — main keeps only the validated decision — and is
+  exploration under the HARD-GATE, never grown into the implementation. Genuinely
   visual questions stay with the Visual Companion.
 
 ## Item Template (write literally)

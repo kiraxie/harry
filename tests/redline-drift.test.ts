@@ -100,6 +100,9 @@ test("HARRY.md §2 encodes exactly N domains (N-1 inline + cross-boundary bullet
   // §2 (hoist-closure, hoist-across-repos, user-requested) are NOT promotion triggers and
   // are deliberately excluded, so a bare bullet count is not lockable here — we lock the
   // honestly-lockable inline list instead.
+  // The lock is also brittle toward false POSITIVES: a semicolon added inside one
+  // domain's phrasing, or a reorder changing which bullet comes first, trips it.
+  // That loudness is acceptable — adjust the split if §2's phrasing legitimately changes.
   const firstBullet = region.split("\n").find((l) => /^-\s+\S/.test(l));
   assert.ok(firstBullet, "HARRY.md §2: no red-line list bullet found");
   const inline = firstBullet
