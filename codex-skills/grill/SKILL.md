@@ -1,6 +1,6 @@
 ---
 name: grill
-description: Stress-test a plan, decision, or idea by adversarial interview. Use when the user says "grill me", "烤問", or wants a plan/decision/idea stress-tested — pinned down question by question until every decision is settled, deferred, or surfaced. Conversational; non-code topics welcome.
+description: Stress-test a plan, decision, or idea by adversarial interview. Use when the user says "grill me" or wants a plan/decision/idea stress-tested — pinned down question by question until every decision is settled, deferred, or surfaced. Conversational; non-code topics welcome.
 ---
 
 # Grill
