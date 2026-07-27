@@ -79,12 +79,12 @@
     },
     {
       "skill": "grill",
-      "from": "mattpocock-skills:skills/grilling + grill-me + batch-grill-me",
-      "note": "references/grilling.md is the single source; commands/grill.md + codex-skills/grill are thin doors; brainstorming points at the same file. Phase-hybrid delivery (divergence free text, convergence AskUserQuestion rounds) replaces upstream's one-question-at-a-time canon; the residue-manifest exit gate is HARRY-AUTHORED with no upstream counterpart; no question caps (upstream's own out-of-scope ruling)."
+      "from": "mattpocock-skills:skills/productivity/grilling + productivity/grill-me + in-progress/batch-grill-me",
+      "note": "references/grilling.md is the single source; commands/grill.md + codex-skills/grill are thin doors; brainstorming points at the same file. Phase-hybrid delivery (divergence free text, convergence AskUserQuestion rounds) replaces upstream's one-question-at-a-time canon; the residue-manifest exit gate is HARRY-AUTHORED with no upstream counterpart; no question caps (upstream's own out-of-scope ruling). batch-grill-me sits under in-progress/ — its path may move when upstream graduates it."
     },
     {
       "skill": "root-cause-tracing / skill-authoring / red-green / brainstorming (partial)",
-      "from": "mattpocock-skills:skills/diagnosing-bugs + writing-great-skills + prototyping seams",
+      "from": "mattpocock-skills:skills/engineering/diagnosing-bugs + productivity/writing-great-skills + engineering/prototype (seams)",
       "note": "Secondary distills from the same 2026-07 survey: loop-first debugging discipline into references/root-cause-tracing.md; authoring vocabulary into references/skill-authoring.md; prototype decision aid into brainstorming; seam pre-agreement into references/red-green.md."
     },
     {
