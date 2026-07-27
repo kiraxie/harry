@@ -30,7 +30,7 @@ execute) as their own units — never inline in a distill session.
 
 ### 1. Route: onboard or re-sync
 
-This procedure maintains HARRY's upstream tracking and requires the harry checkout
+This procedure maintains harry's upstream tracking and requires the harry checkout
 (`upstream.json` at the repo root). Anywhere else, stop and tell the user: cloning
 would drop an un-ignored `.references/` tree into their project, and there is no
 tracking file to record the survey in.
@@ -104,7 +104,8 @@ The boundary is one question: **does a derived file exist in harry?** A pin plus
 `derived[]` entries exist exactly when derived files do — a ruling alone creates
 nothing to track.
 
-- **Ports exist** (made before this session, or landing in it): add the repo to
+- **Ports exist** (made before this session — e.g. backfilling an untracked
+  influence): add the repo to
   `upstream.json` `sources` (repo URL, version, full SHA, date) plus one `derived[]`
   entry per derived area, with `from` paths literal per step 4 and a `note` naming
   harry's deviations — the note is what protects the NEXT survey (step 3). Add the
