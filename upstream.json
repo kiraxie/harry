@@ -24,6 +24,12 @@
       "synced_version": "1.1.0",
       "synced_commit": "ed37663cc5fbef691ddfecd080dff42f7e7e350d",
       "synced_date": "2026-07-27"
+    },
+    "anthropics-skills": {
+      "repo": "https://github.com/anthropics/skills",
+      "synced_version": "none (repo declares no version or tags)",
+      "synced_commit": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+      "synced_date": "2026-07-27"
     }
   },
   "derived": [
@@ -86,6 +92,11 @@
       "skill": "root-cause-tracing / skill-authoring / red-green / brainstorming (partial)",
       "from": "mattpocock-skills:skills/engineering/diagnosing-bugs + productivity/writing-great-skills + engineering/prototype (seams)",
       "note": "Secondary distills from the same 2026-07 survey: loop-first debugging discipline into references/root-cause-tracing.md; authoring vocabulary into references/skill-authoring.md; prototype decision aid into brainstorming; seam pre-agreement into references/red-green.md."
+    },
+    {
+      "skill": "skill-authoring (partial)",
+      "from": "anthropics-skills:skills/skill-creator",
+      "note": "2026-07 distills into references/skill-authoring.md: reinvented-helpers bundling signal (e), trigger widening + trigger-eval discipline (d), scoped why-over-MUST + REFACTOR anti-overfit guard (a/e). Deviations kept: WHEN-only descriptions (upstream wants what+when) and (b)/(c) prohibition forms for discipline skills — don't restore either. Scaffolding/packaging/optimization tooling stays delegated to the installed official skill-creator. Licensing is per-skill: port only from Apache-2.0 paths (skills/skill-creator); the document skills are proprietary."
     },
     {
       "skill": "HARRY.md §0/§6/§7 (harness layer, pre-send check, lawful exit)",
