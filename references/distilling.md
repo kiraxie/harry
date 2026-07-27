@@ -30,10 +30,15 @@ execute) as their own units — never inline in a distill session.
 
 ### 1. Route: onboard or re-sync
 
+This procedure maintains HARRY's upstream tracking and requires the harry checkout
+(`upstream.json` at the repo root). Anywhere else, stop and tell the user: cloning
+would drop an un-ignored `.references/` tree into their project, and there is no
+tracking file to record the survey in.
+
 If the repo is already a source in `upstream.json`, this is a **re-sync**, not an
 onboard: follow `references/upstream-sync.md`'s check procedure (path-scoped diff since
-the pinned commit) and stop here. A repo recorded there as a historical influence gets a
-fresh comparison only if the user asks for one.
+the pinned commit) and stop here. A repo recorded in `upstream-sync.md`'s intro as a
+historical influence gets a fresh comparison only if the user asks for one.
 
 ### 2. Clone and capture pin data
 
@@ -95,21 +100,23 @@ Deliver in chat, in this shape:
 
 ### 7. Bookkeeping — by outcome, never skipped
 
-- **Any pull/adapt accepted** (or ports already made): add the repo to `upstream.json`
-  `sources` (repo URL, version, full SHA, date) plus one `derived[]` entry per derived
-  area, with `from` paths literal per step 4 and a `note` naming harry's deviations —
-  the note is what protects the NEXT survey (step 3). Add the source's row to
-  `references/upstream-sync.md`'s table and a provenance bullet there. Update the
-  source count where prose states it (CLAUDE.md, README.md — grep for the spelled-out
-  count; a stale "three upstreams" is drift).
-- **Everything skipped / comparison only**: record the repo as a historical influence
-  in `references/upstream-sync.md`'s intro (the i-have-adhd pattern: date, what was
-  compared, why nothing is pinned). No pin — an unpinned record is enough for a repo
-  with no derived files to diff.
-- **Pull/adapt ruled but not yet accepted** (including every headless run — step 8's
-  confirmation cannot happen): same unpinned record, noting the pending proposals. The
-  pin plus `derived[]` entries land when the first proposal is actually ported —
-  acceptance, not ruling, is what creates a derived file to track.
+The boundary is one question: **does a derived file exist in harry?** A pin plus
+`derived[]` entries exist exactly when derived files do — a ruling alone creates
+nothing to track.
+
+- **Ports exist** (made before this session, or landing in it): add the repo to
+  `upstream.json` `sources` (repo URL, version, full SHA, date) plus one `derived[]`
+  entry per derived area, with `from` paths literal per step 4 and a `note` naming
+  harry's deviations — the note is what protects the NEXT survey (step 3). Add the
+  source's row to `references/upstream-sync.md`'s table and a provenance bullet there.
+  Update the source count where prose states it (CLAUDE.md, README.md — grep for the
+  spelled-out count; a stale "three upstreams" is drift).
+- **No ports yet** — comparison-only, everything skipped, or pull/adapt rulings still
+  awaiting the user's acceptance (every headless run): record the repo in
+  `references/upstream-sync.md`'s intro (the i-have-adhd pattern: date, what was
+  compared, why nothing is pinned), noting any pending proposals. When the first
+  proposal is actually ported, that pipeline unit adds the pin and `derived[]` and
+  upgrades this record.
 
 Either way the survey leaves a durable trace. A surveyed repo with no record is exactly
 the failure mode this skill exists to close.
@@ -118,9 +125,11 @@ the failure mode this skill exists to close.
 
 Each accepted candidate becomes a `.local/items/<slug>.md` with `status: backlog`
 quoting its ruling line, plus an `.local/INDEX.md` entry — only after the user confirms
-which ones to keep (present the list; let them cut). If no user is available
-(headless/batch run), create nothing: leave the proposals in the report and say so.
-Backlog items are proposals for future pipeline runs, not commitments.
+which ones to keep (present the list; let them cut). Deliver the confirmation via the
+harness's structured picker when one exists (on Claude Code, AskUserQuestion with
+multi-select); plain text otherwise. If no user is available (headless/batch run),
+create nothing: leave the proposals in the report and say so. Backlog items are
+proposals for future pipeline runs, not commitments.
 
 ## Boundaries
 
