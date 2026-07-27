@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-07-27
+
+### Added
+
+- Red-line drift guard (`tests/redline-drift.test.ts`): nine wording-tolerant
+  probes lock the promotion-trigger domains across HARRY.md §2 and
+  `references/tier-gates.md`, with per-region count locks.
+- Distilled references (from the mattpocock/skills survey): the loop-first
+  debugging gate in `references/root-cause-tracing.md` (no theory before a
+  tight, red-capable, one-command loop), editorial skill vocabulary in
+  `references/skill-authoring.md` (context/cognitive load, leading words,
+  no-op test, negation warning), a throwaway-prototype decision aid in the
+  brainstorming skill, and seam pre-agreement in `references/red-green.md`.
+- `residue-manifest` informative eval case, live-calibrated (12 sessions,
+  both conditions fully compliant — recorded as permanently informative).
+
+### Fixed
+
+- Evals fixture repos pin a local git identity, so agentic sessions can
+  commit on machines with no global git config (first-CI-run failure on
+  ubuntu runners); the regression guard is now deterministic on every
+  platform and the test git helper gains gpgsign/hooks hardening.
+
 ## [0.14.0] - 2026-07-26
 
 ### Added
