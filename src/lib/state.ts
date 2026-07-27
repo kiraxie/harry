@@ -51,13 +51,7 @@ interface StateFile {
 const MAX_JOBS = 50;
 const PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
 const SESSION_ID_ENV = "HARRY_SESSION_ID";
-// DEBT: back-compat read for background jobs spawned by a pre-rename build that
-// set the old env var. Drop after one release.
-const LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
 const FALLBACK_STATE_ROOT = join(tmpdir(), "harry");
-// DEBT: back-compat fallback for background jobs queued by a pre-rename build,
-// which wrote their state under the old tmp root. Drop after one release.
-const LEGACY_FALLBACK_STATE_ROOT = join(tmpdir(), "copilot-companion");
 
 // ─── State Directory ─────────────────────────────────────────────────────────
 
@@ -93,16 +87,7 @@ export function resolveStateDir(cwd: string): string {
   if (pluginDataDir) {
     return join(pluginDataDir, "state", dirName);
   }
-  // Fallback (no CLAUDE_PLUGIN_DATA): a job queued by a pre-rename build lives
-  // under the legacy tmp root. If the current root has no state for this
-  // workspace yet but the legacy one does, keep using the legacy dir so those
-  // queued jobs remain retrievable after the rename.
-  const fallbackDir = join(FALLBACK_STATE_ROOT, dirName);
-  if (!existsSync(fallbackDir)) {
-    const legacyDir = join(LEGACY_FALLBACK_STATE_ROOT, dirName);
-    if (existsSync(legacyDir)) return legacyDir;
-  }
-  return fallbackDir;
+  return join(FALLBACK_STATE_ROOT, dirName);
 }
 
 // State dirs/files are 0700/0600: the fallback root is under a world-readable
@@ -235,7 +220,7 @@ export function generateJobId(): string {
 }
 
 export function getSessionId(): string | undefined {
-  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || undefined;
+  return process.env[SESSION_ID_ENV] || undefined;
 }
 
 export function createJob(stateDir: string, job: JobRecord): void {
