@@ -76,6 +76,8 @@ All files written during the audit go in the output directory:
 
 Subagents in Round 1 (Steps 1b and 2), Round 2, Round 3, and Round 5 do NOT write files — they return results to you. You write all files. Rounds 4 and 6 have no subagents at all — structured-output assembly and report writing are yours directly, not delegated.
 
+Every subagent dispatch here sets `model` explicitly at the dispatch cap or below (HARRY.md §5; the cap's concrete name lives in the executing skill's Model-by-role paragraph — currently `opus`). Never let a dispatch inherit the session model.
+
 ## Iterative by design — no single run is complete
 
 Like a security audit, one run does not find everything: which agents dig where determines what surfaces. This audit is meant to be **run repeatedly**, each run a full pass that accumulates.
