@@ -8,14 +8,21 @@ import test from "node:test";
 import { resolveStateDir } from "../src/lib/state.ts";
 
 test("resolveStateDir keys on the git repo root, not the invoking subdir (C2)", () => {
-  const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "harry-staterepo-")));
-  execFileSync("git", ["init", "-q"], { cwd: repo });
-  const sub = path.join(repo, "pkg", "nested");
-  fs.mkdirSync(sub, { recursive: true });
+  const prev = process.env.CLAUDE_PLUGIN_DATA;
+  delete process.env.CLAUDE_PLUGIN_DATA;
+  try {
+    const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "harry-staterepo-")));
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    const sub = path.join(repo, "pkg", "nested");
+    fs.mkdirSync(sub, { recursive: true });
 
-  // A provider invoked with repoRoot and a command invoked from a subdir must
-  // resolve to the SAME state dir, else their quota/rate-limit caches diverge.
-  assert.equal(resolveStateDir(sub), resolveStateDir(repo));
+    // A provider invoked with repoRoot and a command invoked from a subdir must
+    // resolve to the SAME state dir, else their quota/rate-limit caches diverge.
+    assert.equal(resolveStateDir(sub), resolveStateDir(repo));
+  } finally {
+    if (prev !== undefined) process.env.CLAUDE_PLUGIN_DATA = prev;
+    else delete process.env.CLAUDE_PLUGIN_DATA;
+  }
 });
 
 test("resolveStateDir falls back to the harry tmp root when CLAUDE_PLUGIN_DATA is unset", () => {
