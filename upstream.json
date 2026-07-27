@@ -3,9 +3,9 @@
   "sources": {
     "superpowers": {
       "repo": "https://github.com/obra/superpowers",
-      "synced_version": "6.0.3",
-      "synced_commit": "896224c4b1879920ab573417e68fd51d2ccc9072",
-      "synced_date": "2026-06-26"
+      "synced_version": "6.2.0",
+      "synced_commit": "3dcbd5c4b48e02263fbf4a3c01e3fe4f81d584d9",
+      "synced_date": "2026-07-27"
     },
     "ponytail": {
       "repo": "https://github.com/DietrichGebert/ponytail",
