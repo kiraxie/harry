@@ -59,9 +59,9 @@ is the only backend.
 `tests/fake-codex.d.mts` are derived from `codex-plugin-cc` and are **Apache-2.0**, not MIT — see
 `NOTICE`. Everything else in the repo is MIT.
 
-`upstream.json` pins the four upstream sources (`superpowers`, `ponytail`, `codex-plugin-cc`,
-`mattpocock-skills`) by commit; `references/upstream-sync.md` documents how to diff an upstream's
-newer philosophy against harry's customized version when pulling in changes.
+`upstream.json` pins the five upstream sources (`superpowers`, `ponytail`, `codex-plugin-cc`,
+`mattpocock-skills`, `anthropics-skills`) by commit; `references/upstream-sync.md` documents how
+to diff an upstream's newer philosophy against harry's customized version when pulling in changes.
 
 ## Plugin content (`HARRY.md`, `skills/`, `commands/`, `references/`)
 

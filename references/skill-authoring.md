@@ -1,7 +1,8 @@
 # Skill Authoring — harry's note
 
-For scaffolding, file structure, frontmatter, and packaging, use **Claude Code's official
-skill-creator**. Don't re-derive the mechanics here — let the tool generate the skeleton.
+For scaffolding, file structure, frontmatter, packaging, and description-optimization tooling,
+use **Claude Code's official skill-creator**. Don't re-derive the mechanics here — let the tool
+generate the skeleton.
 
 What harry keeps is the part the official tooling doesn't cover: the **Superpowers
 behavior-shaping methodology**. A skill is not prose, it is code that shapes agent behavior, so
@@ -21,7 +22,9 @@ The cycle:
 - **GREEN** — write the minimal skill that addresses those specific failures. No content for
   hypothetical cases.
 - **REFACTOR** — re-run; when the agent finds a new rationalization, add an explicit counter.
-  Repeat until bulletproof.
+  Repeat until bulletproof. A counter must generalize beyond the pressure scenario that
+  produced it — if only the triggering example improves, the fix is overfit; switch metaphor
+  or framework instead of stacking rules.
 
 Iron law: **no skill without a failing test first** — applies to new skills *and* edits.
 
@@ -78,6 +81,14 @@ Write it in third person, lead with "Use when", pack in searchable keywords (err
 symptoms, tool names), and name skills verb-first (`condition-based-waiting`, not
 `async-test-helpers`).
 
+Within WHEN-only, **widen deliberately**: agents undertrigger far more than they overtrigger,
+so enumerate the triggering contexts — including ones that don't name the skill — and add
+near-miss exclusions ("not for X — use Y") so the widened net doesn't catch neighbors. Then
+**test the description like you test the skill**: realistic, noisy should-trigger and
+should-not-trigger queries. A negative sharing no surface with the skill ("write fibonacci"
+against a PDF skill) tests nothing — negatives must be near-misses. A simple one-step task
+won't load a skill however good the description, so don't spend eval budget there.
+
 ## (e) Editorial vocabulary — how the prose is written
 
 Sections (a)–(d) verify a skill like code; this axis governs how its text is *written*. Both
@@ -105,10 +116,17 @@ words *after* the baseline test is green, not instead of it.
   banned one is never spoken. Keep a prohibition only as a hard guardrail you can't phrase
   positively, and even then pair it with what to do instead. (This is the general form of (c)'s
   "prohibitions backfire on output-shape problems.")
+- **Explain the why — capability skills.** A capability skill earns generalization by saying
+  why each instruction matters: the model extends reasons to cases the text never named, so an
+  unexplained all-caps MUST is a smell there. Discipline skills are the deliberate exception —
+  (b)/(c) hold because their failure is knowing better and doing it anyway, where
+  pressure-tested prohibition forms outperform explanation.
 - **Failure modes to name when a skill misbehaves.** *Premature completion* — a step ends before
   it's done, attention slipping to being-done; sharpen the completion criterion first (cheap,
   local), and split to hide later steps only if it stays fuzzy. *Sediment* — stale layers that
   accrete because adding feels safe and removing feels risky, the default fate of any skill
   without a pruning discipline. *Sprawl* — simply too long even when every line is live; cure with
   **progressive disclosure**, pushing branch-specific reference behind context pointers so each
-  path carries only what it needs.
+  path carries only what it needs. *Reinvented helpers* — successive runs each rewrite the same
+  helper script from scratch; that repetition IS the signal to bundle it once under the skill's
+  `scripts/` and point the body at it, so no future invocation reinvents it.
