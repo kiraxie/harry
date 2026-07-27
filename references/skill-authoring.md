@@ -1,7 +1,8 @@
 # Skill Authoring — harry's note
 
-For scaffolding, file structure, frontmatter, and packaging, use **Claude Code's official
-skill-creator**. Don't re-derive the mechanics here — let the tool generate the skeleton.
+For scaffolding, file structure, frontmatter, packaging, and description-optimization tooling,
+use **Claude Code's official skill-creator**. Don't re-derive the mechanics here — let the tool
+generate the skeleton.
 
 What harry keeps is the part the official tooling doesn't cover: the **Superpowers
 behavior-shaping methodology**. A skill is not prose, it is code that shapes agent behavior, so
@@ -87,7 +88,6 @@ near-miss exclusions ("not for X — use Y") so the widened net doesn't catch ne
 should-not-trigger queries. A negative sharing no surface with the skill ("write fibonacci"
 against a PDF skill) tests nothing — negatives must be near-misses. A simple one-step task
 won't load a skill however good the description, so don't spend eval budget there.
-(Optimization tooling stays with the official skill-creator.)
 
 ## (e) Editorial vocabulary — how the prose is written
 

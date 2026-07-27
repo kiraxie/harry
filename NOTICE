@@ -36,3 +36,16 @@ Modifications made by harry:
     - Added a connect/initialize timeout that tears down the spawned child,
       so a turn cannot hang the host process.
     - Trimmed to the subset needed by harry's ask/review/fix commands.
+
+Parts of references/skill-authoring.md are distilled from the
+skill-creator skill in anthropics/skills:
+
+    Copyright Anthropic, PBC
+    https://github.com/anthropics/skills
+    skills/skill-creator is licensed under the Apache License, Version 2.0
+    (see above for the license notice).
+
+Modifications made by harry:
+    - Principles rephrased and recalibrated to harry's methodology
+      (WHEN-only descriptions; discipline-skill prohibition forms kept);
+      no verbatim text carried over.
