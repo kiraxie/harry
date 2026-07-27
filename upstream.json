@@ -95,7 +95,7 @@
     },
     {
       "skill": "skill-authoring / red-green / executing / finishing (partial, 2026-07 re-sync)",
-      "from": "superpowers:skills/subagent-driven-development + finishing-a-development-branch + test-driven-development + writing-good-tests sweep",
+      "from": "superpowers:skills/subagent-driven-development + finishing-a-development-branch + test-driven-development (incl. writing-good-tests.md) + brainstorming (05d90ac recap sweep)",
       "note": "v6.2.0 re-sync adaptations: capped resume-based fix loop + scoped re-review (executing), verify-merged-result-before-cleanup tail (finishing), falsifiability gate + mock discipline + full-argument red flags (red-green.md), point-of-use placement + argument-carrying rows (skill-authoring.md e/b). Calibration deviations kept: tiered TDD, per-task parallel worktrees, harry's own recap-free structure — see the sp-sync unit records for the 16 declared skips."
     },
     {
