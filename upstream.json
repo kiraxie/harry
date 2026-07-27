@@ -18,6 +18,12 @@
       "synced_version": "1.0.6",
       "synced_commit": "db52e28f4d9ded852ab3942cea316258ae4ef346",
       "synced_date": "2026-07-27"
+    },
+    "mattpocock-skills": {
+      "repo": "https://github.com/mattpocock/skills",
+      "synced_version": "1.1.0",
+      "synced_commit": "ed37663cc5fbef691ddfecd080dff42f7e7e350d",
+      "synced_date": "2026-07-27"
     }
   },
   "derived": [
@@ -70,6 +76,21 @@
       "skill": "ask / status / result",
       "from": "copilot-plugin-cc + codex-plugin-cc",
       "note": "runtime commands; setup+status merged into status. Originally had a Copilot premium-quota fallback at <5% remaining; removed along with the Copilot backend."
+    },
+    {
+      "skill": "grill",
+      "from": "mattpocock-skills:skills/productivity/grilling + productivity/grill-me + in-progress/batch-grill-me",
+      "note": "references/grilling.md is the single source; commands/grill.md + codex-skills/grill are thin doors; brainstorming points at the same file. Phase-hybrid delivery (divergence free text, convergence AskUserQuestion rounds) replaces upstream's one-question-at-a-time canon; the residue-manifest exit gate is HARRY-AUTHORED with no upstream counterpart; no question caps (upstream's own out-of-scope ruling). batch-grill-me sits under in-progress/ — its path may move when upstream graduates it."
+    },
+    {
+      "skill": "root-cause-tracing / skill-authoring / red-green / brainstorming (partial)",
+      "from": "mattpocock-skills:skills/engineering/diagnosing-bugs + productivity/writing-great-skills + engineering/prototype (seams)",
+      "note": "Secondary distills from the same 2026-07 survey: loop-first debugging discipline into references/root-cause-tracing.md; authoring vocabulary into references/skill-authoring.md; prototype decision aid into brainstorming; seam pre-agreement into references/red-green.md."
+    },
+    {
+      "skill": "HARRY.md §0/§6/§7 (harness layer, pre-send check, lawful exit)",
+      "from": "i-have-adhd (ayghri/i-have-adhd, one-time comparison)",
+      "note": "2026-07-24 philosophy comparison, not a port — three law edits distilled, no derived files to diff, so the source is not pinned or cloned. Re-compare on demand; see references/upstream-sync.md."
     },
     {
       "skill": "init",

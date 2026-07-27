@@ -1,6 +1,6 @@
 # Upstream Sync
 
-Harry is distilled from three upstreams (tracked in `upstream.json`, pinned by commit) — a fourth, `copilot-plugin-cc`, was a historical design influence (see the `derived[].from` notes below) but is no longer pinned/synced now that the Copilot backend is gone. This is how to check whether an upstream's newer philosophy is worth pulling into harry.
+Harry is distilled from four upstreams (tracked in `upstream.json`, pinned by commit). Two more sources are historical influences that are NOT pinned/synced: `copilot-plugin-cc` (design influence for `debate`/`ask`/`status`/`result`; dropped when the Copilot backend went away) and `ayghri/i-have-adhd` (a one-time 2026-07-24 philosophy comparison that produced the HARRY.md §0/§6/§7 law edits — no derived files exist to diff, so there is nothing to sync; re-compare on demand if its philosophy evolves). This is how to check whether an upstream's newer philosophy is worth pulling into harry.
 
 Clones live in `.references/` (gitignored). Each `derived` entry in `upstream.json` records which source + path a harry file came from, plus a `note` on *why* it was customized — read the note before pulling, so you don't re-add something deliberately removed.
 
@@ -27,11 +27,16 @@ Then compare that upstream diff against harry's customized version and decide �
   (see `upstream.json`'s `derived[].from` for that historical attribution), but no longer track
   it for sync — the Copilot backend was removed, and `upstream.json` no longer pins that source.
 - The resident laws (`HARRY.md`) track `superpowers` + `ponytail` but were heavily recalibrated (correctness > cost) — most upstream "be lazier" changes do NOT apply; read the `note`.
+- **`grill`'s upstream is `mattpocock-skills`** (the grill family: grilling primitive, grill-me, batch-grill-me). Harry's residue-manifest exit gate has NO upstream counterpart (harry-authored), and the phase-hybrid delivery deliberately replaces upstream's one-question-at-a-time canon — when diffing, don't "restore" either. The same survey also fed smaller distills into `root-cause-tracing.md`, `skill-authoring.md`, `red-green.md`, and brainstorming (see `derived[]`).
+- `HARRY.md` §0/§6/§7 came from the `i-have-adhd` comparison (see the intro) — attribution only, nothing to sync.
 
 ## Sources
 
-| Source | Tracks | Pin |
-|--------|--------|-----|
-| superpowers | HARRY.md laws, the 4 skills | `896224c` (v6.0.3) |
-| ponytail | HARRY.md philosophy, `debt`, historically `lean` (absorbed into `/audit` dimension 10 + `/review --simplify`, 2026-07) | `c4d1925` (v4.8.3) |
-| codex-plugin-cc | `review` | `80c31f9` (v1.0.5) |
+| Source | Tracks |
+|--------|--------|
+| superpowers | HARRY.md laws, the 4 skills |
+| ponytail | HARRY.md philosophy, `debt`, historically `lean` (absorbed into `/audit` dimension 10 + `/review --simplify`, 2026-07) |
+| codex-plugin-cc | `review` |
+| mattpocock-skills | `grill` (+ survey distills into `root-cause-tracing.md`, `skill-authoring.md`, `red-green.md`, brainstorming) |
+
+Pins (commit, version, date) live only in `upstream.json` — read them with `jq`, per the procedure above. A duplicated Pin column here drifted from `upstream.json`, so it was removed rather than maintained twice.

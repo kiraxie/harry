@@ -131,12 +131,12 @@ src/ + dist/        agent runtime — Codex provider (bundled via build.mjs, sha
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
 .claude-plugin/     Claude Code plugin manifest
 .codex-plugin/ + .agents/plugins/   Codex CLI plugin manifest
-upstream.json       tracks the three upstreams by commit (see references/upstream-sync.md)
+upstream.json       tracks the four upstreams by commit (see references/upstream-sync.md)
 ```
 
 ## Upstream
 
-harry is distilled from `superpowers`, `ponytail`, and `codex-plugin-cc` — all three pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. A fourth, `copilot-plugin-cc`, was a historical design influence (`debate`'s three-model structure, `ask`/`status`/`result`'s original shape) but is no longer pinned now that the Copilot backend is gone. Note: `review`'s design upstream is **codex-plugin-cc** (it was originally ported for the Copilot backend).
+harry is distilled from `superpowers`, `ponytail`, `codex-plugin-cc`, and `mattpocock-skills` (the `grill` family) — all four pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Two more sources are historical influences, not pinned: `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`/`result`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's pre-send check and lawful-exit rules). Note: `review`'s design upstream is **codex-plugin-cc** (it was originally ported for the Copilot backend).
 
 ## License
 
