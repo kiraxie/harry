@@ -35,8 +35,8 @@ rationalization. Build in:
 
 - **Rationalization table** — every excuse from baseline testing, paired with its rebuttal
   (`"Should work now" → Run the verification.`). A row carries the full argument, not just
-  the excuse's label — label-compressed rows measurably fail under pressure (upstream eval,
-  n=10, two harnesses).
+  the excuse's label — label-compressed rows measurably weaken behavior under pressure
+  (upstream eval, n=10, two harnesses).
 - **Red flags list** — self-check phrases that signal the agent is *about* to violate the rule
   ("just this once", "this is different because…").
 - **Letter vs spirit** — state early: *"Violating the letter of the rule is violating the spirit

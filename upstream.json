@@ -94,6 +94,11 @@
       "note": "Secondary distills from the same 2026-07 survey: loop-first debugging discipline into references/root-cause-tracing.md; authoring vocabulary into references/skill-authoring.md; prototype decision aid into brainstorming; seam pre-agreement into references/red-green.md."
     },
     {
+      "skill": "skill-authoring / red-green / executing / finishing (partial, 2026-07 re-sync)",
+      "from": "superpowers:skills/subagent-driven-development + finishing-a-development-branch + test-driven-development + writing-good-tests sweep",
+      "note": "v6.2.0 re-sync adaptations: capped resume-based fix loop + scoped re-review (executing), verify-merged-result-before-cleanup tail (finishing), falsifiability gate + mock discipline + full-argument red flags (red-green.md), point-of-use placement + argument-carrying rows (skill-authoring.md e/b). Calibration deviations kept: tiered TDD, per-task parallel worktrees, harry's own recap-free structure — see the sp-sync unit records for the 16 declared skips."
+    },
+    {
       "skill": "skill-authoring (partial)",
       "from": "anthropics-skills:skills/skill-creator",
       "note": "2026-07 distills into references/skill-authoring.md: reinvented-helpers bundling signal (e), trigger widening + trigger-eval discipline (d), scoped why-over-MUST + REFACTOR anti-overfit guard (a/e). Deviations kept: WHEN-only descriptions (upstream wants what+when) and (b)/(c) prohibition forms for discipline skills — don't restore either. Scaffolding/packaging/optimization tooling stays delegated to the installed official skill-creator. Licensing is per-skill: port only from Apache-2.0 paths (skills/skill-creator); the document skills are proprietary."
