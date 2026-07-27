@@ -20,6 +20,19 @@ reproducing it.
 
 ### RED — write a failing test
 
+**Before writing the test body, name the break**: which production change would make this
+test fail — and would that change be a *bug* or a *decision*? A test only a decision can
+break guards nothing, yet passes every other gate in this file (it fails when watched,
+uses real code, has a clear name). Corollaries:
+
+- **No mirror assertions** — an expected value computed by the code under test always
+  passes; hard-code the expectation.
+- **No change detectors** — `expect(MAX_RETRIES).toBe(5)` fires on redesign and sleeps
+  through bugs; test the behavior the constant controls, not the constant.
+- **Behavior, not text** — never grep a script's or skill's source as a substitute for
+  running it; run it and assert its effects. (Asserting a text artifact's own contract —
+  links resolve, two files agree — is a different kind of test, and fine.)
+
 Write **one** minimal test showing what should happen. Then **watch it fail**:
 
 - Run the test. Confirm it **fails** (not errors).
@@ -28,18 +41,6 @@ Write **one** minimal test showing what should happen. Then **watch it fail**:
 
 Test passes already? You're testing existing behavior — fix the test.
 Test errors? Fix the error and re-run until it fails *correctly*.
-
-**Before writing the test body, name the break**: which production change would make this
-test fail — and would that change be a *bug* or a *decision*? A test only a decision can
-break guards nothing, yet passes every gate above (it fails when watched, uses real code,
-has a clear name). Corollaries:
-
-- **No mirror assertions** — an expected value computed by the code under test always
-  passes; hard-code the expectation.
-- **No change detectors** — `expect(MAX_RETRIES).toBe(5)` fires on redesign and sleeps
-  through bugs; test the behavior the constant controls, not the constant.
-- **Behavior, not text** — never grep a script's or skill's source to "test" it; run it
-  and assert its effects.
 
 ### GREEN — minimal code
 
@@ -81,11 +82,11 @@ over-engineered "general" solution is a YAGNI violation, not thoroughness.
 - When mock setup outgrows the test logic, stop mocking — switch to an integration test
   with real components.
 
-- **Agree the seams before writing tests.** Name the public boundaries under test
-  and confirm them with the user up front — testing effort lands on critical paths
-  and complex logic, not every edge; an unconfirmed seam gets no test. When no
-  correct seam exists for a needed test, that absence is itself the finding to
-  report — it never waives the mandatory reproduction test.
+**Agree the seams before writing tests.** Name the public boundaries under test
+and confirm them with the user up front — testing effort lands on critical paths
+and complex logic, not every edge; an unconfirmed seam gets no test. When no
+correct seam exists for a needed test, that absence is itself the finding to
+report — it never waives the mandatory reproduction test.
 
 ## Regression test verification (the proof)
 
