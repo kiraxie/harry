@@ -118,7 +118,7 @@ These auto-trigger (no slash command); they are the pipeline:
 - **brainstorming** — turn an idea into an approved SCQA spec via the grilling interview (`references/grilling.md`), closing on a residue manifest (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
 - **writing-plans** — turn a spec into a tier-appropriate execution plan.
 - **executing** — run the plan; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
-- **finishing** — verify green, ask merge-vs-PR, then archive the plan, clean up the worktree, return to main, and verify completion (CI when pushed, the full local suite when the merge stays local).
+- **finishing** — verify green, ask merge-vs-PR, then verify the merged result before any cleanup, archive the plan, clean up the worktree, and end on the confirmed base (CI as evidence when pushed; the merged-result suite when the merge stays local).
 
 ## Layout
 
