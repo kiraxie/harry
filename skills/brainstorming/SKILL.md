@@ -45,6 +45,12 @@ The compressed Standard path runs steps 1 → (one approach) → present → **l
 
 - **`/debate`** — for a Major or genuinely-contested architecture decision at the "propose approaches" step, you MAY suggest convening `/debate` (3 frontier models, surfaces disagreement). User opts in; reserve it for hard calls.
 - **Visual Companion** — offer ONLY for genuinely visual questions (UI mockup / wireframe / layout / side-by-side visual comparison). Conceptual UI questions ("what does X mean here?", tradeoff lists, scope choices) stay in the terminal. Not offered upfront — offer just-in-time, as its own message, the first time a question is genuinely clearer shown than told. If none ever arises, never offer it. When the user accepts, follow [visual-companion.md](visual-companion.md): launch with `scripts/start-server.sh --project-dir "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" --open` (the common-dir parent, NOT --show-toplevel: mockups belong in the MAIN checkout's `.local/`, never a worktree's — HARRY.md §5), then push HTML screens and read back browser selections. Mockups persist in `.local/brainstorm/` (gitignored).
+- **Throwaway prototype** — when a state-model or logic question resists paper
+  discussion (the answer needs to be *run*, not argued), offer a minimal throwaway
+  prototype: one command to run, no polish, state printed after every action. It
+  lives on a throwaway branch — main keeps only the validated decision — and is
+  exploration under the HARD-GATE, never grown into the implementation. Genuinely
+  visual questions stay with the Visual Companion.
 
 ## Item Template (write literally)
 

@@ -634,7 +634,7 @@ test("score table: a long informative id does not overflow the condition column"
 // ---- agentic mode: fixture repos + artifact checks -------------------------
 
 function git(args: string[], cwd: string): string {
-  return execFileSync("git", args, {
+  return execFileSync("git", ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=", ...args], {
     cwd,
     encoding: "utf8",
     env: {
@@ -944,11 +944,19 @@ test("runEvals --agentic: a shim-scripted session materializes, edits, commits; 
       ].join("\n"),
     );
     installFakeClaude(binDir);
+    // Force git identity resolution through the fixture's pinned LOCAL config
+    // only: no global/system config to fall back on, so macOS auto-detect
+    // (which can silently supply an identity) can't mask a regression where
+    // materializeFixture stops pinning user.name/user.email.
+    const gitConfigGlobal = path.join(binDir, "gitconfig-empty");
+    writeFileSync(gitConfigGlobal, "[user]\n\tuseConfigOnly = true\n");
     const env = {
       ...process.env,
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       FAKE_CLAUDE_SCRIPT: sessionScript,
       EVALS_FIXTURE_ROOT: fxRoot,
+      GIT_CONFIG_GLOBAL: gitConfigGlobal,
+      GIT_CONFIG_SYSTEM: "/dev/null",
     };
     const out = path.join(binDir, "agentic.jsonl");
     const { lines } = runEvals(

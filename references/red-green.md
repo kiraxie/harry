@@ -57,6 +57,12 @@ Use real code, not mocks (mocks only when unavoidable — must-mock-everything m
 too coupled; use dependency injection instead). GREEN is the minimal code that passes — an
 over-engineered "general" solution is a YAGNI violation, not thoroughness.
 
+- **Agree the seams before writing tests.** Name the public boundaries under test
+  and confirm them with the user up front — testing effort lands on critical paths
+  and complex logic, not every edge; an unconfirmed seam gets no test. When no
+  correct seam exists for a needed test, that absence is itself the finding to
+  report — it never waives the mandatory reproduction test.
+
 ## Regression test verification (the proof)
 
 ```
