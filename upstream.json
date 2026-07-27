@@ -3,9 +3,9 @@
   "sources": {
     "superpowers": {
       "repo": "https://github.com/obra/superpowers",
-      "synced_version": "6.0.3",
-      "synced_commit": "896224c4b1879920ab573417e68fd51d2ccc9072",
-      "synced_date": "2026-06-26"
+      "synced_version": "6.2.0",
+      "synced_commit": "3dcbd5c4b48e02263fbf4a3c01e3fe4f81d584d9",
+      "synced_date": "2026-07-27"
     },
     "ponytail": {
       "repo": "https://github.com/DietrichGebert/ponytail",
@@ -92,6 +92,11 @@
       "skill": "root-cause-tracing / skill-authoring / red-green / brainstorming (partial)",
       "from": "mattpocock-skills:skills/engineering/diagnosing-bugs + productivity/writing-great-skills + engineering/prototype (seams)",
       "note": "Secondary distills from the same 2026-07 survey: loop-first debugging discipline into references/root-cause-tracing.md; authoring vocabulary into references/skill-authoring.md; prototype decision aid into brainstorming; seam pre-agreement into references/red-green.md."
+    },
+    {
+      "skill": "skill-authoring / red-green / executing / finishing (partial, 2026-07 re-sync)",
+      "from": "superpowers:skills/subagent-driven-development + finishing-a-development-branch + test-driven-development (incl. writing-good-tests.md) + brainstorming (05d90ac recap sweep)",
+      "note": "v6.2.0 re-sync adaptations: capped resume-based fix loop + scoped re-review (executing), verify-merged-result-before-cleanup tail (finishing), falsifiability gate + mock discipline + full-argument red flags (red-green.md), point-of-use placement + argument-carrying rows (skill-authoring.md e/b). Calibration deviations kept: tiered TDD, per-task parallel worktrees, harry's own recap-free structure — see the sp-sync unit records for the 16 declared skips."
     },
     {
       "skill": "skill-authoring (partial)",

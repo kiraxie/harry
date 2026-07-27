@@ -34,7 +34,9 @@ Discipline skills (rules the agent will be tempted to skip under pressure) need 
 rationalization. Build in:
 
 - **Rationalization table** — every excuse from baseline testing, paired with its rebuttal
-  (`"Should work now" → Run the verification.`).
+  (`"Should work now" → Run the verification.`). A row carries the full argument, not just
+  the excuse's label — label-compressed rows measurably weaken behavior under pressure
+  (upstream eval, n=10, two harnesses).
 - **Red flags list** — self-check phrases that signal the agent is *about* to violate the rule
   ("just this once", "this is different because…").
 - **Letter vs spirit** — state early: *"Violating the letter of the rule is violating the spirit
@@ -121,6 +123,11 @@ words *after* the baseline test is green, not instead of it.
   unexplained all-caps MUST is a smell there. Discipline skills are the deliberate exception —
   (b)/(c) hold because their failure is knowing better and doing it anyway, where
   pressure-tested prohibition forms outperform explanation.
+- **Point-of-use placement.** A principle restated in a recap section (Key Principles /
+  Remember / The Bottom Line) is sediment in section form — delete the section, moving any
+  sole-carrier line to the step where it acts. Guard sections (Common Mistakes / Red Flags)
+  that restate the procedure fold into the single rationalization table; a guard earns
+  separate existence only by carrying content the steps don't.
 - **Failure modes to name when a skill misbehaves.** *Premature completion* — a step ends before
   it's done, attention slipping to being-done; sharpen the completion criterion first (cheap,
   local), and split to hide later steps only if it stays fuzzy. *Sediment* — stale layers that
