@@ -78,6 +78,15 @@ Write it in third person, lead with "Use when", pack in searchable keywords (err
 symptoms, tool names), and name skills verb-first (`condition-based-waiting`, not
 `async-test-helpers`).
 
+Within WHEN-only, **widen deliberately**: agents undertrigger far more than they overtrigger,
+so enumerate the triggering contexts — including ones that don't name the skill — and add
+near-miss exclusions ("not for X — use Y") so the widened net doesn't catch neighbors. Then
+**test the description like you test the skill**: realistic, noisy should-trigger and
+should-not-trigger queries. A negative sharing no surface with the skill ("write fibonacci"
+against a PDF skill) tests nothing — negatives must be near-misses. A simple one-step task
+won't load a skill however good the description, so don't spend eval budget there.
+(Optimization tooling stays with the official skill-creator.)
+
 ## (e) Editorial vocabulary — how the prose is written
 
 Sections (a)–(d) verify a skill like code; this axis governs how its text is *written*. Both
