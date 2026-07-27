@@ -111,4 +111,6 @@ words *after* the baseline test is green, not instead of it.
   accrete because adding feels safe and removing feels risky, the default fate of any skill
   without a pruning discipline. *Sprawl* — simply too long even when every line is live; cure with
   **progressive disclosure**, pushing branch-specific reference behind context pointers so each
-  path carries only what it needs.
+  path carries only what it needs. *Reinvented helpers* — successive runs each rewrite the same
+  helper script from scratch; that repetition IS the signal to bundle it once under the skill's
+  `scripts/` and point the body at it, so no future invocation reinvents it.
