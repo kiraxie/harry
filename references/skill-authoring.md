@@ -21,7 +21,9 @@ The cycle:
 - **GREEN** — write the minimal skill that addresses those specific failures. No content for
   hypothetical cases.
 - **REFACTOR** — re-run; when the agent finds a new rationalization, add an explicit counter.
-  Repeat until bulletproof.
+  Repeat until bulletproof. A counter must generalize beyond the pressure scenario that
+  produced it — if only the triggering example improves, the fix is overfit; switch metaphor
+  or framework instead of stacking rules.
 
 Iron law: **no skill without a failing test first** — applies to new skills *and* edits.
 
@@ -114,6 +116,11 @@ words *after* the baseline test is green, not instead of it.
   banned one is never spoken. Keep a prohibition only as a hard guardrail you can't phrase
   positively, and even then pair it with what to do instead. (This is the general form of (c)'s
   "prohibitions backfire on output-shape problems.")
+- **Explain the why — capability skills.** A capability skill earns generalization by saying
+  why each instruction matters: the model extends reasons to cases the text never named, so an
+  unexplained all-caps MUST is a smell there. Discipline skills are the deliberate exception —
+  (b)/(c) hold because their failure is knowing better and doing it anyway, where
+  pressure-tested prohibition forms outperform explanation.
 - **Failure modes to name when a skill misbehaves.** *Premature completion* — a step ends before
   it's done, attention slipping to being-done; sharpen the completion criterion first (cheap,
   local), and split to hide later steps only if it stays fuzzy. *Sediment* — stale layers that
