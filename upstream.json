@@ -9,15 +9,15 @@
     },
     "ponytail": {
       "repo": "https://github.com/DietrichGebert/ponytail",
-      "synced_version": "4.8.3",
-      "synced_commit": "c4d1925ae9b76a1b641877328209ad25cfeb5ef2",
-      "synced_date": "2026-06-26"
+      "synced_version": "4.8.4",
+      "synced_commit": "16f29800fd2681bdf24f3eb4ccffe38be3baec6b",
+      "synced_date": "2026-07-27"
     },
     "codex-plugin-cc": {
       "repo": "https://github.com/openai/codex-plugin-cc",
-      "synced_version": "1.0.5",
-      "synced_commit": "80c31f99570876c3ef40327838b0a2ca1ae2cd9c",
-      "synced_date": "2026-06-26"
+      "synced_version": "1.0.6",
+      "synced_commit": "db52e28f4d9ded852ab3942cea316258ae4ef346",
+      "synced_date": "2026-07-27"
     }
   },
   "derived": [
