@@ -140,7 +140,7 @@ guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the portable
 `commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `review`,
-`sync`, `audit`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
+`sync`, `audit`, `distill`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 

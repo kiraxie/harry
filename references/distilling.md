@@ -106,6 +106,10 @@ Deliver in chat, in this shape:
   in `references/upstream-sync.md`'s intro (the i-have-adhd pattern: date, what was
   compared, why nothing is pinned). No pin — an unpinned record is enough for a repo
   with no derived files to diff.
+- **Pull/adapt ruled but not yet accepted** (including every headless run — step 8's
+  confirmation cannot happen): same unpinned record, noting the pending proposals. The
+  pin plus `derived[]` entries land when the first proposal is actually ported —
+  acceptance, not ruling, is what creates a derived file to track.
 
 Either way the survey leaves a durable trace. A surveyed repo with no record is exactly
 the failure mode this skill exists to close.
