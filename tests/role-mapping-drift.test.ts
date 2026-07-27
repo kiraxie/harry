@@ -145,7 +145,7 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
 // CC command ↔ Codex skill twins. `debate` is intentionally absent (its "self"
 // voice is Claude/opus-only by design — no Codex conversion exists), so it is not
 // listed here rather than allowlisted.
-const PAIRS = ["ask", "status", "result", "debt", "review", "sync", "audit", "grill"];
+const PAIRS = ["ask", "status", "result", "debt", "review", "sync", "audit", "grill", "distill"];
 
 // Deliberate-divergence allowlist: reference paths permitted to appear on ONE side
 // only, per pair. Key → set of `references/...` paths exempt from the equality check.
