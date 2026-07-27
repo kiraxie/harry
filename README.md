@@ -39,7 +39,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 harry's commands share the `/harry:` namespace. The ones whose bare name collides
 with a Claude Code built-in — `/harry:review`, `/harry:status` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
-(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`, `/harry:grill`)
+(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:result`, `/harry:grill`, `/harry:distill`)
 accept the bare name when unambiguous.
 
 `/harry:sync` does three things: deploys harry's resident laws (`HARRY.md`, which
@@ -74,7 +74,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `status`, `result`,
-`debt`, `review`, `sync`, `audit`, `grill`); the four pipeline skills and the runtime are
+`debt`, `review`, `sync`, `audit`, `grill`, `distill`); the four pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -93,6 +93,7 @@ Claude-native or local scripts.
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
+| `/harry:distill <repo>` | Evaluate an external repo as a distillation candidate — survey it against harry's laws and deviation record, rule pull/adapt/skip per candidate, record the outcome in upstream tracking |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
 Cheap-first smoke test: `/harry:status` → `/harry:ask` → `/harry:review`/`/harry:debate`.
@@ -124,8 +125,8 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · writing-plans · executing · finishing (shared, both builds)
-commands/           review · ask · status · result · debate · debt · sync · audit · grill (Claude Code)
-codex-skills/       ask · status · result · debt · review · sync · audit · grill (Codex CLI)
+commands/           review · ask · status · result · debate · debt · sync · audit · grill · distill (Claude Code)
+codex-skills/       ask · status · result · debt · review · sync · audit · grill · distill (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        agent runtime — Codex provider (bundled via build.mjs, shared, both builds)
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
