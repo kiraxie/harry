@@ -56,12 +56,11 @@ var package_default = {
     "init-ignore": "node scripts/init.mjs"
   },
   dependencies: {},
-  "//typescript": "DEBT: pinned to 7.0.1-rc (tsgo) for native-TS speed; revisit \u2192 stable 7.0 final when released",
   devDependencies: {
     "@biomejs/biome": "^2.5.1",
     "@types/node": "^26.0.1",
     esbuild: "^0.28.1",
-    typescript: "7.0.1-rc"
+    typescript: "^7.0.2"
   }
 };
 
@@ -1073,9 +1072,7 @@ var import_node_path = require("node:path");
 var MAX_JOBS = 50;
 var PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
 var SESSION_ID_ENV = "HARRY_SESSION_ID";
-var LEGACY_SESSION_ID_ENV = "COPILOT_COMPANION_SESSION_ID";
 var FALLBACK_STATE_ROOT = (0, import_node_path.join)((0, import_node_os.tmpdir)(), "harry");
-var LEGACY_FALLBACK_STATE_ROOT = (0, import_node_path.join)((0, import_node_os.tmpdir)(), "copilot-companion");
 function repoRootOf(cwd) {
   try {
     const root = (0, import_node_child_process3.execFileSync)("git", ["rev-parse", "--show-toplevel"], {
@@ -1097,12 +1094,7 @@ function resolveStateDir(cwd) {
   if (pluginDataDir) {
     return (0, import_node_path.join)(pluginDataDir, "state", dirName);
   }
-  const fallbackDir = (0, import_node_path.join)(FALLBACK_STATE_ROOT, dirName);
-  if (!(0, import_node_fs.existsSync)(fallbackDir)) {
-    const legacyDir = (0, import_node_path.join)(LEGACY_FALLBACK_STATE_ROOT, dirName);
-    if ((0, import_node_fs.existsSync)(legacyDir)) return legacyDir;
-  }
-  return fallbackDir;
+  return (0, import_node_path.join)(FALLBACK_STATE_ROOT, dirName);
 }
 function ensureDir(dir) {
   (0, import_node_fs.mkdirSync)(dir, { recursive: true, mode: 448 });
@@ -1189,7 +1181,7 @@ function generateJobId() {
   return `job-${ts}-${rand}`;
 }
 function getSessionId() {
-  return process.env[SESSION_ID_ENV] || process.env[LEGACY_SESSION_ID_ENV] || void 0;
+  return process.env[SESSION_ID_ENV] || void 0;
 }
 function createJob(stateDir, job) {
   const state = loadState(stateDir);
