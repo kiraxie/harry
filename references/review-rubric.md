@@ -74,4 +74,6 @@ Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 ```
 
 Both verdicts (**spec** AND **quality**) are required — a report missing either
-is not a valid review (executing §Never).
+is not a valid review. This binds every review run against this rubric; executing
+states the acceptance rule at both of its review steps — session mode step 4
+(Standard) and subagent mode step 3 (Major).

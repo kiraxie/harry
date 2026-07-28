@@ -260,4 +260,6 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" fix \
 `fix` snapshots pre-existing changes as a baseline, applies fixes (left staged), and
 emits `{"status":"fixed", filesModified, applied, skipped, …}`. Report applied /
 skipped and changed files; fixes are **staged but not committed**. If `status` is
-`failed`, surface the message and stop.
+`failed`, surface the message and stop. `filesModified`/`linesAdded`/`linesRemoved`
+are `null` when git could not measure the diff — report the stats as unknown, never
+as "no changes".

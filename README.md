@@ -15,7 +15,7 @@ Every non-trivial task is classified; the tier decides how much process applies 
 |------|---------|-----------|
 | **Trivial** | 1 file, mechanical, no branching | just do it + verify |
 | **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, bullet plan, one test, inline execution + required independent review |
-| **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → spec → plan → subagent execution with per-task review → finish |
+| **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → item `## Why / What` + `## Plan` → subagent execution with per-task review → finish |
 
 Any red line (security/auth/money/delete/migration/external contract/cross-boundary contract) forces **Major** regardless of size.
 
@@ -90,7 +90,7 @@ Claude-native or local scripts.
 | `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
 | `/harry:status` | Codex rate-limit snapshot + background jobs |
 | `/harry:result [job-id]` | Fetch a completed background job's output |
-| `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + spec Non-Goals + plan deferrals + backlog entries) into a triaged ledger |
+| `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
 | `/harry:distill <repo>` | Evaluate an external repo as a distillation candidate — survey it against harry's laws and deviation record, rule pull/adapt/skip per candidate, record the outcome in upstream tracking |
@@ -115,10 +115,10 @@ them. One-time setup: install the `codex` CLI, then `codex login`.
 
 These auto-trigger (no slash command); they are the pipeline:
 
-- **brainstorming** — turn an idea into an approved SCQA spec via the grilling interview (`references/grilling.md`), closing on a residue manifest (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
-- **writing-plans** — turn a spec into a tier-appropriate execution plan.
+- **brainstorming** — turn an idea into an approved item `## Why / What` (SCQA) via the grilling interview (`references/grilling.md`), closing on a residue manifest (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
+- **writing-plans** — turn that `## Why / What` into a tier-appropriate `## Plan` in the same item.
 - **executing** — run the plan; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
-- **finishing** — verify green, ask merge-vs-PR, then verify the merged result before any cleanup, archive the plan, clean up the worktree, and end on the confirmed base (CI as evidence when pushed; the merged-result suite when the merge stays local).
+- **finishing** — verify green, ask merge-vs-PR, then verify the merged result before any cleanup, archive the item, clean up the worktree, and end on the confirmed base (CI as evidence when pushed; the merged-result suite when the merge stays local).
 
 ## Layout
 

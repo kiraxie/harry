@@ -7,7 +7,15 @@
 // init's explicit target-dir argument.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -15,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { run as initRun } from "../scripts/init.mjs";
 import { run as installRun } from "../scripts/install.mjs";
 import { run as codexRun } from "../scripts/install-codex.mjs";
-import { safeWrite } from "../scripts/lib/atomic-write.mjs";
+import { safeWrite, tempPathFor } from "../scripts/lib/atomic-write.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -26,6 +34,19 @@ const sourceLaws = readFileSync(path.join(pluginRoot, "HARRY.md"), "utf8");
 
 function tmpDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+// The one authoritative residue check, shared by every writer below. It scans the
+// fixture tree rather than probing a hardcoded `<target>.tmp`, because temp names
+// carry a per-call pid+random suffix (scripts/lib/atomic-write.mjs's tempPathFor):
+// a name-probing assertion can never match, so it would pass no matter what
+// leaked. Recursive so a leak beside a nested write (the deployed HARRY.md
+// snapshot) is caught too.
+function assertNoTempResidue(dir: string, what: string): void {
+  const residue = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((n) =>
+    path.basename(n).includes(".tmp"),
+  );
+  assert.deepEqual(residue, [], `${what}: temp-file residue left behind`);
 }
 
 // Run `fn` with HARRY_GLOBAL pointed at `file`, restoring the prior value after.
@@ -39,6 +60,32 @@ function withGlobal(file: string, fn: () => void): void {
     else process.env.HARRY_GLOBAL = prev;
   }
 }
+
+// The stale-entry WARNING is one piece of knowledge split across two installers:
+// the STALE list (scripts/lib/stale-entries.mjs) was single-sourced precisely so
+// the two could not drift (HARRY.md §2), but the renderer that turns that list
+// into the user-facing warning must be single-sourced for the same reason — a
+// second copy re-opens the drift the module header claims to have closed.
+//
+// Matches a DEFINITION in either form — `function warnStale` and
+// `const warnStale = …` — but not a call: `warnStale(existing)` is what both
+// installers legitimately do, so a bare `warnStale\s*[=(]` would flag them as
+// definitions. `=(?!=)` keeps a `warnStale ===` comparison out too.
+const WARN_STALE_DEFINITION = /function\s+warnStale\b|\bwarnStale\s*=(?!=)/;
+
+test("warnStale is defined exactly once across scripts/, beside the data it renders", () => {
+  const scriptsDir = path.join(pluginRoot, "scripts");
+  const defs = readdirSync(scriptsDir, { recursive: true, encoding: "utf8" })
+    .filter((rel) => rel.endsWith(".mjs"))
+    .filter((rel) => WARN_STALE_DEFINITION.test(readFileSync(path.join(scriptsDir, rel), "utf8")))
+    .map((rel) => path.posix.join("scripts", rel.split(path.sep).join("/")))
+    .sort();
+  assert.deepEqual(
+    defs,
+    ["scripts/lib/stale-entries.mjs"],
+    "warnStale must live once, in the module that owns STALE",
+  );
+});
 
 test("install.mjs: first install writes the block, drops a .bak, leaves no .tmp", () => {
   const dir = tmpDir("harry-install-test-");
@@ -54,7 +101,7 @@ test("install.mjs: first install writes the block, drops a .bak, leaves no .tmp"
     assert.ok(out.includes("# My rules"), "user content preserved");
     assert.ok(existsSync(`${g}.bak`), "one-time .bak created");
     assert.equal(readFileSync(`${g}.bak`, "utf8"), original, ".bak holds the pristine original");
-    assert.ok(!existsSync(`${g}.tmp`), "no .tmp residue after an atomic write");
+    assertNoTempResidue(dir, "install.mjs first install");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -311,7 +358,7 @@ test("init.mjs: appends plain ignore entries (no harry branding) with a .bak", (
     assert.ok(!out.includes("harry"), "no harry branding written to the shared .gitignore");
     assert.ok(existsSync(`${gi}.bak`), "one-time .bak created");
     assert.equal(readFileSync(`${gi}.bak`, "utf8"), original, ".bak holds the pristine original");
-    assert.ok(!existsSync(`${gi}.tmp`), "no .tmp residue");
+    assertNoTempResidue(dir, "init.mjs");
 
     initRun(dir, { remove: true });
     const removed = readFileSync(gi, "utf8");
@@ -345,7 +392,7 @@ test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
       }
       assert.ok(existsSync(`${g}.bak`), "one-time .bak created");
       assert.equal(readFileSync(`${g}.bak`, "utf8"), original, ".bak holds the pristine original");
-      assert.ok(!existsSync(`${g}.tmp`), "no .tmp residue");
+      assertNoTempResidue(dir, "install-codex.mjs");
     } finally {
       if (prev === undefined) delete process.env.HARRY_CODEX_GLOBAL;
       else process.env.HARRY_CODEX_GLOBAL = prev;
@@ -355,7 +402,8 @@ test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
   }
 });
 
-test("safeWrite: backs up once, never clobbers the .bak, leaves no .tmp", () => {
+// Residue is NOT re-checked here — the temp-path test below owns that assertion.
+test("safeWrite: backs up once and never clobbers the .bak", () => {
   const dir = tmpDir("harry-safewrite-test-");
   try {
     const f = path.join(dir, "file.txt");
@@ -364,7 +412,6 @@ test("safeWrite: backs up once, never clobbers the .bak, leaves no .tmp", () => 
     safeWrite(f, "v2");
     assert.equal(readFileSync(f, "utf8"), "v2", "target updated");
     assert.equal(readFileSync(`${f}.bak`, "utf8"), "v1", "backup holds pristine v1");
-    assert.ok(!existsSync(`${f}.tmp`), "no .tmp residue");
 
     safeWrite(f, "v3");
     assert.equal(readFileSync(f, "utf8"), "v3", "target updated again");
@@ -379,6 +426,57 @@ test("safeWrite: backs up once, never clobbers the .bak, leaves no .tmp", () => 
     safeWrite(fresh, "hello");
     assert.equal(readFileSync(fresh, "utf8"), "hello", "new file written");
     assert.ok(!existsSync(`${fresh}.bak`), "no backup when there was nothing to preserve");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The write is atomic per process; concurrency is the remaining hole. Two
+// installers running at once (a second /harry:sync, or a sync racing
+// `pnpm run install-laws`) share one target — with a fixed `<target>.tmp` they
+// write the SAME temp file and rename it twice, so one process can rename a
+// half-written file over the user's ~/.claude/CLAUDE.md. That is exactly the
+// truncation this module exists to prevent, so the temp name must be unique
+// per call while staying a sibling of the target (same filesystem → atomic
+// rename).
+test("safeWrite: each write picks a unique temp path in the target's directory", () => {
+  const dir = tmpDir("harry-safewrite-tmp-");
+  try {
+    const f = path.join(dir, "file.txt");
+    const a = tempPathFor(f);
+    const b = tempPathFor(f);
+
+    assert.notEqual(a, b, "two writes to the same target must not share a temp path");
+    assert.equal(path.dirname(a), dir, "temp file is a sibling of the target");
+    assert.equal(path.dirname(b), dir, "temp file is a sibling of the target");
+    assert.ok(path.basename(a).startsWith("file.txt.tmp"), "temp name is traceable to its target");
+
+    // …and the real write still leaves nothing behind under the new naming.
+    writeFileSync(f, "v1");
+    safeWrite(f, "v2");
+    assertNoTempResidue(dir, "completed safeWrite");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Per-call temp names mean a failed write can no longer be reclaimed by the next
+// run overwriting a fixed path: whatever it leaves behind accumulates next to the
+// user's ~/.claude/CLAUDE.md forever. So the failure path must clean up after
+// itself — and must still report the failure, never swallow it.
+test("safeWrite: a failed write cleans up its temp file and rethrows", () => {
+  const dir = tmpDir("harry-safewrite-fail-");
+  try {
+    // Make the rename fail: the target is a non-empty DIRECTORY (rename onto it
+    // is EISDIR), with a .bak already present so the backup step is skipped and
+    // the temp file is actually written before the failure.
+    const target = path.join(dir, "t");
+    mkdirSync(target);
+    writeFileSync(path.join(target, "inner"), "x");
+    writeFileSync(`${target}.bak`, "old");
+
+    assert.throws(() => safeWrite(target, "new"), /EISDIR/, "the write failure must surface");
+    assertNoTempResidue(dir, "failed safeWrite");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

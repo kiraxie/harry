@@ -8,22 +8,47 @@
 // (HARRY.md §2: shared knowledge across a boundary gets one source of truth),
 // so the safe-write policy lives here once.
 
-import { copyFileSync, existsSync, renameSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { copyFileSync, existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
 
 // Write `content` to `targetPath` atomically, keeping a one-time backup.
 //
 //  1. On the FIRST modification of an existing target, copy it to `<target>.bak`
 //     — but only if no `.bak` already exists, so re-runs never clobber the
 //     original snapshot with a harry-modified one.
-//  2. Write to a sibling `<target>.tmp` (same directory → same filesystem, so the
-//     rename is atomic), then rename it over the target. A reader ever sees only
-//     the complete old file or the complete new one, never a half-written file.
+//  2. Write to a uniquely-named sibling of the target (same directory → same
+//     filesystem, so the rename is atomic), then rename it over the target. A
+//     reader ever sees only the complete old file or the complete new one, never
+//     a half-written file.
+
+// Per-call temp path for `targetPath`. Unique because two installers can run at
+// once (a second /harry:sync, or a sync racing `pnpm run install-laws`) against
+// the same target: with a shared temp name they interleave write and rename, and
+// one process renames the other's half-written file over the user's global
+// instructions — the very truncation this module prevents. Same idiom as
+// src/lib/state.ts's atomicWrite (copied, not imported: scripts/ and src/ share
+// no code). A per-call name is also why safeWrite must clean up after a failed
+// write: there is no next run to reclaim a fixed path, so the debris would
+// accumulate beside the user's global instructions.
+export function tempPathFor(targetPath) {
+  return `${targetPath}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`;
+}
+
 export function safeWrite(targetPath, content) {
   const backupPath = `${targetPath}.bak`;
   if (existsSync(targetPath) && !existsSync(backupPath)) {
     copyFileSync(targetPath, backupPath);
   }
-  const tmpPath = `${targetPath}.tmp`;
-  writeFileSync(tmpPath, content);
-  renameSync(tmpPath, targetPath);
+  const tmpPath = tempPathFor(targetPath);
+  try {
+    writeFileSync(tmpPath, content);
+    renameSync(tmpPath, targetPath);
+  } catch (err) {
+    try {
+      rmSync(tmpPath, { force: true });
+    } catch {
+      // Best-effort cleanup: a failure here must never mask the real error.
+    }
+    throw err;
+  }
 }
