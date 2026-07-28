@@ -18,5 +18,10 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" [--model <id>] [-
 ```
 
 - Return the command stdout verbatim, exactly as-is. Do not paraphrase, summarize,
-  or add commentary before or after it (HARRY.md §6).
-- If `status` is `failed`, surface the message and stop.
+  or add commentary before or after it (HARRY.md §6) — but only once you've
+  confirmed the run succeeded (next bullet). `ask` has no JSON mode and no
+  `status` field to check; its output is plain markdown either way.
+- Check before relaying: on failure the process exits non-zero and stdout is
+  markdown beginning `# Ask Failed`, not an answer — the same failure also prints
+  a `Fatal error: <message>` line on stderr. If you see either signal, report the
+  failure and stop; never present that stdout body as the model's answer.
