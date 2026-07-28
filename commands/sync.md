@@ -142,9 +142,6 @@ migrate.") and stop. Do not prompt.
 and propose a target path `.local/items/<topic>.md` (or `.local/archive/<topic>.md`
 if already complete):
 
-- Date: first git commit touching the file
-  (`git log --diff-filter=A --follow --format=%ad --date=short -1 -- <file>`),
-  else the file mtime, else today.
 - Topic: kebab-case, derived from the filename/content.
 
 Present the full candidate list as a table (source → proposed kind → target path).
