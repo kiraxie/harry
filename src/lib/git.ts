@@ -46,11 +46,27 @@ function gitDiffTolerant(cwd: string, args: string[]): { stdout: string; overflo
   return { stdout: result.stdout, overflow: false };
 }
 
-function truncateUtf8(s: string, maxBytes: number): { text: string; truncated: boolean } {
+export function truncateUtf8(s: string, maxBytes: number): { text: string; truncated: boolean } {
+  // A negative or fractional cap is a caller bug, and propagating one would
+  // silently skip the boundary walk below: `subarray(0, -5)` counts from the
+  // END, and `buf[2.5]` is `undefined`, which fails the continuation-byte test.
+  // Either would reintroduce exactly the defect the walk exists to prevent, so
+  // normalize instead. Nothing validates `maxInlineDiffBytes` upstream.
+  const cap = Math.max(0, Math.trunc(maxBytes));
   const buf = Buffer.from(s, "utf8");
-  if (buf.length <= maxBytes) return { text: s, truncated: false };
-  // Trim back to the nearest line break to avoid cutting mid-line.
-  let cut = buf.subarray(0, maxBytes).toString("utf8");
+  if (buf.length <= cap) return { text: s, truncated: false };
+  // Back off any character the cut lands inside, BEFORE decoding. `cap` is a
+  // byte offset with no regard for character boundaries, and decoding an
+  // orphaned tail yields U+FFFD — three bytes standing in for the one to three
+  // they replaced. When the orphan is one or two bytes that overruns the cap;
+  // when it is three (a 4-byte character cut after its third byte) it is
+  // three-for-three, so only the glyph is injected. Both are wrong: the input
+  // never contained that character. UTF-8 continuation bytes are `10xxxxxx`;
+  // walking back off them lands on a character boundary.
+  let end = cap;
+  while (end > 0 && (buf[end] & 0b1100_0000) === 0b1000_0000) end--;
+  // Then trim back to the nearest line break to avoid cutting mid-line.
+  let cut = buf.subarray(0, end).toString("utf8");
   const lastNl = cut.lastIndexOf("\n");
   if (lastNl > 0) cut = cut.slice(0, lastNl);
   return { text: cut, truncated: true };
