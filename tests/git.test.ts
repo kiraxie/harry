@@ -54,12 +54,33 @@ function write(dir: string, name: string, body: string): void {
 
 /**
  * A file git will treat as binary (it contains NUL). This is what makes the
- * `--binary` measurement flag load-bearing: on text-only content git produces
- * byte-identical output with and without it, so an all-text fixture cannot tell
- * the real flag set apart from a weaker one.
+ * `--binary` measurement flag load-bearing: on text-only content git emits
+ * byte-identical output with and without it, so an all-text fixture cannot
+ * notice `--binary` being dropped from the measured command.
+ *
+ * Scope, so the next reader does not re-derive it: this pins `--binary` and
+ * nothing else. The other two flags in that command stay unpinned — mutating
+ * `--submodule=diff` to `--submodule=short`, or dropping `--no-ext-diff`
+ * outright, leaves the whole suite green, because this fixture has no submodule
+ * and no configured `diff.external` driver, so neither flag changes a byte.
+ * Closing them costs a submodule fixture and a gitconfig respectively — far
+ * heavier than a NUL file, guarding drift that matters much less than
+ * `--binary`'s. Deliberately not bought.
  */
 function writeBinary(dir: string, name: string, bytes: number[]): void {
   writeFileSync(path.join(dir, name), Buffer.from(bytes));
+}
+
+/**
+ * `count` lines of multi-byte UTF-8. This is what makes the measurement's UNIT
+ * observable: on ASCII, `Buffer.byteLength(s, "utf8")` and `s.length` are equal,
+ * so an all-ASCII fixture cannot tell a byte count from a UTF-16 code-unit
+ * count — and the review budget is denominated in bytes. Traditional Chinese
+ * runs about 2.5x, and is this tool's own workload rather than an exotic edge.
+ */
+function multiByteLines(count: number): string {
+  const lines = Array.from({ length: count }, (_, i) => `第 ${i} 行：這是一段中文測試內容`);
+  return `${lines.join("\n")}\n`;
 }
 
 /**
@@ -283,18 +304,23 @@ test("collectReviewContext: untracked files count toward the inline file cap", (
 
 test("collectReviewContext: the inline byte cap is inclusive", () => {
   inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
+    write(dir, "unstaged.txt", "one\n");
+    write(dir, "staged.txt", "one\n");
     writeBinary(dir, "staged.bin", [0, 1, 2, 253, 254, 255]);
     writeBinary(dir, "unstaged.bin", [7, 0, 7, 0, 255]);
     commitAll(dir, "init");
-    write(dir, "a.txt", `${Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n")}\n`);
+    write(dir, "unstaged.txt", multiByteLines(40));
+    write(dir, "staged.txt", multiByteLines(40));
     writeBinary(dir, "staged.bin", [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
     writeBinary(dir, "unstaged.bin", [1, 1, 2, 3, 5, 8, 13, 0]);
     // The working-tree measurement is a sum over a staged and an unstaged
-    // command. Give each half its own binary change: a fixture with nothing
-    // staged cannot notice the staged half going missing, and a half carrying
-    // only text cannot notice --binary being dropped from it.
-    run(dir, "add", "staged.bin");
+    // command, so each half needs to carry every property the assertion below
+    // relies on. A half with nothing in it cannot notice being dropped from the
+    // sum; a half carrying only text cannot notice --binary being dropped from
+    // it; and a half carrying only ASCII cannot notice bytes being counted as
+    // characters. Hence four changes, two per half, one binary and one
+    // multi-byte on each side.
+    run(dir, "add", "staged.txt", "staged.bin");
     const target = resolveReviewTarget(dir, { scope: "working-tree" });
     // The exact byte size of a git diff is git's to decide, so the cap below is
     // derived from what the code measured. That alone would let the code measure
@@ -303,8 +329,10 @@ test("collectReviewContext: the inline byte cap is inclusive", () => {
     // together. So pin the measurement itself first, by re-running the commands
     // independently: the working-tree number is the staged and unstaged binary
     // diffs added together.
-    const measured = collectReviewContext(dir, target, { maxInlineFiles: 8 }).diffBytes;
+    const baseline = collectReviewContext(dir, target, { maxInlineFiles: 8 });
+    const measured = baseline.diffBytes;
     assert.ok(measured > 0, "the fixture must produce a non-empty diff");
+    assert.equal(baseline.fileCount, 4, "four changed files, so the cap of 8 never decides");
     const staged = run(dir, "diff", "--cached", "--binary", "--no-ext-diff", "--submodule=diff");
     const unstaged = run(dir, "diff", "--binary", "--no-ext-diff", "--submodule=diff");
     assert.equal(
@@ -353,18 +381,29 @@ test("collectReviewContext: the inline byte cap also applies to branch targets",
     writeBinary(dir, "blob.bin", [0, 1, 2, 253, 254, 255]);
     commitAll(dir, "init");
     run(dir, "checkout", "-q", "-b", "feature");
-    write(dir, "a.txt", `${Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n")}\n`);
+    write(dir, "a.txt", multiByteLines(40));
     writeBinary(dir, "blob.bin", [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
     commitAll(dir, "work");
     const target = resolveReviewTarget(dir, { base: "main" });
     // Two changed files against a cap of eight, so only the byte cap can decide
     // — this is the arm whose byte cap once had no guard at all while the file
-    // cap had two.
-    const measured = collectReviewContext(dir, target, { maxInlineFiles: 8 }).diffBytes;
+    // cap had two. One change is binary and one is multi-byte text, for the
+    // reasons in writeBinary and multiByteLines.
+    const baseline = collectReviewContext(dir, target, { maxInlineFiles: 8 });
+    const measured = baseline.diffBytes;
     assert.ok(measured > 0, "the fixture must produce a non-empty branch diff");
+    assert.equal(baseline.fileCount, 2, "two changed files, so the cap of 8 never decides");
     // Pin the measurement, not just which side of the cap it lands on — see the
-    // working-tree byte test. The branch number is one command over the
-    // merge-base range, and the same flags the inline path later renders with.
+    // working-tree byte test.
+    //
+    // Read this equality as a guard on the FLAGS and the unit, not on the range.
+    // The range half is decoration here: `main` has not moved since the branch
+    // point in this fixture, so every spelling of it — merge-base..HEAD,
+    // main..HEAD, HEAD~1..HEAD — selects the same commits, and replacing the
+    // code's merge-base with the raw base ref leaves the whole suite green.
+    // Pinning the range needs a fixture where the base advanced independently,
+    // and the behavior it would pin belongs to buildBranchComparison, which is
+    // outside this test's subject. Tracked in the backlog, not guarded here.
     const mergeBase = run(dir, "merge-base", "HEAD", "main").trim();
     assert.equal(
       measured,
