@@ -22,7 +22,7 @@ the whole repo.
 
 ## Known limitation vs. the Claude Code build
 
-The Claude Code version pins this command to a read-only tool universe through its
-`allowed-tools` frontmatter. Codex has no discovered per-skill tool permission gate —
+The Claude Code version is pinned to a read-only tool universe by its `allowed-tools`
+frontmatter. Codex has no discovered per-skill tool permission gate —
 follow the shared procedure's "Reads and reports only" boundary as a hard instruction
 instead of relying on enforcement.
