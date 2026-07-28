@@ -36,6 +36,19 @@ function tmpDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
+// The one authoritative residue check, shared by every writer below. It scans the
+// fixture tree rather than probing a hardcoded `<target>.tmp`, because temp names
+// carry a per-call pid+random suffix (scripts/lib/atomic-write.mjs's tempPathFor):
+// a name-probing assertion can never match, so it would pass no matter what
+// leaked. Recursive so a leak beside a nested write (the deployed HARRY.md
+// snapshot) is caught too.
+function assertNoTempResidue(dir: string, what: string): void {
+  const residue = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((n) =>
+    path.basename(n).includes(".tmp"),
+  );
+  assert.deepEqual(residue, [], `${what}: temp-file residue left behind`);
+}
+
 // Run `fn` with HARRY_GLOBAL pointed at `file`, restoring the prior value after.
 function withGlobal(file: string, fn: () => void): void {
   const prev = process.env.HARRY_GLOBAL;
@@ -83,7 +96,7 @@ test("install.mjs: first install writes the block, drops a .bak, leaves no .tmp"
     assert.ok(out.includes("# My rules"), "user content preserved");
     assert.ok(existsSync(`${g}.bak`), "one-time .bak created");
     assert.equal(readFileSync(`${g}.bak`, "utf8"), original, ".bak holds the pristine original");
-    assert.ok(!existsSync(`${g}.tmp`), "no .tmp residue after an atomic write");
+    assertNoTempResidue(dir, "install.mjs first install");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -340,7 +353,7 @@ test("init.mjs: appends plain ignore entries (no harry branding) with a .bak", (
     assert.ok(!out.includes("harry"), "no harry branding written to the shared .gitignore");
     assert.ok(existsSync(`${gi}.bak`), "one-time .bak created");
     assert.equal(readFileSync(`${gi}.bak`, "utf8"), original, ".bak holds the pristine original");
-    assert.ok(!existsSync(`${gi}.tmp`), "no .tmp residue");
+    assertNoTempResidue(dir, "init.mjs");
 
     initRun(dir, { remove: true });
     const removed = readFileSync(gi, "utf8");
@@ -374,7 +387,7 @@ test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
       }
       assert.ok(existsSync(`${g}.bak`), "one-time .bak created");
       assert.equal(readFileSync(`${g}.bak`, "utf8"), original, ".bak holds the pristine original");
-      assert.ok(!existsSync(`${g}.tmp`), "no .tmp residue");
+      assertNoTempResidue(dir, "install-codex.mjs");
     } finally {
       if (prev === undefined) delete process.env.HARRY_CODEX_GLOBAL;
       else process.env.HARRY_CODEX_GLOBAL = prev;
@@ -384,7 +397,8 @@ test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
   }
 });
 
-test("safeWrite: backs up once, never clobbers the .bak, leaves no .tmp", () => {
+// Residue is NOT re-checked here — the temp-path test below owns that assertion.
+test("safeWrite: backs up once and never clobbers the .bak", () => {
   const dir = tmpDir("harry-safewrite-test-");
   try {
     const f = path.join(dir, "file.txt");
@@ -393,7 +407,6 @@ test("safeWrite: backs up once, never clobbers the .bak, leaves no .tmp", () => 
     safeWrite(f, "v2");
     assert.equal(readFileSync(f, "utf8"), "v2", "target updated");
     assert.equal(readFileSync(`${f}.bak`, "utf8"), "v1", "backup holds pristine v1");
-    assert.ok(!existsSync(`${f}.tmp`), "no .tmp residue");
 
     safeWrite(f, "v3");
     assert.equal(readFileSync(f, "utf8"), "v3", "target updated again");
@@ -436,11 +449,7 @@ test("safeWrite: each write picks a unique temp path in the target's directory",
     // …and the real write still leaves nothing behind under the new naming.
     writeFileSync(f, "v1");
     safeWrite(f, "v2");
-    assert.deepEqual(
-      readdirSync(dir).filter((n) => n.includes(".tmp")),
-      [],
-      "no temp residue after a completed write",
-    );
+    assertNoTempResidue(dir, "completed safeWrite");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
