@@ -1427,7 +1427,7 @@ async function runAsk(cwd, options) {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");
   const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
+  const jobId = generateJobId();
   const log = (msg) => appendLog(stateDir, jobId, msg);
   log(`ask start: model=${requestedModel} effort=${reasoning} promptChars=${prompt.length}`);
   const extraContext = resolveExtraContext(cwd, {
@@ -2050,7 +2050,7 @@ function computeStagedDiff(cwd, baseline, log) {
 async function runFix(cwd, options = {}) {
   const progress = makeProgress();
   const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
+  const jobId = generateJobId();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
   const requestedModel = options.model ?? DEFAULT_MODEL2;
@@ -2467,7 +2467,7 @@ async function runReview(cwd, options = {}) {
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS3;
   const requestedModel = options.model ?? defaultModelFor(kind);
   const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
+  const jobId = generateJobId();
   const log = (msg) => appendLog(stateDir, jobId, msg);
   log(
     `review start: kind=${kind} model=${requestedModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`

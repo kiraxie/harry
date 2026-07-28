@@ -39,7 +39,6 @@ export interface ReviewOptions {
    * `@file` / `@-` (stdin) to read from a source — see `resolveExtraContext`.
    */
   context?: string;
-  jobId?: string;
   /**
    * Structured-findings mode. Instead of markdown, emit a `reviewed` JSON
    * envelope (findings + metadata) on stdout so Claude Code can judge each
@@ -90,7 +89,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   const requestedModel = options.model ?? defaultModelFor(kind);
 
   const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
+  const jobId = generateJobId();
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
   log(
     `review start: kind=${kind} model=${requestedModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`,
