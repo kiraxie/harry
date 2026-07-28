@@ -1881,6 +1881,7 @@ function collectReviewContext(cwd, target, options = {}) {
   const branch = getCurrentBranch(repoRoot);
   const maxInlineFiles = options.maxInlineFiles ?? DEFAULT_INLINE_DIFF_MAX_FILES;
   const maxInlineDiffBytes = options.maxInlineDiffBytes ?? DEFAULT_INLINE_DIFF_MAX_BYTES;
+  const shouldInline = (measured) => options.includeDiff ?? (measured.fileCount <= maxInlineFiles && measured.diffBytes <= maxInlineDiffBytes);
   let details;
   let includeDiff;
   let diffBytes;
@@ -1895,7 +1896,7 @@ function collectReviewContext(cwd, target, options = {}) {
       maxInlineDiffBytes
     );
     const fileCount = listUniqueFiles(state.staged, state.unstaged, state.untracked).length;
-    includeDiff = options.includeDiff ?? (fileCount <= maxInlineFiles && diffBytes <= maxInlineDiffBytes);
+    includeDiff = shouldInline({ fileCount, diffBytes });
     details = collectWorkingTreeContext(repoRoot, state, includeDiff, maxInlineDiffBytes);
   } else {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
@@ -1906,7 +1907,7 @@ function collectReviewContext(cwd, target, options = {}) {
       ["diff", "--binary", "--no-ext-diff", "--submodule=diff", comparison.commitRange],
       maxInlineDiffBytes
     );
-    includeDiff = options.includeDiff ?? (fileCount <= maxInlineFiles && diffBytes <= maxInlineDiffBytes);
+    includeDiff = shouldInline({ fileCount, diffBytes });
     details = collectBranchContext(
       repoRoot,
       target.baseRef,
