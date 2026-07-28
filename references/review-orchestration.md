@@ -3,9 +3,10 @@
 The shared, drift-prone `/review` orchestration definitions used by **both** builds:
 `commands/review.md` (Claude Code) and `codex-skills/review/SKILL.md` (Codex CLI).
 Each of those files keeps its own build-specific sections (frontmatter, RO/RW gating,
-review angle, routing, plain review, full mode, single review + fix, apply backends,
-and the Codex-only limitation/asymmetry notes) and points here for the two definitions
-below. Where the two builds genuinely differ, both variants are captured under explicit
+review angle, routing, plain review, full mode apart from its Stage 2 consolidation,
+single review + fix, apply backends apart from the apply steps themselves, and the
+Codex-only limitation/asymmetry notes) and points here for the four definitions below.
+Where the two builds genuinely differ, both variants are captured under explicit
 **Claude Code build:** / **Codex build:** labels — never collapse them to one.
 
 ## The structured-review envelope (one definition)
@@ -127,3 +128,66 @@ If there is nothing to cut or clarify, say so plainly and return no findings.
 - Present ONE table: `id | file:line | tag/severity | source(s) | title | verdict`.
   (`source(s)` = `simplify` / `lean` / both; `verdict` = Keep / Drop with a one-line
   reason per Drop.) If both lanes return nothing, say so and stop.
+
+---
+
+## Full-mode Stage 2 — consolidate into one table (one definition)
+
+Full mode's Stage 1 (fanning the three read-only lanes out) and Stage 3 (output /
+hand off) stay per build in the doors; this is the consolidation step all three lanes
+feed into. Two of its bullets are worded per build:
+
+- For each Codex leg (adversarial, simplify Lane A): check it succeeded first (zero
+  exit, stdout is the envelope not `# Review Failed`). A failed leg contributes no
+  findings — record it as a failed source and continue; never abort the whole
+  consolidation for one bad leg. Adversarial design-level notes live in
+  `reviewMarkdown`'s `## Design Concerns`; simplify findings are cleanups, not bugs.
+- The Lane B mapping bullet names the lane per build:
+  - **Claude Code build:** Simplify Lane B (CC over-engineering & readability) returns plain `tag: what. replacement.` lines — map each to a finding: `tag`→severity-ish label, the line itself→title.
+  - **Codex build:** Simplify Lane B (the over-engineering & readability sub-agent) returns plain `tag: what. replacement.` lines — map each to a finding: `tag`→severity-ish label, the line itself→title.
+- **Re-key ids across sources** before merging: prefix each by source
+  (`adv-`/`smp-`/`lean-`) so the table's `id` column is unique and unambiguous.
+- **Dedup** by `file` + `line` + semantic-title. When `line` is absent (file-wide),
+  only merge on a genuine semantic-title match on the same file — do not collapse two
+  different file-wide findings just because they share a file. Simplify Lane A and
+  Lane B will sometimes name the same spot from different angles — merge, keep both
+  sources listed.
+- The judging bullet names the read step per build:
+  - **Claude Code build:** Judge against this codebase: `Read` cited files where it matters and drop clear false positives (HARRY §6 — automated review is a suggestion, not an order).
+  - **Codex build:** Judge against this codebase: read cited files where it matters and drop clear false positives (HARRY §6 — automated review is a suggestion, not an order).
+
+Present ONE table, plus a `## Design Concerns` section (from adversarial) below it:
+
+| id | file:line | severity | source(s) | title | verdict |
+
+(source(s) = adversarial / simplify / lean; verdict = Keep / Drop with a one-line
+reason per Drop.) If all three yield nothing material, say so and stop.
+
+---
+
+## The apply steps — baseline snapshot, apply, report (one definition)
+
+The steps that apply an approved (Keep) set to the working tree yourself. Which path
+invokes them differs by build:
+
+- **Claude Code build:** these are the steps of **Apply: `--fix`** (Claude Code applies). The other backend, `--harry-fix` (an isolated Codex fix session), does not use them — it keeps its own section in the door.
+- **Codex build:** these are the steps of **Stage 3 — Apply**, this build's only apply path (it has no `--harry-fix`).
+
+1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix): if `git
+   status --porcelain` is non-empty, the fix diff must be isolated from the user's
+   pre-existing work. Run `git stash create` and **record the printed SHA** as the
+   baseline — an ephemeral snapshot object; nothing (working tree, index, branch
+   history, stash ref) is mutated, so no confirmation is needed. If it prints
+   nothing (e.g. only untracked changes) or the tree is clean, use `git rev-parse
+   HEAD` as the baseline instead. The SHA-reuse caution and the known limit are
+   worded per build:
+   - **Claude Code build:** Reuse that literal SHA in step 3 — each `Bash` call is a fresh shell, so a `BASE=…` variable will not survive; substitute the actual value. Known limit (same as runFix): `stash create` skips pre-existing untracked files, so `git add -A` in step 3 stages them and they appear in the fix diff as if the fix created them.
+   - **Codex build:** Reuse that literal SHA in step 3 (don't rely on a shell variable surviving between commands). Known limit (same as runFix): `stash create` skips pre-existing untracked files, so the reported diff may attribute them to the fix.
+2. The write mechanism is named per build:
+   - **Claude Code build:** **Apply** each approved finding with `Edit`/`Write`: minimal, correct change per finding; no unrelated refactor. Skip any that is already fixed, no longer applies, or whose fix would change intended behavior — note why.
+   - **Codex build:** **Apply** each approved finding directly: minimal, correct change per finding; no unrelated refactor. Skip any that is already fixed, no longer applies, or whose fix would change intended behavior — note why.
+3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons) and
+   changed files, and tell the user the fixes are **staged but not committed** —
+   review the fix-only diff with `git diff --cached <baseline-sha>` (the SHA recorded
+   in step 1; it excludes their pre-existing *tracked* WIP — pre-existing *untracked*
+   files may still appear, so warn the user before they commit the staged changes).
