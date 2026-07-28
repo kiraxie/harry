@@ -174,8 +174,8 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     process.stderr.write(`Review failed: ${reason}\n`);
     process.stdout.write(`# Review Failed\n\n${reason}\n\n${reviewBody}\n`);
     log(`review failed: ${reason}`);
-    // Signal failure to callers (background worker / shell exit code).
-    // Markdown has already been written to stdout for foreground users.
+    // Signal failure to the caller via a non-zero shell exit code. Markdown has
+    // already been written to stdout, so the user still sees what came back.
     throw new Error(reason);
   }
 
@@ -201,8 +201,8 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     process.stdout.write(`${reviewBody.trim()}\n`);
   }
 
-  // Run metadata goes to stderr (same channel as progress) so foreground users
-  // still see it, background workers log it, and stdout stays clean.
+  // Run metadata goes to stderr (same channel as progress) so the user still
+  // sees it and the job log captures it, while stdout stays clean.
   if (result.usage) {
     const u = result.usage;
     progress(
