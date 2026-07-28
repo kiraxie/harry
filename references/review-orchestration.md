@@ -3,9 +3,10 @@
 The shared, drift-prone `/review` orchestration definitions used by **both** builds:
 `commands/review.md` (Claude Code) and `codex-skills/review/SKILL.md` (Codex CLI).
 Each of those files keeps its own build-specific sections (frontmatter, RO/RW gating,
-review angle, routing, plain review, full mode, single review + fix, apply backends,
-and the Codex-only limitation/asymmetry notes) and points here for the four definitions
-below. Where the two builds genuinely differ, both variants are captured under explicit
+review angle, routing, plain review, full mode apart from its Stage 2 consolidation,
+single review + fix, apply backends apart from the apply steps themselves, and the
+Codex-only limitation/asymmetry notes) and points here for the four definitions below.
+Where the two builds genuinely differ, both variants are captured under explicit
 **Claude Code build:** / **Codex build:** labels — never collapse them to one.
 
 ## The structured-review envelope (one definition)
