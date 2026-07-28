@@ -49,7 +49,6 @@ export interface FixOptions {
    * `@file` / `@-` (stdin) to read from a source — see `resolveExtraContext`.
    */
   context?: string;
-  jobId?: string;
 }
 
 // Capable-by-default model: applying vetted findings is a judgment task, same
@@ -247,7 +246,7 @@ export function computeStagedDiff(
 export async function runFix(cwd: string, options: FixOptions = {}): Promise<void> {
   const progress = makeProgress();
   const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
+  const jobId = generateJobId();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const requestedModel = options.model ?? DEFAULT_MODEL;

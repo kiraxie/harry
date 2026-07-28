@@ -4,7 +4,7 @@
  * These were previously copy-pasted verbatim across the three command modules
  * (progress writer, the timeout→abort scaffold with its DEBT note, and the
  * codex usage footer). Centralizing them removes the triplication that let the
- * background worker silently drift from the foreground dispatcher.
+ * three commands silently drift from each other.
  */
 
 import type { CodexRateLimits } from "./provider.ts";
