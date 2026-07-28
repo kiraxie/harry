@@ -54,7 +54,6 @@ const BOOLEAN_FLAGS = new Set<string>([
   "adversarial",
   "allow-shell",
   "allow-url",
-  "check",
   "fix",
   "full",
   "harry-fix",

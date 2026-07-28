@@ -2683,7 +2683,6 @@ var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
   "adversarial",
   "allow-shell",
   "allow-url",
-  "check",
   "fix",
   "full",
   "harry-fix",
