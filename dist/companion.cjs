@@ -53,7 +53,8 @@ var package_default = {
     format: "biome format --write .",
     "install-laws": "node scripts/install.mjs",
     "install-laws-codex": "node scripts/install-codex.mjs",
-    "init-ignore": "node scripts/init.mjs"
+    "init-ignore": "node scripts/init.mjs",
+    evals: "node scripts/run-evals.mjs"
   },
   dependencies: {},
   devDependencies: {
@@ -1723,7 +1724,7 @@ function git(cwd, args, maxBuffer) {
     windowsHide: true
   });
   return {
-    status: result.status ?? 0,
+    status: result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
     error: result.error ?? null
@@ -2538,7 +2539,9 @@ function tryGit(args, cwd) {
   return {
     ok: res.status === 0,
     stdout: (res.stdout ?? "").trim(),
-    stderr: (res.stderr ?? "").trim()
+    // A spawn failure (git missing, bad cwd) produces no stderr at all — fall
+    // back to the spawn error so the caller always has something to report.
+    stderr: (res.stderr ?? "").trim() || (res.error?.message ?? "")
   };
 }
 function gitHead(cwd) {
@@ -2616,21 +2619,29 @@ function parseApplyReport(text, findings) {
   }
   return { applied, skipped };
 }
-function computeStagedDiff(cwd, baseline) {
-  tryGit(["add", "-A"], cwd);
+function computeStagedDiff(cwd, baseline, log) {
+  const staged = tryGit(["add", "-A"], cwd);
   const names = tryGit(["diff", "--cached", "--name-only", baseline], cwd);
-  const filesModified = names.ok && names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
+  const numstat = tryGit(["diff", "--cached", "--numstat", baseline], cwd);
+  for (const [what, res] of [
+    ["git add -A", staged],
+    ["git diff --cached --name-only", names],
+    ["git diff --cached --numstat", numstat]
+  ]) {
+    if (!res.ok) {
+      log(`fix diff stats unavailable: ${what} failed: ${res.stderr || "no output"}`);
+      return null;
+    }
+  }
+  const filesModified = names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
   let linesAdded = 0;
   let linesRemoved = 0;
-  const numstat = tryGit(["diff", "--cached", "--numstat", baseline], cwd);
-  if (numstat.ok && numstat.stdout) {
-    for (const line of numstat.stdout.split("\n")) {
-      const [addStr, delStr] = line.split("	");
-      const add = Number.parseInt(addStr ?? "0", 10);
-      const del = Number.parseInt(delStr ?? "0", 10);
-      if (Number.isFinite(add)) linesAdded += add;
-      if (Number.isFinite(del)) linesRemoved += del;
-    }
+  for (const line of numstat.stdout ? numstat.stdout.split("\n") : []) {
+    const [addStr, delStr] = line.split("	");
+    const add = Number.parseInt(addStr ?? "0", 10);
+    const del = Number.parseInt(delStr ?? "0", 10);
+    if (Number.isFinite(add)) linesAdded += add;
+    if (Number.isFinite(del)) linesRemoved += del;
   }
   return { filesModified, linesAdded, linesRemoved };
 }
@@ -2768,7 +2779,7 @@ async function runFix(cwd, options = {}) {
   }
   envelopeDone = true;
   const report = parseApplyReport(result.lastAssistantMessage, findings);
-  const diff = computeStagedDiff(repoRoot, diffBase);
+  const diff = computeStagedDiff(repoRoot, diffBase, log);
   const summary = result.summary?.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
   const envelope = {
     status: "fixed",
@@ -2776,9 +2787,9 @@ async function runFix(cwd, options = {}) {
     summary,
     baselineCommit,
     preFixDirty,
-    filesModified: diff.filesModified,
-    linesAdded: diff.linesAdded,
-    linesRemoved: diff.linesRemoved,
+    filesModified: diff?.filesModified ?? null,
+    linesAdded: diff?.linesAdded ?? null,
+    linesRemoved: diff?.linesRemoved ?? null,
     applied: report.applied,
     skipped: report.skipped,
     model: requestedModel
@@ -2791,12 +2802,11 @@ async function runFix(cwd, options = {}) {
 `, "utf-8");
     progress(`Report saved to ${outPath}`);
   }
+  const diffSummary = diff ? `files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})` : "diff stats unavailable (git failed \u2014 see the job log)";
   progress(
-    `Fix done \u2014 applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})`
+    `Fix done \u2014 applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`
   );
-  log(
-    `fix done: applied=${report.applied.length} skipped=${report.skipped.length} files=${diff.filesModified.length}`
-  );
+  log(`fix done: applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`);
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 

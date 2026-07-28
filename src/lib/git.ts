@@ -12,7 +12,9 @@ const DEFAULT_INLINE_DIFF_MAX_FILES = 2;
 const DEFAULT_INLINE_DIFF_MAX_BYTES = 256 * 1024;
 
 interface CommandResult {
-  status: number;
+  /** `null` when git never ran (spawn failure) or was killed by a signal —
+   * deliberately NOT coerced to 0, which would read as a clean success. */
+  status: number | null;
   stdout: string;
   stderr: string;
   error: NodeJS.ErrnoException | null;
@@ -55,7 +57,7 @@ function git(cwd: string, args: string[], maxBuffer?: number): CommandResult {
     windowsHide: true,
   });
   return {
-    status: result.status ?? 0,
+    status: result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
     error: (result.error as NodeJS.ErrnoException) ?? null,

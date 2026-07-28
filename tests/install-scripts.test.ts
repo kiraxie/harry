@@ -7,7 +7,15 @@
 // init's explicit target-dir argument.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -15,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { run as initRun } from "../scripts/init.mjs";
 import { run as installRun } from "../scripts/install.mjs";
 import { run as codexRun } from "../scripts/install-codex.mjs";
-import { safeWrite } from "../scripts/lib/atomic-write.mjs";
+import { safeWrite, tempPathFor } from "../scripts/lib/atomic-write.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -39,6 +47,27 @@ function withGlobal(file: string, fn: () => void): void {
     else process.env.HARRY_GLOBAL = prev;
   }
 }
+
+// The stale-entry WARNING is one piece of knowledge split across two installers:
+// the STALE list (scripts/lib/stale-entries.mjs) was single-sourced precisely so
+// the two could not drift (HARRY.md §2), but the renderer that turns that list
+// into the user-facing warning must be single-sourced for the same reason — a
+// second copy re-opens the drift the module header claims to have closed.
+test("warnStale is defined exactly once across scripts/, beside the data it renders", () => {
+  const scriptsDir = path.join(pluginRoot, "scripts");
+  const defs = readdirSync(scriptsDir, { recursive: true, encoding: "utf8" })
+    .filter((rel) => rel.endsWith(".mjs"))
+    .filter((rel) =>
+      /\bfunction warnStale\b/.test(readFileSync(path.join(scriptsDir, rel), "utf8")),
+    )
+    .map((rel) => path.posix.join("scripts", rel.split(path.sep).join("/")))
+    .sort();
+  assert.deepEqual(
+    defs,
+    ["scripts/lib/stale-entries.mjs"],
+    "warnStale must live once, in the module that owns STALE",
+  );
+});
 
 test("install.mjs: first install writes the block, drops a .bak, leaves no .tmp", () => {
   const dir = tmpDir("harry-install-test-");
@@ -379,6 +408,39 @@ test("safeWrite: backs up once, never clobbers the .bak, leaves no .tmp", () => 
     safeWrite(fresh, "hello");
     assert.equal(readFileSync(fresh, "utf8"), "hello", "new file written");
     assert.ok(!existsSync(`${fresh}.bak`), "no backup when there was nothing to preserve");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The write is atomic per process; concurrency is the remaining hole. Two
+// installers running at once (a second /harry:sync, or a sync racing
+// `pnpm run install-laws`) share one target — with a fixed `<target>.tmp` they
+// write the SAME temp file and rename it twice, so one process can rename a
+// half-written file over the user's ~/.claude/CLAUDE.md. That is exactly the
+// truncation this module exists to prevent, so the temp name must be unique
+// per call while staying a sibling of the target (same filesystem → atomic
+// rename).
+test("safeWrite: each write picks a unique temp path in the target's directory", () => {
+  const dir = tmpDir("harry-safewrite-tmp-");
+  try {
+    const f = path.join(dir, "file.txt");
+    const a = tempPathFor(f);
+    const b = tempPathFor(f);
+
+    assert.notEqual(a, b, "two writes to the same target must not share a temp path");
+    assert.equal(path.dirname(a), dir, "temp file is a sibling of the target");
+    assert.equal(path.dirname(b), dir, "temp file is a sibling of the target");
+    assert.ok(path.basename(a).startsWith("file.txt.tmp"), "temp name is traceable to its target");
+
+    // …and the real write still leaves nothing behind under the new naming.
+    writeFileSync(f, "v1");
+    safeWrite(f, "v2");
+    assert.deepEqual(
+      readdirSync(dir).filter((n) => n.includes(".tmp")),
+      [],
+      "no temp residue after a completed write",
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

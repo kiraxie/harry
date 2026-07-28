@@ -32,7 +32,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
-import { STALE } from "./lib/stale-entries.mjs";
+import { warnStale } from "./lib/stale-entries.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -87,16 +87,6 @@ function removeExplore() {
   const dest = explorePath();
   if (existsSync(dest) && readFileSync(dest, "utf8").includes(EXPLORE_MARKER)) {
     rmSync(dest);
-  }
-}
-
-function warnStale(text) {
-  const hits = STALE.filter((s) => s.pattern.test(text));
-  if (hits.length) {
-    console.warn(
-      "\n  Stale entries in your global instructions (harry supersedes — edit manually):",
-    );
-    for (const h of hits) console.warn(`    - ${h.pattern.source} → ${h.why}`);
   }
 }
 
