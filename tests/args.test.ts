@@ -8,7 +8,9 @@
  *     swallows the next positional as its value, and every downstream
  *     `flags.x === true` check silently reads false — the run looks fine and
  *     quietly does the wrong thing. The `=== true` source scan below fails for
- *     a NEWLY added flag too, not just today's set.
+ *     a NEWLY added flag too, not just today's set — and a second test keeps
+ *     every read in a shape that scan can see, since a regex cannot follow
+ *     indirection and a hidden consumer is the same bug wearing a disguise.
  *  2. An unrecognized `--flag` being swallowed instead of erroring (the
  *     past-tense note at `src/companion.ts`'s `assertKnownFlags` call site).
  *
@@ -188,7 +190,7 @@ test("every flag consumed as `=== true` is registered in BOOLEAN_FLAGS", () => {
   // dispatcher's source means a NEWLY added flag is caught too.
   const source = fs.readFileSync(COMPANION_TS, "utf-8");
   const consumers = new Set<string>();
-  for (const m of source.matchAll(/flags(?:\.([A-Za-z_$][\w$]*)|\["([^"]+)"\])\s*===\s*true/g)) {
+  for (const m of source.matchAll(/flags\??(?:\.([A-Za-z_$][\w$]*)|\["([^"]+)"\])\s*===\s*true/g)) {
     consumers.add(m[1] ?? m[2]);
   }
 
@@ -208,6 +210,40 @@ test("every flag consumed as `=== true` is registered in BOOLEAN_FLAGS", () => {
       BOOLEAN_FLAGS.has(key),
       `--${key} is read as \`=== true\` but is missing from BOOLEAN_FLAGS: ` +
         "a positional would bind to it and the check would silently read false",
+    );
+  }
+});
+
+// The scan above can only see a literal member read of `flags`. Every form of
+// indirection hides a consumer from it, and a hidden consumer IS the bug class:
+// destructuring `flags.simplify === true` into `const { simplify: f } = flags;
+// … f === true` and dropping "simplify" from BOOLEAN_FLAGS leaves the whole
+// suite green while `parseArgs(["review", "--simplify", "race"])` binds
+// {"simplify": "race"}. A regex cannot follow indirection and this file is not
+// going to grow a parser, so the guard is the SHAPE rather than the symptom:
+// keep every read scannable. Optional chaining is not listed — the scan itself
+// now tolerates `flags?.x`, so it needs no ban.
+const OPAQUE_FLAG_READS: Array<{ pattern: RegExp; form: string }> = [
+  { pattern: /\}\s*=\s*flags\b/, form: "destructuring off `flags` (`const { x } = flags`)" },
+  {
+    pattern: /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*flags\s*[;,]/,
+    form: "aliasing `flags` to another binding (`const f = flags;`)",
+  },
+  { pattern: /flags\??\[(?!")/, form: "a computed `flags[…]` key (`flags[key]`)" },
+];
+
+test("companion.ts reads `flags` only in a shape the `=== true` scan can see", () => {
+  const source = fs.readFileSync(COMPANION_TS, "utf-8");
+  for (const { pattern, form } of OPAQUE_FLAG_READS) {
+    const hit = source.match(pattern);
+    assert.equal(
+      hit,
+      null,
+      `${form} — found "${hit?.[0]}" — hides a flag consumer from the \`=== true\` scan ` +
+        "above, which is the only guard against a flag being read as a boolean without " +
+        'being registered in BOOLEAN_FLAGS. Read flags as `flags.x` or `flags["x"]` ' +
+        "instead. Passing `flags` whole to the args.ts accessors stays fine — those are " +
+        "value readers, not boolean consumers, and are tested directly here.",
     );
   }
 });
