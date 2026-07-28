@@ -55,10 +55,10 @@ setting still ran 18 min). Practical consequences for the conductor:
 failed `ask` call exits non-zero, but its stdout can still read as a plausible
 answer — the `# Ask Failed` first line exists precisely to keep the partial
 response visible, not to make the body unreadable. Gate on the exit code, never
-on whether the text below the heading looks complete. Same policy as gemini: if
-`gpt` fails twice, proceed with a two-voice debate (opus + gemini) and say so
-explicitly in the final report (see the failed-voice note under Synthesis
-below).
+on whether the text below the heading looks complete — and never relay that
+body as `gpt`'s position. Same policy as gemini: if `gpt` fails twice, proceed
+with a two-voice debate (opus + gemini) and say so explicitly in the final
+report (see the failed-voice note under Synthesis below).
 
 ## Permissions (do not widen)
 
