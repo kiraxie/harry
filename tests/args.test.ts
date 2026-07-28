@@ -224,14 +224,34 @@ test("every flag consumed as `=== true` is registered in BOOLEAN_FLAGS", () => {
 // keep every read scannable. Optional chaining is not listed — the scan itself
 // now tolerates `flags?.x`, so it needs no ban.
 //
-// WHERE THIS GUARD'S REACH ENDS, DELIBERATELY. A two-argument hand-off,
-// `helper(flags, "x")`, is syntactically identical to the blessed accessor
-// calls (`flagString(flags, "base")`), and no regex can tell them apart without
-// knowing what the callee does — that is the parser boundary this rule is
-// drawn against, so the form is out of reach rather than overlooked. It is the
-// weaker escape of the two: the accessors it is indistinguishable from are
-// themselves tested here, and a new one would have to imitate their signature.
-// The single-argument hand-off below has no such alibi, so it is banned.
+// WHERE THIS GUARD'S REACH ENDS, DELIBERATELY. The rows below are not a
+// closed list of every escape — they are a positive rule (a read has to stay
+// in the literal `flags.x` / `flags["x"]` shape the scan above can see) with
+// the specific opaque forms that have actually come up banned as examples of
+// it. Treat the table as the boundary's evidence, not its full extent.
+//
+// The clearest known gap is structural rather than missed: a two-argument
+// hand-off, `helper(flags, "x")`, is syntactically identical to the blessed
+// accessor calls (`flagString(flags, "base")`), and no regex can tell them
+// apart without knowing what the callee does — that is the parser boundary
+// this rule is drawn against, so the form stays out of reach rather than
+// overlooked. The accessors it is indistinguishable from are themselves
+// tested here, and a new one would have to imitate their signature; that
+// makes it explainable, not safe, which is why the single-argument hand-off
+// below — which has no such alibi — is banned outright.
+//
+// A second gap sits in the scan itself, not in this table: the scan only
+// matches `=== true`, so a truthy read like `!!flags.x` never enters its
+// view. Pair that with dropping the flag from BOOLEAN_FLAGS and the whole
+// suite stays green while the built CLI starts binding the next positional
+// argument to it — the exact bug class this file exists to catch, reached
+// through the scan's own blind spot instead of an opaque read.
+//
+// One form that looks like a gap and isn't: a multi-line trailing-comma call,
+// `isSimplify(\n  flags,\n)`, dodges the single-argument pattern below as
+// written, but `biome check` reformats it back onto one line before this test
+// ever runs, where the pattern catches it. Closed by the formatter, not the
+// regex — recorded here so it doesn't get re-derived as an opening.
 const OPAQUE_FLAG_READS: Array<{ pattern: RegExp; form: string }> = [
   { pattern: /\}\s*=\s*flags\b/, form: "destructuring off `flags` (`const { x } = flags`)" },
   {
