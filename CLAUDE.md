@@ -52,6 +52,15 @@ laws' effect. Run them after any material `HARRY.md` change. `validate` (schema-
 `score` (grade a results file) are free; `run` is **real API spend** and requires a pinned `--model`.
 Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`.
 
+**Cutting a release:** bump the four hand-maintained version fields in lockstep —
+`package.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, and the **nested**
+`plugins[harry].version` in `.claude-plugin/marketplace.json` — `tests/version-sync.test.ts`
+fails if any one of them disagrees. Add the `CHANGELOG.md` entry, then rebuild `dist/`
+(`build.mjs` inlines `package.json`, so a version bump with no rebuild fails CI's drift
+gate). Finally `git tag vX.Y.Z` and push the tag — this step has lapsed before (tagging
+silently stopped after `v0.9.1` while `CHANGELOG.md` went on to declare ten more versions);
+it is load-bearing, not optional ceremony.
+
 ## Runtime architecture (`src/`)
 
 Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/commands/*.ts`
