@@ -312,6 +312,27 @@ rl.on("line", (line) => {
           break;
         }
 
+        if (BEHAVIOR === "task-truncated-then-error") {
+          // A turn that yields a PARTIAL answer and then fails: the agent message
+          // arrives and looks like a finished reply, but an error follows, so the
+          // turn is not successful. This is the shape a caller cannot distinguish
+          // from a complete answer unless the command marks the failure — the
+          // stuck-turn behavior above emits no message at all, so it exercises
+          // only the empty-body path, not this one.
+          send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
+          send({
+            method: "item/completed",
+            params: {
+              threadId: thread.id,
+              turnId,
+              item: { type: "agentMessage", id: "msg_" + turnId, text: "The three main causes are:\\n1. A stale cache", phase: "final_answer" }
+            }
+          });
+          send({ method: "error", params: { error: { message: "stream disconnected before completion" } } });
+          send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
+          break;
+        }
+
         if (BEHAVIOR === "task-partial-ratelimits") {
           send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
           // First snapshot carries the full rate-limit picture.
