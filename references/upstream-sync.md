@@ -27,7 +27,7 @@ Then compare that upstream diff against harry's customized version and decide �
 
 - **`review`'s upstream is `codex-plugin-cc`** — its design was originally ported for the (now-removed)
   Copilot backend; when codex changes, sync `review` against `codex-plugin-cc`.
-- `debate` / `ask` / `status` / `result` were originally designed against `copilot-plugin-cc`
+- `debate` / `ask` / `status` / historically `result` (retired for lack of a shipped producer, 2026-07) were originally designed against `copilot-plugin-cc`
   (see `upstream.json`'s `derived[].from` for that historical attribution), but no longer track
   it for sync — the Copilot backend was removed, and `upstream.json` no longer pins that source.
 - The resident laws (`HARRY.md`) track `superpowers` + `ponytail` but were heavily recalibrated (correctness > cost) — most upstream "be lazier" changes do NOT apply; read the `note`.
