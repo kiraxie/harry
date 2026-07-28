@@ -174,8 +174,11 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     process.stderr.write(`Review failed: ${reason}\n`);
     process.stdout.write(`# Review Failed\n\n${reason}\n\n${reviewBody}\n`);
     log(`review failed: ${reason}`);
-    // Signal failure to the caller via a non-zero shell exit code. Markdown has
-    // already been written to stdout, so the user still sees what came back.
+    // Signal failure to the caller via a non-zero shell exit code. Whatever came
+    // back is already on stdout above — genuinely partial markdown on the
+    // incomplete-turn path, but only the empty-review placeholder on the timeout
+    // path, where codex/turn.ts's `failure()` returns an empty finalMessage and
+    // so discards the partial text. `ask` behaves identically.
     throw new Error(reason);
   }
 

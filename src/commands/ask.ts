@@ -99,8 +99,11 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
     // a bare body would be presented as the model's real answer.
     process.stdout.write(`# Ask Failed\n\n${reason}\n\n${body}\n`);
     log(`ask failed: ${reason}`);
-    // Signal failure to the caller via a non-zero shell exit code. The body has
-    // already been written to stdout, so the user still sees what came back.
+    // Signal failure to the caller via a non-zero shell exit code. Whatever came
+    // back is already on stdout above — a genuinely partial answer on the
+    // incomplete-turn path, but only the empty-answer placeholder on the timeout
+    // path, where codex/turn.ts's `failure()` returns an empty finalMessage and
+    // so discards the partial text. `review` behaves identically.
     throw new Error(reason);
   }
 
