@@ -58,7 +58,7 @@ For each topic found, using the filename's `<topic>` slug to match across
 directories:
 
 1. **Spec + matching plan** (same topic) → merge into one
-   `.local/items/<topic>.md`: `## Why / What` = the spec's §1-§5 content as
+   `.local/items/<topic>.md`: `## Why / What` = the spec's five numbered sections as
    prose (the item schema in `references/doc-types.md` numbers nothing inside
    that section), `## Plan` = the plan's content. `status: active` if the plan is in `.local/plans/` (not yet
    archived), `status: done` if the plan is in `.local/plans/archived/` (and

@@ -1,7 +1,8 @@
 # Review Rubric (shared)
 
 The rubric a **CC reviewer subagent (dispatched at the §5 cap)** applies for per-task and whole-branch
-reviews (executing §3). Frontier `/review` carries its own rubric — this is the
+reviews (`skills/executing/SKILL.md`, subagent mode steps 3 and 6). Frontier
+`/review` carries its own rubric — this is the
 in-house fallback used at Standard tier.
 Hand the reviewer the brief, the report, the diff (as a file), and the binding
 Global Constraints verbatim. It reviews **read-only** — no working-tree, index,
