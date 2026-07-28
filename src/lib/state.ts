@@ -3,8 +3,7 @@
  *
  * Holds the per-run job log (`jobs/<id>.log`, the path each command prints so a
  * user can inspect a run) and the cached codex rate-limit snapshot, under
- * $CLAUDE_PLUGIN_DATA. Ported from the sibling gemini-plugin-cc with minimal
- * changes.
+ * $CLAUDE_PLUGIN_DATA.
  */
 
 import { execFileSync } from "node:child_process";
@@ -100,6 +99,13 @@ export function generateJobId(): string {
   return `job-${ts}-${rand}`;
 }
 
+// DEBT: `jobs/` grows without bound — every ask/review/fix run creates one more
+// `jobs/<id>.log` and nothing ever deletes one. Each file is a handful of
+// progress lines (see the log() call sites), not a transcript, and the dir is
+// per-workspace, so growth is slow — but it is monotonic and nothing reclaims
+// it. Ceiling: file count / total size of one workspace's `jobs/` dir. Upgrade
+// path: prune oldest-first by age or count on write, if a workspace's `jobs/`
+// ever gets large enough to notice.
 export function appendLog(stateDir: string, jobId: string, message: string): void {
   const logFile = jobLogPath(stateDir, jobId);
   ensureDir(jobsDir(stateDir));
