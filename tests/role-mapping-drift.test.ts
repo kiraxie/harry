@@ -142,10 +142,44 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
 // B. Command ↔ codex-skill hard-fact pairs
 // ---------------------------------------------------------------------------
 
-// CC command ↔ Codex skill twins. `debate` is intentionally absent (its "self"
-// voice is Claude/opus-only by design — no Codex conversion exists), so it is not
-// listed here rather than allowlisted.
+// CC command ↔ Codex skill twins. Hand-maintained on purpose — it is a
+// declaration of intent, and a list derived from disk would sweep in doors that
+// legitimately should not be paired, then get silenced by an allowlist. But a
+// hand list needs a cross-check to stay honest, which is the pattern
+// `tests/ask.test.ts` already states and follows for its own `ASK_DOORS`; this
+// one had none. The cross-check below is that, added when section C started
+// deriving from `PAIRS` too: until then a door pair landing on disk without
+// being listed here was invisible to the WHOLE suite, content guard included.
 const PAIRS = ["ask", "status", "debt", "review", "sync", "audit", "grill", "distill"];
+
+// CC commands with no Codex twin, each an explicit decision rather than an
+// oversight. An entry here is a conscious exemption, not a silencer.
+const CC_ONLY: Record<string, string> = {
+  debate: "its `self` voice is Claude/opus-only by design; no Codex conversion exists",
+};
+
+test("B · every command with a Codex twin is declared in PAIRS", () => {
+  const commands = readdirSync(path.join(repoRoot, "commands"))
+    .filter((f) => f.endsWith(".md"))
+    .map((f) => f.replace(/\.md$/, ""));
+  const codexSkills = readdirSync(path.join(repoRoot, "codex-skills"), { withFileTypes: true })
+    .filter(
+      (d) => d.isDirectory() && existsSync(path.join(repoRoot, "codex-skills", d.name, "SKILL.md")),
+    )
+    .map((d) => d.name);
+
+  assert.deepEqual(
+    commands.filter((n) => codexSkills.includes(n)).sort(),
+    [...PAIRS].sort(),
+    "a command/skill pair exists on disk but is not in PAIRS (or vice versa) — every " +
+      "check in sections B and C iterates PAIRS, so an unlisted pair is guarded by nothing",
+  );
+  assert.deepEqual(
+    commands.filter((n) => !codexSkills.includes(n) && !(n in CC_ONLY)).sort(),
+    [],
+    "a CC command has no Codex twin and no CC_ONLY entry saying that is deliberate",
+  );
+});
 
 // Deliberate-divergence allowlist: reference paths permitted to appear on ONE side
 // only, per pair. Key → set of `references/...` paths exempt from the equality check.
@@ -196,5 +230,131 @@ for (const name of PAIRS) {
       [],
       `${skill} references paths absent from ${cmd}: ${onlyCodex.join(", ")}`,
     );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// C. Hoisted content stays hoisted
+// ---------------------------------------------------------------------------
+
+// Test B compares the SET of reference paths each side mentions, never their
+// content. The archive that produced these hoists recorded a belief that
+// hoisting therefore converts B into a real content guard "at zero test cost" —
+// true only while the hoist introduces a NEW path on one side. Measured after
+// every hoist landed, that property is gone for every pair without exception:
+//
+//   ask, status                              both sides cite NO reference path
+//   debt, review, sync, audit, grill, distill  1 shared path, zero asymmetry
+//
+// So B passes vacuously against re-inlining on 8 of 8 pairs. It still does what
+// its name says — path-set parity, which catches a path added to one side only —
+// but the content guard nobody had to write turned out not to exist.
+//
+// This is that guard, in the cheapest shape that is not an approximation: a door
+// may NAME the reference and its headings, but must not carry its prose. Copying
+// a paragraph back into one build's door is exactly the drift B cannot see.
+//
+// CEILINGS, both real:
+//  - Line-granular and verbatim after normalization. Indentation, doubled
+//    whitespace, CRLF, code fences, HTML-comment wrappers and list/quote prefixes
+//    are all survived. What escapes is anything that changes where the LINE
+//    BREAKS fall — reflowing to a different width, or joining a paragraph into
+//    one line — and re-wording. A plain copy-paste, the actual failure mode, does
+//    not.
+//  - `ask` and `status` are NOT covered: no shared reference means no hoisted
+//    content to protect. For `ask` that is literal — its two doors share zero
+//    prose lines. `status` shares two, one of them a real duplicated description
+//    sentence; it is left alone because both doors are five prose lines long, so
+//    hoisting two of them would be textbook speculative abstraction. Their
+//    divergence risk is the opposite shape — content that was never shared (see
+//    the `--context` case) — and needs its own answer.
+//  - Door↔REFERENCE only, never door↔door. Seven of the eight pairs carry
+//    verbatim cross-build duplication today (`grill` and `distill` are 60-70%
+//    identical prose); some is by design (the pointer sentences), some is not.
+//    That is unhoisted duplication rather than escaped hoisted content, so it is
+//    a candidate for a future hoist, not a hole in this guard.
+// Declared per pair as a LIST, and checked against the paths actually shared —
+// not just against which pairs share something. A pair-granular floor (the first
+// version of this) is the same mistake the unit exists to correct: it reads as a
+// guard while a second hoist onto an existing pair, or both doors switching to a
+// different reference, leaves the new path unguarded and everything green.
+const HOISTED: Record<string, string[]> = {
+  debt: ["references/debt-audit.md"],
+  review: ["references/review-orchestration.md"],
+  sync: ["references/sync-migration.md"],
+  audit: ["references/audit/ORCHESTRATION.md"],
+  grill: ["references/grilling.md"],
+  distill: ["references/distilling.md"],
+};
+
+/** The reference paths a pair's two doors both cite. */
+function sharedRefs(name: string): string[] {
+  const codex = refPaths(`codex-skills/${name}/SKILL.md`);
+  return [...refPaths(`commands/${name}.md`)].filter((p) => codex.has(p)).sort();
+}
+
+// 40 chars: long enough that a shared line is prose rather than a common phrase.
+// The evidence for it is the DOWNWARD measurement, since a false negative comes
+// from the threshold being too high — measuring 50 and 60 only shows it tolerates
+// being raised, which cannot falsify it. At 30 exactly one line appears, generic
+// instruction phrasing ("Return the command output verbatim.", 34 chars) whose CC
+// twin is already worded differently. So 40 sits just above the noise floor.
+const PROSE_LINE_MIN = 40;
+// List and quote markers are stripped: a bullet or blockquote prefix is the most
+// natural way prose gets moved into these bullet-heavy doors, and without this a
+// re-inline as `- <paragraph>` slips through untouched.
+const normalizeLine = (l: string): string =>
+  l
+    .trim()
+    .replace(/^(?:[-*>]\s+|\d+\.\s+)+/, "")
+    .replace(/\s+/g, " ");
+const isProse = (l: string): boolean => l.length >= PROSE_LINE_MIN && !l.startsWith("#");
+
+test("C · the shared reference paths are exactly the ones HOISTED declares", () => {
+  // Exact at PATH granularity, both directions. Pair granularity alone lets a
+  // pair gain a second hoist, or swap which file it points at, without anything
+  // failing — the per-pair loop below would keep guarding the old path.
+  const actual = Object.fromEntries(
+    PAIRS.map((name) => [name, sharedRefs(name)]).filter(([, refs]) => refs.length > 0),
+  );
+  assert.deepEqual(
+    actual,
+    Object.fromEntries(Object.entries(HOISTED).map(([k, v]) => [k, [...v].sort()])),
+    "the shared reference paths changed; HOISTED is now guarding the wrong files",
+  );
+});
+
+for (const name of Object.keys(HOISTED)) {
+  test(`C · ${name}: neither door re-inlines prose from its hoisted reference`, () => {
+    // Driven off the DERIVED set, not the literal, so the test above is what
+    // keeps them in step rather than this loop silently trusting the map.
+    const refs = sharedRefs(name);
+    assert.ok(refs.length > 0, `${name}: no shared reference; the test above should have failed`);
+
+    for (const ref of refs) {
+      assert.ok(
+        existsSync(path.join(repoRoot, ref)),
+        `${ref} is missing; ${name}'s doors point at nothing`,
+      );
+      const refProse = new Set(read(ref).split("\n").map(normalizeLine).filter(isProse));
+      assert.ok(
+        refProse.size > 0,
+        `${ref} yielded no prose lines — an empty set makes every assertion below vacuous`,
+      );
+
+      for (const door of [`commands/${name}.md`, `codex-skills/${name}/SKILL.md`]) {
+        const copied = read(door)
+          .split("\n")
+          .map(normalizeLine)
+          .filter(isProse)
+          .filter((l) => refProse.has(l));
+        assert.deepEqual(
+          copied,
+          [],
+          `${door} carries prose verbatim from ${ref}. Hoisted content must live in one ` +
+            `place; test B cannot see this because both doors already cite that path.`,
+        );
+      }
+    }
   });
 }
