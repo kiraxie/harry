@@ -22,12 +22,13 @@ Google subscription via `agy`.
 | Voice | How you call it |
 |-------|-----------------|
 | `opus` | Dispatch a subagent via the Agent tool, `model: opus`. Prompt it to "ultrathink". |
-| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high` |
+| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high`, run with `run_in_background: true` (a high-effort `ask` turn can run past the 10-min foreground Bash timeout before `ask`'s own 30-min timeout ever fires — see below) |
 | `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
 
 `${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when this command runs. The `ask` and
 `agy` calls are single-shot stateless calls, so the **entire** prompt (including all
-prior-round context) must be in that one string.
+prior-round context) must be in that one string. `opus` (Agent tool) and `gpt`
+(`ask`, via a shell variable / heredoc) accept multi-line prompts normally.
 
 **`agy` is slow and high-variance — plan for it.** Live measurement of
 `Gemini 3.1 Pro (High)` via `agy -p`: the same prompt returned in 11–25s on some
@@ -38,8 +39,10 @@ setting still ran 18 min). Practical consequences for the conductor:
 - Run the gemini call with `run_in_background: true` — a backgrounded Bash task
   is not subject to the 10-min foreground timeout, so an 18-min Gemini turn can
   still land (a foreground call would be killed at 10m, below Gemini's worst
-  case). This also keeps a slow Gemini turn from blocking the opus/gpt voices:
-  dispatch all three, then collect gemini whenever it lands.
+  case). `gpt` gets the same treatment for the same reason (a high-effort `ask`
+  turn is not guaranteed to land inside 10 minutes either — see the table
+  above). This also keeps a slow leg from blocking the others: dispatch all
+  three, then collect `gpt` and gemini whenever they land.
 - It usually succeeds eventually (exit 0 with a real answer); treat a true >20-min
   hang, not mere slowness, as failure. If gemini fails twice, proceed with a
   **two-voice debate** (opus + gpt) and say so explicitly in the final report
@@ -48,13 +51,14 @@ setting still ran 18 min). Practical consequences for the conductor:
   (Low)` was consistently fast (~14s) in testing — but the fixed routing calls for
   High, so only drop to Low if the user opts in.
 
-**`gpt`'s failure signal is simpler: check the exit code.** A failed `ask` call
-exits non-zero with a `# Ask Failed` stdout body instead of an answer — never
-relay that body as `gpt`'s position. Same policy as gemini: record it as a failed
-source and continue with the remaining two voices rather than aborting the debate.
-
-`opus` (Agent tool) and `gpt` (`ask`, via a shell variable / heredoc) accept
-multi-line prompts normally.
+**`gpt`'s failure signal is simpler: check the exit code, not the wording.** A
+failed `ask` call exits non-zero, but its stdout can still read as a plausible
+answer — the `# Ask Failed` first line exists precisely to keep the partial
+response visible, not to make the body unreadable. Gate on the exit code, never
+on whether the text below the heading looks complete. Same policy as gemini: if
+`gpt` fails twice, proceed with a two-voice debate (opus + gemini) and say so
+explicitly in the final report (see the failed-voice note under Synthesis
+below).
 
 ## Permissions (do not widen)
 
@@ -138,7 +142,11 @@ Collect `R2.opus`, `R2.gpt`, `R2.gemini`.
 
 ## Synthesis — your final report to the user
 
-Read the three R2 answers and produce exactly these sections:
+Read the three R2 answers and produce exactly these sections. If a voice failed
+and you proceeded with two (per the gemini/gpt failure policies above), replace
+that voice's `三方最終立場` bullet with a short note that it did not respond, and
+repeat that note in `CC 綜合建議` so the reader knows the verdict rests on two
+voices, not three:
 ```
 ## 共識
 <points all three converged on>
