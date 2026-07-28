@@ -1070,9 +1070,7 @@ var import_node_crypto = require("node:crypto");
 var import_node_fs = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path = require("node:path");
-var MAX_JOBS = 50;
 var PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
-var SESSION_ID_ENV = "HARRY_SESSION_ID";
 var FALLBACK_STATE_ROOT = (0, import_node_path.join)((0, import_node_os.tmpdir)(), "harry");
 function repoRootOf(cwd) {
   try {
@@ -1106,57 +1104,16 @@ function atomicWrite(filePath, content) {
   (0, import_node_fs.writeFileSync)(tmp, content, { encoding: "utf-8", mode: 384 });
   (0, import_node_fs.renameSync)(tmp, filePath);
 }
-function stateFilePath(stateDir) {
-  return (0, import_node_path.join)(stateDir, "state.json");
-}
-function loadState(stateDir) {
-  const filePath = stateFilePath(stateDir);
-  if (!(0, import_node_fs.existsSync)(filePath)) {
-    return { version: 1, jobs: [] };
-  }
-  try {
-    return JSON.parse((0, import_node_fs.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return { version: 1, jobs: [] };
-  }
-}
-function saveState(stateDir, state) {
-  ensureDir(stateDir);
-  if (state.jobs.length > MAX_JOBS) {
-    const keep = [];
-    for (const job of state.jobs) {
-      const inFlight = job.status === "running" || job.status === "queued";
-      if (inFlight || keep.length < MAX_JOBS) {
-        keep.push(job);
-      } else {
-        (0, import_node_fs.rmSync)(jobFilePath(stateDir, job.id), { force: true });
-        (0, import_node_fs.rmSync)(jobLogPath(stateDir, job.id), { force: true });
-      }
-    }
-    state.jobs = keep;
-  }
-  atomicWrite(stateFilePath(stateDir), JSON.stringify(state, null, 2));
-}
 function jobsDir(stateDir) {
   return (0, import_node_path.join)(stateDir, "jobs");
-}
-function jobFilePath(stateDir, jobId) {
-  return (0, import_node_path.join)(jobsDir(stateDir), `${jobId}.json`);
 }
 function jobLogPath(stateDir, jobId) {
   return (0, import_node_path.join)(jobsDir(stateDir), `${jobId}.log`);
 }
-function writeJobFile(stateDir, job) {
-  atomicWrite(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2));
-}
-function readJobFile(stateDir, jobId) {
-  const filePath = jobFilePath(stateDir, jobId);
-  if (!(0, import_node_fs.existsSync)(filePath)) return null;
-  try {
-    return JSON.parse((0, import_node_fs.readFileSync)(filePath, "utf-8"));
-  } catch {
-    return null;
-  }
+function generateJobId() {
+  const ts = Date.now();
+  const rand = (0, import_node_crypto.randomUUID)().slice(0, 8);
+  return `job-${ts}-${rand}`;
 }
 function appendLog(stateDir, jobId, message) {
   const logFile = jobLogPath(stateDir, jobId);
@@ -1164,61 +1121,6 @@ function appendLog(stateDir, jobId, message) {
   const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
   (0, import_node_fs.writeFileSync)(logFile, `[${time}] ${message}
 `, { flag: "a", mode: 384 });
-}
-function readLogTail(stateDir, jobId, maxLines = 10) {
-  const logFile = jobLogPath(stateDir, jobId);
-  if (!(0, import_node_fs.existsSync)(logFile)) return [];
-  try {
-    const content = (0, import_node_fs.readFileSync)(logFile, "utf-8");
-    const lines = content.trim().split("\n");
-    return lines.slice(-maxLines);
-  } catch {
-    return [];
-  }
-}
-function generateJobId() {
-  const ts = Date.now();
-  const rand = (0, import_node_crypto.randomUUID)().slice(0, 8);
-  return `job-${ts}-${rand}`;
-}
-function getSessionId() {
-  return process.env[SESSION_ID_ENV] || void 0;
-}
-function createJob(stateDir, job) {
-  const state = loadState(stateDir);
-  state.jobs.unshift(job);
-  saveState(stateDir, state);
-  writeJobFile(stateDir, job);
-}
-function updateJob(stateDir, jobId, updates) {
-  const state = loadState(stateDir);
-  const idx = state.jobs.findIndex((j) => j.id === jobId);
-  if (idx >= 0) {
-    state.jobs[idx] = { ...state.jobs[idx], ...updates };
-    saveState(stateDir, state);
-  }
-  const full = readJobFile(stateDir, jobId);
-  if (full) {
-    writeJobFile(stateDir, { ...full, ...updates });
-  }
-}
-function markJobFailed(stateDir, jobId, errorMessage) {
-  const job = readJobFile(stateDir, jobId);
-  if (!job || job.status === "completed" || job.status === "failed") return;
-  updateJob(stateDir, jobId, {
-    status: "failed",
-    phase: "failed",
-    completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    errorMessage
-  });
-  appendLog(stateDir, jobId, `Marked failed: ${errorMessage}`);
-}
-function listJobs(stateDir, sessionId) {
-  const state = loadState(stateDir);
-  if (sessionId) {
-    return state.jobs.filter((j) => j.sessionId === sessionId);
-  }
-  return state.jobs;
 }
 var CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
 function codexRateLimitsPath(stateDir) {
@@ -1588,26 +1490,10 @@ async function runAsk(cwd, options) {
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
-// src/commands/background.ts
+// src/commands/fix.ts
 var import_node_child_process5 = require("node:child_process");
-
-// src/lib/args.ts
-function extractTask(args, flags) {
-  const positional = args.join(" ").trim();
-  if (positional) return positional;
-  const flag = flags.task;
-  return typeof flag === "string" ? flag.trim() : "";
-}
-function flagString(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number(v.trim());
-  return Number.isFinite(n) && n > 0 ? n : void 0;
-}
+var import_node_fs4 = require("node:fs");
+var import_node_path4 = require("node:path");
 
 // src/lib/findings.ts
 var VALID_SEVERITIES = /* @__PURE__ */ new Set(["blocker", "major", "minor"]);
@@ -2046,6 +1932,286 @@ function collectReviewContext(cwd, target, options = {}) {
   };
 }
 
+// src/commands/fix.ts
+var DEFAULT_MODEL2 = "gpt-5.6-sol";
+var DEFAULT_EFFORT2 = "high";
+var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
+function tryGit(args, cwd) {
+  const res = (0, import_node_child_process5.spawnSync)("git", args, { cwd, encoding: "utf-8" });
+  return {
+    ok: res.status === 0,
+    stdout: (res.stdout ?? "").trim(),
+    // A spawn failure (git missing, bad cwd) produces no stderr at all — fall
+    // back to the spawn error so the caller always has something to report.
+    stderr: (res.stderr ?? "").trim() || (res.error?.message ?? "")
+  };
+}
+function gitHead(cwd) {
+  try {
+    return (0, import_node_child_process5.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
+  } catch {
+    return "";
+  }
+}
+function emit(env) {
+  const json = JSON.stringify(env);
+  process.stdout.write(`${json}
+`);
+  return json;
+}
+function loadFindings(path) {
+  const raw = (0, import_node_fs4.readFileSync)(path, "utf-8");
+  return normalizeFindings(JSON.parse(raw));
+}
+function buildFixPrompt(findings) {
+  const blocks = findings.map((f, i) => {
+    const loc = f.line ? `${f.file}:${f.line}` : f.file;
+    return [
+      `### Finding ${i + 1} \u2014 id: ${f.id} (${f.severity})`,
+      `Location: ${loc}`,
+      `Issue: ${f.title}`,
+      f.rationale ? `Why: ${f.rationale}` : "",
+      f.suggestedFix ? `Suggested fix: ${f.suggestedFix}` : ""
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
+  return [
+    "Apply the following code-review fixes to this repository. Each finding has",
+    "already been vetted by a human reviewer \u2014 implement the fix for each one.",
+    "",
+    "Guidelines:",
+    "- Make the minimal, correct change for each finding. Do not refactor unrelated code.",
+    "- If a finding cannot be safely applied (already fixed, no longer applies, or",
+    "  the suggested fix would break something), skip it and explain why.",
+    "- Do not commit; just edit the files.",
+    "",
+    "FINDINGS TO FIX:",
+    "",
+    blocks,
+    "",
+    "When done, output ONE fenced ```json block reporting what you did:",
+    "```json",
+    '{ "applied": ["finding-id", ...], "skipped": [{ "id": "finding-id", "reason": "..." }] }',
+    "```"
+  ].join("\n");
+}
+function parseApplyReport(text, findings) {
+  const parsed = extractJsonBlock(text);
+  const ids = new Set(findings.map((f) => f.id));
+  const applied = [];
+  const skipped = [];
+  if (parsed && typeof parsed === "object") {
+    const p = parsed;
+    if (Array.isArray(p.applied)) {
+      for (const a of p.applied) if (typeof a === "string" && ids.has(a)) applied.push(a);
+    }
+    if (Array.isArray(p.skipped)) {
+      for (const s of p.skipped) {
+        if (s && typeof s === "object") {
+          const id = s.id;
+          const reason = s.reason;
+          if (typeof id === "string")
+            skipped.push({ id, reason: typeof reason === "string" ? reason : "no reason given" });
+        }
+      }
+    }
+  }
+  const accounted = /* @__PURE__ */ new Set([...applied, ...skipped.map((s) => s.id)]);
+  for (const f of findings) {
+    if (!accounted.has(f.id)) skipped.push({ id: f.id, reason: "not reported by the model" });
+  }
+  return { applied, skipped };
+}
+function computeStagedDiff(cwd, baseline, log) {
+  const staged = tryGit(["add", "-A"], cwd);
+  const names = tryGit(["diff", "--cached", "--name-only", baseline], cwd);
+  const numstat = tryGit(["diff", "--cached", "--numstat", baseline], cwd);
+  for (const [what, res] of [
+    ["git add -A", staged],
+    ["git diff --cached --name-only", names],
+    ["git diff --cached --numstat", numstat]
+  ]) {
+    if (!res.ok) {
+      log(`fix diff stats unavailable: ${what} failed: ${res.stderr || "no output"}`);
+      return null;
+    }
+  }
+  const filesModified = names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  for (const line of numstat.stdout ? numstat.stdout.split("\n") : []) {
+    const [addStr, delStr] = line.split("	");
+    const add = Number.parseInt(addStr ?? "0", 10);
+    const del = Number.parseInt(delStr ?? "0", 10);
+    if (Number.isFinite(add)) linesAdded += add;
+    if (Number.isFinite(del)) linesRemoved += del;
+  }
+  return { filesModified, linesAdded, linesRemoved };
+}
+async function runFix(cwd, options = {}) {
+  const progress = makeProgress();
+  const stateDir = resolveStateDir(cwd);
+  const jobId = options.jobId ?? generateJobId();
+  const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
+  const requestedModel = options.model ?? DEFAULT_MODEL2;
+  const log = (msg) => appendLog(stateDir, jobId, msg);
+  if (!options.findingsPath) {
+    emit({
+      status: "failed",
+      jobId,
+      error: "Missing --findings <path>; provide the approved findings JSON."
+    });
+    process.exit(1);
+  }
+  const findingsAbs = (0, import_node_path4.resolve)(cwd, options.findingsPath);
+  let findings;
+  try {
+    findings = loadFindings(findingsAbs);
+  } catch (err) {
+    emit({
+      status: "failed",
+      jobId,
+      error: `Could not read findings file ${findingsAbs}: ${err.message}`
+    });
+    process.exit(1);
+  }
+  if (findings.length === 0) {
+    emit({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
+    process.exit(1);
+  }
+  log(`fix start: model=${requestedModel} findings=${findings.length} source=${findingsAbs}`);
+  let repoRoot;
+  try {
+    repoRoot = ensureGitRepository(cwd);
+  } catch (err) {
+    emit({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
+    process.exit(1);
+  }
+  let preFixDirty = false;
+  let baselineCommit = "";
+  let diffBase = "";
+  const snapshotInfo = () => baselineCommit ? { baselineCommit, ...preFixDirty ? { preFixDirty } : {} } : {};
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
+  let envelopeDone = false;
+  const onInterrupt = () => {
+    if (envelopeDone) return;
+    envelopeDone = true;
+    turn.clear();
+    progress("Received interrupt signal; aborting fix session.");
+    emit({ status: "failed", jobId, error: "Interrupted by signal" });
+  };
+  const extraContext = resolveExtraContext(cwd, {
+    context: options.context,
+    onWarn: (m) => {
+      progress(m);
+      log(m);
+    }
+  });
+  progress(`Applying ${findings.length} approved fix(es) (model=${requestedModel})\u2026`);
+  let result;
+  try {
+    ({ result } = await runAgentSession({
+      cwd: repoRoot,
+      run: {
+        cwd: repoRoot,
+        prompt: buildFixPrompt(findings),
+        model: requestedModel,
+        reasoning,
+        readOnly: false,
+        allowShell: options.allowShell ?? false,
+        allowUrl: options.allowUrl ?? false,
+        systemMessage: buildSystemMessage("fix", { extraContext }),
+        appendLog: log,
+        progress,
+        signal: turn.signal
+      },
+      onInterrupt,
+      // Post-precheck / pre-run: snapshot pre-existing changes so the fix diff
+      // is isolated. Runs ONLY after precheckRun passes. Uses `git stash create`
+      // — an ephemeral snapshot object — so NOTHING (working tree, index, branch
+      // history, stash ref) is mutated, unlike the prior baseline-commit design.
+      beforeRun: () => {
+        baselineCommit = gitHead(repoRoot);
+        if (!baselineCommit) {
+          envelopeDone = true;
+          turn.clear();
+          emit({
+            status: "failed",
+            jobId,
+            error: "fix requires at least one commit to diff against (repository has no commits yet)."
+          });
+          process.exit(1);
+        }
+        const dirty = tryGit(["status", "--porcelain"], repoRoot);
+        preFixDirty = dirty.ok && dirty.stdout.trim().length > 0;
+        if (preFixDirty) {
+          const snap = tryGit(["stash", "create"], repoRoot);
+          diffBase = snap.ok && snap.stdout.trim() ? snap.stdout.trim() : baselineCommit;
+          progress("Isolating the fix diff from your uncommitted changes (no commit made).");
+          log(
+            `pre-fix dirty; diff base = ${diffBase === baselineCommit ? "HEAD" : "stash-create snapshot"}`
+          );
+        } else {
+          diffBase = baselineCommit;
+        }
+      },
+      log
+    }));
+  } catch (err) {
+    turn.clear();
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit({ status: "failed", jobId, error: err.message, ...snapshotInfo() });
+    }
+    process.exit(1);
+  }
+  turn.clear();
+  const success = result.success && !turn.timedOut();
+  if (!success) {
+    if (!envelopeDone) {
+      envelopeDone = true;
+      emit({
+        status: "failed",
+        jobId,
+        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.",
+        ...snapshotInfo()
+      });
+    }
+    process.exit(1);
+  }
+  envelopeDone = true;
+  const report = parseApplyReport(result.lastAssistantMessage, findings);
+  const diff = computeStagedDiff(repoRoot, diffBase, log);
+  const summary = result.summary?.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
+  const envelope = {
+    status: "fixed",
+    jobId,
+    summary,
+    baselineCommit,
+    preFixDirty,
+    filesModified: diff?.filesModified ?? null,
+    linesAdded: diff?.linesAdded ?? null,
+    linesRemoved: diff?.linesRemoved ?? null,
+    applied: report.applied,
+    skipped: report.skipped,
+    model: requestedModel
+  };
+  const envelopeJson = emit(envelope);
+  if (options.writePath) {
+    const outPath = (0, import_node_path4.resolve)(cwd, options.writePath);
+    (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(outPath), { recursive: true });
+    (0, import_node_fs4.writeFileSync)(outPath, `${envelopeJson}
+`, "utf-8");
+    progress(`Report saved to ${outPath}`);
+  }
+  const diffSummary = diff ? `files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})` : "diff stats unavailable (git failed \u2014 see the job log)";
+  progress(
+    `Fix done \u2014 applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`
+  );
+  log(`fix done: applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`);
+  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
+}
+
 // src/lib/review-prompts.ts
 var STANDARD = `<role>
 You are a careful, technically rigorous code reviewer.
@@ -2272,7 +2438,7 @@ function buildReviewPrompt(kind, vars) {
 }
 
 // src/commands/review.ts
-var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
+var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
 var DEFAULT_MODEL_STANDARD = "gpt-5.6-terra";
 var DEFAULT_MODEL_ADVERSARIAL = "gpt-5.6-sol";
 var DEFAULT_MODEL_SIMPLIFY = "gpt-5.6-terra";
@@ -2298,7 +2464,7 @@ async function runReview(cwd, options = {}) {
   const progress = makeProgress();
   const kind = resolveKind(options);
   const reasoning = options.reasoning ?? defaultEffortFor(kind);
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS3;
   const requestedModel = options.model ?? defaultModelFor(kind);
   const stateDir = resolveStateDir(cwd);
   const jobId = options.jobId ?? generateJobId();
@@ -2413,506 +2579,6 @@ ${reviewBody}
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
-// src/commands/background.ts
-function enqueueBackground(command, args, flags, cwd) {
-  if (command !== "review") {
-    throw new Error(`Background execution is only supported for 'review', got '${command}'.`);
-  }
-  const stateDir = resolveStateDir(cwd);
-  const jobId = generateJobId();
-  const summary = extractTask(args, flags).slice(0, 80) || command;
-  const job = {
-    id: jobId,
-    kind: command,
-    title: `harry ${command}`,
-    summary,
-    status: "queued",
-    phase: "queued",
-    cwd,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    sessionId: getSessionId(),
-    request: { command, args, flags, cwd }
-  };
-  createJob(stateDir, job);
-  appendLog(stateDir, jobId, `Queued for background execution: ${command} "${summary}"`);
-  const scriptPath = getScriptPath();
-  const child = (0, import_node_child_process5.spawn)(process.execPath, [scriptPath, "_worker", "--job-id", jobId, "--cwd", cwd], {
-    cwd,
-    env: { ...process.env, HARRY_SESSION_ID: getSessionId() ?? "" },
-    detached: true,
-    stdio: "ignore"
-  });
-  child.unref();
-  updateJob(stateDir, jobId, { pid: child.pid ?? null });
-  return jobId;
-}
-function getScriptPath() {
-  if (typeof __filename === "undefined" || !__filename) {
-    throw new Error(
-      "Unable to resolve script path: __filename is not defined. The companion must be run via the bundled CJS output."
-    );
-  }
-  return __filename;
-}
-async function runWorker(jobId, cwd) {
-  const stateDir = resolveStateDir(cwd);
-  const job = readJobFile(stateDir, jobId);
-  if (!job) {
-    console.error(`Worker: Job not found: ${jobId}`);
-    process.exit(1);
-  }
-  const { args, flags } = job.request;
-  updateJob(stateDir, jobId, {
-    status: "running",
-    phase: "starting",
-    startedAt: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  appendLog(stateDir, jobId, "Worker started.");
-  process.on("exit", (code) => {
-    if (code === 0) return;
-    try {
-      markJobFailed(stateDir, jobId, `worker exited with code ${code}`);
-    } catch {
-    }
-  });
-  const stdoutChunks = [];
-  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = ((chunk, ...rest) => {
-    const text = typeof chunk === "string" ? chunk : chunk.toString();
-    stdoutChunks.push(text);
-    return originalStdoutWrite(chunk, ...rest);
-  });
-  const originalStderrWrite = process.stderr.write.bind(process.stderr);
-  process.stderr.write = ((chunk, ...rest) => {
-    const text = typeof chunk === "string" ? chunk : chunk.toString();
-    if (text.trim()) appendLog(stateDir, jobId, text.trim());
-    return originalStderrWrite(chunk, ...rest);
-  });
-  const reasoning = flagString(flags, "reasoning");
-  const validEfforts = ["low", "medium", "high", "xhigh"];
-  const effort = reasoning && validEfforts.includes(reasoning) ? reasoning : void 0;
-  try {
-    if (job.request.command !== "review") {
-      throw new Error(`Background worker only supports 'review', got '${job.request.command}'.`);
-    }
-    const scope = flagString(flags, "scope");
-    const validScopes = ["auto", "working-tree", "branch"];
-    const reviewOpts = {
-      adversarial: flags.adversarial === true,
-      scope: scope && validScopes.includes(scope) ? scope : void 0,
-      base: flagString(flags, "base"),
-      focusText: extractTask(args, flags),
-      simplify: flags.simplify === true,
-      model: flagString(flags, "model"),
-      reasoning: effort,
-      timeout: flagNumber(flags, "timeout"),
-      fix: flags.fix === true,
-      context: flagString(flags, "context"),
-      jobId
-    };
-    await runReview(cwd, reviewOpts);
-    const captured = stdoutChunks.join("").trim();
-    updateJob(stateDir, jobId, {
-      status: "completed",
-      phase: "done",
-      completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      result: captured
-    });
-    appendLog(stateDir, jobId, "Worker completed.");
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    markJobFailed(stateDir, jobId, message);
-  } finally {
-    process.stdout.write = originalStdoutWrite;
-    process.stderr.write = originalStderrWrite;
-  }
-}
-
-// src/commands/fix.ts
-var import_node_child_process6 = require("node:child_process");
-var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
-var DEFAULT_MODEL2 = "gpt-5.6-sol";
-var DEFAULT_EFFORT2 = "high";
-var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
-function tryGit(args, cwd) {
-  const res = (0, import_node_child_process6.spawnSync)("git", args, { cwd, encoding: "utf-8" });
-  return {
-    ok: res.status === 0,
-    stdout: (res.stdout ?? "").trim(),
-    // A spawn failure (git missing, bad cwd) produces no stderr at all — fall
-    // back to the spawn error so the caller always has something to report.
-    stderr: (res.stderr ?? "").trim() || (res.error?.message ?? "")
-  };
-}
-function gitHead(cwd) {
-  try {
-    return (0, import_node_child_process6.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
-  } catch {
-    return "";
-  }
-}
-function emit(env) {
-  const json = JSON.stringify(env);
-  process.stdout.write(`${json}
-`);
-  return json;
-}
-function loadFindings(path) {
-  const raw = (0, import_node_fs4.readFileSync)(path, "utf-8");
-  return normalizeFindings(JSON.parse(raw));
-}
-function buildFixPrompt(findings) {
-  const blocks = findings.map((f, i) => {
-    const loc = f.line ? `${f.file}:${f.line}` : f.file;
-    return [
-      `### Finding ${i + 1} \u2014 id: ${f.id} (${f.severity})`,
-      `Location: ${loc}`,
-      `Issue: ${f.title}`,
-      f.rationale ? `Why: ${f.rationale}` : "",
-      f.suggestedFix ? `Suggested fix: ${f.suggestedFix}` : ""
-    ].filter(Boolean).join("\n");
-  }).join("\n\n");
-  return [
-    "Apply the following code-review fixes to this repository. Each finding has",
-    "already been vetted by a human reviewer \u2014 implement the fix for each one.",
-    "",
-    "Guidelines:",
-    "- Make the minimal, correct change for each finding. Do not refactor unrelated code.",
-    "- If a finding cannot be safely applied (already fixed, no longer applies, or",
-    "  the suggested fix would break something), skip it and explain why.",
-    "- Do not commit; just edit the files.",
-    "",
-    "FINDINGS TO FIX:",
-    "",
-    blocks,
-    "",
-    "When done, output ONE fenced ```json block reporting what you did:",
-    "```json",
-    '{ "applied": ["finding-id", ...], "skipped": [{ "id": "finding-id", "reason": "..." }] }',
-    "```"
-  ].join("\n");
-}
-function parseApplyReport(text, findings) {
-  const parsed = extractJsonBlock(text);
-  const ids = new Set(findings.map((f) => f.id));
-  const applied = [];
-  const skipped = [];
-  if (parsed && typeof parsed === "object") {
-    const p = parsed;
-    if (Array.isArray(p.applied)) {
-      for (const a of p.applied) if (typeof a === "string" && ids.has(a)) applied.push(a);
-    }
-    if (Array.isArray(p.skipped)) {
-      for (const s of p.skipped) {
-        if (s && typeof s === "object") {
-          const id = s.id;
-          const reason = s.reason;
-          if (typeof id === "string")
-            skipped.push({ id, reason: typeof reason === "string" ? reason : "no reason given" });
-        }
-      }
-    }
-  }
-  const accounted = /* @__PURE__ */ new Set([...applied, ...skipped.map((s) => s.id)]);
-  for (const f of findings) {
-    if (!accounted.has(f.id)) skipped.push({ id: f.id, reason: "not reported by the model" });
-  }
-  return { applied, skipped };
-}
-function computeStagedDiff(cwd, baseline, log) {
-  const staged = tryGit(["add", "-A"], cwd);
-  const names = tryGit(["diff", "--cached", "--name-only", baseline], cwd);
-  const numstat = tryGit(["diff", "--cached", "--numstat", baseline], cwd);
-  for (const [what, res] of [
-    ["git add -A", staged],
-    ["git diff --cached --name-only", names],
-    ["git diff --cached --numstat", numstat]
-  ]) {
-    if (!res.ok) {
-      log(`fix diff stats unavailable: ${what} failed: ${res.stderr || "no output"}`);
-      return null;
-    }
-  }
-  const filesModified = names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
-  let linesAdded = 0;
-  let linesRemoved = 0;
-  for (const line of numstat.stdout ? numstat.stdout.split("\n") : []) {
-    const [addStr, delStr] = line.split("	");
-    const add = Number.parseInt(addStr ?? "0", 10);
-    const del = Number.parseInt(delStr ?? "0", 10);
-    if (Number.isFinite(add)) linesAdded += add;
-    if (Number.isFinite(del)) linesRemoved += del;
-  }
-  return { filesModified, linesAdded, linesRemoved };
-}
-async function runFix(cwd, options = {}) {
-  const progress = makeProgress();
-  const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
-  const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS3;
-  const requestedModel = options.model ?? DEFAULT_MODEL2;
-  const log = (msg) => appendLog(stateDir, jobId, msg);
-  if (!options.findingsPath) {
-    emit({
-      status: "failed",
-      jobId,
-      error: "Missing --findings <path>; provide the approved findings JSON."
-    });
-    process.exit(1);
-  }
-  const findingsAbs = (0, import_node_path4.resolve)(cwd, options.findingsPath);
-  let findings;
-  try {
-    findings = loadFindings(findingsAbs);
-  } catch (err) {
-    emit({
-      status: "failed",
-      jobId,
-      error: `Could not read findings file ${findingsAbs}: ${err.message}`
-    });
-    process.exit(1);
-  }
-  if (findings.length === 0) {
-    emit({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
-    process.exit(1);
-  }
-  log(`fix start: model=${requestedModel} findings=${findings.length} source=${findingsAbs}`);
-  let repoRoot;
-  try {
-    repoRoot = ensureGitRepository(cwd);
-  } catch (err) {
-    emit({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
-    process.exit(1);
-  }
-  let preFixDirty = false;
-  let baselineCommit = "";
-  let diffBase = "";
-  const snapshotInfo = () => baselineCommit ? { baselineCommit, ...preFixDirty ? { preFixDirty } : {} } : {};
-  const turn = startTurnTimeout({ timeoutMs, progress, log });
-  let envelopeDone = false;
-  const onInterrupt = () => {
-    if (envelopeDone) return;
-    envelopeDone = true;
-    turn.clear();
-    progress("Received interrupt signal; aborting fix session.");
-    emit({ status: "failed", jobId, error: "Interrupted by signal" });
-  };
-  const extraContext = resolveExtraContext(cwd, {
-    context: options.context,
-    onWarn: (m) => {
-      progress(m);
-      log(m);
-    }
-  });
-  progress(`Applying ${findings.length} approved fix(es) (model=${requestedModel})\u2026`);
-  let result;
-  try {
-    ({ result } = await runAgentSession({
-      cwd: repoRoot,
-      run: {
-        cwd: repoRoot,
-        prompt: buildFixPrompt(findings),
-        model: requestedModel,
-        reasoning,
-        readOnly: false,
-        allowShell: options.allowShell ?? false,
-        allowUrl: options.allowUrl ?? false,
-        systemMessage: buildSystemMessage("fix", { extraContext }),
-        appendLog: log,
-        progress,
-        signal: turn.signal
-      },
-      onInterrupt,
-      // Post-precheck / pre-run: snapshot pre-existing changes so the fix diff
-      // is isolated. Runs ONLY after precheckRun passes. Uses `git stash create`
-      // — an ephemeral snapshot object — so NOTHING (working tree, index, branch
-      // history, stash ref) is mutated, unlike the prior baseline-commit design.
-      beforeRun: () => {
-        baselineCommit = gitHead(repoRoot);
-        if (!baselineCommit) {
-          envelopeDone = true;
-          turn.clear();
-          emit({
-            status: "failed",
-            jobId,
-            error: "fix requires at least one commit to diff against (repository has no commits yet)."
-          });
-          process.exit(1);
-        }
-        const dirty = tryGit(["status", "--porcelain"], repoRoot);
-        preFixDirty = dirty.ok && dirty.stdout.trim().length > 0;
-        if (preFixDirty) {
-          const snap = tryGit(["stash", "create"], repoRoot);
-          diffBase = snap.ok && snap.stdout.trim() ? snap.stdout.trim() : baselineCommit;
-          progress("Isolating the fix diff from your uncommitted changes (no commit made).");
-          log(
-            `pre-fix dirty; diff base = ${diffBase === baselineCommit ? "HEAD" : "stash-create snapshot"}`
-          );
-        } else {
-          diffBase = baselineCommit;
-        }
-      },
-      log
-    }));
-  } catch (err) {
-    turn.clear();
-    if (!envelopeDone) {
-      envelopeDone = true;
-      emit({ status: "failed", jobId, error: err.message, ...snapshotInfo() });
-    }
-    process.exit(1);
-  }
-  turn.clear();
-  const success = result.success && !turn.timedOut();
-  if (!success) {
-    if (!envelopeDone) {
-      envelopeDone = true;
-      emit({
-        status: "failed",
-        jobId,
-        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.",
-        ...snapshotInfo()
-      });
-    }
-    process.exit(1);
-  }
-  envelopeDone = true;
-  const report = parseApplyReport(result.lastAssistantMessage, findings);
-  const diff = computeStagedDiff(repoRoot, diffBase, log);
-  const summary = result.summary?.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
-  const envelope = {
-    status: "fixed",
-    jobId,
-    summary,
-    baselineCommit,
-    preFixDirty,
-    filesModified: diff?.filesModified ?? null,
-    linesAdded: diff?.linesAdded ?? null,
-    linesRemoved: diff?.linesRemoved ?? null,
-    applied: report.applied,
-    skipped: report.skipped,
-    model: requestedModel
-  };
-  const envelopeJson = emit(envelope);
-  if (options.writePath) {
-    const outPath = (0, import_node_path4.resolve)(cwd, options.writePath);
-    (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(outPath), { recursive: true });
-    (0, import_node_fs4.writeFileSync)(outPath, `${envelopeJson}
-`, "utf-8");
-    progress(`Report saved to ${outPath}`);
-  }
-  const diffSummary = diff ? `files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})` : "diff stats unavailable (git failed \u2014 see the job log)";
-  progress(
-    `Fix done \u2014 applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`
-  );
-  log(`fix done: applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`);
-  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
-}
-
-// src/lib/zombie.ts
-var import_node_fs5 = require("node:fs");
-var STALE_LOG_MS = 6e4;
-var PID_REUSE_STALE_MS = 6 * 60 * 60 * 1e3;
-function isProcessAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function logMtimeMs(path) {
-  try {
-    if (!(0, import_node_fs5.existsSync)(path)) return null;
-    return (0, import_node_fs5.statSync)(path).mtimeMs;
-  } catch {
-    return null;
-  }
-}
-function isZombie(job, logFile, now = Date.now()) {
-  if (job.status !== "running" && job.status !== "queued") return false;
-  const mtime = logMtimeMs(logFile);
-  const silentFor = (threshold) => {
-    if (mtime == null) {
-      const ref = Date.parse(job.startedAt ?? job.createdAt);
-      return Number.isFinite(ref) && now - ref > threshold;
-    }
-    return now - mtime > threshold;
-  };
-  if (job.pid != null && isProcessAlive(job.pid)) {
-    const requested = Number(job.request?.flags?.timeout);
-    const ownWindow = Number.isFinite(requested) && requested > 0 ? requested + STALE_LOG_MS : 0;
-    return silentFor(Math.max(PID_REUSE_STALE_MS, ownWindow));
-  }
-  return silentFor(STALE_LOG_MS);
-}
-function sweepZombieJobs(stateDir) {
-  const reaped = [];
-  const now = Date.now();
-  for (const job of listJobs(stateDir)) {
-    const logFile = jobLogPath(stateDir, job.id);
-    if (!isZombie(job, logFile, now)) continue;
-    markJobFailed(stateDir, job.id, "worker process died without writing exit status");
-    reaped.push(job.id);
-  }
-  return reaped;
-}
-
-// src/commands/result.ts
-async function runResult(cwd, options = {}) {
-  const stateDir = resolveStateDir(cwd);
-  sweepZombieJobs(stateDir);
-  let jobId = options.jobId;
-  if (!jobId) {
-    const sessionId = getSessionId();
-    const jobs = listJobs(stateDir, sessionId);
-    const finished = jobs.find((j) => j.status === "completed" || j.status === "failed");
-    if (!finished) {
-      console.error("No completed jobs found.");
-      process.exit(1);
-    }
-    jobId = finished.id;
-  }
-  const job = readJobFile(stateDir, jobId);
-  if (!job) {
-    console.error(`Job not found: ${jobId}`);
-    process.exit(1);
-  }
-  if (job.status === "queued" || job.status === "running") {
-    console.error(`Job ${jobId} is still ${job.status}. Use /harry:status to check progress.`);
-    process.exit(1);
-  }
-  if (options.json) {
-    console.log(
-      JSON.stringify(
-        {
-          id: job.id,
-          kind: job.kind,
-          status: job.status,
-          result: job.result,
-          errorMessage: job.errorMessage
-        },
-        null,
-        2
-      )
-    );
-    return;
-  }
-  if (job.status === "failed") {
-    console.log(`## Job Failed: ${job.id}
-
-**Error:** ${job.errorMessage ?? "Unknown error"}`);
-    return;
-  }
-  if (job.result) {
-    console.log(job.result);
-  } else {
-    console.log("Job completed but produced no output.");
-  }
-}
-
 // src/commands/setup.ts
 async function runSetup(options = {}) {
   const cwd = options.cwd ?? process.cwd();
@@ -2956,103 +2622,34 @@ async function runSetup(options = {}) {
 // src/commands/status.ts
 async function runStatus(cwd, options = {}) {
   const stateDir = resolveStateDir(cwd);
-  sweepZombieJobs(stateDir);
-  const sessionId = options.all ? void 0 : getSessionId();
-  if (options.jobId) {
-    const job = readJobFile(stateDir, options.jobId);
-    if (!job) {
-      console.error(`Job not found: ${options.jobId}`);
-      process.exit(1);
-    }
-    if (options.json) {
-      console.log(JSON.stringify(job, null, 2));
-      return;
-    }
-    const logTail = readLogTail(stateDir, job.id, 15);
-    console.log(renderJobDetail(job, logTail));
-    return;
-  }
-  const jobs = listJobs(stateDir, sessionId);
   const codexRateLimits = readCodexRateLimits(stateDir);
   if (options.json) {
-    console.log(
-      JSON.stringify({ ...codexRateLimits ? { codex: codexRateLimits } : {}, jobs }, null, 2)
-    );
+    console.log(JSON.stringify(codexRateLimits ? { codex: codexRateLimits } : {}, null, 2));
     return;
   }
-  const sections = [];
-  if (codexRateLimits) sections.push(renderCodexBlock(codexRateLimits, codexRateLimits.capturedAt));
-  const running = jobs.filter((j) => j.status === "queued" || j.status === "running");
-  const finished = jobs.filter((j) => j.status === "completed" || j.status === "failed");
-  if (running.length > 0) {
-    const block = ["## Running", renderJobsTable(running.map(toTableRow))];
-    const logLines = [];
-    for (const job of running) {
-      const logTail = readLogTail(stateDir, job.id, 3);
-      const lastLine = logTail[logTail.length - 1] ?? "";
-      if (lastLine) logLines.push(`  ${job.id}: ${lastLine}`);
-    }
-    if (logLines.length > 0) {
-      block.push("Last log:");
-      block.push(...logLines);
-    }
-    sections.push(block.join("\n"));
+  if (!codexRateLimits) {
+    console.log("_No Codex rate-limit snapshot yet \u2014 run a review, ask, or fix first._");
+    return;
   }
-  if (finished.length > 0) {
-    sections.push(["## Recent", renderJobsTable(finished.slice(0, 10).map(toTableRow))].join("\n"));
-  }
-  if (running.length === 0 && finished.length === 0) {
-    sections.push("_No background jobs._");
-  }
-  console.log(sections.join("\n\n"));
+  console.log(renderCodexBlock(codexRateLimits, codexRateLimits.capturedAt));
 }
-function toTableRow(job) {
-  const icon = job.status === "completed" ? "\u2713 " : job.status === "failed" ? "\u2717 " : job.status === "running" ? "\u25B6 " : job.status === "queued" ? "\u2026 " : "  ";
-  return { id: job.id, kind: job.kind, status: icon + job.status, task: job.summary };
+
+// src/lib/args.ts
+function extractTask(args, flags) {
+  const positional = args.join(" ").trim();
+  if (positional) return positional;
+  const flag = flags.task;
+  return typeof flag === "string" ? flag.trim() : "";
 }
-var TASK_MAX_WIDTH = 72;
-function renderJobsTable(rows) {
-  const headers = { id: "Job ID", kind: "Command", status: "Status", task: "Task" };
-  const widths = {
-    id: Math.max(headers.id.length, ...rows.map((r) => r.id.length)),
-    kind: Math.max(headers.kind.length, ...rows.map((r) => r.kind.length)),
-    status: Math.max(headers.status.length, ...rows.map((r) => r.status.length)),
-    task: Math.min(
-      TASK_MAX_WIDTH,
-      Math.max(headers.task.length, ...rows.map((r) => r.task.length))
-    )
-  };
-  const border = (l, m, r) => l + "\u2500".repeat(widths.id + 2) + m + "\u2500".repeat(widths.kind + 2) + m + "\u2500".repeat(widths.status + 2) + m + "\u2500".repeat(widths.task + 2) + r;
-  const renderRow = (r) => {
-    const task = r.task.length > widths.task ? `${r.task.slice(0, widths.task - 1)}\u2026` : r.task.padEnd(widths.task);
-    return `\u2502 ${r.id.padEnd(widths.id)} \u2502 ${r.kind.padEnd(widths.kind)} \u2502 ${r.status.padEnd(widths.status)} \u2502 ${task} \u2502`;
-  };
-  return [
-    border("\u250C", "\u252C", "\u2510"),
-    renderRow(headers),
-    border("\u251C", "\u253C", "\u2524"),
-    ...rows.map(renderRow),
-    border("\u2514", "\u2534", "\u2518")
-  ].join("\n");
+function flagString(flags, key) {
+  const v = flags[key];
+  return typeof v === "string" ? v : void 0;
 }
-function renderJobDetail(job, logTail) {
-  const sections = [];
-  sections.push(`## Job: ${job.id}`);
-  sections.push(`**Kind:** ${job.kind}`);
-  sections.push(`**Status:** ${job.status}`);
-  sections.push(`**Phase:** ${job.phase}`);
-  sections.push(`**Summary:** ${job.summary}`);
-  sections.push(`**Created:** ${job.createdAt}`);
-  if (job.startedAt) sections.push(`**Started:** ${job.startedAt}`);
-  if (job.completedAt) sections.push(`**Completed:** ${job.completedAt}`);
-  if (job.errorMessage) sections.push(`**Error:** ${job.errorMessage}`);
-  if (logTail.length > 0) {
-    sections.push("\n### Recent Log");
-    sections.push("```");
-    sections.push(logTail.join("\n"));
-    sections.push("```");
-  }
-  return sections.join("\n");
+function flagNumber(flags, key) {
+  const v = flags[key];
+  if (typeof v !== "string") return void 0;
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : void 0;
 }
 
 // src/companion.ts
@@ -3065,31 +2662,27 @@ function printUsage() {
       "                           [--scope auto|working-tree|branch] [--fix]",
       "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
       "                           [--context <text|@file|@->]",
-      "                           [--timeout <ms>] [--background]",
+      "                           [--timeout <ms>]",
       '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
       "  companion fix --findings <path> [--model <id>]",
       "                        [--reasoning <low|medium|high|xhigh>]",
       "                        [--context <text|@file|@->]",
       "                        [--timeout <ms>] [--write <path>]",
-      "  companion status [job-id] [--all] [--json]",
-      "  companion result [job-id] [--json]",
+      "  companion status [--json]",
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
       "  review      Run a code review (markdown, or JSON findings with --fix)",
       "  ask         Ask a single prompt (read-only) and print the answer",
       "  fix         Apply Claude-Code-approved review findings to the working tree",
-      "  status      Show Codex rate-limit snapshot plus background job status",
-      "  result      Retrieve a background job's output"
+      "  status      Show the cached Codex rate-limit snapshot"
     ].join("\n")
   );
 }
 var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
   "adversarial",
-  "all",
   "allow-shell",
   "allow-url",
-  "background",
   "check",
   "fix",
   "full",
@@ -3111,8 +2704,7 @@ var KNOWN_FLAGS = {
     "reasoning",
     "timeout",
     "fix",
-    "context",
-    "background"
+    "context"
   ]),
   ask: /* @__PURE__ */ new Set(["task", "model", "reasoning", "timeout", "context"]),
   fix: /* @__PURE__ */ new Set([
@@ -3125,9 +2717,7 @@ var KNOWN_FLAGS = {
     "write",
     "context"
   ]),
-  status: /* @__PURE__ */ new Set(["all", "json"]),
-  result: /* @__PURE__ */ new Set(["json"]),
-  _worker: /* @__PURE__ */ new Set(["job-id", "cwd"])
+  status: /* @__PURE__ */ new Set(["json"])
 };
 function assertKnownFlags(command, flags) {
   const allowed = KNOWN_FLAGS[command];
@@ -3224,11 +2814,6 @@ async function main() {
       const validEfforts = ["low", "medium", "high", "xhigh"];
       const scope = flagEnum(flags, "scope", validScopes);
       const reasoning = flagEnum(flags, "reasoning", validEfforts);
-      if (flags.background === true) {
-        const jobId = enqueueBackground("review", args, flags, import_node_process3.default.cwd());
-        console.log(JSON.stringify({ status: "queued", jobId }));
-        break;
-      }
       await runReview(import_node_process3.default.cwd(), {
         adversarial: flags.adversarial === true,
         simplify: flags.simplify === true,
@@ -3271,28 +2856,9 @@ async function main() {
     }
     case "status":
       await runStatus(import_node_process3.default.cwd(), {
-        jobId: args[0],
-        all: flags.all === true,
         json: flags.json === true
       });
       break;
-    case "result":
-      await runResult(import_node_process3.default.cwd(), {
-        jobId: args[0],
-        json: flags.json === true
-      });
-      break;
-    // Internal: background worker entry point.
-    case "_worker": {
-      const jobId = flagString(flags, "job-id");
-      const workerCwd = flagString(flags, "cwd") ?? import_node_process3.default.cwd();
-      if (!jobId) {
-        console.error("Worker requires --job-id");
-        import_node_process3.default.exit(1);
-      }
-      await runWorker(jobId, workerCwd);
-      break;
-    }
     case "help":
     case "--help":
     case "-h":

@@ -7,9 +7,7 @@
 
 import process from "node:process";
 import { runAsk } from "./commands/ask.ts";
-import { enqueueBackground, runWorker } from "./commands/background.ts";
 import { runFix } from "./commands/fix.ts";
-import { runResult } from "./commands/result.ts";
 import { runReview } from "./commands/review.ts";
 import { runSetup } from "./commands/setup.ts";
 import { runStatus } from "./commands/status.ts";
@@ -25,22 +23,20 @@ function printUsage(): void {
       "                           [--scope auto|working-tree|branch] [--fix]",
       "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
       "                           [--context <text|@file|@->]",
-      "                           [--timeout <ms>] [--background]",
+      "                           [--timeout <ms>]",
       '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
       "  companion fix --findings <path> [--model <id>]",
       "                        [--reasoning <low|medium|high|xhigh>]",
       "                        [--context <text|@file|@->]",
       "                        [--timeout <ms>] [--write <path>]",
-      "  companion status [job-id] [--all] [--json]",
-      "  companion result [job-id] [--json]",
+      "  companion status [--json]",
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
       "  review      Run a code review (markdown, or JSON findings with --fix)",
       "  ask         Ask a single prompt (read-only) and print the answer",
       "  fix         Apply Claude-Code-approved review findings to the working tree",
-      "  status      Show Codex rate-limit snapshot plus background job status",
-      "  result      Retrieve a background job's output",
+      "  status      Show the cached Codex rate-limit snapshot",
     ].join("\n"),
   );
 }
@@ -56,10 +52,8 @@ interface ParsedArgs {
 // not boolean) and silently disable strict `=== true` checks downstream.
 const BOOLEAN_FLAGS = new Set<string>([
   "adversarial",
-  "all",
   "allow-shell",
   "allow-url",
-  "background",
   "check",
   "fix",
   "full",
@@ -88,7 +82,6 @@ const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
     "timeout",
     "fix",
     "context",
-    "background",
   ]),
   ask: new Set(["task", "model", "reasoning", "timeout", "context"]),
   fix: new Set([
@@ -101,9 +94,7 @@ const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
     "write",
     "context",
   ]),
-  status: new Set(["all", "json"]),
-  result: new Set(["json"]),
-  _worker: new Set(["job-id", "cwd"]),
+  status: new Set(["json"]),
 };
 
 /** Throw on any `--flag` not in the command's allow-list (typos error loudly). */
@@ -134,8 +125,8 @@ function parseArgs(argv: string[]): ParsedArgs {
         if (BOOLEAN_FLAGS.has(key)) {
           // Boolean flags must not be assigned a value via `=`. Coerce common
           // truthy spellings (`true`, `1`, `yes`) and reject everything else
-          // so a mistake like `--background=foo` errors loudly instead of
-          // running with `flags[background] = "foo"` (which fails === true
+          // so a mistake like `--adversarial=foo` errors loudly instead of
+          // running with `flags[adversarial] = "foo"` (which fails === true
           // and silently flips behavior).
           const lc = value.toLowerCase();
           if (lc === "" || lc === "true" || lc === "1" || lc === "yes") {
@@ -239,11 +230,6 @@ async function main(): Promise<void> {
       const scope = flagEnum<ReviewScope>(flags, "scope", validScopes);
       const reasoning = flagEnum(flags, "reasoning", validEfforts);
 
-      if (flags.background === true) {
-        const jobId = enqueueBackground("review", args, flags, process.cwd());
-        console.log(JSON.stringify({ status: "queued", jobId }));
-        break;
-      }
       await runReview(process.cwd(), {
         adversarial: flags.adversarial === true,
         simplify: flags.simplify === true,
@@ -289,30 +275,9 @@ async function main(): Promise<void> {
 
     case "status":
       await runStatus(process.cwd(), {
-        jobId: args[0],
-        all: flags.all === true,
         json: flags.json === true,
       });
       break;
-
-    case "result":
-      await runResult(process.cwd(), {
-        jobId: args[0],
-        json: flags.json === true,
-      });
-      break;
-
-    // Internal: background worker entry point.
-    case "_worker": {
-      const jobId = flagString(flags, "job-id");
-      const workerCwd = flagString(flags, "cwd") ?? process.cwd();
-      if (!jobId) {
-        console.error("Worker requires --job-id");
-        process.exit(1);
-      }
-      await runWorker(jobId, workerCwd);
-      break;
-    }
 
     case "help":
     case "--help":
