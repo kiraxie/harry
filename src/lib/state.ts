@@ -1,56 +1,22 @@
 /**
- * Job state persistence.
+ * Workspace-scoped state directory.
  *
- * Stores job metadata in a workspace-scoped directory under $CLAUDE_PLUGIN_DATA.
- * Ported from the sibling gemini-plugin-cc with minimal changes.
+ * Holds the per-run job log (`jobs/<id>.log`, the path each command prints so a
+ * user can inspect a run) and the cached codex rate-limit snapshot, under
+ * $CLAUDE_PLUGIN_DATA.
  */
 
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
 import type { CodexRateLimits } from "./provider.ts";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export interface JobRecord {
-  id: string;
-  kind: string; // 'review' | 'ask' | 'fix'
-  title: string;
-  summary: string;
-  status: "queued" | "running" | "completed" | "failed";
-  phase: string;
-  cwd: string;
-  pid?: number | null;
-  logFile?: string;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  sessionId?: string;
-  request: JobRequest;
-  result?: string;
-  errorMessage?: string;
-}
-
-export interface JobRequest {
-  command: string; // 'review' | 'ask' | 'fix'
-  args: string[];
-  flags: Record<string, string | boolean>;
-  cwd: string;
-}
-
-interface StateFile {
-  version: number;
-  jobs: JobRecord[];
-}
-
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MAX_JOBS = 50;
 const PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
-const SESSION_ID_ENV = "HARRY_SESSION_ID";
 const FALLBACK_STATE_ROOT = join(tmpdir(), "harry");
 
 // ─── State Directory ─────────────────────────────────────────────────────────
@@ -91,9 +57,9 @@ export function resolveStateDir(cwd: string): string {
 }
 
 // State dirs/files are 0700/0600: the fallback root is under a world-readable
-// /tmp (see FALLBACK_STATE_ROOT), and job records + logs hold prompts, review
-// findings, diffs, and the model's reasoning text — not readable by other users
-// on a shared host.
+// /tmp (see FALLBACK_STATE_ROOT), and job logs hold prompts, review findings,
+// diffs, and the model's reasoning text — not readable by other users on a
+// shared host.
 function ensureDir(dir: string): void {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
@@ -103,7 +69,7 @@ function ensureDir(dir: string): void {
  * the same directory, then rename it into place (rename is atomic on a single
  * filesystem). A crash mid-write leaves the previous file intact instead of a
  * truncated one — the torn read a plain writeFileSync exposes would make
- * loadState's catch fall back to an empty store and permanently drop all jobs.
+ * readCodexRateLimits' catch discard a snapshot that is still perfectly good.
  */
 function atomicWrite(filePath: string, content: string): void {
   ensureDir(dirname(filePath));
@@ -112,84 +78,36 @@ function atomicWrite(filePath: string, content: string): void {
   renameSync(tmp, filePath);
 }
 
-// ─── State File ──────────────────────────────────────────────────────────────
-
-function stateFilePath(stateDir: string): string {
-  return join(stateDir, "state.json");
-}
-
-function loadState(stateDir: string): StateFile {
-  const filePath = stateFilePath(stateDir);
-  if (!existsSync(filePath)) {
-    return { version: 1, jobs: [] };
-  }
-  try {
-    return JSON.parse(readFileSync(filePath, "utf-8")) as StateFile;
-  } catch {
-    return { version: 1, jobs: [] };
-  }
-}
-
-function saveState(stateDir: string, state: StateFile): void {
-  ensureDir(stateDir);
-  if (state.jobs.length > MAX_JOBS) {
-    // MAX_JOBS caps state.json, but never at the cost of an in-flight job: a
-    // running/queued entry keeps its slot (and its files) regardless of position
-    // — pruning it would delete the state/log out from under a live worker.
-    // Dropped terminal jobs' per-job files/logs are never referenced again —
-    // delete them so the jobs/ dir doesn't grow without bound.
-    // DEBT: terminal jobs are hard-capped at MAX_JOBS, but in-flight ones are
-    // not — a worker that dies without persisting failure (SIGKILL/OOM/reboot)
-    // stays `running` until sweepZombieJobs marks it failed, and that sweep is
-    // lazy (only status/result invoke it), so a never-inspected queue of dead
-    // jobs grows state.json/jobs-dir unbounded until the next status/result.
-    // Ceiling: count of never-swept dead in-flight jobs. Upgrade path: invoke
-    // sweepZombieJobs from createJob, or cap in-flight retention, if it grows.
-    const keep: JobRecord[] = [];
-    for (const job of state.jobs) {
-      const inFlight = job.status === "running" || job.status === "queued";
-      if (inFlight || keep.length < MAX_JOBS) {
-        keep.push(job);
-      } else {
-        rmSync(jobFilePath(stateDir, job.id), { force: true });
-        rmSync(jobLogPath(stateDir, job.id), { force: true });
-      }
-    }
-    state.jobs = keep;
-  }
-  atomicWrite(stateFilePath(stateDir), JSON.stringify(state, null, 2));
-}
-
-// ─── Job Files ───────────────────────────────────────────────────────────────
+// ─── Job Log ─────────────────────────────────────────────────────────────────
+//
+// A "job" is just one command run: `ask`/`review`/`fix` each allocate an id,
+// append their progress to `jobs/<id>.log`, and print that path so the user can
+// read it. There is no job *record* — the log file is the whole artifact, and
+// the user is its only reader.
 
 function jobsDir(stateDir: string): string {
   return join(stateDir, "jobs");
-}
-
-function jobFilePath(stateDir: string, jobId: string): string {
-  return join(jobsDir(stateDir), `${jobId}.json`);
 }
 
 export function jobLogPath(stateDir: string, jobId: string): string {
   return join(jobsDir(stateDir), `${jobId}.log`);
 }
 
-export function writeJobFile(stateDir: string, job: JobRecord): void {
-  atomicWrite(jobFilePath(stateDir, job.id), JSON.stringify(job, null, 2));
+export function generateJobId(): string {
+  const ts = Date.now();
+  const rand = randomUUID().slice(0, 8);
+  return `job-${ts}-${rand}`;
 }
 
-export function readJobFile(stateDir: string, jobId: string): JobRecord | null {
-  const filePath = jobFilePath(stateDir, jobId);
-  if (!existsSync(filePath)) return null;
-  try {
-    return JSON.parse(readFileSync(filePath, "utf-8")) as JobRecord;
-  } catch {
-    return null;
-  }
-}
-
-// ─── Log File ────────────────────────────────────────────────────────────────
-
+// DEBT: `jobs/` grows without bound — every ask/review/fix run creates one more
+// `jobs/<id>.log` and nothing ever deletes one. The per-command log() calls are
+// only a few lines each; the volume is the model's reasoning text (see the 0600
+// note above), which reaches this same sink because each command hands `log` to
+// the provider as `opts.appendLog` — `providers/codex.ts:99` then writes one
+// line per reasoning section, untruncated and unthrottled, for the whole turn.
+// Ceiling: file count / total size of one workspace's `jobs/` dir. Upgrade
+// path: prune oldest-first by age or count on write, if a workspace's `jobs/`
+// ever gets large enough to notice.
 export function appendLog(stateDir: string, jobId: string, message: string): void {
   const logFile = jobLogPath(stateDir, jobId);
   ensureDir(jobsDir(stateDir));
@@ -199,81 +117,11 @@ export function appendLog(stateDir: string, jobId: string, message: string): voi
   writeFileSync(logFile, `[${time}] ${message}\n`, { flag: "a", mode: 0o600 });
 }
 
-export function readLogTail(stateDir: string, jobId: string, maxLines = 10): string[] {
-  const logFile = jobLogPath(stateDir, jobId);
-  if (!existsSync(logFile)) return [];
-  try {
-    const content = readFileSync(logFile, "utf-8");
-    const lines = content.trim().split("\n");
-    return lines.slice(-maxLines);
-  } catch {
-    return [];
-  }
-}
-
-// ─── Job CRUD ────────────────────────────────────────────────────────────────
-
-export function generateJobId(): string {
-  const ts = Date.now();
-  const rand = randomUUID().slice(0, 8);
-  return `job-${ts}-${rand}`;
-}
-
-export function getSessionId(): string | undefined {
-  return process.env[SESSION_ID_ENV] || undefined;
-}
-
-export function createJob(stateDir: string, job: JobRecord): void {
-  const state = loadState(stateDir);
-  state.jobs.unshift(job);
-  saveState(stateDir, state);
-  writeJobFile(stateDir, job);
-}
-
-export function updateJob(stateDir: string, jobId: string, updates: Partial<JobRecord>): void {
-  const state = loadState(stateDir);
-  const idx = state.jobs.findIndex((j) => j.id === jobId);
-  if (idx >= 0) {
-    state.jobs[idx] = { ...state.jobs[idx], ...updates };
-    saveState(stateDir, state);
-  }
-  const full = readJobFile(stateDir, jobId);
-  if (full) {
-    writeJobFile(stateDir, { ...full, ...updates });
-  }
-}
-
-/**
- * Mark a job as failed with the given message, also writing a log line.
- * Idempotent-ish: leaves already-terminal jobs alone so concurrent
- * failure paths (worker catch, exit handler, zombie sweeper) cannot
- * clobber an earlier, more specific error message.
- */
-export function markJobFailed(stateDir: string, jobId: string, errorMessage: string): void {
-  const job = readJobFile(stateDir, jobId);
-  if (!job || job.status === "completed" || job.status === "failed") return;
-  updateJob(stateDir, jobId, {
-    status: "failed",
-    phase: "failed",
-    completedAt: new Date().toISOString(),
-    errorMessage,
-  });
-  appendLog(stateDir, jobId, `Marked failed: ${errorMessage}`);
-}
-
-export function listJobs(stateDir: string, sessionId?: string): JobRecord[] {
-  const state = loadState(stateDir);
-  if (sessionId) {
-    return state.jobs.filter((j) => j.sessionId === sessionId);
-  }
-  return state.jobs;
-}
-
 // ─── Codex rate-limit snapshot ───────────────────────────────────────────────
 //
 // Codex is a rate-limit backend (no metered quota), so instead of a live quota
 // poll we persist the last rate-limit snapshot reported by a codex turn and let
-// `status` render it from cache. Mirrors the job-file read/write style above.
+// `status` render it from cache.
 
 const CODEX_RATE_LIMITS_FILE = "codex-rate-limits.json";
 

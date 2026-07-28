@@ -98,7 +98,7 @@ claims). Do not use any write tool on this path.
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review <args without --wait/--background>
 ```
 `--wait`/`--background` are execution-mode flags for this command, not companion
-flags — strip them before forwarding (the CLI rejects `--wait` as an unknown flag).
+flags — strip them before forwarding (the CLI rejects both as unknown flags).
 Return stdout verbatim (markdown). No paraphrase, summary, or commentary.
 
 **Background:** launch with the harness's own background mode — do NOT pass

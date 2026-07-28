@@ -1,23 +1,14 @@
 ---
-description: Show harry's quota snapshot + background-job status. Optionally pass a job-id for details, or --all for jobs from every session.
-argument-hint: '[job-id] [--all]'
+description: Show harry's Codex rate-limit snapshot — quota usage and reset windows, as of the last ask/review/fix run.
 allowed-tools: Bash(node:*)
 ---
 
-Show harry's runtime snapshot: quota and background jobs.
-
-Raw slash-command arguments:
-`$ARGUMENTS`
-
-Run the runtime subcommand and return its stdout **verbatim** in your text response so the user does not have to expand the collapsed tool-output block (HARRY.md §6). A `job-id` shows that job's detail; `--all` shows jobs from every session.
+Show harry's runtime snapshot: the Codex quota state.
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status
 ```
 
 The quota shown is a cached snapshot — refreshed after every ask/review/fix run — with its age labelled in the header.
 
-Return the output verbatim. Then, only if something is worth flagging, append at most one short line:
-- If there is a failed background job the user may not have noticed, flag it in one line.
-
-Do not paraphrase or summarize the runtime output itself; only the appended note is yours.
+Return the stdout **verbatim** in your text response so the user does not have to expand the collapsed tool-output block (HARRY.md §6). Do not paraphrase or summarize it.

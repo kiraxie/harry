@@ -1,6 +1,6 @@
 /**
- * Shared CLI argument helpers used by both the foreground dispatcher
- * (`companion.ts`) and the background worker (`commands/background.ts`).
+ * Shared CLI argument helpers. `src/companion.ts` (the dispatcher) is the only
+ * importer.
  */
 
 /**
@@ -27,7 +27,7 @@ export function flagString(
  * A `--key <n>` positive number flag. Strict: `Number()` rejects trailing
  * garbage ("30sec" → NaN) that parseInt would accept, and NaN/zero/negative
  * return undefined so a downstream `?? DEFAULT` applies instead of arming a 0ms
- * timer. Single source for both the dispatcher and the background worker.
+ * timer.
  */
 export function flagNumber(
   flags: Record<string, string | boolean>,

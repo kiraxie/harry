@@ -55,7 +55,7 @@ Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`
 ## Runtime architecture (`src/`)
 
 Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/commands/*.ts`
-(`review`, `ask`, `fix`, `status`, `result`, `background`, `setup`). Bundled by `build.mjs`
+(`review`, `ask`, `fix`, `status`, `setup`). Bundled by `build.mjs`
 (esbuild, CJS, Node built-ins kept external) into the one committed file `dist/companion.cjs`.
 
 **Codex session driver** (`src/lib/provider.ts`, `src/lib/run-agent-session.ts`,
@@ -147,7 +147,7 @@ authenticated Codex CLI install (0.128.0) via `codex debug prompt-input`, not
 guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the portable
-`commands/*.md` slash commands (`ask`, `status`, `result`, `debt`, `review`,
+`commands/*.md` slash commands (`ask`, `status`, `debt`, `review`,
 `sync`, `audit`, `distill`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:

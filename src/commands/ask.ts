@@ -23,7 +23,6 @@ export interface AskOptions {
   reasoning?: ReasoningEffort;
   timeout?: number;
   context?: string;
-  jobId?: string;
 }
 
 const DEFAULT_MODEL = "gpt-5.6-sol";
@@ -40,7 +39,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
   if (!prompt) throw new Error("ask: empty prompt");
 
   const stateDir = resolveStateDir(cwd);
-  const jobId = options.jobId ?? generateJobId();
+  const jobId = generateJobId();
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
   log(`ask start: model=${requestedModel} effort=${reasoning} promptChars=${prompt.length}`);
 
