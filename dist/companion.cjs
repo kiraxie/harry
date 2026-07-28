@@ -1881,6 +1881,7 @@ function collectReviewContext(cwd, target, options = {}) {
   const branch = getCurrentBranch(repoRoot);
   const maxInlineFiles = options.maxInlineFiles ?? DEFAULT_INLINE_DIFF_MAX_FILES;
   const maxInlineDiffBytes = options.maxInlineDiffBytes ?? DEFAULT_INLINE_DIFF_MAX_BYTES;
+  const shouldInline = (measured) => options.includeDiff ?? (measured.fileCount <= maxInlineFiles && measured.diffBytes <= maxInlineDiffBytes);
   let details;
   let includeDiff;
   let diffBytes;
@@ -1895,7 +1896,7 @@ function collectReviewContext(cwd, target, options = {}) {
       maxInlineDiffBytes
     );
     const fileCount = listUniqueFiles(state.staged, state.unstaged, state.untracked).length;
-    includeDiff = options.includeDiff ?? (fileCount <= maxInlineFiles && diffBytes <= maxInlineDiffBytes);
+    includeDiff = shouldInline({ fileCount, diffBytes });
     details = collectWorkingTreeContext(repoRoot, state, includeDiff, maxInlineDiffBytes);
   } else {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
@@ -1906,7 +1907,7 @@ function collectReviewContext(cwd, target, options = {}) {
       ["diff", "--binary", "--no-ext-diff", "--submodule=diff", comparison.commitRange],
       maxInlineDiffBytes
     );
-    includeDiff = options.includeDiff ?? (fileCount <= maxInlineFiles && diffBytes <= maxInlineDiffBytes);
+    includeDiff = shouldInline({ fileCount, diffBytes });
     details = collectBranchContext(
       repoRoot,
       target.baseRef,
@@ -2635,50 +2636,6 @@ async function runStatus(cwd, options = {}) {
 }
 
 // src/lib/args.ts
-function extractTask(args, flags) {
-  const positional = args.join(" ").trim();
-  if (positional) return positional;
-  const flag = flags.task;
-  return typeof flag === "string" ? flag.trim() : "";
-}
-function flagString(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number(v.trim());
-  return Number.isFinite(n) && n > 0 ? n : void 0;
-}
-
-// src/companion.ts
-function printUsage() {
-  console.log(
-    [
-      "Usage:",
-      "  companion setup [--json]",
-      "  companion review [focus...] [--adversarial] [--base <ref>]",
-      "                           [--scope auto|working-tree|branch] [--fix]",
-      "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
-      "                           [--context <text|@file|@->]",
-      "                           [--timeout <ms>]",
-      '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
-      "  companion fix --findings <path> [--model <id>]",
-      "                        [--reasoning <low|medium|high|xhigh>]",
-      "                        [--context <text|@file|@->]",
-      "                        [--timeout <ms>] [--write <path>]",
-      "  companion status [--json]",
-      "",
-      "Commands:",
-      "  setup       Check Codex auth and availability",
-      "  review      Run a code review (markdown, or JSON findings with --fix)",
-      "  ask         Ask a single prompt (read-only) and print the answer",
-      "  fix         Apply Claude-Code-approved review findings to the working tree",
-      "  status      Show the cached Codex rate-limit snapshot"
-    ].join("\n")
-  );
-}
 var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
   "adversarial",
   "allow-shell",
@@ -2783,6 +2740,50 @@ function flagEnum(flags, key, allowed) {
     throw new Error(`Invalid --${key} value "${v}". Expected one of: ${allowed.join(", ")}.`);
   }
   return v;
+}
+function extractTask(args, flags) {
+  const positional = args.join(" ").trim();
+  if (positional) return positional;
+  const flag = flags.task;
+  return typeof flag === "string" ? flag.trim() : "";
+}
+function flagString(flags, key) {
+  const v = flags[key];
+  return typeof v === "string" ? v : void 0;
+}
+function flagNumber(flags, key) {
+  const v = flags[key];
+  if (typeof v !== "string") return void 0;
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : void 0;
+}
+
+// src/companion.ts
+function printUsage() {
+  console.log(
+    [
+      "Usage:",
+      "  companion setup [--json]",
+      "  companion review [focus...] [--adversarial] [--base <ref>]",
+      "                           [--scope auto|working-tree|branch] [--fix]",
+      "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
+      "                           [--context <text|@file|@->]",
+      "                           [--timeout <ms>]",
+      '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
+      "  companion fix --findings <path> [--model <id>]",
+      "                        [--reasoning <low|medium|high|xhigh>]",
+      "                        [--context <text|@file|@->]",
+      "                        [--timeout <ms>] [--write <path>]",
+      "  companion status [--json]",
+      "",
+      "Commands:",
+      "  setup       Check Codex auth and availability",
+      "  review      Run a code review (markdown, or JSON findings with --fix)",
+      "  ask         Ask a single prompt (read-only) and print the answer",
+      "  fix         Apply Claude-Code-approved review findings to the working tree",
+      "  status      Show the cached Codex rate-limit snapshot"
+    ].join("\n")
+  );
 }
 async function main() {
   const { command, args, flags } = parseArgs(import_node_process3.default.argv.slice(2));

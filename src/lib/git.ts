@@ -432,6 +432,17 @@ export function collectReviewContext(
   const maxInlineFiles = options.maxInlineFiles ?? DEFAULT_INLINE_DIFF_MAX_FILES;
   const maxInlineDiffBytes = options.maxInlineDiffBytes ?? DEFAULT_INLINE_DIFF_MAX_BYTES;
 
+  // One decision site for both arms. They measure different things — a working
+  // tree's staged+unstaged diff vs a branch's merge-base range — but answer to
+  // one policy, so a copy per arm is one policy that can silently disagree with
+  // itself. Both caps and the explicit override are closed over rather than
+  // passed, so no arm can apply a different budget or forget the override; the
+  // two measurements come in by name because both are numbers and a positional
+  // call could be transposed without a type error.
+  const shouldInline = (measured: { fileCount: number; diffBytes: number }): boolean =>
+    options.includeDiff ??
+    (measured.fileCount <= maxInlineFiles && measured.diffBytes <= maxInlineDiffBytes);
+
   let details: CollectedDetails;
   let includeDiff: boolean;
   let diffBytes: number;
@@ -447,8 +458,7 @@ export function collectReviewContext(
       maxInlineDiffBytes,
     );
     const fileCount = listUniqueFiles(state.staged, state.unstaged, state.untracked).length;
-    includeDiff =
-      options.includeDiff ?? (fileCount <= maxInlineFiles && diffBytes <= maxInlineDiffBytes);
+    includeDiff = shouldInline({ fileCount, diffBytes });
     details = collectWorkingTreeContext(repoRoot, state, includeDiff, maxInlineDiffBytes);
   } else {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
@@ -462,8 +472,7 @@ export function collectReviewContext(
       ["diff", "--binary", "--no-ext-diff", "--submodule=diff", comparison.commitRange],
       maxInlineDiffBytes,
     );
-    includeDiff =
-      options.includeDiff ?? (fileCount <= maxInlineFiles && diffBytes <= maxInlineDiffBytes);
+    includeDiff = shouldInline({ fileCount, diffBytes });
     details = collectBranchContext(
       repoRoot,
       target.baseRef,
