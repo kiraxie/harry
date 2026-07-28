@@ -15,10 +15,6 @@ function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "harry-status-codex-test-"));
 }
 
-// status.ts / setup.ts are `.js`-chain modules (not loadable under `node --test`
-// type-stripping), so we exercise the extracted pure reader + renderer here and
-// trust the (thin) wiring in those commands via typecheck + build.
-
 test("readCodexRateLimits returns null when no snapshot exists", () => {
   const dir = makeTempDir();
   assert.equal(readCodexRateLimits(dir), null);
