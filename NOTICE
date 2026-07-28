@@ -38,7 +38,8 @@ Modifications made by harry, to src/lib/codex/:
     - Trimmed to the subset needed by harry's ask/review/fix commands.
 
 Modifications made by harry, to tests/fake-codex.mjs:
-    - Kept as JavaScript (.mjs); it is a spawned fixture, not library code.
+    - Deliberately NOT ported to TypeScript, unlike the provider above; it is a
+      spawned fixture, not library code.
     - Removed the broker behaviors, matching the provider above.
     - Trimmed to the app-server turn/auth surface.
     - Added harry-specific test behaviors (additive `BEHAVIOR` branches) that
