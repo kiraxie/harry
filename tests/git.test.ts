@@ -316,6 +316,33 @@ test("collectReviewContext: the inline file cap also applies to branch targets",
   });
 });
 
+test("collectReviewContext: the inline byte cap also applies to branch targets", () => {
+  inTempRepo("main", (dir) => {
+    write(dir, "a.txt", "one\n");
+    commitAll(dir, "init");
+    run(dir, "checkout", "-q", "-b", "feature");
+    write(dir, "a.txt", `${Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n")}\n`);
+    commitAll(dir, "work");
+    const target = resolveReviewTarget(dir, { base: "main" });
+    // One changed file, so only the byte cap can decide — this is the arm whose
+    // byte cap once had no guard at all while the file cap had two.
+    const measured = collectReviewContext(dir, target, { maxInlineFiles: 8 }).diffBytes;
+    assert.ok(measured > 0, "the fixture must produce a non-empty branch diff");
+    assert.equal(
+      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured })
+        .inputMode,
+      "inline-diff",
+      "a branch diff exactly at the byte cap must still inline",
+    );
+    assert.equal(
+      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured - 1 })
+        .inputMode,
+      "self-collect",
+      "a branch diff past the byte cap must fall back to self-collect",
+    );
+  });
+});
+
 test("collectReviewContext: an explicit includeDiff:false overrides a would-be-inline diff", () => {
   inTempRepo("main", (dir) => {
     repoWithChangedFiles(dir, 1);
