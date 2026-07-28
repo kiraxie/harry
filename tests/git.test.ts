@@ -522,7 +522,7 @@ test("truncateUtf8 never invents a replacement character the input lacked", () =
   }
 });
 
-test("truncateUtf8 returns the LONGEST whole-character prefix that fits", () => {
+test("truncateUtf8 returns the LONGEST whole-character prefix that fits (no line breaks)", () => {
   // The lower bound, without which the two sweeps above are satisfied by an
   // implementation that always returns "". Stated as maximality rather than a
   // byte floor so it holds for any character width: one more character must
@@ -535,9 +535,15 @@ test("truncateUtf8 returns the LONGEST whole-character prefix that fits", () => 
     const { text } = truncateUtf8(CJK_NO_NEWLINE, max);
     assert.ok(CJK_NO_NEWLINE.startsWith(text), `cap ${max}: result is not a prefix of the input`);
     const kept = Array.from(text).length;
-    // At a cap large enough for the whole input there is no "one more" to test;
-    // the prefix assertion above already pins that case.
-    if (kept === chars.length) continue;
+    // At a cap large enough for the whole input there is no "one more" to test.
+    // Assert WHY we are skipping: without this, an implementation that returns
+    // the whole input at cap 0 makes the guard fire and swallows the defect,
+    // leaving cap 0 covered only indirectly by the negative cases in the
+    // normalization test below.
+    if (kept === chars.length) {
+      assert.equal(max, total, `cap ${max}: returned the whole input when it cannot fit`);
+      continue;
+    }
     const oneMore = chars.slice(0, kept + 1).join("");
     assert.ok(
       Buffer.byteLength(oneMore, "utf8") > max,
@@ -550,13 +556,31 @@ test("truncateUtf8 normalizes a cap that is negative or fractional", () => {
   // Not hypothetical plumbing: `subarray(0, -5)` counts from the END of the
   // buffer and `buf[2.5]` is undefined, so an unnormalized cap of either shape
   // skips the boundary walk entirely and reproduces the original defect.
-  for (const max of [-5, -1, 2.5, 7.9]) {
+  for (const max of [-5, -1, 2.5, 7.9, 100.5]) {
     const { text } = truncateUtf8(CJK_NO_NEWLINE, max);
-    const got = Buffer.byteLength(text, "utf8");
-    assert.ok(got <= Math.max(0, Math.trunc(max)), `cap ${max}: returned ${got} bytes`);
+    // Equivalence, not just an upper bound. Bounds alone are satisfied by any
+    // implementation that maps these caps to 0 — the exact hole that made the
+    // two sweeps above meaningless before maximality was added, repeated here.
+    // `truncateUtf8(x, 100.5)` must behave as `truncateUtf8(x, 100)`, not as "".
+    assert.equal(
+      text,
+      truncateUtf8(CJK_NO_NEWLINE, Math.max(0, Math.trunc(max))).text,
+      `cap ${max}: must behave as its normalized integer cap, not be discarded`,
+    );
     assert.ok(!text.includes("�"), `cap ${max}: left U+FFFD in ${JSON.stringify(text)}`);
-    assert.ok(CJK_NO_NEWLINE.startsWith(text), `cap ${max}: result is not a prefix`);
   }
+});
+
+test("truncateUtf8 handles a NaN cap as zero and an infinite cap as no limit", () => {
+  // Both reachable through a public `maxInlineDiffBytes` and neither previously
+  // asserted. The behaviour is already right; pin it so a future change to the
+  // normalization cannot alter it unnoticed. Infinity must NOT be normalized to
+  // zero — an unbounded cap means "no truncation", which is a real answer.
+  assert.deepEqual(truncateUtf8(CJK_NO_NEWLINE, Number.NaN), { text: "", truncated: true });
+  assert.deepEqual(truncateUtf8(CJK_NO_NEWLINE, Number.POSITIVE_INFINITY), {
+    text: CJK_NO_NEWLINE,
+    truncated: false,
+  });
 });
 
 test("truncateUtf8 leaves input that fits the cap exactly as it was", () => {
