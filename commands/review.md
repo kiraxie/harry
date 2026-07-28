@@ -152,29 +152,8 @@ Bash({ command: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --advers
 Wait until ALL THREE have produced output before Stage 2.
 
 ### Stage 2 — Consolidate into a table (your job)
-- For each Codex leg (adversarial, simplify Lane A): check it succeeded first (zero
-  exit, stdout is the envelope not `# Review Failed`). A failed leg contributes no
-  findings — record it as a failed source and continue; never abort the whole
-  consolidation for one bad leg. Adversarial design-level notes live in
-  `reviewMarkdown`'s `## Design Concerns`; simplify findings are cleanups, not bugs.
-- Simplify Lane B (CC over-engineering & readability) returns plain `tag: what. replacement.`
-  lines — map each to a finding: `tag`→severity-ish label, the line itself→title.
-- **Re-key ids across sources** before merging: prefix each by source
-  (`adv-`/`smp-`/`lean-`) so the table's `id` column is unique and unambiguous.
-- **Dedup** by `file` + `line` + semantic-title. When `line` is absent (file-wide),
-  only merge on a genuine semantic-title match on the same file — do not collapse two
-  different file-wide findings just because they share a file. Simplify Lane A and
-  Lane B will sometimes name the same spot from different angles — merge, keep both
-  sources listed.
-- Judge against this codebase: `Read` cited files where it matters and drop clear
-  false positives (HARRY §6 — automated review is a suggestion, not an order).
-
-Present ONE table, plus a `## Design Concerns` section (from adversarial) below it:
-
-| id | file:line | severity | source(s) | title | verdict |
-
-(source(s) = adversarial / simplify / lean; verdict = Keep / Drop with a one-line
-reason per Drop.) If all three yield nothing material, say so and stop.
+See **Full-mode Stage 2 — consolidate into one table** in
+`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
 
 ### Stage 3 — Output / hand off
 - RO (no fix backend): the table + `## Design Concerns` is the final report. Stop.
@@ -221,25 +200,8 @@ Follow **Apply: --fix** or **Apply: --harry-fix** on the approved (Keep) set.
 
 You apply the approved findings yourself, with full conversation context.
 
-1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix): if `git
-   status --porcelain` is non-empty, the fix diff must be isolated from the user's
-   pre-existing work. Run `git stash create` and **record the printed SHA** as the
-   baseline — an ephemeral snapshot object; nothing (working tree, index, branch
-   history, stash ref) is mutated, so no confirmation is needed. If it prints
-   nothing (e.g. only untracked changes) or the tree is clean, use `git rev-parse
-   HEAD` as the baseline instead. Reuse that literal SHA in step 3 — each `Bash`
-   call is a fresh shell, so a `BASE=…` variable will not survive; substitute the
-   actual value. Known limit (same as runFix): `stash create` skips pre-existing
-   untracked files, so `git add -A` in step 3 stages them and they appear in the
-   fix diff as if the fix created them.
-2. **Apply** each approved finding with `Edit`/`Write`: minimal, correct change per
-   finding; no unrelated refactor. Skip any that is already fixed, no longer applies,
-   or whose fix would change intended behavior — note why.
-3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons) and
-   changed files, and tell the user the fixes are **staged but not committed** —
-   review the fix-only diff with `git diff --cached <baseline-sha>` (the SHA recorded
-   in step 1; it excludes their pre-existing *tracked* WIP — pre-existing *untracked*
-   files may still appear, so warn the user before they commit the staged changes).
+See **The apply steps — baseline snapshot, apply, report** in
+`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
 
 ## Apply: `--harry-fix` (isolated Codex fix session, gpt-5.6-sol/xhigh)
 
