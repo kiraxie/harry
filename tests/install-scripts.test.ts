@@ -66,13 +66,18 @@ function withGlobal(file: string, fn: () => void): void {
 // the two could not drift (HARRY.md §2), but the renderer that turns that list
 // into the user-facing warning must be single-sourced for the same reason — a
 // second copy re-opens the drift the module header claims to have closed.
+//
+// Matches a DEFINITION in either form — `function warnStale` and
+// `const warnStale = …` — but not a call: `warnStale(existing)` is what both
+// installers legitimately do, so a bare `warnStale\s*[=(]` would flag them as
+// definitions. `=(?!=)` keeps a `warnStale ===` comparison out too.
+const WARN_STALE_DEFINITION = /function\s+warnStale\b|\bwarnStale\s*=(?!=)/;
+
 test("warnStale is defined exactly once across scripts/, beside the data it renders", () => {
   const scriptsDir = path.join(pluginRoot, "scripts");
   const defs = readdirSync(scriptsDir, { recursive: true, encoding: "utf8" })
     .filter((rel) => rel.endsWith(".mjs"))
-    .filter((rel) =>
-      /\bfunction warnStale\b/.test(readFileSync(path.join(scriptsDir, rel), "utf8")),
-    )
+    .filter((rel) => WARN_STALE_DEFINITION.test(readFileSync(path.join(scriptsDir, rel), "utf8")))
     .map((rel) => path.posix.join("scripts", rel.split(path.sep).join("/")))
     .sort();
   assert.deepEqual(
