@@ -15,5 +15,5 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask $ARGUMENTS
 ```
 
 - The first quoted argument is the prompt. `--model <id>` (default is the runtime's frontier model, gpt-5.6-sol for debate use) and `--reasoning <low|medium|high>` override defaults; forward all of `$ARGUMENTS` verbatim.
-- Return the command stdout verbatim, exactly as-is. Do not paraphrase, summarize, or add commentary before or after it (HARRY.md §6) — that applies only once you've confirmed the run succeeded (next bullet).
-- Check before relaying: on failure the process exits non-zero and stdout is markdown beginning `# Ask Failed`, not an answer. If either signals failure (non-zero exit, or a `# Ask Failed` stdout body / a `Fatal error: <message>` line on stderr), report the failure and stop — never present that body as the model's answer.
+- Return the command stdout verbatim, exactly as-is. Do not paraphrase, summarize, or add commentary before or after it (HARRY.md §6) — that applies only once you've confirmed the run succeeded (next bullet). `ask` has no JSON mode or `status` field; its output is plain markdown either way.
+- Failure signals: a non-zero exit, a `# Ask Failed` stdout heading, or a `Fatal error: <message>` line on stderr. If you see any of these, report the failure and stop — never present that body as the model's answer.
