@@ -53,6 +53,16 @@ function write(dir: string, name: string, body: string): void {
 }
 
 /**
+ * A file git will treat as binary (it contains NUL). This is what makes the
+ * `--binary` measurement flag load-bearing: on text-only content git produces
+ * byte-identical output with and without it, so an all-text fixture cannot tell
+ * the real flag set apart from a weaker one.
+ */
+function writeBinary(dir: string, name: string, bytes: number[]): void {
+  writeFileSync(path.join(dir, name), Buffer.from(bytes));
+}
+
+/**
  * A throwaway repo on `branch`, torn down afterwards. `git init -b` pins the
  * initial branch name so the caller's global `init.defaultBranch` cannot decide
  * what these tests observe.
@@ -274,13 +284,34 @@ test("collectReviewContext: untracked files count toward the inline file cap", (
 test("collectReviewContext: the inline byte cap is inclusive", () => {
   inTempRepo("main", (dir) => {
     write(dir, "a.txt", "one\n");
+    writeBinary(dir, "staged.bin", [0, 1, 2, 253, 254, 255]);
+    writeBinary(dir, "unstaged.bin", [7, 0, 7, 0, 255]);
     commitAll(dir, "init");
     write(dir, "a.txt", `${Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n")}\n`);
+    writeBinary(dir, "staged.bin", [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
+    writeBinary(dir, "unstaged.bin", [1, 1, 2, 3, 5, 8, 13, 0]);
+    // The working-tree measurement is a sum over a staged and an unstaged
+    // command. Give each half its own binary change: a fixture with nothing
+    // staged cannot notice the staged half going missing, and a half carrying
+    // only text cannot notice --binary being dropped from it.
+    run(dir, "add", "staged.bin");
     const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    // Measured, not asserted: the exact byte size of a git diff is git's to
-    // decide. What is asserted is which side of the cap each size lands on.
+    // The exact byte size of a git diff is git's to decide, so the cap below is
+    // derived from what the code measured. That alone would let the code measure
+    // the WRONG COMMAND — a summary instead of the diff — and still satisfy every
+    // threshold assertion, because both sides of the comparison would shrink
+    // together. So pin the measurement itself first, by re-running the commands
+    // independently: the working-tree number is the staged and unstaged binary
+    // diffs added together.
     const measured = collectReviewContext(dir, target, { maxInlineFiles: 8 }).diffBytes;
     assert.ok(measured > 0, "the fixture must produce a non-empty diff");
+    const staged = run(dir, "diff", "--cached", "--binary", "--no-ext-diff", "--submodule=diff");
+    const unstaged = run(dir, "diff", "--binary", "--no-ext-diff", "--submodule=diff");
+    assert.equal(
+      measured,
+      Buffer.byteLength(staged, "utf8") + Buffer.byteLength(unstaged, "utf8"),
+      "diffBytes must measure the full staged + unstaged binary diff",
+    );
     assert.equal(
       collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured })
         .inputMode,
@@ -319,15 +350,30 @@ test("collectReviewContext: the inline file cap also applies to branch targets",
 test("collectReviewContext: the inline byte cap also applies to branch targets", () => {
   inTempRepo("main", (dir) => {
     write(dir, "a.txt", "one\n");
+    writeBinary(dir, "blob.bin", [0, 1, 2, 253, 254, 255]);
     commitAll(dir, "init");
     run(dir, "checkout", "-q", "-b", "feature");
     write(dir, "a.txt", `${Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n")}\n`);
+    writeBinary(dir, "blob.bin", [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
     commitAll(dir, "work");
     const target = resolveReviewTarget(dir, { base: "main" });
-    // One changed file, so only the byte cap can decide — this is the arm whose
-    // byte cap once had no guard at all while the file cap had two.
+    // Two changed files against a cap of eight, so only the byte cap can decide
+    // — this is the arm whose byte cap once had no guard at all while the file
+    // cap had two.
     const measured = collectReviewContext(dir, target, { maxInlineFiles: 8 }).diffBytes;
     assert.ok(measured > 0, "the fixture must produce a non-empty branch diff");
+    // Pin the measurement, not just which side of the cap it lands on — see the
+    // working-tree byte test. The branch number is one command over the
+    // merge-base range, and the same flags the inline path later renders with.
+    const mergeBase = run(dir, "merge-base", "HEAD", "main").trim();
+    assert.equal(
+      measured,
+      Buffer.byteLength(
+        run(dir, "diff", "--binary", "--no-ext-diff", "--submodule=diff", `${mergeBase}..HEAD`),
+        "utf8",
+      ),
+      "diffBytes must measure the full binary diff over the merge-base range",
+    );
     assert.equal(
       collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured })
         .inputMode,
