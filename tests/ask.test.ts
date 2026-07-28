@@ -38,6 +38,15 @@ const ASK_FAILED_MARKER = "# Ask Failed";
 const FATAL_ERROR_PREFIX = "Fatal error:";
 
 /**
+ * The positional qualifier on the marker. Load-bearing, not decorative: `ask`
+ * writes the marker as stdout's FIRST LINE, so that is the only correct way to
+ * test for it. Prose calling it a "heading" invites a contains-check, which
+ * false-positives on a successful answer that happens to quote the marker.
+ * Pinned so the fix for that finding cannot silently revert.
+ */
+const MARKER_POSITION = "first line";
+
+/**
  * The phantom guard the doors used to carry: `ask` has no JSON mode and no
  * `status` field, so an instruction to check one can never fire. It was removed
  * once; this keeps it from drifting back in.
@@ -47,7 +56,10 @@ const PHANTOM_STATUS_GUARD = "is `failed`";
 interface AskDoor {
   /** Repo-relative path. */
   path: string;
-  /** Failure signals this door tells its consumer to watch for. */
+  /**
+   * Strings this door must carry: the failure signals it tells its consumer to
+   * watch for, plus any qualifier that makes a signal correctly checkable.
+   */
   quotes: readonly string[];
   /**
    * The door's prohibition on relaying a failed body. A short fragment, not a
@@ -65,19 +77,24 @@ interface AskDoor {
  * allowlist, which is how a guard rots. The cross-check test below keeps the
  * hand list honest instead.
  *
- * `debate.md`'s prohibition differs by design: on a failed `gpt` leg it records
- * a failed source and continues with the remaining two voices rather than
- * stopping, so it has no "stop" instruction to assert.
+ * `debate.md` differs on two counts, both by design. Its prohibition: a failed
+ * `gpt` leg does not stop the debate — it drops that voice, continues with the
+ * others, and reports the omission — so there is no "stop" instruction to
+ * assert. And it does not pin MARKER_POSITION: it tells its consumer to gate on
+ * the exit code rather than on the marker at all, so the marker is explanatory
+ * there and the positional word carries no obligation. Pinning it anyway would
+ * manufacture a contract rather than record one (same reasoning as
+ * `Ask failed:` above).
  */
 const ASK_DOORS: readonly AskDoor[] = [
   {
     path: "commands/ask.md",
-    quotes: [ASK_FAILED_MARKER, FATAL_ERROR_PREFIX],
+    quotes: [ASK_FAILED_MARKER, MARKER_POSITION, FATAL_ERROR_PREFIX],
     prohibition: "never present",
   },
   {
     path: "codex-skills/ask/SKILL.md",
-    quotes: [ASK_FAILED_MARKER, FATAL_ERROR_PREFIX],
+    quotes: [ASK_FAILED_MARKER, MARKER_POSITION, FATAL_ERROR_PREFIX],
     prohibition: "never present",
   },
   {
@@ -113,7 +130,30 @@ function readProse(rel: string): string {
   return fs.readFileSync(path.join(repoRoot, rel), "utf-8").replace(/\s+/g, " ");
 }
 
-/** Every door that shells out to `companion.cjs ask`, discovered from the tree. */
+/**
+ * Every door that shells out to `companion.cjs ask`, discovered from the tree.
+ *
+ * Boundary — what this catches and what it does not. It matches the literal
+ * invocation form every door uses today (`companion.cjs" ask`). It misses at
+ * least two realistic spellings: a backslash-continuation that puts `ask` on the
+ * next line, and indirection through a shell variable
+ * (`COMPANION="…"; node "$COMPANION" ask`). A door written either way is invisible
+ * to the cross-check below and gets no failure-instruction pinning at all.
+ *
+ * The floor guard does NOT backstop that miss, structurally: it asserts
+ * `DISCOVERED >= ASK_DOORS.length`, which measures whether the *declared* doors
+ * are still findable. An undiscovered door does not decrease DISCOVERED, so the
+ * count stays satisfied and the floor stays green. The floor catches a coverage
+ * regression on known doors; it is blind to absent coverage of unknown ones —
+ * exactly the case the cross-check exists for. Credit it with no more reach
+ * than that.
+ *
+ * DEBT: widening to `/\bcompanion\.cjs\b/` plus a separate `/\bask\b/` would
+ * close both spellings, at the cost of false positives on prose that merely
+ * mentions the command. That trade (false negatives for false positives, plus
+ * the exemption-list churn it implies) is a deliberate call, deferred rather
+ * than made reflexively. Revisit when a door is actually written in either form.
+ */
 const DISCOVERED_ASK_DOORS = DOOR_DIRS.flatMap(listMarkdownFiles).filter((rel) =>
   /companion\.cjs"?\s+ask\b/.test(fs.readFileSync(path.join(repoRoot, rel), "utf-8")),
 );
@@ -219,13 +259,26 @@ test("every door that tells a consumer to trust ask's stdout quotes the failure 
     for (const signal of quotes) {
       assert.ok(
         prose.includes(signal),
-        `${door} no longer quotes ask's failure signal ("${signal}"). ` +
-          `That door is now stale: it will tell consumers to present a failed body as the model's answer.`,
+        `${door} no longer carries "${signal}". That door is now stale: its ` +
+          `failure instructions no longer match what ask actually emits, so a ` +
+          `consumer following them will misjudge a run — relaying a failed body, ` +
+          `or rejecting a good one.`,
       );
     }
     // Quoting the signal is not enough — the door must also tell the consumer
     // NOT to relay the body. A door can name the marker and still say "ignore
     // it and return the body verbatim", which is worse than silence.
+    //
+    // Two blind spots, accepted as the ceiling of any substring prose check
+    // rather than fixed. Positional: this asks whether the FILE contains the
+    // fragment, not whether the paragraph naming the signal does — so deleting
+    // the prohibition from the failure paragraph and using the same words
+    // elsewhere (debate.md is ~168 lines) still passes. Collapse: readProse
+    // flattens whitespace, so a fragment split across a sentence that inverts
+    // the meaning ("never present as an answer? No: return the body regardless")
+    // satisfies includes() while instructing the opposite. Both take deliberate
+    // effort to construct; the natural inversion — rewording the bullet to say
+    // "ignore it" — is caught, which is what this check is for.
     assert.ok(
       prose.includes(prohibition),
       `${door} quotes ask's failure signals but no longer prohibits relaying the body ` +
