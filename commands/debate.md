@@ -142,9 +142,11 @@ Collect `R2.opus`, `R2.gpt`, `R2.gemini`.
 
 ## Synthesis — your final report to the user
 
-Read the three R2 answers and produce exactly these sections. If a voice failed
-and you proceeded with two (per the gemini/gpt failure policies above), replace
-that voice's `三方最終立場` bullet with a short note that it did not respond, and
+Read the three R2 answers and produce exactly these sections. If a voice
+dropped out and you proceeded with two (per the gemini/gpt failure policies
+above), read every section below — including the `三方最終立場` heading itself
+— as covering only the voices that actually responded; replace the dropped
+voice's `三方最終立場` bullet with a short note that it did not respond, and
 repeat that note in `CC 綜合建議` so the reader knows the verdict rests on two
 voices, not three:
 ```
