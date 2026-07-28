@@ -46,11 +46,19 @@ function gitDiffTolerant(cwd: string, args: string[]): { stdout: string; overflo
   return { stdout: result.stdout, overflow: false };
 }
 
-function truncateUtf8(s: string, maxBytes: number): { text: string; truncated: boolean } {
+export function truncateUtf8(s: string, maxBytes: number): { text: string; truncated: boolean } {
   const buf = Buffer.from(s, "utf8");
   if (buf.length <= maxBytes) return { text: s, truncated: false };
-  // Trim back to the nearest line break to avoid cutting mid-line.
-  let cut = buf.subarray(0, maxBytes).toString("utf8");
+  // Back off any character the cut lands inside, BEFORE decoding. `maxBytes` is
+  // a byte offset with no regard for character boundaries, and decoding an
+  // orphaned tail yields U+FFFD — three bytes standing in for the one or two
+  // they replaced, so a naive cut both overruns the cap it was asked to enforce
+  // and injects a glyph the input never contained. UTF-8 continuation bytes are
+  // `10xxxxxx`; walking back off them lands on a character boundary.
+  let end = maxBytes;
+  while (end > 0 && (buf[end] & 0b1100_0000) === 0b1000_0000) end--;
+  // Then trim back to the nearest line break to avoid cutting mid-line.
+  let cut = buf.subarray(0, end).toString("utf8");
   const lastNl = cut.lastIndexOf("\n");
   if (lastNl > 0) cut = cut.slice(0, lastNl);
   return { text: cut, truncated: true };
