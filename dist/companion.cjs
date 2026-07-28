@@ -1471,7 +1471,13 @@ async function runAsk(cwd, options) {
   const success = result.success && !turn.timedOut();
   if (!success) {
     const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Ask did not complete successfully.";
-    process.stdout.write(`${body}
+    process.stderr.write(`Ask failed: ${reason}
+`);
+    process.stdout.write(`# Ask Failed
+
+${reason}
+
+${body}
 `);
     log(`ask failed: ${reason}`);
     throw new Error(reason);

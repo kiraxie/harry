@@ -92,8 +92,18 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
     const reason = turn.timedOut()
       ? `Timed out after ${timeoutMs}ms.`
       : "Ask did not complete successfully.";
-    process.stdout.write(`${body}\n`);
+    process.stderr.write(`Ask failed: ${reason}\n`);
+    // The body may be a PARTIAL answer that reads as a finished one. `ask`'s
+    // doors tell consumers to return this stdout verbatim (and /debate folds it
+    // into a synthesis), so the failure has to be legible in the stdout itself —
+    // a bare body would be presented as the model's real answer.
+    process.stdout.write(`# Ask Failed\n\n${reason}\n\n${body}\n`);
     log(`ask failed: ${reason}`);
+    // Signal failure to the caller via a non-zero shell exit code. Whatever came
+    // back is already on stdout above — a genuinely partial answer on the
+    // incomplete-turn path, but only the empty-answer placeholder on the timeout
+    // path, where codex/turn.ts's `failure()` returns an empty finalMessage and
+    // so discards the partial text. `review` behaves identically.
     throw new Error(reason);
   }
 
