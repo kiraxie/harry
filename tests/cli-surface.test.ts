@@ -30,7 +30,7 @@ function makeTempDir(prefix: string): string {
 function runCli(
   args: string[],
   opts: { cwd?: string; binDir?: string } = {},
-): { status: number | null; stdout: string; stderr: string; dataDir: string } {
+): { status: number | null; stdout: string; stderr: string } {
   const dataDir = makeTempDir("harry-cli-data-");
   const cwd = opts.cwd ?? makeTempDir("harry-cli-cwd-");
   const base = opts.binDir ? buildEnv(opts.binDir) : process.env;
@@ -39,7 +39,7 @@ function runCli(
     encoding: "utf8",
     env: { ...base, CLAUDE_PLUGIN_DATA: dataDir },
   });
-  return { status: res.status, stdout: res.stdout, stderr: res.stderr, dataDir };
+  return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
 
 test("ask writes its job log and reports the path (job-LOG machinery is live)", () => {
