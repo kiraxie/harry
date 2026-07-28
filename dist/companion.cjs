@@ -1603,9 +1603,10 @@ function gitDiffTolerant(cwd, args) {
   return { stdout: result.stdout, overflow: false };
 }
 function truncateUtf8(s, maxBytes) {
+  const cap = Math.max(0, Math.trunc(maxBytes));
   const buf = Buffer.from(s, "utf8");
-  if (buf.length <= maxBytes) return { text: s, truncated: false };
-  let end = maxBytes;
+  if (buf.length <= cap) return { text: s, truncated: false };
+  let end = cap;
   while (end > 0 && (buf[end] & 192) === 128) end--;
   let cut = buf.subarray(0, end).toString("utf8");
   const lastNl = cut.lastIndexOf("\n");

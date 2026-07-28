@@ -477,18 +477,27 @@ test("collectReviewContext: a truncated self-collect diff is cut at a line bound
 //
 // It cuts at a BYTE offset, so a multi-byte character can straddle the cut.
 // Node decodes the orphaned bytes to U+FFFD, which is THREE bytes standing in
-// for the one or two it replaced — so a naive cut can return MORE bytes than
-// the cap it was asked to enforce, and can inject a glyph the input never had.
+// for the one to three it replaced — so a naive cut can return MORE bytes than
+// the cap it was asked to enforce (orphan of one or two bytes), and in every
+// case injects a glyph the input never had.
 //
-// Reachability, measured rather than assumed: the line-boundary trim removes
-// both symptoms whenever a newline exists before the cut, so only a cut landing
-// before the FIRST newline can leak. No shipped caller does that —
-// `src/commands/review.ts` passes no cap, so the 262144 default always lands
-// deep inside a diff. But `maxInlineDiffBytes` is a public field on the
-// exported CollectContextOptions, so any caller passing a small cap hits it.
-// These sweep every cap from 1 to the input's length rather than picking a
-// lucky offset, because which offsets straddle a character is an implementation
-// detail of the input, not something a test should encode.
+// Reachability, measured rather than assumed, and narrower than it first looks.
+// The line-boundary trim removes both symptoms whenever a newline precedes the
+// cut, so only a cut landing before the FIRST newline can leak — and through
+// `collectReviewContext` the input is always a git diff whose first line is
+// `diff --git a/<path> b/<path>`. So the precondition is a **non-ASCII path in
+// the diff header**, not CJK content: an ASCII filename yields zero leaking cut
+// points no matter how much CJK the file contains. No shipped caller can reach
+// even that — `src/commands/review.ts` passes no cap, so the 262144 default
+// always lands thousands of newlines deep. The fix is provably a no-op on
+// shipped output; it exists because `maxInlineDiffBytes` is a public field on
+// the exported CollectContextOptions and the cap is stated as a promise.
+//
+// The sweeps below walk every cap rather than picking a lucky offset, because
+// which offsets straddle a character is a property of the input, not something
+// a test should encode. Note an upper bound alone is not enough: returning ""
+// satisfies both "within the cap" and "no U+FFFD", so the maximality test is
+// what makes the pair mean anything.
 // ---------------------------------------------------------------------------
 
 /** No newline anywhere, so the line-boundary trim cannot mask the defect. */
@@ -513,6 +522,43 @@ test("truncateUtf8 never invents a replacement character the input lacked", () =
   }
 });
 
+test("truncateUtf8 returns the LONGEST whole-character prefix that fits", () => {
+  // The lower bound, without which the two sweeps above are satisfied by an
+  // implementation that always returns "". Stated as maximality rather than a
+  // byte floor so it holds for any character width: one more character must
+  // not fit. This is the assertion that kills a wrong continuation-byte mask
+  // (`0b1000_0000`), which backs off past whole characters and empties the
+  // result for every truncating cap while both upper bounds stay satisfied.
+  const chars = Array.from(CJK_NO_NEWLINE);
+  const total = Buffer.byteLength(CJK_NO_NEWLINE, "utf8");
+  for (let max = 0; max <= total; max++) {
+    const { text } = truncateUtf8(CJK_NO_NEWLINE, max);
+    assert.ok(CJK_NO_NEWLINE.startsWith(text), `cap ${max}: result is not a prefix of the input`);
+    const kept = Array.from(text).length;
+    // At a cap large enough for the whole input there is no "one more" to test;
+    // the prefix assertion above already pins that case.
+    if (kept === chars.length) continue;
+    const oneMore = chars.slice(0, kept + 1).join("");
+    assert.ok(
+      Buffer.byteLength(oneMore, "utf8") > max,
+      `cap ${max}: returned ${JSON.stringify(text)} when one more character still fits`,
+    );
+  }
+});
+
+test("truncateUtf8 normalizes a cap that is negative or fractional", () => {
+  // Not hypothetical plumbing: `subarray(0, -5)` counts from the END of the
+  // buffer and `buf[2.5]` is undefined, so an unnormalized cap of either shape
+  // skips the boundary walk entirely and reproduces the original defect.
+  for (const max of [-5, -1, 2.5, 7.9]) {
+    const { text } = truncateUtf8(CJK_NO_NEWLINE, max);
+    const got = Buffer.byteLength(text, "utf8");
+    assert.ok(got <= Math.max(0, Math.trunc(max)), `cap ${max}: returned ${got} bytes`);
+    assert.ok(!text.includes("�"), `cap ${max}: left U+FFFD in ${JSON.stringify(text)}`);
+    assert.ok(CJK_NO_NEWLINE.startsWith(text), `cap ${max}: result is not a prefix`);
+  }
+});
+
 test("truncateUtf8 leaves input that fits the cap exactly as it was", () => {
   const total = Buffer.byteLength(CJK_NO_NEWLINE, "utf8");
   const { text, truncated } = truncateUtf8(CJK_NO_NEWLINE, total);
@@ -521,9 +567,16 @@ test("truncateUtf8 leaves input that fits the cap exactly as it was", () => {
 });
 
 test("truncateUtf8 still trims back to the last whole line", () => {
+  // Asserted as an exact string, not as "does not end with 三": that weaker
+  // shape passes even with the line trim deleted, because the untrimmed result
+  // ends in 中. Two caps, because they exercise different paths — at 35 the
+  // cut already sits on a character boundary and only the line trim runs; at 36
+  // it lands mid-character, so the boundary walk runs first and the trim then
+  // has to produce the same answer.
   const input = "一行中文\n二行中文\n三行中文\n";
-  const { text, truncated } = truncateUtf8(input, Buffer.byteLength(input, "utf8") - 4);
-  assert.equal(truncated, true);
-  assert.ok(!text.endsWith("三"), "a partial last line must be dropped, not kept");
-  assert.ok(text.startsWith("一行中文"), `unexpected trim: ${JSON.stringify(text)}`);
+  for (const max of [35, 36]) {
+    const { text, truncated } = truncateUtf8(input, max);
+    assert.equal(truncated, true, `cap ${max}: expected truncation`);
+    assert.equal(text, "一行中文\n二行中文", `cap ${max}: wrong trim`);
+  }
 });
