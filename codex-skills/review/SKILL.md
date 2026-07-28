@@ -41,9 +41,7 @@ Mutually exclusive:
 - full → orchestrate three dispatches — adversarial (design) and the simplify
   dual-lane's two lanes (the Codex cleanup pass and the sub-agent
   over-engineering & readability pass) — in parallel, then consolidate into one deduped table
-  (see **Full mode**). Unlike the Claude Code build, this does NOT include a
-  fourth, self-review lane (its `/code-review max` equivalent) — Codex has no
-  equivalent to invoke.
+  (see **Full mode**). Same three lanes as the Claude Code build.
 
 **Shared overrides:** a base ref (`--base <ref>`) sets a base-branch review. A
 scope override (`--scope <auto|working-tree|branch>`) forces working-tree-only or
@@ -64,11 +62,10 @@ See **The structured-review envelope** in
 See **The simplify dual-lane** in
 `${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
 
-**Known asymmetry vs. the Claude Code build:** Lane B ports cleanly here because it
+**Parity note vs. the Claude Code build:** Lane B ports cleanly here because it
 is ordinary sub-agent delegation — the same capability this skill's other sections
-already assume Codex has, not something Claude-Code-specific. This is unlike the
-Claude Code build's fourth lane (`/code-review max`), which has no Codex equivalent
-at all — see **Known limitation** above.
+already assume Codex has, not something Claude-Code-specific. Both builds run the
+same dual-lane, so there is no asymmetry to work around here.
 
 ---
 
