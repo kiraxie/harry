@@ -5,6 +5,39 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-07-28
+
+### Removed
+
+- **`/harry:result` removed from both builds.** No release ever shipped a way to produce
+  the job it was meant to retrieve — `--background` was never wired to the node CLI on any
+  version, so the command could only ever report "No completed jobs found." `/harry:status`
+  no longer reports job state either; it now covers only the Codex rate-limit snapshot it
+  already showed. The node CLI's `--background` and `_worker` are removed with them.
+  `/harry:review`'s own `--background` flag, which hands the run to the harness's native
+  backgrounding, is unchanged and unaffected.
+
+### Changed
+
+- `/harry:ask` now signals failure instead of returning a possibly-truncated answer with no
+  way to tell it apart from a complete one: a timed-out or incomplete run prints `# Ask
+  Failed` as the first line of its answer, an `Ask failed:` line on stderr, and exits
+  non-zero. Both doors also stop telling callers to check a `status` field that never
+  existed, and instead point at these real signals.
+- `/harry:debate`'s gpt voice gains the same failure handling its gemini voice already had,
+  and now runs in the background so a long, high-effort turn is no longer killed by a
+  ten-minute foreground timeout.
+- `/harry:sync`, `/harry:debt`, and `/harry:review` behave the same as before from the
+  outside; the Codex build's `/debt` gained six judgment steps that the Claude Code door
+  already had, closing a gap between the two builds.
+
+### Fixed
+
+- A failed `git` invocation (e.g. a missing binary) no longer reports success; a failed
+  staged-diff collection during `/harry:fix` no longer reports zero changes instead of
+  flagging the stats as unavailable; and a temporary file used while writing state can no
+  longer collide with another write in progress.
+
 ## [0.15.0] - 2026-07-27
 
 ### Added
