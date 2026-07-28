@@ -29,7 +29,7 @@ Implementation complete and tests green. How should I integrate this?
 
 Discard is **not offered** — it exists only as a response to the user's explicit request (see Discard below). Proactively offering to delete work nudges toward destruction; the user can always ask.
 
-**Pre-decided integration path.** If the user already chose the path (e.g. "commit & merge", "just open the PR"), skip the menu — do NOT re-ask. But a pre-decided path is NOT a shortcut past finishing: still run the §1 verify gate first, then the FULL tail of the chosen option (for merge, every step a–h below). A bare `git merge` that stops at the merge skips the wind-down and is a §6 violation.
+**Pre-decided integration path.** If the user already chose the path (e.g. "commit & merge", "just open the PR"), skip the menu — do NOT re-ask. But a pre-decided path is NOT a shortcut past finishing: still run step 1's verify gate first, then the FULL tail of the chosen option (for merge, every step a–h below). A bare `git merge` that stops at the merge skips the wind-down and is a §6 violation.
 
 ## 3. Execute the choice
 
