@@ -503,22 +503,45 @@ test("collectReviewContext: a truncated self-collect diff is cut at a line bound
 /** No newline anywhere, so the line-boundary trim cannot mask the defect. */
 const CJK_NO_NEWLINE = "你好世界你好世界你好世界";
 
+/**
+ * Every UTF-8 width in one string: ASCII (1 byte), é (2), 漢 (3), 😀 (4).
+ *
+ * A uniform-width fixture cannot tell the continuation-byte walk apart from
+ * plain arithmetic — replacing the whole test with `while (end % 3 !== 0) end--`
+ * passes a CJK-only sweep, because every character there happens to be three
+ * bytes. This is also the only fixture that reaches the case the implementation
+ * comment argues explicitly: a 4-byte character cut after its third byte, where
+ * the orphan is three bytes and so injects the glyph WITHOUT overrunning the
+ * cap. A comment arguing a case no test exercises is the drift this file exists
+ * to prevent.
+ */
+const MIXED_WIDTHS = "aé漢😀bé漢😀";
+
+const SWEEP_FIXTURES: ReadonlyArray<readonly [string, string]> = [
+  ["CJK", CJK_NO_NEWLINE],
+  ["mixed widths", MIXED_WIDTHS],
+];
+
 test("truncateUtf8 never returns more bytes than its cap", () => {
-  const total = Buffer.byteLength(CJK_NO_NEWLINE, "utf8");
-  for (let max = 1; max <= total; max++) {
-    const got = Buffer.byteLength(truncateUtf8(CJK_NO_NEWLINE, max).text, "utf8");
-    assert.ok(got <= max, `cap ${max}: returned ${got} bytes — the cap is a promise`);
+  for (const [name, input] of SWEEP_FIXTURES) {
+    const total = Buffer.byteLength(input, "utf8");
+    for (let max = 1; max <= total; max++) {
+      const got = Buffer.byteLength(truncateUtf8(input, max).text, "utf8");
+      assert.ok(got <= max, `${name} cap ${max}: returned ${got} bytes — the cap is a promise`);
+    }
   }
 });
 
 test("truncateUtf8 never invents a replacement character the input lacked", () => {
-  const total = Buffer.byteLength(CJK_NO_NEWLINE, "utf8");
-  for (let max = 1; max <= total; max++) {
-    const { text } = truncateUtf8(CJK_NO_NEWLINE, max);
-    assert.ok(
-      !text.includes("�"),
-      `cap ${max}: cut mid-character, leaving U+FFFD in ${JSON.stringify(text)}`,
-    );
+  for (const [name, input] of SWEEP_FIXTURES) {
+    const total = Buffer.byteLength(input, "utf8");
+    for (let max = 1; max <= total; max++) {
+      const { text } = truncateUtf8(input, max);
+      assert.ok(
+        !text.includes("�"),
+        `${name} cap ${max}: cut mid-character, leaving U+FFFD in ${JSON.stringify(text)}`,
+      );
+    }
   }
 });
 
@@ -529,26 +552,28 @@ test("truncateUtf8 returns the LONGEST whole-character prefix that fits (no line
   // not fit. This is the assertion that kills a wrong continuation-byte mask
   // (`0b1000_0000`), which backs off past whole characters and empties the
   // result for every truncating cap while both upper bounds stay satisfied.
-  const chars = Array.from(CJK_NO_NEWLINE);
-  const total = Buffer.byteLength(CJK_NO_NEWLINE, "utf8");
-  for (let max = 0; max <= total; max++) {
-    const { text } = truncateUtf8(CJK_NO_NEWLINE, max);
-    assert.ok(CJK_NO_NEWLINE.startsWith(text), `cap ${max}: result is not a prefix of the input`);
-    const kept = Array.from(text).length;
-    // At a cap large enough for the whole input there is no "one more" to test.
-    // Assert WHY we are skipping: without this, an implementation that returns
-    // the whole input at cap 0 makes the guard fire and swallows the defect,
-    // leaving cap 0 covered only indirectly by the negative cases in the
-    // normalization test below.
-    if (kept === chars.length) {
-      assert.equal(max, total, `cap ${max}: returned the whole input when it cannot fit`);
-      continue;
+  for (const [name, input] of SWEEP_FIXTURES) {
+    const chars = Array.from(input);
+    const total = Buffer.byteLength(input, "utf8");
+    for (let max = 0; max <= total; max++) {
+      const { text } = truncateUtf8(input, max);
+      assert.ok(input.startsWith(text), `${name} cap ${max}: result is not a prefix of the input`);
+      const kept = Array.from(text).length;
+      // At a cap large enough for the whole input there is no "one more" to test.
+      // Assert WHY we are skipping: without this, an implementation that returns
+      // the whole input at cap 0 makes the guard fire and swallows the defect,
+      // leaving cap 0 covered only indirectly by the negative cases in the
+      // normalization test below.
+      if (kept === chars.length) {
+        assert.equal(max, total, `${name} cap ${max}: returned the whole input when it cannot fit`);
+        continue;
+      }
+      const oneMore = chars.slice(0, kept + 1).join("");
+      assert.ok(
+        Buffer.byteLength(oneMore, "utf8") > max,
+        `${name} cap ${max}: returned ${JSON.stringify(text)} when one more character still fits`,
+      );
     }
-    const oneMore = chars.slice(0, kept + 1).join("");
-    assert.ok(
-      Buffer.byteLength(oneMore, "utf8") > max,
-      `cap ${max}: returned ${JSON.stringify(text)} when one more character still fits`,
-    );
   }
 });
 
