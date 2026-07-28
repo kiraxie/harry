@@ -1,24 +1,17 @@
 ---
 name: status
-description: Show harry's quota snapshot and background-job status via the companion runtime. Use when the user asks about harry's quota, background review/fix jobs, or job status.
+description: Show harry's Codex rate-limit snapshot — quota usage and reset windows — via the companion runtime. Use when the user asks about harry's quota or how much Codex budget is left.
 ---
 
 # Status
 
-Show harry's runtime snapshot: quota and background jobs.
-
-Run the runtime subcommand and return its stdout **verbatim** in the response.
-An optional `job-id` shows that job's detail; an optional `--all` shows jobs from
-every session.
+Show harry's runtime snapshot: the Codex quota state.
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status [job-id] [--all]
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status
 ```
 
 The quota shown is a cached snapshot — refreshed after every ask/review/fix run —
 with its age labelled in the header.
 
-Return the output verbatim. Then, only if something is worth flagging, append at
-most one short line: if there is a failed background job the user may not have
-noticed, flag it in one line. Do not paraphrase or summarize the runtime output
-itself; only the appended note is yours.
+Return the stdout **verbatim** in the response. Do not paraphrase or summarize it.
