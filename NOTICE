@@ -26,7 +26,7 @@ Files derived from codex-plugin-cc:
     src/lib/codex/        (app-server.ts, process.ts, protocol.ts, turn.ts, auth.ts)
     tests/fake-codex.mjs
 
-Modifications made by harry:
+Modifications made by harry, to src/lib/codex/:
     - Ported from JavaScript (.mjs) to TypeScript.
     - Removed the broker transport entirely; Codex runs via the direct
       spawned `codex app-server` transport only.
@@ -36,6 +36,13 @@ Modifications made by harry:
     - Added a connect/initialize timeout that tears down the spawned child,
       so a turn cannot hang the host process.
     - Trimmed to the subset needed by harry's ask/review/fix commands.
+
+Modifications made by harry, to tests/fake-codex.mjs:
+    - Kept as JavaScript (.mjs); it is a spawned fixture, not library code.
+    - Removed the broker behaviors, matching the provider above.
+    - Trimmed to the app-server turn/auth surface.
+    - Added harry-specific test behaviors (additive `BEHAVIOR` branches) that
+      drive harry's own commands through failure modes the source did not model.
 
 Parts of references/skill-authoring.md are distilled from the
 skill-creator skill in anthropics/skills:
