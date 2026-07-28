@@ -50,7 +50,7 @@ Run harry's gitignore initializer through the plugin runtime:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs" $ARGUMENTS
 ```
 
-## Phases 2–3 — the shared workflow
+## The workflow lives in a shared file
 
 What that command does, and the whole of **Phase 3 — Legacy migration**, are shared
 with the Codex build and live in
@@ -61,4 +61,3 @@ with the Codex build and live in
 build, that is you. The invocation surface for this build is `$ARGUMENTS` above
 (`--remove`, `--force`, an optional target dir), and this command's `allowed-tools`
 frontmatter is the tool universe you operate within.
-

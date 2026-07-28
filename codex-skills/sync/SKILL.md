@@ -42,7 +42,7 @@ Run harry's gitignore initializer:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs" [--remove] [--force] [targetDir]
 ```
 
-## Phases 2–3 — the shared workflow
+## The workflow lives in a shared file
 
 What that command does, and the whole of **Phase 3 — Legacy migration**, are shared
 with the Claude Code build and live in
