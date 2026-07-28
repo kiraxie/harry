@@ -173,13 +173,25 @@ invokes them differs by build:
 - **Claude Code build:** these are the steps of **Apply: `--fix`** (Claude Code applies). The other backend, `--harry-fix` (an isolated Codex fix session), does not use them — it keeps its own section in the door.
 - **Codex build:** these are the steps of **Stage 3 — Apply**, this build's only apply path (it has no `--harry-fix`).
 
-1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix): if `git
+1. **Baseline snapshot** — same contract as `src/commands/fix.ts` (runFix). Its
+   first act *within this step* is to **refuse a repository with no commits**:
+   it resolves HEAD and, finding none, exits 1 with `fix requires at least one
+   commit to diff against` *without running a model turn*, because a fix diffed
+   against an unborn HEAD would silently report nothing changed. Do the same —
+   stop here rather than discovering it half-way through an apply. (Earlier
+   refusals exist and are not this step's business: runFix validates its
+   findings file and the repo before this, and the session layer refuses on
+   failed auth or an unhonorable capability set — `run-agent-session.ts`'s
+   capability gate deliberately fires *before* this snapshot.) Then: if `git
    status --porcelain` is non-empty, the fix diff must be isolated from the user's
    pre-existing work. Run `git stash create` and **record the printed SHA** as the
    baseline — an ephemeral snapshot object; nothing (working tree, index, branch
    history, stash ref) is mutated, so no confirmation is needed. If it prints
    nothing (e.g. only untracked changes) or the tree is clean, use `git rev-parse
-   HEAD` as the baseline instead. The SHA-reuse caution and the known limit are
+   HEAD` as the baseline instead. **A `git` command that outright fails counts as
+   the quiet branch, not as a reason to stop**: runFix treats a failed `git status`
+   as clean and a failed `git stash create` as "printed nothing", so both fall
+   through to HEAD. The SHA-reuse caution and the known limit are
    worded per build:
    - **Claude Code build:** Reuse that literal SHA in step 3 — each `Bash` call is a fresh shell, so a `BASE=…` variable will not survive; substitute the actual value. Known limit (same as runFix): `stash create` skips pre-existing untracked files, so `git add -A` in step 3 stages them and they appear in the fix diff as if the fix created them.
    - **Codex build:** Reuse that literal SHA in step 3 (don't rely on a shell variable surviving between commands). Known limit (same as runFix): `stash create` skips pre-existing untracked files, so the reported diff may attribute them to the fix.
@@ -187,7 +199,14 @@ invokes them differs by build:
    - **Claude Code build:** **Apply** each approved finding with `Edit`/`Write`: minimal, correct change per finding; no unrelated refactor. Skip any that is already fixed, no longer applies, or whose fix would change intended behavior — note why.
    - **Codex build:** **Apply** each approved finding directly: minimal, correct change per finding; no unrelated refactor. Skip any that is already fixed, no longer applies, or whose fix would change intended behavior — note why.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons) and
-   changed files, and tell the user the fixes are **staged but not committed** —
+   changed files. **If any of those git commands fails, report the counts as
+   *unavailable*, never as zero** — this too is runFix's contract, and the one
+   place it is easiest to break by accident: `computeStagedDiff` returns `null`
+   rather than zeros when git fails, and the envelope carries `null` with the
+   operator line `diff stats unavailable (git failed — see the job log)`, because
+   the fix may well have edited files and only the *measurement* failed. Reporting
+   "no files changed" there tells the user the opposite of what happened. Then tell
+   the user the fixes are **staged but not committed** —
    review the fix-only diff with `git diff --cached <baseline-sha>` (the SHA recorded
    in step 1; it excludes their pre-existing *tracked* WIP — pre-existing *untracked*
    files may still appear, so warn the user before they commit the staged changes).

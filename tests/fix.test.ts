@@ -253,6 +253,75 @@ test("baseline: an untracked-only dirty tree falls back to HEAD when stash-creat
   }
 });
 
+/**
+ * runFix's unborn-HEAD refusal, declared once because two things depend on it:
+ * the CLI must emit it, and the apply prose that claims to share runFix's
+ * contract must name it. That prose is followed by a human orchestrator on both
+ * builds, so a version of it that omits the refusal sends an operator into a
+ * fresh repo expecting the flow to continue where the code stops dead.
+ */
+const UNBORN_HEAD_REFUSAL = "at least one commit to diff against";
+
+/**
+ * The other half of runFix's contract that the same apply prose claims to
+ * share: a failed measurement is reported as unknown, never as zero. The
+ * consequence of prose omitting it is worse than the unborn-HEAD gap — that one
+ * stalls an operator, this one has them publish "no files changed" when the fix
+ * may well have changed files and only the measurement broke.
+ */
+const UNAVAILABLE_STATS = "diff stats unavailable";
+
+/**
+ * The tail of that operator line, which appears EXACTLY ONCE in fix.ts — inside
+ * the line itself. `diff stats unavailable` alone would not do: it also appears
+ * in an unrelated job-log call, so deleting the operator line while keeping the
+ * log would leave the code side of the guard below satisfied by a string no
+ * operator ever sees.
+ */
+const OPERATOR_LINE_TAIL = "git failed — see the job log";
+
+/**
+ * Slice a document between two markers, refusing every way the bound can lie.
+ *
+ * `indexOf(marker)` guards a marker's ABSENCE but not its AMBIGUITY or its
+ * RELOCATION, and the two need different defences:
+ *
+ *  - **Duplicated** marker → the bound silently re-points at the copy. Closed by
+ *    requiring exactly one occurrence. A bare `\n2. ` list token is re-bound by
+ *    any appended checklist, which is how one of these guards was widened.
+ *  - **Moved** marker (deleted here, re-added elsewhere) → the count stays one,
+ *    so uniqueness cannot see it. Closed by refusing a slice that crosses a
+ *    `\n## ` heading: a bound that has jumped to another section produces a
+ *    slice spanning one, and a legitimate within-section slice never does.
+ *
+ * Both were found by mutation rather than reasoning — the uniqueness check alone
+ * still passed the relocation case.
+ */
+function sliceBetween(doc: string, text: string, from: string, to: string): string {
+  const at = (marker: string): number => {
+    const first = text.indexOf(marker);
+    assert.notEqual(first, -1, `${doc}: "${marker}" is gone; re-point the slice that used it`);
+    assert.equal(
+      text.indexOf(marker, first + 1),
+      -1,
+      `${doc}: "${marker}" now appears more than once, so a slice bound on it can ` +
+        `re-point silently. Make it unique again, or pick a different marker.`,
+    );
+    return first;
+  };
+  const start = at(from);
+  const end = at(to);
+  assert.ok(end > start, `${doc}: "${to}" now precedes "${from}"; the slice is inverted`);
+  const slice = text.slice(start, end);
+  assert.ok(
+    !slice.includes("\n## "),
+    `${doc}: the slice from "${from}" to "${to}" spans a section heading, so one bound ` +
+      `has moved to a different section and this guard is checking the wrong text.`,
+  );
+  // Collapse whitespace: these sentences wrap across lines in the source.
+  return slice.replace(/\s+/g, " ");
+}
+
 // With no commit to diff against, the fix diff would silently report nothing —
 // so fix must refuse up front rather than run and publish an empty result.
 test("baseline: an unborn HEAD refuses the fix instead of running against nothing", () => {
@@ -270,8 +339,92 @@ test("baseline: an unborn HEAD refuses the fix instead of running against nothin
       "failed",
       `expected refusal, got: ${JSON.stringify(run.envelope)}`,
     );
-    assert.match(String(run.envelope.error), /at least one commit/);
+    assert.ok(
+      String(run.envelope.error).includes(UNBORN_HEAD_REFUSAL),
+      `expected the refusal to say "${UNBORN_HEAD_REFUSAL}", got: ${run.envelope.error}`,
+    );
   } finally {
     for (const d of dirs) rmSync(d, { recursive: true, force: true });
   }
+});
+
+// Live prose↔code contract, the same shape as tests/ask.test.ts's failure-marker
+// guard. `references/review-orchestration.md` states the apply steps for BOTH
+// builds and claims them to be "the same contract as src/commands/fix.ts
+// (runFix)". It described the dirty/clean baseline branches but omitted the
+// refusal above, so an operator following it in a repo with no commits would
+// proceed where the code exits 1 before any model turn. Renaming the message in
+// src/ alone fails the test above; dropping it from the prose alone fails here.
+test("the apply prose names runFix's unborn-HEAD refusal it claims to share", () => {
+  const doc = "references/review-orchestration.md";
+  const full = readFileSync(path.resolve(import.meta.dirname, "..", doc), "utf-8");
+
+  // Slice to step 1 — the step that makes the contract claim — not to the whole
+  // file and not to the section. A file-level check passes when the sentence is
+  // deleted from the step and survives anywhere else (a historical note at the
+  // bottom, say), which is how this kind of guard rots. Slicing to the *section*
+  // is no better here: it is the last one in the file, so "up to the next
+  // heading" means "to EOF" and swallows the same escape. Both markers are
+  // asserted, so a restructure fails loudly instead of quietly emptying the
+  // slice — a guard reduced to "" would pass every substring check forever.
+  // The end marker names step 2's text, not just "\n2. ". A bare list marker
+  // REBINDS rather than disappears: renumber step 2 and add any later line
+  // starting "2. " — an appended checklist will do — and the slice silently
+  // widens across the rest of the file instead of failing. Asserting a marker
+  // only protects against its absence.
+  const section = sliceBetween(doc, full, "1. **Baseline snapshot**", "\n2. The write mechanism");
+
+  assert.ok(
+    section.includes(UNBORN_HEAD_REFUSAL),
+    `${doc}'s apply steps claim the same contract as runFix but no longer name its ` +
+      `unborn-HEAD refusal ("${UNBORN_HEAD_REFUSAL}"). An operator following them in a ` +
+      `repo with no commits would proceed where the code refuses.`,
+  );
+});
+
+// The same contract claim, for the failure branch of the report step.
+//
+// WEAKER THAN THE GUARD ABOVE ON TWO AXES, both worth stating precisely because
+// a guard that overstates itself is the defect this file exists to catch.
+//
+//  1. That guard asserts against the LIVE CLI — an unborn HEAD is reachable from
+//     a temp repo. This failure path is not: `computeStagedDiff`'s own comment
+//     records that it needs a live Codex session, which is why it is exported
+//     and unit-tested instead. So the code side here reads source text.
+//  2. Reading source text cannot distinguish EMISSION from MENTION. The literal
+//     is chosen to narrow that as far as a substring can: `git failed — see the
+//     job log` appears exactly once in fix.ts, inside the operator line the
+//     prose quotes — unlike "diff stats unavailable", which also appears in an
+//     unrelated job-log call, so deleting the operator line while keeping that
+//     call would leave the guard green. It would still pass on the string
+//     sitting in a comment with no code path producing it. It ties the prose to
+//     fix.ts's TEXT, not to anything fix.ts emits; the behaviour itself is
+//     covered by the live `computeStagedDiff` unit test above.
+//
+// Ceiling shared with the guard above and with tests/ask.test.ts's: a substring
+// check sees presence, not instruction. Prose that quotes the string and then
+// tells the orchestrator to report zeros anyway passes both. That is the
+// parser boundary these rules are drawn against, not an oversight.
+test("the report step names runFix's unknown-not-zero contract", () => {
+  const doc = "references/review-orchestration.md";
+  const prose = readFileSync(path.resolve(import.meta.dirname, "..", doc), "utf-8");
+  // Bound the slice. There is no step 4, so an unbounded slice runs to EOF and
+  // one appended section carrying the literal makes this guard vacuous — the
+  // same escape the guard above was re-scoped to close. Anchor on the sentence
+  // that already ends step 3.
+  const step = sliceBetween(doc, prose, "3. **Stage + report:**", "staged but not committed");
+
+  assert.ok(
+    step.includes(UNAVAILABLE_STATS),
+    `${doc}'s report step no longer names the unknown-stats outcome ` +
+      `("${UNAVAILABLE_STATS}"). An orchestrator whose git call fails would report ` +
+      `"no files changed" — the opposite of what happened.`,
+  );
+  const source = readFileSync(path.resolve(import.meta.dirname, "../src/commands/fix.ts"), "utf-8");
+  assert.ok(
+    source.includes(OPERATOR_LINE_TAIL),
+    `src/commands/fix.ts no longer contains "${OPERATOR_LINE_TAIL}", the tail of the ` +
+      `operator line the prose above quotes, so that prose now quotes a string the ` +
+      `code does not carry.`,
+  );
 });
