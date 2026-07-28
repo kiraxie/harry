@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -39,13 +39,10 @@ test("ensureGitRepository: a real repo still resolves to its top level", () => {
   const dir = tmpDir();
   try {
     execFileSync("git", ["init", "-q"], { cwd: dir });
-    // macOS temp dirs are symlinked (/var -> /private/var); compare against what
-    // git itself reports rather than the path we passed in.
-    const expected = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd: dir,
-      encoding: "utf-8",
-    }).trim();
-    assert.equal(ensureGitRepository(dir), expected);
+    // Independent expectation: macOS temp dirs are symlinked (/var ->
+    // /private/var) and git reports the resolved path, so resolve it here rather
+    // than re-running the command under test to produce its own answer.
+    assert.equal(ensureGitRepository(dir), realpathSync(dir));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

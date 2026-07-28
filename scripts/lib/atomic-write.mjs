@@ -9,7 +9,7 @@
 // so the safe-write policy lives here once.
 
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
 
 // Write `content` to `targetPath` atomically, keeping a one-time backup.
 //
@@ -27,8 +27,9 @@ import { copyFileSync, existsSync, renameSync, writeFileSync } from "node:fs";
 // one process renames the other's half-written file over the user's global
 // instructions — the very truncation this module prevents. Same idiom as
 // src/lib/state.ts's atomicWrite (copied, not imported: scripts/ and src/ share
-// no code). Trade: an interrupted write leaves its own temp file behind rather
-// than being overwritten by the next run.
+// no code). A per-call name is also why safeWrite must clean up after a failed
+// write: there is no next run to reclaim a fixed path, so the debris would
+// accumulate beside the user's global instructions.
 export function tempPathFor(targetPath) {
   return `${targetPath}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
@@ -39,6 +40,15 @@ export function safeWrite(targetPath, content) {
     copyFileSync(targetPath, backupPath);
   }
   const tmpPath = tempPathFor(targetPath);
-  writeFileSync(tmpPath, content);
-  renameSync(tmpPath, targetPath);
+  try {
+    writeFileSync(tmpPath, content);
+    renameSync(tmpPath, targetPath);
+  } catch (err) {
+    try {
+      rmSync(tmpPath, { force: true });
+    } catch {
+      // Best-effort cleanup: a failure here must never mask the real error.
+    }
+    throw err;
+  }
 }
