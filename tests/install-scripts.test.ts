@@ -454,3 +454,25 @@ test("safeWrite: each write picks a unique temp path in the target's directory",
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Per-call temp names mean a failed write can no longer be reclaimed by the next
+// run overwriting a fixed path: whatever it leaves behind accumulates next to the
+// user's ~/.claude/CLAUDE.md forever. So the failure path must clean up after
+// itself — and must still report the failure, never swallow it.
+test("safeWrite: a failed write cleans up its temp file and rethrows", () => {
+  const dir = tmpDir("harry-safewrite-fail-");
+  try {
+    // Make the rename fail: the target is a non-empty DIRECTORY (rename onto it
+    // is EISDIR), with a .bak already present so the backup step is skipped and
+    // the temp file is actually written before the failure.
+    const target = path.join(dir, "t");
+    mkdirSync(target);
+    writeFileSync(path.join(target, "inner"), "x");
+    writeFileSync(`${target}.bak`, "old");
+
+    assert.throws(() => safeWrite(target, "new"), /EISDIR/, "the write failure must surface");
+    assertNoTempResidue(dir, "failed safeWrite");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
