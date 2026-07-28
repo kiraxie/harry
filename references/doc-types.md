@@ -134,8 +134,9 @@ Non-Goals / follow-up lines inside an active item's `## Why / What` /
 separately re-judges every `status: backlog` item by asking whether it's
 still open. `status: backlog` is the **only** deferred-work source read from
 `.local/items/` — there is no separate research/Non-Goals corpus anymore;
-those cases now live as `## Notes` inside a backlog or active item. See
-`/debt`'s own definition for the verdict vocabulary.
+those cases now live as `## Notes` inside a backlog or active item. The verdict
+vocabulary is defined in `references/debt-audit.md`, which both builds' `/debt`
+doors read — go there rather than to either door.
 
 **Non-Goals do not survive archiving.** `/debt` only scans `status: active`
 items, and finishing's flush (below) only carries `## Follow-ups` forward —
