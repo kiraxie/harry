@@ -19,7 +19,8 @@
     "format": "biome format --write .",
     "install-laws": "node scripts/install.mjs",
     "install-laws-codex": "node scripts/install-codex.mjs",
-    "init-ignore": "node scripts/init.mjs"
+    "init-ignore": "node scripts/init.mjs",
+    "evals": "node scripts/run-evals.mjs"
   },
   "dependencies": {},
   "devDependencies": {
