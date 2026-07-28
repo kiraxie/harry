@@ -47,6 +47,12 @@ setting still ran 18 min). Practical consequences for the conductor:
 - If predictable latency matters more than peak reasoning depth, `Gemini 3.1 Pro
   (Low)` was consistently fast (~14s) in testing — but the fixed routing calls for
   High, so only drop to Low if the user opts in.
+
+**`gpt`'s failure signal is simpler: check the exit code.** A failed `ask` call
+exits non-zero with a `# Ask Failed` stdout body instead of an answer — never
+relay that body as `gpt`'s position. Same policy as gemini: record it as a failed
+source and continue with the remaining two voices rather than aborting the debate.
+
 `opus` (Agent tool) and `gpt` (`ask`, via a shell variable / heredoc) accept
 multi-line prompts normally.
 
