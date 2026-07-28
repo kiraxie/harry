@@ -64,7 +64,3 @@ Tiers are not chosen by file count alone. Apply these in order:
 ## Incident lane
 
 **User-declared only.** When the user calls it an incident ("incident", "ship it now"), invert the order — fix and verify first, then back-fill the rest. Verification is not skipped: the covering / reproduction test still runs and nothing merges red; only the *sequencing* moves. Review and the process artifacts (the `.local/` item, INDEX/HISTORY lines, `DEBT:` markers) are back-filled immediately after shipping, the same day. A model may never self-declare an incident — deciding on your own that something is urgent enough to bypass the flow is a §7 rationalization.
-
-## Red flags (you're rationalizing — stop)
-
-"It seems simple" is not a tier. "Just a quick fix" does not skip the gates. Classify first, then follow the matching flow.

@@ -62,8 +62,8 @@ its members, a member does not need to enumerate its milestones. The one
 exception is a lightweight index key pointing back **up**: an item may carry
 an optional `milestone: <slug>` frontmatter key so finishing can find the
 right milestone in O(1) without a repo-wide search. This caps an item at
-**one** milestone at a time (many-to-many was deliberately not supported —
-see the spec this model was built from) and creates a small sync obligation:
+**one** milestone at a time (many-to-many was deliberately not supported)
+and creates a small sync obligation:
 the `milestone:` key and that milestone's `## Members` list must agree, kept
 in lockstep by finishing's membership step below. Adding or removing a
 member is a one-line edit to `## Members`; `archive/` is never touched by a
@@ -148,7 +148,7 @@ or finishing to catch it for you.
 
 ## Global index `.local/INDEX.md`
 
-Unchanged in role: a live, content-oriented map, one line per item:
+A live, content-oriented map, one line per item:
 `<topic> · <path> · <one-line summary> · <status>`. An entry is removed when
 an item is deleted outright (backlog item settled without graduating) or
 once an item is archived — `HISTORY.md` already holds the permanent record
@@ -158,7 +158,7 @@ graduates, or a milestone's Members/Delivered set changes.
 
 ### `## In flight` — the active-work list
 
-Unchanged: `.local/INDEX.md` opens with an `## In flight` section, one line
+`.local/INDEX.md` opens with an `## In flight` section, one line
 per active unit of work, `<topic> · <branch> · <started YYYY-MM-DD>`.
 Gitignored, **NOT auto-loaded** (lazy) — check it yourself at session start
 so you don't duplicate an in-flight item. Mark a unit started when you begin
@@ -168,9 +168,10 @@ move a one-line conclusion to `HISTORY.md` and remove the In-flight line
 
 ## Chronological archive `.local/HISTORY.md`
 
-Unchanged: the permanent one-line-per-unit completion log
-(`- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> · <one-line outcome>`,
-newest first). On-demand, gitignored, NOT auto-loaded — a thin pointer; the
+The permanent one-line-per-unit completion log
+(`- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> (or "local merge, no PR") · <one-line outcome>`,
+newest first) — a unit that never opened a PR writes the literal
+`local merge, no PR` in that slot rather than leaving it blank. On-demand, gitignored, NOT auto-loaded — a thin pointer; the
 detail lives in git/PR. **Yearly rotation:** when adding the first entry of
 a new year, first move the previous year's entries to
 `.local/history/<year>.md`, leaving `HISTORY.md` holding only the current

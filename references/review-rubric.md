@@ -74,4 +74,4 @@ Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 ```
 
 Both verdicts (**spec** AND **quality**) are required — a report missing either
-is not a valid review (executing §Never).
+is not a valid review (executing, subagent-mode step 3).

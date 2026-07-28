@@ -1,4 +1,4 @@
-# Claim → Evidence — full detail for HARRY.md §6 (Honesty & evidence)
+# Claim → Evidence — the claim/evidence map for HARRY.md §6 (Honesty & evidence)
 
 **Core principle: evidence before claims, always.** No completion claim without fresh
 verification evidence — run the command, read the output (exit code, failure count), *then*
@@ -16,16 +16,6 @@ claim. If you haven't run the verification in this message, you cannot claim it 
 | Agent / subagent done | Check the **VCS diff** — the actual changes | The agent's word ("success") |
 | Requirements met | Line-by-line checklist against the spec | Tests passing |
 
-## Red flags — STOP
-
-- Using "should", "probably", "seems to"
-- Expressing satisfaction before verification ("Great!", "Perfect!", "Done!")
-- About to commit / push / open a PR without running verification
-- Trusting an agent's success report instead of reading the diff
-- Relying on a partial check
-- Thinking "just this once" or "I'm tired, close enough"
-- **Any wording that implies success without having run the verification**
-
 ## Rationalizations
 
 | Excuse | Reality |
@@ -36,9 +26,4 @@ claim. If you haven't run the verification in this message, you cannot claim it 
 | "Linter passed" | Linter ≠ compiler. |
 | "Agent said success" | Verify independently — read the diff. |
 | "Partial check is enough" | Partial proves nothing. |
-
-## Why
-
-An agent's "success" is not evidence: agents report completion they did not achieve, ship
-undefined functions, and miss requirements. The diff is the truth. Read it. Run the command.
-Then claim — never before.
+| "I'll commit now and verify after" | The commit / push / PR *is* the claim — verify before it lands, not after. |

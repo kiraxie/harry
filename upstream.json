@@ -41,12 +41,12 @@
     {
       "skill": "brainstorming",
       "from": "superpowers:skills/brainstorming",
-      "note": "HARD-GATE; SCQA+tech spec to .local/ (not committed); tier-aware; Visual Companion frontend-only; Major contested → /debate."
+      "note": "HARD-GATE; SCQA+tech design into the item's ## Why / What in .local/ (not committed); tier-aware; Visual Companion frontend-only; Major contested → /debate."
     },
     {
       "skill": "writing-plans",
       "from": "superpowers:skills/writing-plans",
-      "note": "tier-aware depth; Global Constraints from spec §5; Major only full-code + Interfaces; plans to .local/."
+      "note": "tier-aware depth; Global Constraints from the item's ## Why / What §5; Major only full-code + Interfaces; the ## Plan section of the same .local/ item."
     },
     {
       "skill": "executing",
@@ -61,12 +61,12 @@
     {
       "skill": "lean",
       "from": "ponytail:skills/ponytail-review + ponytail-audit",
-      "note": "merged; default whole-project, --diff for diff-only; §2 contract carve-out (don't flag contracts as over-engineering)."
+      "note": "merged; default whole-project, --diff for diff-only; §2 contract carve-out (don't flag contracts as over-engineering). Retired as its own command 2026-07 — absorbed into /audit dimension 10 (whole-repo, iterative) and /review --simplify's new lane (quick per-diff); do not re-add a standalone /lean."
     },
     {
       "skill": "debt",
       "from": "ponytail:skills/ponytail-debt",
-      "note": "redefined as deferral re-judge: reconcile DEBT:/TODO + spec Non-Goals + plan defers, freshness flag, promotion."
+      "note": "redefined as deferral re-judge: reconcile DEBT:/TODO + item deferrals + open backlog, freshness flag, promotion."
     },
     {
       "skill": "review",
