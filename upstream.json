@@ -81,7 +81,7 @@
     {
       "skill": "ask / status / result",
       "from": "copilot-plugin-cc + codex-plugin-cc",
-      "note": "runtime commands; setup+status merged into status. Originally had a Copilot premium-quota fallback at <5% remaining; removed along with the Copilot backend."
+      "note": "runtime commands; setup+status merged into status. Originally had a Copilot premium-quota fallback at <5% remaining; removed along with the Copilot backend. result retired 2026-07 — the background-job subsystem behind it never had a shipped producer (no commit in harry's history ever passed --background to the node CLI), so /harry:result could only ever report no completed jobs and exit 1; /harry:status lost its job tables at the same time and is now Codex-rate-limit-only. Do not re-add a standalone /result, and do not restore a job-status block to /status, without first building a producer."
     },
     {
       "skill": "grill",
