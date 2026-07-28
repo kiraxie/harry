@@ -83,16 +83,3 @@ Either way, remove the unit's `.local/INDEX.md` `## In flight` line, and update 
 | Discard (explicit request only) | n/a | — | — | force-deleted (typed `discard`) | removed |
 
 ¹ Not finished at `gh pr create` — on merge (this session or later), run Option 1's tail a–h minus the merge itself.
-
-## Red flags
-
-- Finishing on red, or claiming done at the merge moment instead of after the completion evidence lands (CI green when pushed; the merged-result suite when the merge is local-only).
-- Cleaning up — branch or worktree — before the merged-result suite has run green; a red merged result leaves everything in place.
-- Merging into an unconfirmed base ("the base is obviously main").
-- Offering to discard: discard is response-only, never menu.
-- Auto-picking merge vs PR instead of asking.
-- `gh pr create` before the body draft is approved; merging a PR with unresolved review/CodeRabbit items.
-- Removing a harness-owned worktree, or running `git worktree remove` from inside the worktree.
-- Discarding without the typed `discard` confirmation.
-- Leaving a merged PR's item at `status: active` or its `.local/INDEX.md` In-flight line stale instead of running the wind-down tail.
-- Editing a `.local/archive/` item after it lands there, or reopening it in place instead of linking to it from a new `.local/items/` item (`references/doc-types.md`).
