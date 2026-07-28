@@ -2635,50 +2635,6 @@ async function runStatus(cwd, options = {}) {
 }
 
 // src/lib/args.ts
-function extractTask(args, flags) {
-  const positional = args.join(" ").trim();
-  if (positional) return positional;
-  const flag = flags.task;
-  return typeof flag === "string" ? flag.trim() : "";
-}
-function flagString(flags, key) {
-  const v = flags[key];
-  return typeof v === "string" ? v : void 0;
-}
-function flagNumber(flags, key) {
-  const v = flags[key];
-  if (typeof v !== "string") return void 0;
-  const n = Number(v.trim());
-  return Number.isFinite(n) && n > 0 ? n : void 0;
-}
-
-// src/companion.ts
-function printUsage() {
-  console.log(
-    [
-      "Usage:",
-      "  companion setup [--json]",
-      "  companion review [focus...] [--adversarial] [--base <ref>]",
-      "                           [--scope auto|working-tree|branch] [--fix]",
-      "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
-      "                           [--context <text|@file|@->]",
-      "                           [--timeout <ms>]",
-      '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
-      "  companion fix --findings <path> [--model <id>]",
-      "                        [--reasoning <low|medium|high|xhigh>]",
-      "                        [--context <text|@file|@->]",
-      "                        [--timeout <ms>] [--write <path>]",
-      "  companion status [--json]",
-      "",
-      "Commands:",
-      "  setup       Check Codex auth and availability",
-      "  review      Run a code review (markdown, or JSON findings with --fix)",
-      "  ask         Ask a single prompt (read-only) and print the answer",
-      "  fix         Apply Claude-Code-approved review findings to the working tree",
-      "  status      Show the cached Codex rate-limit snapshot"
-    ].join("\n")
-  );
-}
 var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
   "adversarial",
   "allow-shell",
@@ -2783,6 +2739,50 @@ function flagEnum(flags, key, allowed) {
     throw new Error(`Invalid --${key} value "${v}". Expected one of: ${allowed.join(", ")}.`);
   }
   return v;
+}
+function extractTask(args, flags) {
+  const positional = args.join(" ").trim();
+  if (positional) return positional;
+  const flag = flags.task;
+  return typeof flag === "string" ? flag.trim() : "";
+}
+function flagString(flags, key) {
+  const v = flags[key];
+  return typeof v === "string" ? v : void 0;
+}
+function flagNumber(flags, key) {
+  const v = flags[key];
+  if (typeof v !== "string") return void 0;
+  const n = Number(v.trim());
+  return Number.isFinite(n) && n > 0 ? n : void 0;
+}
+
+// src/companion.ts
+function printUsage() {
+  console.log(
+    [
+      "Usage:",
+      "  companion setup [--json]",
+      "  companion review [focus...] [--adversarial] [--base <ref>]",
+      "                           [--scope auto|working-tree|branch] [--fix]",
+      "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
+      "                           [--context <text|@file|@->]",
+      "                           [--timeout <ms>]",
+      '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
+      "  companion fix --findings <path> [--model <id>]",
+      "                        [--reasoning <low|medium|high|xhigh>]",
+      "                        [--context <text|@file|@->]",
+      "                        [--timeout <ms>] [--write <path>]",
+      "  companion status [--json]",
+      "",
+      "Commands:",
+      "  setup       Check Codex auth and availability",
+      "  review      Run a code review (markdown, or JSON findings with --fix)",
+      "  ask         Ask a single prompt (read-only) and print the answer",
+      "  fix         Apply Claude-Code-approved review findings to the working tree",
+      "  status      Show the cached Codex rate-limit snapshot"
+    ].join("\n")
+  );
 }
 async function main() {
   const { command, args, flags } = parseArgs(import_node_process3.default.argv.slice(2));
