@@ -57,9 +57,13 @@ Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`
 `plugins[harry].version` in `.claude-plugin/marketplace.json` — `tests/version-sync.test.ts`
 fails if any one of them disagrees. Add the `CHANGELOG.md` entry, then rebuild `dist/`
 (`build.mjs` inlines `package.json`, so a version bump with no rebuild fails CI's drift
-gate). Finally `git tag vX.Y.Z` and push the tag — this step has lapsed before (tagging
-silently stopped after `v0.9.1` while `CHANGELOG.md` went on to declare ten more versions);
-it is load-bearing, not optional ceremony.
+gate). Finally `git tag vX.Y.Z` and push the tag — load-bearing, not optional ceremony, and
+it has lapsed before: `0.12.0`, `0.13.2`–`0.13.4`, `0.14.0` and `0.15.0` have `CHANGELOG.md`
+entries and no git ref, so there is no way to diff what those releases actually shipped.
+Deliberately not backfilled — reconstructing six tags from CHANGELOG commits cannot be
+verified, and a wrong tag is worse than a missing one. Audit gaps with
+`git tag --sort=v:refname`: plain `git tag` sorts lexically, filing `v0.10.0` ahead of
+`v0.2.0`, so a `tail` of it hides the newest tags and makes the gap look far older than it is.
 
 ## Runtime architecture (`src/`)
 
