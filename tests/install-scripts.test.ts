@@ -7,7 +7,15 @@
 // init's explicit target-dir argument.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -39,6 +47,27 @@ function withGlobal(file: string, fn: () => void): void {
     else process.env.HARRY_GLOBAL = prev;
   }
 }
+
+// The stale-entry WARNING is one piece of knowledge split across two installers:
+// the STALE list (scripts/lib/stale-entries.mjs) was single-sourced precisely so
+// the two could not drift (HARRY.md §2), but the renderer that turns that list
+// into the user-facing warning must be single-sourced for the same reason — a
+// second copy re-opens the drift the module header claims to have closed.
+test("warnStale is defined exactly once across scripts/, beside the data it renders", () => {
+  const scriptsDir = path.join(pluginRoot, "scripts");
+  const defs = readdirSync(scriptsDir, { recursive: true, encoding: "utf8" })
+    .filter((rel) => rel.endsWith(".mjs"))
+    .filter((rel) =>
+      /\bfunction warnStale\b/.test(readFileSync(path.join(scriptsDir, rel), "utf8")),
+    )
+    .map((rel) => path.posix.join("scripts", rel.split(path.sep).join("/")))
+    .sort();
+  assert.deepEqual(
+    defs,
+    ["scripts/lib/stale-entries.mjs"],
+    "warnStale must live once, in the module that owns STALE",
+  );
+});
 
 test("install.mjs: first install writes the block, drops a .bak, leaves no .tmp", () => {
   const dir = tmpDir("harry-install-test-");
