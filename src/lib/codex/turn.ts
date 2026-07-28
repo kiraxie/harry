@@ -513,6 +513,38 @@ export async function runCodexTurn(opts: CodexTurnOpts): Promise<CodexTurnResult
   const connectTimeoutMs =
     opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
 
+  // A signal that is ALREADY aborted must short-circuit ahead of connect().
+  // Every `if (aborted)` return below sits past the awaited connect, so without
+  // this a turn cancelled before it began still spawned a codex child and waited
+  // out connectTimeoutMs — and when that ceiling expired first, the connect
+  // rejection below reported the initialize timeout as the reason instead of the
+  // abort.
+  //
+  // Written as an inline literal rather than routed through failure(), which
+  // needs a client for stderr: there is no child yet, so stderr is "" by
+  // construction. Keeping it a self-contained early return also keeps this
+  // divergence from vendored upstream to a single insertion (see NOTICE).
+  //
+  // DEBT: this closes the already-aborted case only. A signal that fires DURING
+  // connect is still unobserved until connect settles, so it waits out the
+  // remainder of connect (bounded by connectTimeoutMs — 60 s in production,
+  // since timeoutMs defaults to 15 min) and, if connect then times out, still
+  // reports the initialize timeout over the abort. Closing that window means
+  // racing connect() against the abort gate and tearing down the client that
+  // arrives after the race is lost — plumb an AbortSignal into
+  // CodexAppServerClient.connect if it ever matters. Not urgent for the
+  // interrupt path: run-agent-session.ts caps SIGINT teardown at 2 s
+  // independently; the uncapped case is the timeout-driven signal.
+  if (opts.signal?.aborted) {
+    return {
+      success: false,
+      finalMessage: "",
+      reasoningSummary: [],
+      error: "Codex turn aborted.",
+      stderr: ""
+    };
+  }
+
   // connect() awaits initialize() OUTSIDE the per-turn timeout race below, so it
   // gets its own ceiling at the source (app-server connectTimeoutMs): on expiry
   // the spawned child is torn down and connect() rejects rather than hanging.

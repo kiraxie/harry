@@ -35,6 +35,9 @@ Modifications made by harry, to src/lib/codex/:
       did not surface.
     - Added a connect/initialize timeout that tears down the spawned child,
       so a turn cannot hang the host process.
+    - Added an already-aborted-signal short-circuit ahead of connect(), so a
+      turn cancelled before it starts spawns no codex child at all; upstream
+      observes the signal only after connect() has returned.
     - Trimmed to the subset needed by harry's ask/review/fix commands.
 
 Modifications made by harry, to tests/fake-codex.mjs:

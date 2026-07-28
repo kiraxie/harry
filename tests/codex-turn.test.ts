@@ -155,9 +155,38 @@ test("runCodexTurn prepends instructions (the system message) to the turn input 
   assert.match(state.lastTurnStart?.prompt ?? "", /do the thing/);
 });
 
-test("runCodexTurn aborts promptly on an already-aborted signal (cr-15)", async () => {
+// WAS a wall-clock test, and that made it flaky (1 failure in 4 runs on a loaded
+// machine): `timeoutMs: 2_000` doubles as the connect ceiling (turn.ts derives
+// connectTimeoutMs from it), so a slow connect blew the 2000ms budget and the
+// result carried the initialize-timeout message instead of the abort. Elapsed
+// could not distinguish "aborted early" from "connect happened to be fast" — a
+// timing proxy for the contract, not the contract.
+//
+// The contract is that a turn cancelled before it starts opens NO subprocess, so
+// assert that directly: the fake bumps `appServerStarts` and writes its state
+// file at app-server boot ahead of every BEHAVIOR branch (fake-codex.mjs:140),
+// and connect() awaits initialize, so connect() cannot return without the file
+// existing. The two assertions below are a PAIR, and deleting either as
+// redundant reopens a hole:
+//   - the receipt has one blind spot — a child killed by the connect timeout
+//     before node finishes booting spawned but left no receipt. Narrow (it needs
+//     node startup > 2000ms, not merely connect > 2000ms), but real.
+//   - `/abort/i` covers exactly that case: a connect that times out reports the
+//     initialize timeout, not an abort.
+// Order matters too. Both fire before `elapsed`, so a regression always fails on
+// a deterministic assertion and the timing one can never be the flaky failure.
+//
+// `task-stuck` is NOT load-bearing here — no turn ever starts, in either
+// direction. It is the fixture this test was written against, kept so the
+// already-aborted path is compared against an otherwise identical neighbour.
+test("runCodexTurn spawns no codex child when the signal is already aborted (cr-15)", async () => {
   const binDir = makeTempDir();
   installFakeCodex(binDir, "task-stuck");
+  const statePath = path.join(binDir, "fake-codex-state.json");
+  // Precondition, not ceremony: installFakeCodex writes only the script today,
+  // but if it ever pre-created the state file this test would pass vacuously
+  // while asserting nothing at all.
+  assert.equal(fs.existsSync(statePath), false, "installFakeCodex pre-created the state file");
 
   const startedAt = Date.now();
   const result = await runCodexTurn({
@@ -172,6 +201,12 @@ test("runCodexTurn aborts promptly on an already-aborted signal (cr-15)", async 
 
   assert.equal(result.success, false);
   assert.match(result.error ?? "", /abort/i);
+  assert.equal(
+    fs.existsSync(statePath),
+    false,
+    "an already-cancelled turn spawned a codex child anyway — the abort short-circuit " +
+      "ahead of connect() in runCodexTurn is missing or has moved back below the connect",
+  );
   assert.ok(elapsed < 2_000, `expected the abort to pre-empt the timeout, took ${elapsed}ms`);
 });
 
