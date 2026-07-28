@@ -223,6 +223,15 @@ test("every flag consumed as `=== true` is registered in BOOLEAN_FLAGS", () => {
 // going to grow a parser, so the guard is the SHAPE rather than the symptom:
 // keep every read scannable. Optional chaining is not listed — the scan itself
 // now tolerates `flags?.x`, so it needs no ban.
+//
+// WHERE THIS GUARD'S REACH ENDS, DELIBERATELY. A two-argument hand-off,
+// `helper(flags, "x")`, is syntactically identical to the blessed accessor
+// calls (`flagString(flags, "base")`), and no regex can tell them apart without
+// knowing what the callee does — that is the parser boundary this rule is
+// drawn against, so the form is out of reach rather than overlooked. It is the
+// weaker escape of the two: the accessors it is indistinguishable from are
+// themselves tested here, and a new one would have to imitate their signature.
+// The single-argument hand-off below has no such alibi, so it is banned.
 const OPAQUE_FLAG_READS: Array<{ pattern: RegExp; form: string }> = [
   { pattern: /\}\s*=\s*flags\b/, form: "destructuring off `flags` (`const { x } = flags`)" },
   {
@@ -230,6 +239,10 @@ const OPAQUE_FLAG_READS: Array<{ pattern: RegExp; form: string }> = [
     form: "aliasing `flags` to another binding (`const f = flags;`)",
   },
   { pattern: /flags\??\[(?!")/, form: "a computed `flags[…]` key (`flags[key]`)" },
+  {
+    pattern: /[A-Za-z_$][\w$]*\(\s*flags\s*\)/,
+    form: "handing `flags` whole to a single-argument helper (`isSet(flags)`)",
+  },
 ];
 
 test("companion.ts reads `flags` only in a shape the `=== true` scan can see", () => {
@@ -243,7 +256,9 @@ test("companion.ts reads `flags` only in a shape the `=== true` scan can see", (
         "above, which is the only guard against a flag being read as a boolean without " +
         'being registered in BOOLEAN_FLAGS. Read flags as `flags.x` or `flags["x"]` ' +
         "instead. Passing `flags` whole to the args.ts accessors stays fine — those are " +
-        "value readers, not boolean consumers, and are tested directly here.",
+        "value readers, not boolean consumers, and are tested directly here. If a new " +
+        "helper really is warranted, the scan cannot see inside it: point this test at " +
+        "its source too, or read the flag at the call site.",
     );
   }
 });
