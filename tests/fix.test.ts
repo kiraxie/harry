@@ -21,33 +21,43 @@ import test from "node:test";
 import { computeStagedDiff } from "../src/commands/fix.ts";
 import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
 
-// A repo with one commit to diff against, and no staged changes.
-function emptyRepo(dir: string): void {
-  execFileSync("git", ["init", "-q"], { cwd: dir });
-  execFileSync(
-    "git",
-    [
-      "-c",
-      "user.email=test@example.com",
-      "-c",
-      "user.name=test",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-q",
-      "--allow-empty",
-      "-m",
-      "base",
-    ],
-    { cwd: dir },
-  );
+const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
+
+function tempDir(prefix: string): string {
+  return mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function git(dir: string, args: string[]): string {
+  return execFileSync("git", args, { cwd: dir, encoding: "utf-8" }).trim();
+}
+
+/**
+ * A repo with one commit to diff against and a clean tree, returning its HEAD
+ * sha.
+ *
+ * The identity goes in the repo's LOCAL config rather than on a `-c` command
+ * line because the `git commit` below runs without one, and an identity-less
+ * runner fails it with exit 128. It is NOT propping up the `git stash create`
+ * that fix spawns for itself: git writes stash objects under a hardcoded
+ * `git stash <git@stash>` ident and needs no configured identity for them
+ * (verified on git 2.50.1 with `user.useConfigOnly=true` and no global config).
+ */
+function repoWithCommit(dir: string): string {
+  git(dir, ["init", "-q"]);
+  git(dir, ["config", "user.email", "test@example.com"]);
+  git(dir, ["config", "user.name", "test"]);
+  git(dir, ["config", "commit.gpgsign", "false"]);
+  writeFileSync(path.join(dir, "tracked.txt"), "v1\n");
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-q", "-m", "base"]);
+  return git(dir, ["rev-parse", "HEAD"]);
 }
 
 test("computeStagedDiff: a failed git call reports unknown stats, not zeros", () => {
   // A temp dir outside any repository: every `git` call in computeStagedDiff
   // exits non-zero ("not a git repository"), the same shape as any other
   // failure of the stats collection.
-  const dir = mkdtempSync(path.join(os.tmpdir(), "harry-fix-test-"));
+  const dir = tempDir("harry-fix-test-");
   const logged: string[] = [];
   try {
     const stats = computeStagedDiff(dir, "HEAD", (m) => logged.push(m));
@@ -65,10 +75,10 @@ test("computeStagedDiff: a failed git call reports unknown stats, not zeros", ()
 // measurement of "the model changed nothing" has to stay reportable as zeros.
 // Collapsing the two back together in either direction is the defect.
 test("computeStagedDiff: a genuine empty diff is still reported as zeros", () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "harry-fix-empty-"));
+  const dir = tempDir("harry-fix-empty-");
   const logged: string[] = [];
   try {
-    emptyRepo(dir);
+    repoWithCommit(dir);
     const stats = computeStagedDiff(dir, "HEAD", (m) => logged.push(m));
     assert.deepEqual(
       stats,
@@ -82,33 +92,6 @@ test("computeStagedDiff: a genuine empty diff is still reported as zeros", () =>
 });
 
 // ─── baseline snapshot (runFix's `beforeRun`) ────────────────────────────────
-
-const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
-
-function tempDir(prefix: string): string {
-  return mkdtempSync(path.join(os.tmpdir(), prefix));
-}
-
-function git(dir: string, args: string[]): string {
-  return execFileSync("git", args, { cwd: dir, encoding: "utf-8" }).trim();
-}
-
-/**
- * A repo with one commit. Identity goes in the repo's LOCAL config, not on the
- * `-c` command line: fix spawns its own `git stash create`, which writes a
- * commit object and fails without an identity (CI runners have no global one).
- * Returns the HEAD sha.
- */
-function repoWithCommit(dir: string): string {
-  git(dir, ["init", "-q"]);
-  git(dir, ["config", "user.email", "test@example.com"]);
-  git(dir, ["config", "user.name", "test"]);
-  git(dir, ["config", "commit.gpgsign", "false"]);
-  writeFileSync(path.join(dir, "tracked.txt"), "v1\n");
-  git(dir, ["add", "-A"]);
-  git(dir, ["commit", "-q", "-m", "base"]);
-  return git(dir, ["rev-parse", "HEAD"]);
-}
 
 interface FixRun {
   status: number | null;
