@@ -100,10 +100,12 @@ export function generateJobId(): string {
 }
 
 // DEBT: `jobs/` grows without bound — every ask/review/fix run creates one more
-// `jobs/<id>.log` and nothing ever deletes one. Each file is a handful of
-// progress lines (see the log() call sites), not a transcript, and the dir is
-// per-workspace, so growth is slow — but it is monotonic and nothing reclaims
-// it. Ceiling: file count / total size of one workspace's `jobs/` dir. Upgrade
+// `jobs/<id>.log` and nothing ever deletes one. The per-command log() calls are
+// only a few lines each; the volume is the model's reasoning text (see the 0600
+// note above), which reaches this same sink because each command hands `log` to
+// the provider as `opts.appendLog` — `providers/codex.ts:99` then writes one
+// line per reasoning section, untruncated and unthrottled, for the whole turn.
+// Ceiling: file count / total size of one workspace's `jobs/` dir. Upgrade
 // path: prune oldest-first by age or count on write, if a workspace's `jobs/`
 // ever gets large enough to notice.
 export function appendLog(stateDir: string, jobId: string, message: string): void {
