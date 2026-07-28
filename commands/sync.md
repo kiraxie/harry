@@ -1,7 +1,7 @@
 ---
 description: Set up or resync harry here — wire the resident laws into your global instructions, add the .gitignore block, and offer to migrate legacy spec/plan docs. Re-run after updating the plugin or editing HARRY.md to resync. --remove strips this project's .gitignore block (laws stay).
 argument-hint: '[--remove] [--force] [targetDir]'
-allowed-tools: Bash(node:*), Bash(git log:*), Glob, Grep, Read, Write, Edit, AskUserQuestion
+allowed-tools: Bash(node:*), Glob, Grep, Read, Write, Edit, AskUserQuestion
 ---
 
 Raw slash-command arguments: `$ARGUMENTS`
