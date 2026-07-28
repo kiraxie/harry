@@ -25,6 +25,15 @@ interface CommandResult {
 // instead of throwing so the review can still proceed.
 const SELF_COLLECT_BUFFER_BYTES = 64 * 1024 * 1024;
 
+// Why a git call failed, in human-readable form: git's own stderr when it said
+// anything, else the exit code — or, when there is no status at all, the fact
+// that git never returned one (killed by a signal, or the spawn itself failed).
+// `exit null` would read as a real exit code and is never what happened.
+function failureReason(result: CommandResult): string {
+  if (result.stderr.trim()) return result.stderr.trim();
+  return result.status === null ? "killed by a signal or failed to spawn" : `exit ${result.status}`;
+}
+
 function gitDiffTolerant(cwd: string, args: string[]): { stdout: string; overflow: boolean } {
   const result = git(cwd, args, SELF_COLLECT_BUFFER_BYTES);
   if (result.error?.code === "ENOBUFS") {
@@ -32,9 +41,7 @@ function gitDiffTolerant(cwd: string, args: string[]): { stdout: string; overflo
   }
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`,
-    );
+    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
   }
   return { stdout: result.stdout, overflow: false };
 }
@@ -68,9 +75,7 @@ function gitChecked(cwd: string, args: string[], maxBuffer?: number): CommandRes
   const result = git(cwd, args, maxBuffer);
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`,
-    );
+    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
   }
   return result;
 }
@@ -91,7 +96,8 @@ function measureGitOutputBytes(cwd: string, args: string[], maxBytes: number): n
   const result = git(cwd, args, maxBytes + 1);
   if (result.error && result.error.code === "ENOBUFS") return maxBytes + 1;
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed`);
+  if (result.status !== 0)
+    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
   return Buffer.byteLength(result.stdout, "utf8");
 }
 

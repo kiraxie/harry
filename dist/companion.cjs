@@ -1695,6 +1695,10 @@ var MAX_UNTRACKED_BYTES = 24 * 1024;
 var DEFAULT_INLINE_DIFF_MAX_FILES = 2;
 var DEFAULT_INLINE_DIFF_MAX_BYTES = 256 * 1024;
 var SELF_COLLECT_BUFFER_BYTES = 64 * 1024 * 1024;
+function failureReason(result) {
+  if (result.stderr.trim()) return result.stderr.trim();
+  return result.status === null ? "killed by a signal or failed to spawn" : `exit ${result.status}`;
+}
 function gitDiffTolerant(cwd, args) {
   const result = git(cwd, args, SELF_COLLECT_BUFFER_BYTES);
   if (result.error?.code === "ENOBUFS") {
@@ -1702,9 +1706,7 @@ function gitDiffTolerant(cwd, args) {
   }
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`
-    );
+    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
   }
   return { stdout: result.stdout, overflow: false };
 }
@@ -1734,9 +1736,7 @@ function gitChecked(cwd, args, maxBuffer) {
   const result = git(cwd, args, maxBuffer);
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed: ${result.stderr.trim() || `exit ${result.status}`}`
-    );
+    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
   }
   return result;
 }
@@ -1754,7 +1754,8 @@ function measureGitOutputBytes(cwd, args, maxBytes) {
   const result = git(cwd, args, maxBytes + 1);
   if (result.error && result.error.code === "ENOBUFS") return maxBytes + 1;
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed`);
+  if (result.status !== 0)
+    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
   return Buffer.byteLength(result.stdout, "utf8");
 }
 function measureCombinedGitOutputBytes(cwd, argSets, maxBytes) {
