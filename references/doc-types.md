@@ -169,8 +169,9 @@ move a one-line conclusion to `HISTORY.md` and remove the In-flight line
 ## Chronological archive `.local/HISTORY.md`
 
 The permanent one-line-per-unit completion log
-(`- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> · <one-line outcome>`,
-newest first). On-demand, gitignored, NOT auto-loaded — a thin pointer; the
+(`- YYYY-MM-DD · <topic> · <squash SHA> · PR #<n> (or "local merge, no PR") · <one-line outcome>`,
+newest first) — a unit that never opened a PR writes the literal
+`local merge, no PR` in that slot rather than leaving it blank. On-demand, gitignored, NOT auto-loaded — a thin pointer; the
 detail lives in git/PR. **Yearly rotation:** when adding the first entry of
 a new year, first move the previous year's entries to
 `.local/history/<year>.md`, leaving `HISTORY.md` holding only the current
