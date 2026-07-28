@@ -3,8 +3,7 @@
  *
  * Holds the per-run job log (`jobs/<id>.log`, the path each command prints so a
  * user can inspect a run) and the cached codex rate-limit snapshot, under
- * $CLAUDE_PLUGIN_DATA. Ported from the sibling gemini-plugin-cc with minimal
- * changes.
+ * $CLAUDE_PLUGIN_DATA.
  */
 
 import { execFileSync } from "node:child_process";

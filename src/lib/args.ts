@@ -1,6 +1,6 @@
 /**
- * Shared CLI argument helpers used by the dispatcher (`companion.ts`) and the
- * command modules.
+ * Shared CLI argument helpers. `src/companion.ts` (the dispatcher) is the only
+ * importer.
  */
 
 /**
