@@ -372,7 +372,18 @@ test("the apply prose names runFix's unborn-HEAD refusal it claims to share", ()
   // starting "2. " — an appended checklist will do — and the slice silently
   // widens across the rest of the file instead of failing. Asserting a marker
   // only protects against its absence.
-  const section = sliceBetween(doc, full, "1. **Baseline snapshot**", "\n2. The write mechanism");
+  //
+  // Re-pointed once, and the failure is the reason to keep this shape: step 2
+  // used to open "2. The write mechanism is named per build:" above a labelled
+  // CC/Codex pair that differed only by `Edit`/`Write` vs "directly". Collapsing
+  // that pair deleted the marker, and this test said so by name rather than
+  // silently slicing something else.
+  const section = sliceBetween(
+    doc,
+    full,
+    "1. **Baseline snapshot**",
+    "\n2. **Apply** each approved finding",
+  );
 
   assert.ok(
     section.includes(UNBORN_HEAD_REFUSAL),

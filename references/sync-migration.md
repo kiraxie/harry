@@ -8,7 +8,7 @@ frontmatter, its invocation surface, and **Phase 1 — Resident laws**, which is
 genuinely per-build (`install.mjs` + the `@`-import + the optional Explore override
 vs `install-codex.mjs` + the inlined block). Where the two builds genuinely differ
 below, both variants are captured under explicit **Claude Code build:** /
-**Codex build:** labels — never collapse them to one.
+**Codex build:** labels — never collapse them to one. Where only the **vocabulary** differs — a tool's name or casing, a flag that exists on one build — the text stays build-neutral and names the Claude Code term inline; a near-identical pair for that is duplication, not a divergence.
 
 ---
 

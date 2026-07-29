@@ -6,7 +6,7 @@ Each of those files keeps only its own build-specific shell — frontmatter, tit
 and the invocation surface that scopes the scan — and points here for everything
 below. Where the two builds genuinely differ, both variants are captured under
 explicit **Claude Code build:** / **Codex build:** labels — never collapse them to
-one.
+one. Where only the **vocabulary** differs — a tool's name or casing, a flag that exists on one build — the text stays build-neutral and names the Claude Code term inline; a near-identical pair for that is duplication, not a divergence.
 
 ---
 
