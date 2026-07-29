@@ -9,10 +9,15 @@ The session runs in two phases — **divergence** (find which decisions exist) t
 **convergence** (settle the ones that are cleanly enumerable) — and closes on a residue
 manifest. Each rule below applies across both phases unless it names one.
 
-A grilling session is **a conversation, not a tool run**: it creates no `.local/` item
-and no pipeline entry, and it exits on the residue manifest below rather than on a
-deliverable. Work that emerges from it becomes pipeline work through the handoff at the
-end of this file — never as a side effect of the interview.
+**Standalone `/grill` only.** A `/grill` session is **a conversation, not a tool run**:
+it creates no `.local/` item of its own and no pipeline entry, and it exits on the
+residue manifest below rather than on a deliverable — the backlog items the manifest's
+own dispositions open are the exception. Work that emerges reaches the pipeline through
+those dispositions or through the Handoff at the end of this file, never as a side
+effect of the interview. The scoping is load-bearing, not throat-clearing: this file has
+two callers, and `skills/brainstorming` — told to follow these rules and not re-derive
+them — *does* write an item and enter the pipeline, so inside that skill its own steps
+govern what gets written.
 
 ## Decision-tree dependency order
 
@@ -105,6 +110,6 @@ What the user approves is **design + manifest**. Nothing raised may evaporate.
 
 ## Handoff
 
-When a grilling session produced buildable work and the user agrees to proceed, the
-settled decisions and the manifest **carry into the brainstorming pipeline** — the
-interview is **not** re-run there.
+When a grilling session produced buildable work, **offer** the handoff rather than
+waiting to be asked. On the user's agreement the settled decisions and the manifest
+**carry into the brainstorming pipeline** — the interview is **not** re-run there.

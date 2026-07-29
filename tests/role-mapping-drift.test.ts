@@ -268,11 +268,14 @@ for (const name of PAIRS) {
 //    hoisting two of them would be textbook speculative abstraction. Their
 //    divergence risk is the opposite shape — content that was never shared (see
 //    the `--context` case) — and needs its own answer.
-//  - Door↔REFERENCE only, never door↔door. Seven of the eight pairs carry
-//    verbatim cross-build duplication today (`grill` and `distill` are 60-70%
-//    identical prose); some is by design (the pointer sentences), some is not.
-//    That is unhoisted duplication rather than escaped hoisted content, so it is
-//    a candidate for a future hoist, not a hole in this guard.
+//  - Door↔REFERENCE only, never door↔door. Six of the eight pairs still carry
+//    verbatim cross-build duplication; for most of them it is the pointer
+//    sentences, which are duplicated BY DESIGN — that is what a thin door looks
+//    like. `review` is the live exception: of its 13 shared lines, ~4 are
+//    build-agnostic instruction prose that no reference states. `grill` and
+//    `distill` were the 60-70% cases and are done — what remains shared there is
+//    pointer text only. Unhoisted duplication is a hoist candidate, not a hole
+//    in this guard, which by construction sees only escaped HOISTED content.
 // Declared per pair as a LIST, and checked against the paths actually shared —
 // not just against which pairs share something. A pair-granular floor (the first
 // version of this) is the same mistake the unit exists to correct: it reads as a
