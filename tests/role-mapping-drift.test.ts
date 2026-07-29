@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -278,19 +278,66 @@ for (const name of PAIRS) {
 // version of this) is the same mistake the unit exists to correct: it reads as a
 // guard while a second hoist onto an existing pair, or both doors switching to a
 // different reference, leaves the new path unguarded and everything green.
+// Includes what each pair reaches one level down (see sharedRefs). Two entries
+// under audit are not prose — a JSON schema and a CJS validator — and the
+// content check below is inert on them by nature. They are listed rather than
+// exempted because the equality assertion is what keeps this map honest, and an
+// exemption mechanism would be a second place to forget something; both still
+// clear the non-vacuity guard (29 and 72 qualifying lines).
 const HOISTED: Record<string, string[]> = {
-  debt: ["references/debt-audit.md"],
-  review: ["references/review-orchestration.md"],
-  sync: ["references/sync-migration.md"],
-  audit: ["references/audit/ORCHESTRATION.md"],
+  debt: ["references/debt-audit.md", "references/doc-types.md"],
+  review: ["references/review-orchestration.md", "references/review-rubric.md"],
+  sync: ["references/sync-migration.md", "references/doc-types.md"],
+  audit: [
+    "references/audit/ORCHESTRATION.md",
+    "references/audit/RECON.md",
+    "references/audit/DEEP-DIVE.md",
+    "references/audit/SCAN-DIMENSIONS.md",
+    "references/audit/VALIDATION-AND-REPORTING.md",
+    "references/audit/report-schema.json",
+    "references/audit/validate-findings.cjs",
+  ],
   grill: ["references/grilling.md"],
-  distill: ["references/distilling.md"],
+  distill: ["references/distilling.md", "references/upstream-sync.md"],
 };
 
-/** The reference paths a pair's two doors both cite. */
+/**
+ * The reference paths a pair's two doors both cite, plus — one level deeper —
+ * the references those files themselves cite.
+ *
+ * The transitive step is not decoration. `/audit`'s doors point at a single hub,
+ * `references/audit/ORCHESTRATION.md`, which in turn carries six companions
+ * (RECON, DEEP-DIVE, SCAN-DIMENSIONS, VALIDATION-AND-REPORTING, the report
+ * schema, the validator). With direct citations only, those six sat outside
+ * every guard here: re-inlining five verbatim RECON.md prose lines into BOTH
+ * audit doors left the whole suite green. Deriving one level down is what makes
+ * a hub-and-spoke reference bundle guardable at all — and it is worth more than
+ * the audit case, since it also picks up doc-types.md (via debt and sync),
+ * review-rubric.md, and upstream-sync.md, all real prose nobody was guarding.
+ *
+ * ONE LEVEL, not a full closure. Two levels adds nothing today (measured), and
+ * an unbounded walk would need cycle handling for a graph that is currently a
+ * tree two deep. Raise it when a real third level appears, not before.
+ *
+ * Non-file matches are dropped: the path regex also matches a bare directory
+ * mention like `${CLAUDE_PLUGIN_ROOT}/references/audit/`, which normalizes to
+ * `references/audit` and cannot be read. Skipping it hides nothing — prose-refs
+ * asserts separately that every path cited under references/ resolves on disk,
+ * so a dangling companion fails there rather than vanishing here.
+ */
 function sharedRefs(name: string): string[] {
   const codex = refPaths(`codex-skills/${name}/SKILL.md`);
-  return [...refPaths(`commands/${name}.md`)].filter((p) => codex.has(p)).sort();
+  const direct = [...refPaths(`commands/${name}.md`)].filter((p) => codex.has(p));
+  const all = new Set(direct);
+  for (const ref of direct) {
+    for (const nested of refPaths(ref)) all.add(nested);
+  }
+  return [...all].filter(isReferenceFile).sort();
+}
+
+function isReferenceFile(rel: string): boolean {
+  const abs = path.join(repoRoot, rel);
+  return existsSync(abs) && statSync(abs).isFile();
 }
 
 // 40 chars: long enough that a shared line is prose rather than a common phrase.
