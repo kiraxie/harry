@@ -107,8 +107,16 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     return;
   }
 
+  // Untracked bodies ride the same budget as the diff but are measured
+  // separately, so name them separately whenever they were measured at all —
+  // otherwise a self-collect driven entirely by untracked files reads as
+  // "~1024B diff (self-collect)" with nothing explaining the decision. On a
+  // self-collect line the figure is what the inline path WOULD have spent, not
+  // what was sent: self-collect emits filenames only.
+  const untrackedNote =
+    context.untrackedBytes === null ? "" : ` + ~${context.untrackedBytes}B untracked`;
   progress(
-    `Target: ${context.target.label} — ${context.fileCount} file(s), ~${context.diffBytes}B diff (${context.inputMode}).`,
+    `Target: ${context.target.label} — ${context.fileCount} file(s), ~${context.diffBytes}B diff${untrackedNote} (${context.inputMode}).`,
   );
 
   // 2. Build prompt ----------------------------------------------------------
