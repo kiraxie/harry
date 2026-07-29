@@ -232,3 +232,74 @@ test("every §N citation names a section HARRY.md actually has", () => {
 
   assert.deepEqual(failures, [], "citations pointing at a section HARRY.md does not define");
 });
+
+// ---------------------------------------------------------------------------
+// `See **Heading** in <reference>` pointers
+//
+// The third citation form, and the one that has actually been breaking. The
+// path check above proves the FILE exists; the §N check proves a law number
+// resolves; neither says anything about a heading named inside another file.
+// Three consecutive units broke exactly this and were caught by review rather
+// than by the suite: a section was hoisted or renamed and the sentence pointing
+// at it kept its old name, or introduced bullets that no longer existed.
+//
+// The doors cite the heading WITHOUT the reference's `(one definition)` suffix
+// — `See **The apply steps — baseline snapshot, apply, report**` against
+// `## The apply steps — baseline snapshot, apply, report (one definition)` — so
+// a trailing parenthetical is stripped before comparing. Nothing else about the
+// heading is normalized: an em dash or casing change should fail, because it
+// means the door and the reference have stopped agreeing on the section's name.
+test("every `See **Heading** in <reference>` names a heading that reference has", () => {
+  const headings = new Map<string, Set<string>>();
+  const headingsOf = (rel: string): Set<string> => {
+    let set = headings.get(rel);
+    if (!set) {
+      set = new Set(
+        Array.from(readFileSync(path.join(repoRoot, rel), "utf-8").matchAll(/^##+ (.+)$/gm), (m) =>
+          m[1].replace(/\s*\([^)]*\)\s*$/, "").trim(),
+        ),
+      );
+      headings.set(rel, set);
+    }
+    return set;
+  };
+
+  const failures: string[] = [];
+  let pointers = 0;
+
+  for (const relFile of proseFiles) {
+    const lines = readFileSync(path.join(repoRoot, relFile), "utf-8").split("\n");
+    lines.forEach((line, idx) => {
+      for (const m of line.matchAll(/See \*\*(.+?)\*\* in\b/g)) {
+        pointers++;
+        // The path usually sits on the NEXT line (these sentences are wrapped),
+        // so look at the remainder of this line and the following one. A
+        // pointer with no path at all is a FAILURE, never a skip — that is the
+        // shape that would quietly excuse every future rename.
+        const window = line.slice(m.index ?? 0) + "\n" + (lines[idx + 1] ?? "");
+        const target = window.match(/references\/[\w./-]+\.md/)?.[0];
+        if (!target) {
+          failures.push(`${relFile}:${idx + 1} -> "${m[1]}" names no reference path`);
+          continue;
+        }
+        if (!existsSync(path.join(repoRoot, target))) {
+          failures.push(`${relFile}:${idx + 1} -> ${target} is missing`);
+          continue;
+        }
+        if (!headingsOf(target).has(m[1].trim())) {
+          failures.push(`${relFile}:${idx + 1} -> ${target} has no heading "${m[1]}"`);
+        }
+      }
+    });
+  }
+
+  // Guards the parse, not the corpus: every pointer above is checked exactly, so
+  // this only has to catch the regex matching nothing at all — which would make
+  // the whole test vacuous while staying green.
+  assert.ok(
+    pointers > 0,
+    "no `See **X** in` pointers were found anywhere — the regex above has stopped " +
+      "matching, and this test now asserts nothing.",
+  );
+  assert.deepEqual(failures, [], "pointers naming a heading their reference does not have");
+});
