@@ -8,6 +8,9 @@ single review + fix, apply backends apart from the apply steps themselves, and t
 Codex-only limitation/asymmetry notes) and points here for the four definitions below.
 Where the two builds genuinely differ, both variants are captured under explicit
 **Claude Code build:** / **Codex build:** labels — never collapse them to one.
+Where only the **vocabulary** differs — a tool's name or casing, a flag that
+exists on one build — the text stays build-neutral and names the Claude Code term
+inline; a near-identical pair for that is duplication, not a divergence.
 
 ## The structured-review envelope (one definition)
 
@@ -29,10 +32,9 @@ envelope — never parse a leg's output as JSON without first checking it succee
 
 ## The simplify dual-lane (one definition)
 
-The triggering condition (when the active angle runs as two lanes) is worded per build:
-
-- **Claude Code build:** Whenever the active angle is `--simplify` — standalone, under a fix backend, or as two of `--full`'s three lanes — it runs as **two lanes**, not one.
-- **Codex build:** Whenever the active angle is simplify — standalone, under an apply request, or as two of full's three dispatches — it runs as **two lanes**, not one.
+Whenever the active angle is simplify (`--simplify` on Claude Code) — standalone, under
+a fix/apply request, or as two of full mode's three lanes — it runs as **two lanes**, not
+one.
 
 This is the single definition; every call site below just says "run the simplify dual-lane."
 
@@ -67,11 +69,10 @@ reviewer ... the diff (as a file)") rather than inlining a full diff into the pr
 - Branch mode (`--base <ref>` given): `git diff <base>...HEAD` (new files already
   appear in this diff normally — no untracked-file gap here).
 Write the result to a temp file (e.g. `/tmp/harry-review-simplify-laneb-diff.txt`).
-Then dispatch the reviewer with this brief (the dispatch verb, and whether the context
-arg is named `--context`, differ by build):
-
-- **Claude Code build:** Then dispatch an agent — it has no memory of this conversation, so hand it the file path explicitly — with this brief, substituting the actual file path and any `--context`/focus text into the `Scope:` line:
-- **Codex build:** Then dispatch a sub-agent — it has no memory of this conversation, so hand it the file path explicitly — with this brief, substituting the actual file path and any context/focus text into the `Scope:` line:
+Then dispatch a sub-agent (the `Agent` tool on Claude Code) — it has no memory of this
+conversation, so hand it the file path explicitly — with this brief, substituting the
+actual file path and any context/focus text (`--context` on Claude Code) into the
+`Scope:` line:
 
 ```
 You are a lazy senior engineer reviewing for TWO things: over-engineering and
@@ -135,16 +136,16 @@ If there is nothing to cut or clarify, say so plainly and return no findings.
 
 Full mode's Stage 1 (fanning the three read-only lanes out) and Stage 3 (output /
 hand off) stay per build in the doors; this is the consolidation step all three lanes
-feed into. Two of its bullets are worded per build:
+feed into.
 
 - For each Codex leg (adversarial, simplify Lane A): check it succeeded first (zero
   exit, stdout is the envelope not `# Review Failed`). A failed leg contributes no
   findings — record it as a failed source and continue; never abort the whole
   consolidation for one bad leg. Adversarial design-level notes live in
   `reviewMarkdown`'s `## Design Concerns`; simplify findings are cleanups, not bugs.
-- The Lane B mapping bullet names the lane per build:
-  - **Claude Code build:** Simplify Lane B (CC over-engineering & readability) returns plain `tag: what. replacement.` lines — map each to a finding: `tag`→severity-ish label, the line itself→title.
-  - **Codex build:** Simplify Lane B (the over-engineering & readability sub-agent) returns plain `tag: what. replacement.` lines — map each to a finding: `tag`→severity-ish label, the line itself→title.
+- Simplify Lane B (the over-engineering & readability lane) returns plain `tag: what.
+  replacement.` lines — map each to a finding: `tag`→severity-ish label, the line
+  itself→title.
 - **Re-key ids across sources** before merging: prefix each by source
   (`adv-`/`smp-`/`lean-`) so the table's `id` column is unique and unambiguous.
 - **Dedup** by `file` + `line` + semantic-title. When `line` is absent (file-wide),
@@ -152,9 +153,8 @@ feed into. Two of its bullets are worded per build:
   different file-wide findings just because they share a file. Simplify Lane A and
   Lane B will sometimes name the same spot from different angles — merge, keep both
   sources listed.
-- The judging bullet names the read step per build:
-  - **Claude Code build:** Judge against this codebase: `Read` cited files where it matters and drop clear false positives (HARRY §6 — automated review is a suggestion, not an order).
-  - **Codex build:** Judge against this codebase: read cited files where it matters and drop clear false positives (HARRY §6 — automated review is a suggestion, not an order).
+- Judge against this codebase: read cited files where it matters and drop clear false
+  positives (HARRY §6 — automated review is a suggestion, not an order).
 
 Present ONE table, plus a `## Design Concerns` section (from adversarial) below it:
 
@@ -191,13 +191,14 @@ invokes them differs by build:
    HEAD` as the baseline instead. **A `git` command that outright fails counts as
    the quiet branch, not as a reason to stop**: runFix treats a failed `git status`
    as clean and a failed `git stash create` as "printed nothing", so both fall
-   through to HEAD. The SHA-reuse caution and the known limit are
-   worded per build:
-   - **Claude Code build:** Reuse that literal SHA in step 3 — each `Bash` call is a fresh shell, so a `BASE=…` variable will not survive; substitute the actual value. Known limit (same as runFix): `stash create` skips pre-existing untracked files, so `git add -A` in step 3 stages them and they appear in the fix diff as if the fix created them.
-   - **Codex build:** Reuse that literal SHA in step 3 (don't rely on a shell variable surviving between commands). Known limit (same as runFix): `stash create` skips pre-existing untracked files, so the reported diff may attribute them to the fix.
-2. The write mechanism is named per build:
-   - **Claude Code build:** **Apply** each approved finding with `Edit`/`Write`: minimal, correct change per finding; no unrelated refactor. Skip any that is already fixed, no longer applies, or whose fix would change intended behavior — note why.
-   - **Codex build:** **Apply** each approved finding directly: minimal, correct change per finding; no unrelated refactor. Skip any that is already fixed, no longer applies, or whose fix would change intended behavior — note why.
+   through to HEAD. Reuse that literal SHA in step 3 — each command runs in a fresh
+   shell (every `Bash` call, on Claude Code), so a `BASE=…` variable will not survive;
+   substitute the actual value. Known limit (same as
+   runFix): `stash create` skips pre-existing untracked files, so `git add -A` in step 3
+   stages them and they appear in the fix diff as if the fix created them.
+2. **Apply** each approved finding to the working tree (`Edit`/`Write` on Claude Code):
+   minimal, correct change per finding; no unrelated refactor. Skip any that is already
+   fixed, no longer applies, or whose fix would change intended behavior — note why.
 3. **Stage + report:** `git add -A`, then report applied / skipped (with reasons) and
    changed files. **If any of those git commands fails, report the counts as
    *unavailable*, never as zero** — this too is runFix's contract, and the one
