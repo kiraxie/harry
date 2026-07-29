@@ -356,6 +356,222 @@ test("collectReviewContext: the inline byte cap is inclusive", () => {
   });
 });
 
+// The inline path emits full untracked file BODIES, which appear in no diff and
+// so were never counted against maxInlineDiffBytes — `fileCount` included them
+// while `diffBytes` did not. At shipped defaults that let ~48 KB through an
+// unmeasured door (2 files x MAX_UNTRACKED_BYTES); a caller raising
+// maxInlineFiles to 50 would have let through ~1.2 MB against a 256 KB cap.
+test("collectReviewContext: untracked file bodies count against the inline BYTE cap", () => {
+  inTempRepo("main", (dir) => {
+    write(dir, "a.txt", "one\n");
+    commitAll(dir, "init");
+    // Nothing tracked is touched, so diffBytes is 0 by construction and only the
+    // untracked measurement can decide anything.
+    write(dir, "notes.txt", multiByteLines(60));
+    const target = resolveReviewTarget(dir, { scope: "working-tree" });
+
+    const one = collectReviewContext(dir, target, { maxInlineFiles: 8 });
+    assert.equal(one.diffBytes, 0, "the fixture must produce no diff at all");
+    assert.equal(one.inputMode, "inline-diff");
+    assert.ok(one.untrackedBytes !== null, "the untracked body must have been measured");
+
+    // The hole being closed is a MULTI-file one — the sizing above is
+    // "2 files x MAX_UNTRACKED_BYTES". A single-file fixture cannot tell a sum
+    // from `untracked[0]`, since with one file the two are the same number, so
+    // add a second and require the measurement to move. The untracked list is
+    // sorted, so "extra.txt" sorts FIRST: a first-file-only bug measures the
+    // smaller file here and the total goes DOWN, not merely sideways.
+    write(dir, "extra.txt", multiByteLines(11));
+    const both = collectReviewContext(dir, target, { maxInlineFiles: 8 });
+    assert.ok(both.untrackedBytes !== null);
+    assert.ok(
+      both.untrackedBytes > one.untrackedBytes,
+      `a second untracked file must raise the measurement: ${one.untrackedBytes} -> ` +
+        `${both.untrackedBytes}. Equal or lower means only one file was counted.`,
+    );
+    assert.match(both.content, /### notes\.txt/);
+    assert.match(both.content, /### extra\.txt/);
+
+    // Same inclusive-boundary contract the diff cap has. Derived from what the
+    // code measured, never hardcoded — a hardcoded number would also be
+    // satisfied by measuring the wrong thing.
+    const measured = both.untrackedBytes;
+    assert.equal(
+      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured })
+        .inputMode,
+      "inline-diff",
+      "untracked bytes exactly at the cap must still inline",
+    );
+    assert.equal(
+      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured - 1 })
+        .inputMode,
+      "self-collect",
+      "one byte of untracked body past the cap must fall back to self-collect",
+    );
+  });
+});
+
+// `untrackedBytes` is null on four paths, and the three cheap ones share a
+// mechanism worth pinning on its own: the measurement is LAZY. Reporting 0
+// instead of null on any of them left the suite green, and so did rewriting the
+// decision to measure eagerly — which is not just a reporting difference. Eager
+// measurement stats and reads every untracked file in a tree that was already
+// going to self-collect, and /review runs against arbitrary repos where an
+// un-gitignored node_modules makes that set enormous. Asserting null IS the
+// assertion that nothing was read.
+test("collectReviewContext: a cheaper check that already decided measures no untracked bytes", () => {
+  inTempRepo("main", (dir) => {
+    write(dir, "a.txt", "one\n");
+    commitAll(dir, "init");
+    for (const name of ["x.txt", "y.txt", "z.txt"]) write(dir, name, multiByteLines(20));
+    // A tracked change too, so the byte-cap case below has a non-zero diff to
+    // exceed its cap with — with untracked files alone diffBytes is 0, which no
+    // cap of 0 is greater than, and the check would fall through instead of
+    // short-circuiting.
+    write(dir, "a.txt", "two\n");
+    const target = resolveReviewTarget(dir, { scope: "working-tree" });
+
+    // Rejected by the FILE cap, with untracked bodies present and substantial —
+    // an eager measurement would report a large number here instead of null.
+    const byFileCap = collectReviewContext(dir, target, { maxInlineFiles: 2 });
+    assert.equal(byFileCap.inputMode, "self-collect");
+    assert.equal(
+      byFileCap.untrackedBytes,
+      null,
+      "the file cap short-circuits before the untracked bodies are read, so this is " +
+        "'not measured' (null) — a number here means the laziness is gone",
+    );
+
+    // Rejected by the BYTE cap instead: the file cap admits all three, so the
+    // decision has to reach the byte check and stop there.
+    const byByteCap = collectReviewContext(dir, target, {
+      maxInlineFiles: 8,
+      maxInlineDiffBytes: 0,
+    });
+    assert.equal(byByteCap.inputMode, "self-collect");
+    assert.equal(byByteCap.untrackedBytes, null, "the byte-cap short-circuit measures nothing");
+  });
+});
+
+// Pins WHY the measurement formats each file instead of summing stat sizes.
+// formatUntrackedFile emits a one-line note for a binary, so a binary's real
+// size is not what the inline path spends — charging it would force self-collect
+// on payloads that are in fact tiny.
+test("collectReviewContext: an untracked binary is measured at its note, not its size", () => {
+  inTempRepo("main", (dir) => {
+    write(dir, "a.txt", "one\n");
+    commitAll(dir, "init");
+    const bytes = Array.from({ length: 2048 }, (_, i) => (i % 7 === 0 ? 0 : (i % 255) + 1));
+    writeBinary(dir, "blob.bin", bytes);
+    const target = resolveReviewTarget(dir, { scope: "working-tree" });
+
+    const context = collectReviewContext(dir, target, { maxInlineFiles: 8 });
+    assert.equal(context.diffBytes, 0);
+    // Pinned to the note itself, not to a band between the two numbers that
+    // matter. "< 200" would have been a guess: the real value is 35 and the
+    // claim being made is "not the file's 2048 bytes", so state the contract.
+    assert.equal(
+      context.untrackedBytes,
+      Buffer.byteLength("### blob.bin\n(skipped: binary file)", "utf8"),
+      `a ${bytes.length}-byte untracked binary must be charged only its skip note ` +
+        `— a stat-based sum would report ~${bytes.length}`,
+    );
+    assert.match(context.content, /\(skipped: binary file\)/);
+  });
+});
+
+// measureGitOutputBytes passes maxBytes+1 to spawnSync as maxBuffer and returns
+// the maxBytes+1 SENTINEL when git overflows it (ENOBUFS). That return is the
+// only thing standing between an over-budget diff and being judged small enough
+// to inline — the precise inversion of what the cap is for — and nothing
+// exercised it: mutating it to 0 left the whole suite green.
+test("collectReviewContext: a diff that overflows the measure buffer reads as over-cap", () => {
+  inTempRepo("main", (dir) => {
+    write(dir, "a.txt", "one\n");
+    commitAll(dir, "init");
+    write(dir, "a.txt", multiByteLines(40));
+    const target = resolveReviewTarget(dir, { scope: "working-tree" });
+    // A 10-byte cap makes spawnSync's buffer 11 bytes, which this diff blows
+    // past, so the measurement never completes and can only return the sentinel.
+    const context = collectReviewContext(dir, target, {
+      maxInlineFiles: 8,
+      maxInlineDiffBytes: 10,
+    });
+    assert.equal(context.fileCount, 1, "the file cap must not be what decided this");
+    assert.ok(
+      context.diffBytes > 10,
+      `an unmeasurable diff must report as over-cap, got ${context.diffBytes}`,
+    );
+    assert.equal(context.inputMode, "self-collect");
+  });
+});
+
+// A negative cap is a caller bug, but it must not become an EXCEPTION: it
+// reaches spawnSync as a negative maxBuffer, which throws RangeError out of
+// collectReviewContext. Normalizing at the entry is what lets the arithmetic
+// downstream assume a non-negative budget.
+//
+// NaN is in the sweep because it is the shape the idiom does NOT handle on its
+// own: `Math.max(0, Math.trunc(NaN))` is still NaN, and the first version of
+// this normalization used exactly that and still threw on NaN — while this
+// test, named "never throws", swept only [-5, -1, 0.5] and passed. The sibling
+// truncateUtf8 test pins NaN for the same reason and says so.
+test("collectReviewContext: an invalid cap of either kind degrades to self-collect, never throws", () => {
+  inTempRepo("main", (dir) => {
+    write(dir, "a.txt", "one\n");
+    commitAll(dir, "init");
+    write(dir, "a.txt", "two\n");
+    const target = resolveReviewTarget(dir, { scope: "working-tree" });
+    for (const cap of [-5, -1, 0.5, Number.NaN]) {
+      const context = collectReviewContext(dir, target, {
+        maxInlineFiles: 8,
+        maxInlineDiffBytes: cap,
+      });
+      assert.equal(
+        context.inputMode,
+        "self-collect",
+        `maxInlineDiffBytes=${cap} must normalize to a 0 budget and self-collect`,
+      );
+    }
+    // The file cap needs the same treatment for a different reason: it never
+    // reaches spawnSync, so it cannot throw — instead NaN SILENTLY DISABLES it,
+    // because `fileCount > NaN` is false for every count.
+    assert.equal(
+      collectReviewContext(dir, target, { maxInlineFiles: Number.NaN }).inputMode,
+      "self-collect",
+      "a NaN file cap must not silently admit every file",
+    );
+  });
+});
+
+// The explicit override wins over BOTH caps, in both directions. Only the
+// `false` direction was covered; the `true` direction went unpinned through a
+// rewrite of this exact branch (`??` to ordered `if`s), where mutating it to
+// `if (options.includeDiff === false)` left the whole suite green.
+test("collectReviewContext: an explicit includeDiff:true overrides a would-be self-collect", () => {
+  inTempRepo("main", (dir) => {
+    repoWithChangedFiles(dir, 3);
+    const target = resolveReviewTarget(dir, { scope: "working-tree" });
+    const capped = collectReviewContext(dir, target, { maxInlineFiles: 1, maxInlineDiffBytes: 1 });
+    // Both caps are set below this tree, so it self-collects without the
+    // override. Which one fired is not asserted — the file check short-circuits
+    // first, so this cannot distinguish "both reject it" from "either does".
+    assert.equal(capped.inputMode, "self-collect", "the caps must reject this tree unaided");
+    const forced = collectReviewContext(dir, target, {
+      maxInlineFiles: 1,
+      maxInlineDiffBytes: 1,
+      includeDiff: true,
+    });
+    assert.equal(forced.inputMode, "inline-diff");
+    assert.match(forced.content, /## Unstaged Diff/);
+    assert.equal(
+      forced.untrackedBytes,
+      null,
+      "an override skips the decision, so nothing was measured — null, not 0",
+    );
+  });
+});
+
 test("collectReviewContext: the inline file cap also applies to branch targets", () => {
   inTempRepo("main", (dir) => {
     write(dir, "a.txt", "one\n");
@@ -373,6 +589,11 @@ test("collectReviewContext: the inline file cap also applies to branch targets",
     const narrow = collectReviewContext(dir, target, { maxInlineFiles: 2 });
     assert.equal(narrow.changedFiles.length, 3);
     assert.equal(narrow.inputMode, "self-collect");
+    assert.equal(
+      narrow.untrackedBytes,
+      null,
+      "a branch range has no untracked concept, so the measurement is not applicable",
+    );
   });
 });
 
@@ -597,10 +818,16 @@ test("truncateUtf8 normalizes a cap that is negative or fractional", () => {
 });
 
 test("truncateUtf8 handles a NaN cap as zero and an infinite cap as no limit", () => {
-  // Both reachable through a public `maxInlineDiffBytes` and neither previously
-  // asserted. The behaviour is already right; pin it so a future change to the
-  // normalization cannot alter it unnoticed. Infinity must NOT be normalized to
-  // zero — an unbounded cap means "no truncation", which is a real answer.
+  // Neither previously asserted. The behaviour is already right; pin it so a
+  // future change to the normalization cannot alter it unnoticed. Infinity must
+  // NOT be normalized to zero — an unbounded cap means "no truncation", which is
+  // a real answer.
+  //
+  // These no longer arrive from `maxInlineDiffBytes`: collectReviewContext now
+  // normalizes that cap at its entry, so truncateUtf8's own guard covers direct
+  // callers and this test. Keep it — the function is exported, and a NaN cap
+  // reaching the boundary walk unguarded reintroduces the U+FFFD defect the
+  // walk exists to prevent.
   assert.deepEqual(truncateUtf8(CJK_NO_NEWLINE, Number.NaN), { text: "", truncated: true });
   assert.deepEqual(truncateUtf8(CJK_NO_NEWLINE, Number.POSITIVE_INFINITY), {
     text: CJK_NO_NEWLINE,

@@ -1665,10 +1665,19 @@ function measureGitOutputBytes(cwd, args, maxBytes) {
 function measureCombinedGitOutputBytes(cwd, argSets, maxBytes) {
   let total = 0;
   for (const args of argSets) {
-    const remaining = maxBytes - total;
-    if (remaining < 0) return maxBytes + 1;
-    total += measureGitOutputBytes(cwd, args, remaining);
+    total += measureGitOutputBytes(cwd, args, maxBytes - total);
     if (total > maxBytes) return total;
+  }
+  return total;
+}
+function normalizeCap(value, fallback) {
+  const raw = value ?? fallback;
+  return Number.isNaN(raw) ? 0 : Math.max(0, Math.trunc(raw));
+}
+function measureUntrackedInlineBytes(cwd, untracked) {
+  let total = 0;
+  for (const file of untracked) {
+    total += Buffer.byteLength(formatUntrackedFile(cwd, file), "utf8");
   }
   return total;
 }
@@ -1897,12 +1906,25 @@ ${diffBlock}`;
 function collectReviewContext(cwd, target, options = {}) {
   const repoRoot = getRepoRoot(cwd);
   const branch = getCurrentBranch(repoRoot);
-  const maxInlineFiles = options.maxInlineFiles ?? DEFAULT_INLINE_DIFF_MAX_FILES;
-  const maxInlineDiffBytes = options.maxInlineDiffBytes ?? DEFAULT_INLINE_DIFF_MAX_BYTES;
-  const shouldInline = (measured) => options.includeDiff ?? (measured.fileCount <= maxInlineFiles && measured.diffBytes <= maxInlineDiffBytes);
+  const maxInlineFiles = normalizeCap(options.maxInlineFiles, DEFAULT_INLINE_DIFF_MAX_FILES);
+  const maxInlineDiffBytes = normalizeCap(
+    options.maxInlineDiffBytes,
+    DEFAULT_INLINE_DIFF_MAX_BYTES
+  );
+  const decideInline = (measured) => {
+    if (options.includeDiff !== void 0) {
+      return { inline: options.includeDiff, extraBytes: null };
+    }
+    if (measured.fileCount > maxInlineFiles) return { inline: false, extraBytes: null };
+    if (measured.diffBytes > maxInlineDiffBytes) return { inline: false, extraBytes: null };
+    if (!measured.extraBytes) return { inline: true, extraBytes: null };
+    const extra = measured.extraBytes();
+    return { inline: measured.diffBytes + extra <= maxInlineDiffBytes, extraBytes: extra };
+  };
   let details;
   let includeDiff;
   let diffBytes;
+  let untrackedBytes;
   if (target.mode === "working-tree") {
     const state = getWorkingTreeState(repoRoot);
     diffBytes = measureCombinedGitOutputBytes(
@@ -1914,7 +1936,13 @@ function collectReviewContext(cwd, target, options = {}) {
       maxInlineDiffBytes
     );
     const fileCount = listUniqueFiles(state.staged, state.unstaged, state.untracked).length;
-    includeDiff = shouldInline({ fileCount, diffBytes });
+    const decision = decideInline({
+      fileCount,
+      diffBytes,
+      extraBytes: () => measureUntrackedInlineBytes(repoRoot, state.untracked)
+    });
+    includeDiff = decision.inline;
+    untrackedBytes = decision.extraBytes;
     details = collectWorkingTreeContext(repoRoot, state, includeDiff, maxInlineDiffBytes);
   } else {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
@@ -1925,7 +1953,8 @@ function collectReviewContext(cwd, target, options = {}) {
       ["diff", "--binary", "--no-ext-diff", "--submodule=diff", comparison.commitRange],
       maxInlineDiffBytes
     );
-    includeDiff = shouldInline({ fileCount, diffBytes });
+    includeDiff = decideInline({ fileCount, diffBytes }).inline;
+    untrackedBytes = null;
     details = collectBranchContext(
       repoRoot,
       target.baseRef,
@@ -1946,6 +1975,7 @@ function collectReviewContext(cwd, target, options = {}) {
     changedFiles: details.changedFiles,
     fileCount: details.changedFiles.length,
     diffBytes,
+    untrackedBytes,
     inputMode: includeDiff ? "inline-diff" : "self-collect",
     collectionGuidance
   };
@@ -2503,8 +2533,9 @@ No changes to review under ${context.target.label}.
     log("review aborted: empty target");
     return;
   }
+  const untrackedNote = context.untrackedBytes === null ? "" : ` + ~${context.untrackedBytes}B untracked`;
   progress(
-    `Target: ${context.target.label} \u2014 ${context.fileCount} file(s), ~${context.diffBytes}B diff (${context.inputMode}).`
+    `Target: ${context.target.label} \u2014 ${context.fileCount} file(s), ~${context.diffBytes}B diff${untrackedNote} (${context.inputMode}).`
   );
   const fixMode = options.fix === true;
   let prompt = buildReviewPrompt(kind, { context, focusText: options.focusText ?? "" });

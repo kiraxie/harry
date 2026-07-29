@@ -51,7 +51,10 @@ export function truncateUtf8(s: string, maxBytes: number): { text: string; trunc
   // silently skip the boundary walk below: `subarray(0, -5)` counts from the
   // END, and `buf[2.5]` is `undefined`, which fails the continuation-byte test.
   // Either would reintroduce exactly the defect the walk exists to prevent, so
-  // normalize instead. Nothing validates `maxInlineDiffBytes` upstream.
+  // normalize instead. collectReviewContext now normalizes `maxInlineDiffBytes`
+  // at its entry, so its two call sites arrive clean; this stays because the
+  // function is exported and called directly, including by tests that hand it
+  // NaN and Infinity.
   const cap = Math.max(0, Math.trunc(maxBytes));
   const buf = Buffer.from(s, "utf8");
   if (buf.length <= cap) return { text: s, truncated: false };
@@ -117,13 +120,56 @@ function measureGitOutputBytes(cwd: string, args: string[], maxBytes: number): n
   return Buffer.byteLength(result.stdout, "utf8");
 }
 
+// Requires maxBytes >= 0; collectReviewContext normalizes it at the entry.
+// The per-set budget `maxBytes - total` therefore cannot go negative: it starts
+// at maxBytes, and the `total > maxBytes` return below means a surviving
+// iteration always leaves total <= maxBytes. That matters because
+// measureGitOutputBytes passes that budget + 1 to spawnSync as maxBuffer, which
+// THROWS RangeError below 0 — so a negative cap has to be stopped at the entry,
+// not absorbed here.
 function measureCombinedGitOutputBytes(cwd: string, argSets: string[][], maxBytes: number): number {
   let total = 0;
   for (const args of argSets) {
-    const remaining = maxBytes - total;
-    if (remaining < 0) return maxBytes + 1;
-    total += measureGitOutputBytes(cwd, args, remaining);
+    total += measureGitOutputBytes(cwd, args, maxBytes - total);
     if (total > maxBytes) return total;
+  }
+  return total;
+}
+
+// A cap is a caller bug when it is negative or NaN, and the two fail
+// differently: a negative byte cap reaches spawnSync as a negative maxBuffer and
+// THROWS RangeError, while NaN silently DISABLES the cap it belongs to, because
+// every `x > NaN` is false. NaN has to be named explicitly — `Math.max(0,
+// Math.trunc(NaN))` is still NaN. (truncateUtf8 uses the bare idiom safely: a
+// NaN cap there yields an empty string, not a throw.)
+//
+// `Math.trunc` is defensive, NOT load-bearing, and the distinction is worth
+// keeping straight: Node floors maxBuffer itself, so a fractional byte cap never
+// spuriously overflows, and a fractional file cap compares identically to its
+// floor. It is here so a cap is integral by the time anything downstream reasons
+// about it — the same contract truncateUtf8 states, where a fractional cap IS
+// load-bearing (`buf[2.5]` is undefined and defeats the boundary walk).
+//
+// Infinity is deliberately passed through: spawnSync accepts it, and it is the
+// documented way to ask for no limit.
+function normalizeCap(value: number | undefined, fallback: number): number {
+  const raw = value ?? fallback;
+  return Number.isNaN(raw) ? 0 : Math.max(0, Math.trunc(raw));
+}
+
+// The inline path emits full untracked file bodies, which appear in no diff and
+// so were never counted against maxInlineDiffBytes. Measure them by FORMATTING
+// each file rather than by stat: formatUntrackedFile skips directories, binary,
+// unreadable, and over-MAX_UNTRACKED_BYTES files, emitting a one-line note in
+// their place. A stat-sum would charge a 10 MB untracked binary its full size
+// when it actually contributes ~35 bytes. Sharing the formatter means the
+// measurement cannot disagree with the emitter about what each file costs. It
+// is not exact for the section as a whole: the "\n\n" joins and the section
+// framing are unmeasured, two bytes per extra file against a 256 KB budget.
+function measureUntrackedInlineBytes(cwd: string, untracked: string[]): number {
+  let total = 0;
+  for (const file of untracked) {
+    total += Buffer.byteLength(formatUntrackedFile(cwd, file), "utf8");
   }
   return total;
 }
@@ -421,7 +467,19 @@ export interface ReviewContext {
   content: string;
   changedFiles: string[];
   fileCount: number;
+  /** Bytes of staged+unstaged (or branch-range) diff. Untracked file bodies are
+   *  NOT in any diff and are reported separately in {@link untrackedBytes}. */
   diffBytes: number;
+  /**
+   * Bytes the inline path would spend on untracked file bodies, which count
+   * against the same budget as `diffBytes`. `null` on all four paths where the
+   * measurement never ran: a branch target (no untracked concept), an explicit
+   * `includeDiff` (skips the decision), a file count already over its cap, and a
+   * diff already over the byte cap — the last two short-circuit before anything
+   * is read. `null` is therefore "not measured", which a `0` could not say: 0
+   * means measured and genuinely empty.
+   */
+  untrackedBytes: number | null;
   inputMode: "inline-diff" | "self-collect";
   collectionGuidance: string;
 }
@@ -445,23 +503,53 @@ export function collectReviewContext(
 ): ReviewContext {
   const repoRoot = getRepoRoot(cwd);
   const branch = getCurrentBranch(repoRoot);
-  const maxInlineFiles = options.maxInlineFiles ?? DEFAULT_INLINE_DIFF_MAX_FILES;
-  const maxInlineDiffBytes = options.maxInlineDiffBytes ?? DEFAULT_INLINE_DIFF_MAX_BYTES;
+  // Normalize both caps HERE, at the one place they enter the module — guarding
+  // at each use site would be several chances to miss one, and the byte cap's
+  // invalid shapes are load-bearing downstream (see normalizeCap, and the
+  // non-negative precondition measureCombinedGitOutputBytes now relies on).
+  const maxInlineFiles = normalizeCap(options.maxInlineFiles, DEFAULT_INLINE_DIFF_MAX_FILES);
+  const maxInlineDiffBytes = normalizeCap(
+    options.maxInlineDiffBytes,
+    DEFAULT_INLINE_DIFF_MAX_BYTES,
+  );
 
   // One decision site for both arms. They measure different things — a working
   // tree's staged+unstaged diff vs a branch's merge-base range — but answer to
   // one policy, so a copy per arm is one policy that can silently disagree with
   // itself. Both caps and the explicit override are closed over rather than
   // passed, so no arm can apply a different budget or forget the override; the
-  // two measurements come in by name because both are numbers and a positional
+  // measurements come in by name because they are all numbers and a positional
   // call could be transposed without a type error.
-  const shouldInline = (measured: { fileCount: number; diffBytes: number }): boolean =>
-    options.includeDiff ??
-    (measured.fileCount <= maxInlineFiles && measured.diffBytes <= maxInlineDiffBytes);
+  //
+  // `extraBytes` is a THUNK, not a number, and the checks run in order for that
+  // reason: on the working-tree arm forcing it stats and reads untracked files
+  // off disk, and /review runs against arbitrary repos where an un-gitignored
+  // node_modules makes that set enormous. Doing it before the cheap checks have
+  // passed would measure a tree that was never going to inline. Once the file
+  // count has passed, the untracked set is at most maxInlineFiles files.
+  //
+  // It returns the measurement rather than writing it to an outer variable: the
+  // caller needs the number, and a predicate with a side effect is a worse way
+  // to hand it over than a second field.
+  const decideInline = (measured: {
+    fileCount: number;
+    diffBytes: number;
+    extraBytes?: () => number;
+  }): { inline: boolean; extraBytes: number | null } => {
+    if (options.includeDiff !== undefined) {
+      return { inline: options.includeDiff, extraBytes: null };
+    }
+    if (measured.fileCount > maxInlineFiles) return { inline: false, extraBytes: null };
+    if (measured.diffBytes > maxInlineDiffBytes) return { inline: false, extraBytes: null };
+    if (!measured.extraBytes) return { inline: true, extraBytes: null };
+    const extra = measured.extraBytes();
+    return { inline: measured.diffBytes + extra <= maxInlineDiffBytes, extraBytes: extra };
+  };
 
   let details: CollectedDetails;
   let includeDiff: boolean;
   let diffBytes: number;
+  let untrackedBytes: number | null;
 
   if (target.mode === "working-tree") {
     const state = getWorkingTreeState(repoRoot);
@@ -474,7 +562,13 @@ export function collectReviewContext(
       maxInlineDiffBytes,
     );
     const fileCount = listUniqueFiles(state.staged, state.unstaged, state.untracked).length;
-    includeDiff = shouldInline({ fileCount, diffBytes });
+    const decision = decideInline({
+      fileCount,
+      diffBytes,
+      extraBytes: () => measureUntrackedInlineBytes(repoRoot, state.untracked),
+    });
+    includeDiff = decision.inline;
+    untrackedBytes = decision.extraBytes;
     details = collectWorkingTreeContext(repoRoot, state, includeDiff, maxInlineDiffBytes);
   } else {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
@@ -488,7 +582,10 @@ export function collectReviewContext(
       ["diff", "--binary", "--no-ext-diff", "--submodule=diff", comparison.commitRange],
       maxInlineDiffBytes,
     );
-    includeDiff = shouldInline({ fileCount, diffBytes });
+    // No extraBytes: a branch range has no untracked concept, so untrackedBytes
+    // stays null — "not applicable", distinct from a measured zero.
+    includeDiff = decideInline({ fileCount, diffBytes }).inline;
+    untrackedBytes = null;
     details = collectBranchContext(
       repoRoot,
       target.baseRef,
@@ -515,6 +612,7 @@ export function collectReviewContext(
     changedFiles: details.changedFiles,
     fileCount: details.changedFiles.length,
     diffBytes,
+    untrackedBytes,
     inputMode: includeDiff ? "inline-diff" : "self-collect",
     collectionGuidance,
   };
