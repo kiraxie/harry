@@ -9,6 +9,11 @@ The session runs in two phases — **divergence** (find which decisions exist) t
 **convergence** (settle the ones that are cleanly enumerable) — and closes on a residue
 manifest. Each rule below applies across both phases unless it names one.
 
+A grilling session is **a conversation, not a tool run**: it creates no `.local/` item
+and no pipeline entry, and it exits on the residue manifest below rather than on a
+deliverable. Work that emerges from it becomes pipeline work through the handoff at the
+end of this file — never as a side effect of the interview.
+
 ## Decision-tree dependency order
 
 The plan/idea is a tree of decisions. A parent decision is settled before the children

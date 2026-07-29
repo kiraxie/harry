@@ -13,7 +13,3 @@ framework, and the by-outcome bookkeeping — lives there; this file only points
 
 **Codex has no AskUserQuestion:** the reference's backlog-item confirmation (step 8)
 happens in plain text — list the accepted candidates and ask which to keep.
-
-The session is read-only for harry's laws and skills: its outputs are the ruling
-report, upstream-tracking bookkeeping, and user-confirmed backlog items. Adopted
-candidates become pipeline work later, never inline edits now.
