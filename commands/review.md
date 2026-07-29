@@ -164,35 +164,9 @@ See **Full-mode Stage 2 — consolidate into one table** in
 
 ## Single review + fix (RW; `--fix` or `--harry-fix`, not `--full`)
 
-You are the judge in the middle — the reviewer runs in an isolated session and may
-flag intentional choices only you know about.
-
-### Stage 1 — Structured review
-**If the active angle is `--simplify`:** run **the simplify dual-lane** (defined
-above) instead of the single call below — Lane A already appends `--fix`; Lane B has
-no `--fix` concept and always returns its plain tag-lines. Skip straight to the
-dual-lane's own consolidation step, then continue to Stage 2 below with the
-consolidated table instead of a raw envelope.
-
-**Otherwise (standard or `--adversarial`):** forward args verbatim EXCEPT strip the
-slash-level fix flags (`--fix`, `--harry-fix`, `--wait`, `--background`); keep the
-angle and `--base`/`--scope`/`--context`/focus. Append node's `--fix` for structured
-output:
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --fix <forwarded>
-```
-Parse the envelope (see its one definition above; handle the `# Review Failed`
-failure case). If `findings` is empty, tell the user and stop.
-
-### Stage 2 — Judge each finding
-Decide real defect vs false positive (a false positive is an intentional choice you
-have context for). `Read` cited files. Present a table — id, file:line, title,
-verdict (Keep / Drop + one-line reason per Drop) — for `--simplify` this is just the
-dual-lane's consolidated table carried forward, already deduped. `AskUserQuestion` to
-confirm; the user may override. Do not apply until approved.
-
-### Stage 3 — Apply
-Follow **Apply: --fix** or **Apply: --harry-fix** on the approved (Keep) set.
+See **Single review + fix** in
+`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`. Its Stage 3 hands off to
+one of the two apply backends below — this is the build that has both.
 
 ---
 

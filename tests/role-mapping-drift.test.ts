@@ -271,8 +271,9 @@ for (const name of PAIRS) {
 //  - Door↔REFERENCE only, never door↔door. Six of the eight pairs still carry
 //    verbatim cross-build duplication; for most of them it is the pointer
 //    sentences, which are duplicated BY DESIGN — that is what a thin door looks
-//    like. `review` is the live exception: of its 13 shared lines, ~4 are
-//    build-agnostic instruction prose that no reference states. `grill` and
+//    like. `review` is the live exception, now much reduced: of its 7 shared
+//    lines, ~1 is build-agnostic instruction prose that no reference states (its
+//    Single review + fix section was hoisted). `grill` and
 //    `distill` were the 60-70% cases and are done — what remains shared there is
 //    pointer text only. Unhoisted duplication is a hoist candidate, not a hole
 //    in this guard, which by construction sees only escaped HOISTED content.
