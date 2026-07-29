@@ -203,15 +203,15 @@ the failure rather than parsing it. If `findings` is empty, tell the user and st
 Decide real defect vs false positive (a false positive is an intentional choice you
 have context for). Read cited files. Present a table — id, file:line, title, verdict
 (Keep / Drop + one-line reason per Drop) — for simplify this is just the dual-lane's
-consolidated table carried forward, already deduped. The user may override, and
-nothing is applied until approved. How you ask differs:
+consolidated table carried forward, already deduped. The user may override; do not
+apply anything until approved. How you ask differs:
 
 - **Claude Code build:** confirm with `AskUserQuestion`.
 - **Codex build:** confirm in plain text.
 
 ### Stage 3 — Apply
 
-Apply the approved (Keep) set. Which path does it differs:
+Apply the approved (Keep) set. Which path performs it differs by build:
 
 - **Claude Code build:** follow **Apply: `--fix`** or **Apply: `--harry-fix`** in the
   door — two backends, and the choice is the user's flag.

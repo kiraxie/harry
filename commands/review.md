@@ -168,6 +168,8 @@ See **Single review + fix** in
 `${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`. Its Stage 3 hands off to
 one of the two apply backends below — this is the build that has both.
 
+---
+
 ## Apply: `--fix` (Claude Code applies)
 
 You apply the approved findings yourself, with full conversation context.
