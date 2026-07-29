@@ -6,7 +6,10 @@ Each of those files keeps only its own build-specific shell (frontmatter, title,
 the invocation surface, and — for Codex — the "Known limitation vs. the Claude Code
 build" note) and points here for everything below. Where the two builds genuinely
 differ, both variants are captured under explicit **Claude Code build:** /
-**Codex build:** labels — never collapse them to one. Where only the **vocabulary** differs — a tool's name or casing, a flag that exists on one build — the text stays build-neutral and names the Claude Code term inline; a near-identical pair for that is duplication, not a divergence.
+**Codex build:** labels — never collapse them to one.
+Where only the **vocabulary** differs — a tool's name or casing, a flag that
+exists on one build — the text stays build-neutral and names the Claude Code term
+inline; a near-identical pair for that is duplication, not a divergence.
 
 The per-round methodology is *not* here — it lives in the sibling files under
 `${CLAUDE_PLUGIN_ROOT}/references/audit/` (`RECON.md`, `DEEP-DIVE.md`,

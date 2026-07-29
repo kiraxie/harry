@@ -8,7 +8,10 @@ frontmatter, its invocation surface, and **Phase 1 — Resident laws**, which is
 genuinely per-build (`install.mjs` + the `@`-import + the optional Explore override
 vs `install-codex.mjs` + the inlined block). Where the two builds genuinely differ
 below, both variants are captured under explicit **Claude Code build:** /
-**Codex build:** labels — never collapse them to one. Where only the **vocabulary** differs — a tool's name or casing, a flag that exists on one build — the text stays build-neutral and names the Claude Code term inline; a near-identical pair for that is duplication, not a divergence.
+**Codex build:** labels — never collapse them to one.
+Where only the **vocabulary** differs — a tool's name or casing, a flag that
+exists on one build — the text stays build-neutral and names the Claude Code term
+inline; a near-identical pair for that is duplication, not a divergence.
 
 ---
 
@@ -138,9 +141,8 @@ How to ask:
    the source lacks a section, write `_(not present in source)_` rather than
    invent.
 2. Write the new file at its target path (create `.local/items` /
-   `.local/archive` as needed). **Claude Code build:** with `--force`, overwrite an
-   existing target. **Codex build:** with a forced re-run, overwrite an existing
-   target.
+   `.local/archive` as needed). With a forced re-run (`--force` on Claude Code),
+   overwrite an existing target.
 3. Per Q_B: keep the original untouched, or delete it ONLY after its new file is
    successfully written.
 

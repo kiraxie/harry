@@ -7,7 +7,10 @@ review angle, routing, plain review, full mode apart from its Stage 2 consolidat
 single review + fix, apply backends apart from the apply steps themselves, and the
 Codex-only limitation/asymmetry notes) and points here for the four definitions below.
 Where the two builds genuinely differ, both variants are captured under explicit
-**Claude Code build:** / **Codex build:** labels — never collapse them to one. Where only the **vocabulary** differs — a tool's name or casing, a flag that exists on one build — the text stays build-neutral and names the Claude Code term inline; a near-identical pair for that is duplication, not a divergence.
+**Claude Code build:** / **Codex build:** labels — never collapse them to one.
+Where only the **vocabulary** differs — a tool's name or casing, a flag that
+exists on one build — the text stays build-neutral and names the Claude Code term
+inline; a near-identical pair for that is duplication, not a divergence.
 
 ## The structured-review envelope (one definition)
 
@@ -133,7 +136,7 @@ If there is nothing to cut or clarify, say so plainly and return no findings.
 
 Full mode's Stage 1 (fanning the three read-only lanes out) and Stage 3 (output /
 hand off) stay per build in the doors; this is the consolidation step all three lanes
-feed into. Two of its bullets are worded per build:
+feed into.
 
 - For each Codex leg (adversarial, simplify Lane A): check it succeeded first (zero
   exit, stdout is the envelope not `# Review Failed`). A failed leg contributes no
@@ -188,9 +191,9 @@ invokes them differs by build:
    HEAD` as the baseline instead. **A `git` command that outright fails counts as
    the quiet branch, not as a reason to stop**: runFix treats a failed `git status`
    as clean and a failed `git stash create` as "printed nothing", so both fall
-   through to HEAD. The SHA-reuse caution and the known limit are
-   Reuse that literal SHA in step 3 — each command may run in a fresh shell, so a
-   `BASE=…` variable will not survive; substitute the actual value. Known limit (same as
+   through to HEAD. Reuse that literal SHA in step 3 — each command runs in a fresh
+   shell (every `Bash` call, on Claude Code), so a `BASE=…` variable will not survive;
+   substitute the actual value. Known limit (same as
    runFix): `stash create` skips pre-existing untracked files, so `git add -A` in step 3
    stages them and they appear in the fix diff as if the fix created them.
 2. **Apply** each approved finding to the working tree (`Edit`/`Write` on Claude Code):
