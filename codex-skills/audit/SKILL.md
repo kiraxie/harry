@@ -15,10 +15,9 @@ repo or subsystem, not a single change.
 
 The full six-round audit orchestration — the auditor's role, the falsifiability
 discipline and core principles, the setup / output-directory rules, the
-iteration / `run-<N>` semantics, and the six-round flow (with its pointers into
-`RECON.md`, `DEEP-DIVE.md`, `SCAN-DIMENSIONS.md`, `VALIDATION-AND-REPORTING.md`,
-`report-schema.json`, and `validate-findings.cjs`) — is shared with the Claude Code
-build and lives in **`${CLAUDE_PLUGIN_ROOT}/references/audit/ORCHESTRATION.md`**.
+iteration / `run-<N>` semantics, and the six-round flow with its pointers into
+the rest of `references/audit/` — is shared with the Claude Code build and lives
+in **`${CLAUDE_PLUGIN_ROOT}/references/audit/ORCHESTRATION.md`**.
 
 **Read that file now and follow it.** It carries the build divergences under
 explicit **Claude Code build:** / **Codex build:** labels; wherever it names the
