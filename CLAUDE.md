@@ -131,11 +131,15 @@ install** (or `claude plugin update`), not a hand-edited plugin cache.
 iterative workflow distinct from the four pipeline skills above (it's user-invoked via slash
 command, not tier-triggered). Its round-by-round methodology, JSON schema, and validator script
 are too large to inline in one command file, so they live in `references/audit/`
-(`ORCHESTRATION.md` — the shared six-round orchestration both builds' thin wrappers point at —
-plus `RECON.md`, `DEEP-DIVE.md`, `SCAN-DIMENSIONS.md`, `VALIDATION-AND-REPORTING.md`,
-`report-schema.json`, `validate-findings.cjs`) — a subdirectory of the shared `references/`,
-read by path from `commands/audit.md` and `codex-skills/audit/SKILL.md`, not auto-discovered
-as anything on its own.
+(`references/audit/ORCHESTRATION.md` — the shared six-round orchestration both builds' thin
+wrappers point at — plus `references/audit/RECON.md`, `references/audit/DEEP-DIVE.md`,
+`references/audit/SCAN-DIMENSIONS.md`, `references/audit/VALIDATION-AND-REPORTING.md`,
+`references/audit/report-schema.json`, `references/audit/validate-findings.cjs`) — a
+subdirectory of the shared `references/`, read by path from `commands/audit.md` and
+`codex-skills/audit/SKILL.md`, not auto-discovered as anything on its own. Written as full
+paths, not bare filenames: this is now the only hand-maintained copy of that list, and
+`tests/prose-refs.test.ts` can only verify a path, so a bare filename here would go stale
+silently on a rename.
 
 `CLAUDE.local.md` (gitignored, present in this repo) is harry's own convention for
 project-specific rules that refine `HARRY.md` for a single repo — not a task list. Active in-flight

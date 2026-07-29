@@ -287,7 +287,7 @@ for (const name of PAIRS) {
 const HOISTED: Record<string, string[]> = {
   debt: ["references/debt-audit.md", "references/doc-types.md"],
   review: ["references/review-orchestration.md", "references/review-rubric.md"],
-  sync: ["references/sync-migration.md", "references/doc-types.md"],
+  sync: ["references/sync-migration.md", "references/doc-types.md", "references/debt-audit.md"],
   audit: [
     "references/audit/ORCHESTRATION.md",
     "references/audit/RECON.md",
@@ -315,26 +315,43 @@ const HOISTED: Record<string, string[]> = {
  * the audit case, since it also picks up doc-types.md (via debt and sync),
  * review-rubric.md, and upstream-sync.md, all real prose nobody was guarding.
  *
- * ONE LEVEL, not a full closure. Two levels adds nothing today (measured), and
- * an unbounded walk would need cycle handling for a graph that is currently a
- * tree two deep. Raise it when a real third level appears, not before.
+ * FULL closure, not a fixed depth. A depth limit here would be a magic number
+ * standing in for the graph's real shape, and the first version of this used
+ * one — bounded at a level with a comment claiming two levels added nothing and
+ * the graph was "a tree two deep". All of that was wrong, and review measured
+ * it: `commands/sync.md` -> `sync-migration.md` -> `doc-types.md` ->
+ * `debt-audit.md` is three deep, `doc-types.md` is reached from both debt and
+ * sync so it is not a tree, and two cycles exist TODAY
+ * (`doc-types.md` <-> `debt-audit.md`, `distilling.md` <-> `upstream-sync.md`).
+ * Under that bound, three verbatim `debt-audit.md` prose lines inlined into both
+ * sync doors stayed green — the same hole one level further out. A worklist with
+ * a `seen` set is the same size as the bounded loop and has no such edge.
  *
- * Non-file matches are dropped: the path regex also matches a bare directory
- * mention like `${CLAUDE_PLUGIN_ROOT}/references/audit/`, which normalizes to
- * `references/audit` and cannot be read. Skipping it hides nothing — prose-refs
- * asserts separately that every path cited under references/ resolves on disk,
- * so a dangling companion fails there rather than vanishing here.
+ * Non-file matches are dropped. The regex also matches a bare directory mention
+ * (`${CLAUDE_PLUGIN_ROOT}/references/audit/` normalizes to `references/audit`),
+ * and it slices false positives out of fenced shell snippets that prose-refs
+ * deliberately skips. For real `.md` citations a rename is caught twice over —
+ * by prose-refs and by the equality test below — so nothing dangling hides here;
+ * for those two other shapes there was never a citation to check.
  */
 function sharedRefs(name: string): string[] {
-  const codex = refPaths(`codex-skills/${name}/SKILL.md`);
-  const direct = [...refPaths(`commands/${name}.md`)].filter((p) => codex.has(p));
-  const all = new Set(direct);
-  for (const ref of direct) {
+  const cc = refPaths(`commands/${name}.md`);
+  const stack = [...refPaths(`codex-skills/${name}/SKILL.md`)].filter((p) => cc.has(p));
+  const all = new Set(stack);
+  const seen = new Set<string>();
+  while (stack.length) {
+    const ref = stack.pop() as string;
     // Filter BEFORE the read, not only after: a door may itself name a bare
     // directory (both audit doors point at "the rest of `references/audit/`"),
-    // which reaches here as a directly-shared path and throws EISDIR on read.
-    if (!isReferenceFile(ref)) continue;
-    for (const nested of refPaths(ref)) all.add(nested);
+    // which arrives as a directly-shared path and throws EISDIR on read.
+    if (seen.has(ref) || !isReferenceFile(ref)) continue;
+    seen.add(ref);
+    for (const nested of refPaths(ref)) {
+      if (!all.has(nested)) {
+        all.add(nested);
+        stack.push(nested);
+      }
+    }
   }
   return [...all].filter(isReferenceFile).sort();
 }
@@ -371,7 +388,14 @@ test("C · the shared reference paths are exactly the ones HOISTED declares", ()
   assert.deepEqual(
     actual,
     Object.fromEntries(Object.entries(HOISTED).map(([k, v]) => [k, [...v].sort()])),
-    "the shared reference paths changed; HOISTED is now guarding the wrong files",
+    "the shared reference paths changed; HOISTED is now guarding the wrong files. " +
+      "READ THE DIRECTION BEFORE PASTING THE NEW LIST. A pair that GAINED paths is " +
+      "normal — a new reference, or one reachable through an existing one. A pair " +
+      "that LOST them usually is not: the likeliest cause is a citation reworded " +
+      "out of machine-readable form (a `references/...` path rewritten as a bare " +
+      "backticked filename, which this file's regex cannot see). That silently " +
+      "unguards every file it used to reach, and accepting the shrunk list here is " +
+      "what makes it permanent. Restore the path form instead.",
   );
 });
 
@@ -382,11 +406,11 @@ for (const name of Object.keys(HOISTED)) {
     const refs = sharedRefs(name);
     assert.ok(refs.length > 0, `${name}: no shared reference; the test above should have failed`);
 
+    // No existence assertion here: sharedRefs already ends in
+    // `.filter(isReferenceFile)`, so this loop cannot see a missing path and an
+    // assertion for one could never fire. A rename is caught by prose-refs and
+    // by the equality test above, both with better messages than this had.
     for (const ref of refs) {
-      assert.ok(
-        existsSync(path.join(repoRoot, ref)),
-        `${ref} is missing; ${name}'s doors point at nothing`,
-      );
       const refProse = new Set(read(ref).split("\n").map(normalizeLine).filter(isProse));
       assert.ok(
         refProse.size > 0,
