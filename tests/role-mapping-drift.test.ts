@@ -330,6 +330,10 @@ function sharedRefs(name: string): string[] {
   const direct = [...refPaths(`commands/${name}.md`)].filter((p) => codex.has(p));
   const all = new Set(direct);
   for (const ref of direct) {
+    // Filter BEFORE the read, not only after: a door may itself name a bare
+    // directory (both audit doors point at "the rest of `references/audit/`"),
+    // which reaches here as a directly-shared path and throws EISDIR on read.
+    if (!isReferenceFile(ref)) continue;
     for (const nested of refPaths(ref)) all.add(nested);
   }
   return [...all].filter(isReferenceFile).sort();
