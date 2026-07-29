@@ -4,8 +4,8 @@ The shared, drift-prone `/review` orchestration definitions used by **both** bui
 `commands/review.md` (Claude Code) and `codex-skills/review/SKILL.md` (Codex CLI).
 Each of those files keeps its own build-specific sections (frontmatter, RO/RW gating,
 review angle, routing, plain review, full mode apart from its Stage 2 consolidation,
-single review + fix, apply backends apart from the apply steps themselves, and the
-Codex-only limitation/asymmetry notes) and points here for the four definitions below.
+apply backends apart from the apply steps themselves, and the Codex-only
+limitation/asymmetry notes) and points here for the five definitions below.
 Where the two builds genuinely differ, both variants are captured under explicit
 **Claude Code build:** / **Codex build:** labels — never collapse them to one.
 Where only the **vocabulary** differs — a tool's name or casing, a flag that
@@ -162,6 +162,60 @@ Present ONE table, plus a `## Design Concerns` section (from adversarial) below 
 
 (source(s) = adversarial / simplify / lean; verdict = Keep / Drop with a one-line
 reason per Drop.) If all three yield nothing material, say so and stop.
+
+---
+
+## Single review + fix (one definition)
+
+The judge role and the three stages. Which apply backends exist, what is stripped
+when forwarding, and how the user confirms differ by build and are labelled below;
+everything else is shared.
+
+You are the judge in the middle — the reviewer runs in an isolated session and may
+flag intentional choices only you know about.
+
+### Stage 1 — Structured review
+
+**If the active angle is simplify:** run **the simplify dual-lane** (defined above)
+instead of the single call below — Lane A already appends `--fix`; Lane B has no
+`--fix` concept and always returns its plain tag-lines. Skip straight to the
+dual-lane's own consolidation step, then continue to Stage 2 with the consolidated
+table instead of a raw envelope.
+
+**Otherwise (standard or adversarial):** append node's `--fix` for structured output.
+What to forward differs:
+
+- **Claude Code build:** forward args verbatim EXCEPT the slash-level fix flags
+  (`--fix`, `--harry-fix`, `--wait`, `--background`); keep the angle and
+  `--base`/`--scope`/`--context`/focus.
+- **Codex build:** forward the angle and base/scope/context/focus args.
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --fix <forwarded>
+```
+
+Parse the envelope (see its one definition above) — including its failure shape: a
+non-zero exit with stdout beginning `# Review Failed` is NOT an envelope, so report
+the failure rather than parsing it. If `findings` is empty, tell the user and stop.
+
+### Stage 2 — Judge each finding
+
+Decide real defect vs false positive (a false positive is an intentional choice you
+have context for). Read cited files. Present a table — id, file:line, title, verdict
+(Keep / Drop + one-line reason per Drop) — for simplify this is just the dual-lane's
+consolidated table carried forward, already deduped. The user may override, and
+nothing is applied until approved. How you ask differs:
+
+- **Claude Code build:** confirm with `AskUserQuestion`.
+- **Codex build:** confirm in plain text.
+
+### Stage 3 — Apply
+
+Apply the approved (Keep) set. Which path does it differs:
+
+- **Claude Code build:** follow **Apply: `--fix`** or **Apply: `--harry-fix`** in the
+  door — two backends, and the choice is the user's flag.
+- **Codex build:** follow **The apply steps** below; this build has only that path.
 
 ---
 
