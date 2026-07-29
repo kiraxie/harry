@@ -895,6 +895,15 @@ function applyTurnNotification(state, message) {
 async function runCodexTurn(opts) {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
   const connectTimeoutMs = opts.connectTimeoutMs ?? Math.min(DEFAULT_CONNECT_TIMEOUT_MS, timeoutMs);
+  if (opts.signal?.aborted) {
+    return {
+      success: false,
+      finalMessage: "",
+      reasoningSummary: [],
+      error: "Codex turn aborted.",
+      stderr: ""
+    };
+  }
   let client;
   try {
     client = await CodexAppServerClient.connect(opts.cwd, {
