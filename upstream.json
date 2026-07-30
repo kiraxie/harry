@@ -76,7 +76,7 @@
     {
       "skill": "debate",
       "from": "copilot-plugin-cc",
-      "note": "3-model debate (opus/gpt-5.5/gemini); judge-panel for Major decisions."
+      "note": "3-model debate (opus/gpt-5.6-sol/gemini-3.1-pro); judge-panel for Major decisions. No Codex build (the 'self' voice is Claude/opus by design)."
     },
     {
       "skill": "ask / status / result",

@@ -5,6 +5,66 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-07-30
+
+### Changed
+
+- **The resident laws are ~38% shorter (18.6 KB → 11.4 KB), and this changes what lands in
+  your global `CLAUDE.md` on the next `/harry:sync`.** No law was repealed; what left the
+  always-loaded layer was mechanism that already had an authoritative home — the dispatch
+  cap and role wiring (the executing skill's Model-by-role paragraph and
+  `references/codex-role-mapping.md`), the `.local/` item format and In-flight/HISTORY
+  bookkeeping (`references/doc-types.md`), and accumulated exemption prose. Anthropic's
+  own guidance for this model generation prompted it: Claude Code's system prompt was cut
+  by over 80% with no measured loss, the Claude 5 prompting docs warn that instructions
+  written for prior models are "often too prescriptive… and can degrade output quality",
+  and the Claude Code docs target under 200 lines per `CLAUDE.md` because a bloated file
+  loses adherence. One behavior change is deliberate: §6's reply-hygiene rules are one line
+  instead of a checklist — and they stay resident rather than moving to a skill because the
+  same text also serves the Codex build, which has no Claude harness enforcing them.
+  §3's tier-declaration sentence, by contrast, is kept **verbatim**: the behavioral evals
+  measured two independent rewrites of it at 0/3 where the original scores 3/3, so its exact
+  scoping — not its gist — is what makes a one-shot reply state its tier at all.
+- Doors no longer restate rules their references own (`grill`, `distill`, `review`,
+  `audit` on both builds). One of those duplicates had already drifted: the Codex `review`
+  door was missing the `# Review Failed` branch its own full-mode path checks for, so a
+  single-review failure went unreported there.
+- `references/review-orchestration.md` now carries one definition of the single-review +
+  fix flow instead of two that had diverged, and its per-build labels are applied only
+  where following the wrong build's wording would change what you do.
+- `upstream.json`'s `debate` row now names what harry actually ships
+  (`opus`/`gpt-5.6-sol`/`gemini-3.1-pro`) rather than a stale model set.
+
+### Fixed
+
+- **A Codex-side failure now says why.** `ask`, `review`, and `fix` reported only that
+  something "did not complete successfully", so an upstream rejection — e.g. `The
+  'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT account` — was
+  indistinguishable from a model that genuinely returned nothing; the cause reached the job
+  log and stopped there. The neutral result type now carries it and all three commands
+  frame it, bounded at 4 KB (tail-cut, and it says when it cut) so a hung turn's child
+  stderr cannot flood the reply the doors return verbatim.
+- `review`'s inline byte cap now measures untracked file **bodies**, which the inline path
+  emitted while the cap ignored them (~48 KB unmeasured at defaults). Working trees that
+  inlined before may now self-collect — the honest behavior, and the reason this is called
+  out rather than filed as internal.
+- `truncateUtf8` no longer returns more bytes than its cap, nor injects a replacement
+  character the input never had, when a cut lands mid-character.
+- A turn cancelled before it starts no longer spawns a `codex` child, no longer waits out
+  the 60-second connect timeout, and reports the abort instead of an initialize timeout.
+
+### Added
+
+- Drift guards for the prose that ships as product: a door may name its reference but must
+  not carry its prose (closing a hole that was invisible on all eight door pairs); the
+  reference graph is followed transitively, so `/audit`'s companion files are guarded
+  rather than only the hub that cites them; `§N` is enforced to mean `HARRY.md` by the
+  corpus rather than assumed by the checker; and a `See **Heading** in <ref>` pointer must
+  resolve to a heading that exists.
+- End-to-end coverage where a passing test previously proved less than it looked like:
+  `status --json` (its old test drove the flag allow-list, one layer below the behavior),
+  `review`'s failure path (it had none), and `fix`'s cause reporting. 239 → 276 tests.
+
 ## [0.16.0] - 2026-07-28
 
 ### Removed

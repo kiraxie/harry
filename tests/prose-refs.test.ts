@@ -276,7 +276,7 @@ test("every `See **Heading** in <reference>` names a heading that reference has"
         // so look at the remainder of this line and the following one. A
         // pointer with no path at all is a FAILURE, never a skip — that is the
         // shape that would quietly excuse every future rename.
-        const window = line.slice(m.index ?? 0) + "\n" + (lines[idx + 1] ?? "");
+        const window = `${line.slice(m.index ?? 0)}\n${lines[idx + 1] ?? ""}`;
         const target = window.match(/references\/[\w./-]+\.md/)?.[0];
         if (!target) {
           failures.push(`${relFile}:${idx + 1} -> "${m[1]}" names no reference path`);
