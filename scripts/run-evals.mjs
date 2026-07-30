@@ -23,6 +23,7 @@
 //   node scripts/run-evals.mjs score --results <path>
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   chmodSync,
@@ -454,12 +455,20 @@ export function scoreResults(lines) {
         trials: 0,
         passCount: 0,
         errors: 0,
+        // Every distinct law text this group's trials were taken under. More than
+        // one means the group's verdict averages ACROSS law versions, which is the
+        // one thing a law-effect measurement must never do silently: on 2026-07-30
+        // a §3 probe read 3/3 twice on one text and 1/3 on the next, and pooling
+        // them into a single "weak" hid both numbers. Legacy lines predate the
+        // stamp and contribute no hash rather than a false one.
+        lawShas: new Set(),
       };
       groupMap.set(key, g);
     }
     g.trials += 1;
     if (t.pass) g.passCount += 1;
     if (t.error) g.errors += 1;
+    if (line.lawSha256) g.lawShas.add(line.lawSha256);
     // Backfill law/informative from any trial that carries them (a legacy line
     // may omit law; a later trial may supply it).
     if (!g.law && t.law) g.law = t.law;
@@ -467,6 +476,11 @@ export function scoreResults(lines) {
   }
   const groups = [...groupMap.values()].map((g) => ({
     ...g,
+    lawShas: [...g.lawShas].sort(),
+    // A group whose trials span more than one law text is NOT a measurement of
+    // either text. Surfaced per group so the table can say so; the verdict is
+    // still computed (refusing to score would lose the run) but it is marked.
+    mixedLaw: g.lawShas.size > 1,
     // Strict majority: passCount > trials/2  ⇔  2*passCount > trials.
     pass: g.passCount * 2 > g.trials,
   }));
@@ -943,6 +957,21 @@ export function runEvals(opts, env = process.env) {
   const sandbox = sandboxContext(env, runnable);
 
   const lawsText = condition === "candidate" ? readFileSync(lawsPath(), "utf8") : "";
+  // Provenance stamped onto every result line. Without it a results file cannot be
+  // attributed to a law text at all: on 2026-07-30 a probe's failure was read as a
+  // regression, two law edits were made on that reading, and the only way anyone
+  // could later recover WHICH text each run used was that the throwaway mkdtemp
+  // config dirs happened not to have been reaped yet. That is luck, not a record.
+  // `lawSha256` is what lets `score` refuse to pool trials across different texts.
+  // The `claude` CLI version is deliberately NOT probed: it would cost one extra
+  // invocation of the binary per run, and the tests count invocations because that
+  // count IS the spend contract. A CLI change therefore remains indistinguishable
+  // from a model-alias change after the fact — a known gap, not an oversight.
+  const provenance = {
+    lawBytes: Buffer.byteLength(lawsText),
+    lawSha256: lawsText ? createHash("sha256").update(lawsText).digest("hex").slice(0, 16) : null,
+    sandbox: Boolean(sandbox),
+  };
   // One config dir per condition, reused across cases (and left in place for
   // post-hoc inspection — each `run` makes at most one dir). The workDir is a
   // separate EMPTY dir used as the child's cwd for every case, so no project
@@ -985,6 +1014,7 @@ export function runEvals(opts, env = process.env) {
           checks: c.checks,
           configDir,
           workDir,
+          ...provenance,
           timestamp: new Date().toISOString(),
         };
         try {
@@ -1123,8 +1153,15 @@ function cmdScore(opts) {
   // An errored trial counts as a failing trial (it is in the denominator); when
   // any trial errored, surface the count so `FAIL (0/3, 3 error)` is legible as
   // "all errored", not "all genuinely non-compliant".
+  // A MIXED-LAW group averaged trials across more than one HARRY.md, so its
+  // verdict describes no single text — say so on the row rather than printing a
+  // number that reads like a measurement.
   const verdict = (g) =>
-    `${g.pass ? "PASS" : "FAIL"} (${g.passCount}/${g.trials}${g.errors ? `, ${g.errors} error` : ""})`;
+    `${g.pass ? "PASS" : "FAIL"} (${g.passCount}/${g.trials}${g.errors ? `, ${g.errors} error` : ""})${
+      g.mixedLaw
+        ? `  ⚠ MIXED LAW TEXT (${g.lawShas.length} versions — verdict describes neither)`
+        : ""
+    }`;
   // Column width spans EVERY printed id — graded AND informative — plus the
   // "case" header, so a long informative id can't overflow into the condition
   // column of either section (both use the same width). +2 for breathing room.
