@@ -1298,6 +1298,12 @@ var CodexProvider = class {
       lastAssistantMessage: result.finalMessage,
       success: result.success,
       summary: result.finalMessage || void 0,
+      // Carry the turn's cause onto the neutral result, not just into the log
+      // above. `turn.ts`'s failure() already folds the child's stderr in after
+      // the message, so the upstream message leads — deliberately uncapped: the
+      // cause is the first thing in the string, and a cap sized for stderr would
+      // be the thing most likely to cut it off.
+      error: result.error,
       usage: {
         inputTokens: result.usage?.inputTokens,
         outputTokens: result.usage?.outputTokens,
@@ -1394,199 +1400,6 @@ ${input.extraContext.trim()}`
   }
   return sections.join("\n\n");
 }
-
-// src/lib/turn-runtime.ts
-function makeProgress() {
-  return (message) => {
-    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
-    process.stderr.write(`[${time}] ${message}
-`);
-  };
-}
-function startTurnTimeout(opts) {
-  const abort = new AbortController();
-  let firedTimeout = false;
-  const handle = setTimeout(() => {
-    firedTimeout = true;
-    opts.progress(`Timeout after ${opts.timeoutMs}ms reached \u2014 requesting abort.`);
-    opts.log(`timeout ${opts.timeoutMs}ms`);
-    abort.abort();
-  }, opts.timeoutMs);
-  return {
-    signal: abort.signal,
-    timedOut: () => firedTimeout,
-    clear: () => clearTimeout(handle)
-  };
-}
-function formatCodexUsage(u) {
-  const pct = u.rateLimits?.primaryUsedPercent;
-  const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
-  return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
-}
-
-// src/commands/ask.ts
-var DEFAULT_MODEL = "gpt-5.6-sol";
-var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
-var DEFAULT_EFFORT = "high";
-async function runAsk(cwd, options) {
-  const progress = makeProgress();
-  const reasoning = options.reasoning ?? DEFAULT_EFFORT;
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  const requestedModel = options.model ?? DEFAULT_MODEL;
-  const prompt = options.prompt.trim();
-  if (!prompt) throw new Error("ask: empty prompt");
-  const stateDir = resolveStateDir(cwd);
-  const jobId = generateJobId();
-  const log = (msg) => appendLog(stateDir, jobId, msg);
-  log(`ask start: model=${requestedModel} effort=${reasoning} promptChars=${prompt.length}`);
-  const extraContext = resolveExtraContext(cwd, {
-    context: options.context,
-    onWarn: (m) => {
-      progress(m);
-      log(m);
-    }
-  });
-  const turn = startTurnTimeout({ timeoutMs, progress, log });
-  let result;
-  try {
-    ({ result } = await runAgentSession({
-      cwd,
-      run: {
-        cwd,
-        prompt,
-        model: requestedModel,
-        reasoning,
-        readOnly: true,
-        allowShell: false,
-        allowUrl: false,
-        systemMessage: buildSystemMessage("ask", { extraContext }),
-        appendLog: log,
-        progress,
-        signal: turn.signal
-      },
-      log
-    }));
-  } catch (err) {
-    turn.clear();
-    const msg = err.message;
-    process.stderr.write(`Ask failed: ${msg}
-`);
-    log(`ask failed: ${msg}`);
-    throw err instanceof Error ? err : new Error(msg);
-  } finally {
-    turn.clear();
-  }
-  const body = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty answer.)_";
-  const success = result.success && !turn.timedOut();
-  if (!success) {
-    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Ask did not complete successfully.";
-    process.stderr.write(`Ask failed: ${reason}
-`);
-    process.stdout.write(`# Ask Failed
-
-${reason}
-
-${body}
-`);
-    log(`ask failed: ${reason}`);
-    throw new Error(reason);
-  }
-  process.stdout.write(`${body.trim()}
-`);
-  if (result.usage) {
-    progress(`Ask done \u2014 effort=${reasoning} ${formatCodexUsage(result.usage)}`);
-    log(
-      `ask done: inputTokens=${result.usage.inputTokens ?? "?"} outputTokens=${result.usage.outputTokens ?? "?"}`
-    );
-  } else {
-    progress(`Ask done \u2014 effort=${reasoning}`);
-    log("ask done");
-  }
-  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
-}
-
-// src/commands/fix.ts
-var import_node_child_process5 = require("node:child_process");
-var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
-
-// src/lib/findings.ts
-var VALID_SEVERITIES = /* @__PURE__ */ new Set(["blocker", "major", "minor"]);
-function extractJsonBlock(text) {
-  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
-  const fenced = [];
-  for (const m of text.matchAll(fenceRe)) {
-    if (m[1]?.trim()) fenced.push(m[1]);
-  }
-  const candidates = fenced.reverse();
-  const lastSpan = (open, close) => {
-    const start = text.lastIndexOf(open);
-    const end = text.lastIndexOf(close);
-    return start !== -1 && end > start ? text.slice(start, end + 1) : void 0;
-  };
-  const spans = [lastSpan("[", "]"), lastSpan("{", "}")].filter((s) => !!s).sort((a, b) => b.length - a.length);
-  candidates.push(...spans);
-  for (const c of candidates) {
-    try {
-      return JSON.parse(c.trim());
-    } catch {
-    }
-  }
-  return null;
-}
-function normalizeFindings(parsed) {
-  const arr = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray(parsed.findings) ? parsed.findings : [];
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (let i = 0; i < arr.length; i++) {
-    const raw = arr[i];
-    if (!raw || typeof raw !== "object") continue;
-    const r = raw;
-    const file = typeof r.file === "string" ? r.file : "";
-    const title = typeof r.title === "string" ? r.title : "";
-    if (!file || !title) continue;
-    const sev = typeof r.severity === "string" && VALID_SEVERITIES.has(r.severity) ? r.severity : "major";
-    let id = typeof r.id === "string" && r.id.trim() ? r.id.trim() : `finding-${i + 1}`;
-    if (seen.has(id)) id = `${id}-${i + 1}`;
-    seen.add(id);
-    out.push({
-      id,
-      file,
-      line: typeof r.line === "string" ? r.line : typeof r.line === "number" ? String(r.line) : void 0,
-      severity: sev,
-      title,
-      rationale: typeof r.rationale === "string" ? r.rationale : "",
-      suggestedFix: typeof r.suggestedFix === "string" ? r.suggestedFix : ""
-    });
-  }
-  return out;
-}
-var FINDINGS_OUTPUT_INSTRUCTION = `
-<structured_findings>
-This review feeds an automated fix pipeline. After your markdown review, output
-ONE fenced code block tagged \`json\` containing an array of the material
-findings (and ONLY material findings \u2014 omit notes, praise, and style nits):
-
-\`\`\`json
-[
-  {
-    "id": "kebab-case-stable-id",
-    "file": "relative/path.ts",
-    "line": "42-50",
-    "severity": "blocker | major | minor",
-    "title": "one-sentence statement of the defect",
-    "rationale": "why this is a real defect",
-    "suggestedFix": "concrete change to make"
-  }
-]
-\`\`\`
-
-Rules:
-- If there are no material findings, output an empty array: \`[]\`.
-- "line" is optional; omit it for file-wide findings.
-- Keep ids stable and descriptive \u2014 they are how a human approves each fix.
-</structured_findings>
-`;
 
 // src/lib/git.ts
 var import_node_child_process4 = require("node:child_process");
@@ -1981,6 +1794,208 @@ function collectReviewContext(cwd, target, options = {}) {
   };
 }
 
+// src/lib/turn-runtime.ts
+function makeProgress() {
+  return (message) => {
+    const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: false });
+    process.stderr.write(`[${time}] ${message}
+`);
+  };
+}
+function startTurnTimeout(opts) {
+  const abort = new AbortController();
+  let firedTimeout = false;
+  const handle = setTimeout(() => {
+    firedTimeout = true;
+    opts.progress(`Timeout after ${opts.timeoutMs}ms reached \u2014 requesting abort.`);
+    opts.log(`timeout ${opts.timeoutMs}ms`);
+    abort.abort();
+  }, opts.timeoutMs);
+  return {
+    signal: abort.signal,
+    timedOut: () => firedTimeout,
+    clear: () => clearTimeout(handle)
+  };
+}
+function formatCodexUsage(u) {
+  const pct = u.rateLimits?.primaryUsedPercent;
+  const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
+  return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
+}
+var MAX_CAUSE_BYTES = 4096;
+function withCause(generic, cause) {
+  const trimmed = cause?.trim();
+  if (!trimmed) return generic;
+  const { text, truncated } = truncateUtf8(trimmed, MAX_CAUSE_BYTES);
+  const shown = truncated ? `${text}
+\u2026 (cause truncated; full text in the job log)` : text;
+  return `${generic.replace(/\.$/, "")}: ${shown}`;
+}
+
+// src/commands/ask.ts
+var DEFAULT_MODEL = "gpt-5.6-sol";
+var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
+var DEFAULT_EFFORT = "high";
+async function runAsk(cwd, options) {
+  const progress = makeProgress();
+  const reasoning = options.reasoning ?? DEFAULT_EFFORT;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const requestedModel = options.model ?? DEFAULT_MODEL;
+  const prompt = options.prompt.trim();
+  if (!prompt) throw new Error("ask: empty prompt");
+  const stateDir = resolveStateDir(cwd);
+  const jobId = generateJobId();
+  const log = (msg) => appendLog(stateDir, jobId, msg);
+  log(`ask start: model=${requestedModel} effort=${reasoning} promptChars=${prompt.length}`);
+  const extraContext = resolveExtraContext(cwd, {
+    context: options.context,
+    onWarn: (m) => {
+      progress(m);
+      log(m);
+    }
+  });
+  const turn = startTurnTimeout({ timeoutMs, progress, log });
+  let result;
+  try {
+    ({ result } = await runAgentSession({
+      cwd,
+      run: {
+        cwd,
+        prompt,
+        model: requestedModel,
+        reasoning,
+        readOnly: true,
+        allowShell: false,
+        allowUrl: false,
+        systemMessage: buildSystemMessage("ask", { extraContext }),
+        appendLog: log,
+        progress,
+        signal: turn.signal
+      },
+      log
+    }));
+  } catch (err) {
+    turn.clear();
+    const msg = err.message;
+    process.stderr.write(`Ask failed: ${msg}
+`);
+    log(`ask failed: ${msg}`);
+    throw err instanceof Error ? err : new Error(msg);
+  } finally {
+    turn.clear();
+  }
+  const body = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty answer.)_";
+  const success = result.success && !turn.timedOut();
+  if (!success) {
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : withCause("Ask did not complete successfully.", result.error);
+    process.stderr.write(`Ask failed: ${reason}
+`);
+    process.stdout.write(`# Ask Failed
+
+${reason}
+
+${body}
+`);
+    log(`ask failed: ${reason}`);
+    throw new Error(reason);
+  }
+  process.stdout.write(`${body.trim()}
+`);
+  if (result.usage) {
+    progress(`Ask done \u2014 effort=${reasoning} ${formatCodexUsage(result.usage)}`);
+    log(
+      `ask done: inputTokens=${result.usage.inputTokens ?? "?"} outputTokens=${result.usage.outputTokens ?? "?"}`
+    );
+  } else {
+    progress(`Ask done \u2014 effort=${reasoning}`);
+    log("ask done");
+  }
+  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
+}
+
+// src/commands/fix.ts
+var import_node_child_process5 = require("node:child_process");
+var import_node_fs4 = require("node:fs");
+var import_node_path4 = require("node:path");
+
+// src/lib/findings.ts
+var VALID_SEVERITIES = /* @__PURE__ */ new Set(["blocker", "major", "minor"]);
+function extractJsonBlock(text) {
+  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
+  const fenced = [];
+  for (const m of text.matchAll(fenceRe)) {
+    if (m[1]?.trim()) fenced.push(m[1]);
+  }
+  const candidates = fenced.reverse();
+  const lastSpan = (open, close) => {
+    const start = text.lastIndexOf(open);
+    const end = text.lastIndexOf(close);
+    return start !== -1 && end > start ? text.slice(start, end + 1) : void 0;
+  };
+  const spans = [lastSpan("[", "]"), lastSpan("{", "}")].filter((s) => !!s).sort((a, b) => b.length - a.length);
+  candidates.push(...spans);
+  for (const c of candidates) {
+    try {
+      return JSON.parse(c.trim());
+    } catch {
+    }
+  }
+  return null;
+}
+function normalizeFindings(parsed) {
+  const arr = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray(parsed.findings) ? parsed.findings : [];
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let i = 0; i < arr.length; i++) {
+    const raw = arr[i];
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw;
+    const file = typeof r.file === "string" ? r.file : "";
+    const title = typeof r.title === "string" ? r.title : "";
+    if (!file || !title) continue;
+    const sev = typeof r.severity === "string" && VALID_SEVERITIES.has(r.severity) ? r.severity : "major";
+    let id = typeof r.id === "string" && r.id.trim() ? r.id.trim() : `finding-${i + 1}`;
+    if (seen.has(id)) id = `${id}-${i + 1}`;
+    seen.add(id);
+    out.push({
+      id,
+      file,
+      line: typeof r.line === "string" ? r.line : typeof r.line === "number" ? String(r.line) : void 0,
+      severity: sev,
+      title,
+      rationale: typeof r.rationale === "string" ? r.rationale : "",
+      suggestedFix: typeof r.suggestedFix === "string" ? r.suggestedFix : ""
+    });
+  }
+  return out;
+}
+var FINDINGS_OUTPUT_INSTRUCTION = `
+<structured_findings>
+This review feeds an automated fix pipeline. After your markdown review, output
+ONE fenced code block tagged \`json\` containing an array of the material
+findings (and ONLY material findings \u2014 omit notes, praise, and style nits):
+
+\`\`\`json
+[
+  {
+    "id": "kebab-case-stable-id",
+    "file": "relative/path.ts",
+    "line": "42-50",
+    "severity": "blocker | major | minor",
+    "title": "one-sentence statement of the defect",
+    "rationale": "why this is a real defect",
+    "suggestedFix": "concrete change to make"
+  }
+]
+\`\`\`
+
+Rules:
+- If there are no material findings, output an empty array: \`[]\`.
+- "line" is optional; omit it for file-wide findings.
+- Keep ids stable and descriptive \u2014 they are how a human approves each fix.
+</structured_findings>
+`;
+
 // src/commands/fix.ts
 var DEFAULT_MODEL2 = "gpt-5.6-sol";
 var DEFAULT_EFFORT2 = "high";
@@ -2222,7 +2237,7 @@ async function runFix(cwd, options = {}) {
       emit({
         status: "failed",
         jobId,
-        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.",
+        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : withCause("Fix session did not complete successfully.", result.error),
         ...snapshotInfo()
       });
     }
@@ -2582,7 +2597,7 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
   const reviewBody = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty review.)_";
   const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Review did not complete successfully.";
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : withCause("Review did not complete successfully.", result.error);
     process.stderr.write(`Review failed: ${reason}
 `);
     process.stdout.write(`# Review Failed

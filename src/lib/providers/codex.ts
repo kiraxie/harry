@@ -163,6 +163,12 @@ export class CodexProvider implements CodexSession {
       lastAssistantMessage: result.finalMessage,
       success: result.success,
       summary: result.finalMessage || undefined,
+      // Carry the turn's cause onto the neutral result, not just into the log
+      // above. `turn.ts`'s failure() already folds the child's stderr in after
+      // the message, so the upstream message leads — deliberately uncapped: the
+      // cause is the first thing in the string, and a cap sized for stderr would
+      // be the thing most likely to cut it off.
+      error: result.error,
       usage: {
         inputTokens: result.usage?.inputTokens,
         outputTokens: result.usage?.outputTokens,

@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { CodexProvider } from "../src/lib/providers/codex.ts";
-import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
+import { buildEnv, installFakeCodex, TRUNCATED_CAUSE } from "./fake-codex.mjs";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "harry-codex-provider-test-"));
@@ -191,4 +191,72 @@ test("CodexProvider.checkAuth reports a ChatGPT login as ok", async () => {
 
   assert.equal(auth.ok, true);
   assert.ok(auth.message.length > 0, "expected a non-empty auth detail message");
+});
+
+// The single producer of `RunResult.error`. Everything downstream — ask's stdout
+// marker, review's `# Review Failed` block, fix's envelope — can only report a
+// cause the provider carried across this boundary, so this is the one place a
+// break silently blinds all three at once.
+//
+// Before this field existed, `turn.ts` captured the cause and codex.ts logged it
+// (`turn error: …`) without ever attaching it, so a backend rejection and a model
+// that genuinely returned nothing were indistinguishable in every command's
+// output. The concrete cost: an upstream 400 ("The 'gpt-5.6-sol' model is not
+// supported when using Codex with a ChatGPT account") surfaced only as "The model
+// returned an empty review."
+test("CodexProvider.run carries the turn's failure cause onto RunResult", async () => {
+  const binDir = makeTempDir();
+  // This fixture ends a turn with an `error` notification after a partial answer,
+  // so the turn fails WITH a cause — the shape that has one to lose.
+  installFakeCodex(binDir, "task-truncated-then-error");
+
+  const res = await withFakeOnPath(binDir, () => {
+    const p = new CodexProvider();
+    return p.run({
+      cwd: binDir,
+      prompt: "hi",
+      readOnly: true,
+      allowShell: false,
+      allowUrl: false,
+      systemMessage: "",
+      appendLog() {},
+      progress() {},
+    });
+  });
+
+  assert.equal(res.success, false, "the fixture must fail, or there is no cause to carry");
+  assert.equal(
+    res.error,
+    TRUNCATED_CAUSE,
+    "RunResult.error must carry the cause turn.ts captured — declared by " +
+      "tests/fake-codex.mjs's task-truncated-then-error behavior",
+  );
+  // Not a consolation prize: the partial body still has to survive, because ask
+  // and review print it beneath their failure marker.
+  assert.match(res.lastAssistantMessage, /The three main causes are:/);
+});
+
+// The other pole. `error` is only meaningful as a discriminator, so proving it is
+// set on failure is half the guard: if it were also set on success, callers would
+// frame good answers as failures and the test above would still pass.
+test("CodexProvider.run leaves RunResult.error unset on a successful turn", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-ok");
+
+  const res = await withFakeOnPath(binDir, () => {
+    const p = new CodexProvider();
+    return p.run({
+      cwd: binDir,
+      prompt: "hi",
+      readOnly: true,
+      allowShell: false,
+      allowUrl: false,
+      systemMessage: "",
+      appendLog() {},
+      progress() {},
+    });
+  });
+
+  assert.equal(res.success, true);
+  assert.equal(res.error, undefined, "a successful run must carry no cause");
 });

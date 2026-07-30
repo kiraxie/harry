@@ -11,6 +11,13 @@ function writeExecutable(filePath, source) {
   fs.writeFileSync(filePath, source, { encoding: "utf8", mode: 0o755 });
 }
 
+/**
+ * The cause the `task-truncated-then-error` behavior reports. Exported because
+ * four test files assert on it: hand-copying it into each made the fixture's own
+ * message something the fixture did not own.
+ */
+export const TRUNCATED_CAUSE = "stream disconnected before completion";
+
 export function installFakeCodex(binDir, behavior = "logged-in") {
   const statePath = path.join(binDir, "fake-codex-state.json");
   const scriptPath = path.join(binDir, "codex");
@@ -20,6 +27,7 @@ const readline = require("node:readline");
 
 const STATE_PATH = ${JSON.stringify(statePath)};
 const BEHAVIOR = ${JSON.stringify(behavior)};
+const TRUNCATED_CAUSE = ${JSON.stringify(TRUNCATED_CAUSE)};
 
 function loadState() {
   if (!fs.existsSync(STATE_PATH)) {
@@ -328,7 +336,7 @@ rl.on("line", (line) => {
               item: { type: "agentMessage", id: "msg_" + turnId, text: "The three main causes are:\\n1. A stale cache", phase: "final_answer" }
             }
           });
-          send({ method: "error", params: { error: { message: "stream disconnected before completion" } } });
+          send({ method: "error", params: { error: { message: TRUNCATED_CAUSE } } });
           send({ method: "turn/completed", params: { threadId: thread.id, turnId, turn: buildTurn(turnId, "completed") } });
           break;
         }

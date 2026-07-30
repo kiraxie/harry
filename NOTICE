@@ -46,7 +46,9 @@ Modifications made by harry, to tests/fake-codex.mjs:
     - Removed the broker behaviors, matching the provider above.
     - Trimmed to the app-server turn/auth surface.
     - Added harry-specific test behaviors (additive `BEHAVIOR` branches) that
-      drive harry's own commands through failure modes the source did not model.
+      drive harry's own commands through failure modes the source did not model,
+      plus one export (`TRUNCATED_CAUSE`) so a behavior's own message belongs to
+      the fixture rather than being hand-copied into each asserting test.
 
 Parts of references/skill-authoring.md are distilled from the
 skill-creator skill in anthropics/skills:

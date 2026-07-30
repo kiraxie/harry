@@ -19,7 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { computeStagedDiff } from "../src/commands/fix.ts";
-import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
+import { buildEnv, installFakeCodex, TRUNCATED_CAUSE } from "./fake-codex.mjs";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -105,11 +105,11 @@ interface FixRun {
  * edits nothing, so every file the envelope reports as modified came from the
  * baseline choice, not from the fix.
  */
-function runFixCli(repo: string, cleanup: string[]): FixRun {
+function runFixCli(repo: string, cleanup: string[], behavior = "task-ok"): FixRun {
   const binDir = tempDir("harry-fix-bin-");
   const dataDir = tempDir("harry-fix-data-");
   cleanup.push(binDir, dataDir);
-  installFakeCodex(binDir, "task-ok");
+  installFakeCodex(binDir, behavior);
 
   const findingsPath = path.join(binDir, "findings.json");
   writeFileSync(
@@ -438,4 +438,40 @@ test("the report step names runFix's unknown-not-zero contract", () => {
       `operator line the prose above quotes, so that prose now quotes a string the ` +
       `code does not carry.`,
   );
+});
+
+// fix's third failure signal — the envelope's `error` field — must carry the
+// backend's cause too, not only the fact that the session failed.
+//
+// This is the machine-read one of the three: an orchestrator keys on the
+// envelope, so a generic string here is what turns a diagnosable model rejection
+// into "the fix just didn't work". The provider carries the cause and
+// `withCause` frames it; this proves fix's own call site uses them, which
+// nothing else does — removing `withCause` from this file alone left the
+// whole suite green until this test existed.
+test("a failed session's envelope carries the backend cause, not just a generic message", () => {
+  const dirs: string[] = [];
+  const repo = tempDir("harry-fix-cause-");
+  dirs.push(repo);
+  try {
+    repoWithCommit(repo);
+    // Fails with a BACKEND-reported cause. A timeout also carries one, but fix
+    // prefers its own timeout wording there, so this is the path that shows it.
+    const run = runFixCli(repo, dirs, "task-truncated-then-error");
+
+    assert.equal(
+      run.envelope.status,
+      "failed",
+      `expected a failed envelope, got: ${run.envelope.status}`,
+    );
+    assert.equal(
+      run.envelope.error,
+      "Fix session did not complete successfully: stream disconnected before completion",
+      "the envelope must name WHY — the generic sentence as the prefix (it says which " +
+        "command failed) plus the cause turn.ts captured",
+    );
+    assert.notEqual(run.status, 0);
+  } finally {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  }
 });

@@ -37,6 +37,25 @@ export interface RunResult {
   lastAssistantMessage: string;
   success: boolean;
   summary?: string;
+  /**
+   * Why the run failed, when the turn produced a message. Only ever set
+   * alongside `success: false` — `turn.ts` computes success as `!state.error &&
+   * …`, so the two cannot both be true.
+   *
+   * Set on the abort/timeout paths TOO ("Codex turn aborted.", "Codex turn timed
+   * out…"), not only on a backend rejection. The commands prefer their own
+   * timeout wording when their own clock fired, so they discard it there — that
+   * is a display choice, not an absence. Do not read `error` as proof the
+   * BACKEND said something.
+   *
+   * This field exists because without it every command could only report that
+   * *something* failed. The backend's actual cause — an upstream 400 like
+   * "The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT
+   * account" — reached the job log and stopped there, so a model rejection and a
+   * model that genuinely returned nothing were indistinguishable in the output.
+   * That cost real diagnosis time.
+   */
+  error?: string;
   usage?: CodexUsage;
   codeChanges?: { linesAdded: number; linesRemoved: number; filesModified: string[] };
 }

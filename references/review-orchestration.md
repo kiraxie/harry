@@ -196,7 +196,8 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --fix <forwarded>
 
 Parse the envelope (see its one definition above) — including its failure shape: a
 non-zero exit with stdout beginning `# Review Failed` is NOT an envelope, so report
-the failure rather than parsing it. If `findings` is empty, tell the user and stop.
+the failure rather than parsing it — **naming its reason line**, which carries the
+backend's own cause when there is one, not just that the review failed. If `findings` is empty, tell the user and stop.
 
 ### Stage 2 — Judge each finding
 
