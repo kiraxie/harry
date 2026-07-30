@@ -48,6 +48,22 @@ function runCli(
   return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
 
+/**
+ * Parse CLI stdout as JSON, failing with the output rather than a SyntaxError.
+ *
+ * A bare `JSON.parse` here is worse than no message: under the exact mutation
+ * these tests exist to catch (the `--json` flag stopping at companion.ts), stdout
+ * is the markdown notice, and the parse dies with `Unexpected token '_'` before
+ * any crafted assertion message can print.
+ */
+function parseJson(stdout: string, what: string): unknown {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return assert.fail(`${what}: expected JSON on stdout, got:\n${stdout}`);
+  }
+}
+
 test("ask writes its job log and reports the path (job-LOG machinery is live)", () => {
   const binDir = makeTempDir("harry-cli-bin-");
   installFakeCodex(binDir, "task-with-ratelimits");
@@ -80,16 +96,33 @@ test("the node CLI has no `result` command (job-record subsystem retired)", () =
 // `status --json` is reachable ONLY by running this CLI directly: the doors
 // forward no arguments (`commands/status.md` has no `$ARGUMENTS`), deliberately,
 // because they tell the agent to return stdout verbatim as markdown for a human.
-// A backlog item asked whether that makes the flag the same no-shipped-producer
-// shape that retired the job records — the answer is no, and the ruling is that
-// direct CLI invocation is a supported surface (`setup` has no door at all and
-// carries the same flag; `printUsage` advertises both).
+// A backlog item asked whether that made the flag the same no-shipped-producer
+// shape that retired the job-record subsystem. It does not, and the reason is a
+// COST class rather than a reachability class:
 //
-// This test exists because that ruling was not enforced by anything.
-// `tests/args.test.ts` pins that the PARSER accepts `--json`, one layer below the
-// thing that matters: replacing `json: flags.json === true` with `json: false` in
-// companion.ts leaves the whole suite green, and the flag silently stops working
-// while its own test still passes. Proven by that mutation, not assumed.
+//   - That subsystem was stateful machinery — files written, ids allocated, a
+//     whole `result` retrieval command — so a missing consumer meant live dead
+//     paths and ongoing upkeep. This is a four-line output-format switch on a
+//     code path that runs either way.
+//   - `printUsage` documents the argv surface, which makes it a published
+//     contract (HARRY.md §2), not an internal affordance.
+//   - Deleting it is the WIDER diff: companion.ts, status.ts, `KNOWN_FLAGS` in
+//     args.ts, args.test.ts, and printUsage — to remove the natural
+//     machine-readable form of a snapshot a hook has in fact consumed before
+//     (the SessionStart `setup --check`, removed as a no-op, not as unwanted).
+//
+// Note what is NOT the argument, because it was tried and it is circular: that
+// `setup` has no door either and carries the same flag. `setup` is reachable from
+// nothing but `printUsage` — no door, no hook, and the README points users at
+// `codex login` instead — which makes it MORE orphaned than this flag, not
+// evidence that direct invocation is supported.
+//
+// This test exists because that ruling was enforced by nothing.
+// `tests/args.test.ts`'s "status accepts --json" drives `assertKnownFlags` — the
+// flag ALLOW-LIST, a layer below the thing that matters. Replacing
+// `json: flags.json === true` with `json: false` in companion.ts leaves the whole
+// suite green: the flag silently stops working while its own test still passes.
+// Measured, not assumed — that mutation against the pre-commit tree passes 262/262.
 //
 // Asserts the DIFFERENCE between the two modes, not just "the output is JSON".
 // A guard that only checked for JSON could not tell forwarding from JSON being
@@ -109,7 +142,7 @@ test("status --json is forwarded and switches the output format", () => {
   const emptyJson = runCli(["status", "--json"], where);
   assert.equal(emptyJson.status, 0, `status --json failed:\n${emptyJson.stderr}`);
   assert.deepEqual(
-    JSON.parse(emptyJson.stdout),
+    parseJson(emptyJson.stdout, "status --json with no snapshot"),
     {},
     "with no snapshot yet, --json must emit an empty object, not the markdown notice",
   );
@@ -129,7 +162,9 @@ test("status --json is forwarded and switches the output format", () => {
 
   const populated = runCli(["status", "--json"], where);
   assert.equal(populated.status, 0, `status --json failed:\n${populated.stderr}`);
-  const parsed = JSON.parse(populated.stdout) as { codex?: { primaryUsedPercent?: number } };
+  const parsed = parseJson(populated.stdout, "status --json after a real ask") as {
+    codex?: { primaryUsedPercent?: number };
+  };
   assert.equal(
     parsed.codex?.primaryUsedPercent,
     12,

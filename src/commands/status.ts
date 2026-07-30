@@ -12,16 +12,9 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
   const stateDir = resolveStateDir(cwd);
   const codexRateLimits = readCodexRateLimits(stateDir);
 
-  // Reachable only by running this CLI directly — `commands/status.md` forwards no
-  // arguments, deliberately: that door tells the agent to return stdout verbatim as
-  // markdown for a human to read, which JSON would make worse. Not the
-  // no-shipped-producer shape that retired the job records, though: `setup` has no
-  // door at all and carries the same flag, so direct invocation is a supported
-  // surface here, not an orphan. `printUsage` advertises both.
-  //
-  // Guarded end-to-end by `tests/cli-surface.test.ts`, NOT by args.test.ts's
-  // "status accepts --json" — that one pins the parser, one layer below this, and
-  // stays green while `companion.ts` stops forwarding the flag entirely.
+  // No door forwards this — it is for direct CLI use. Kept deliberately; the
+  // argument and the end-to-end guard both live in `tests/cli-surface.test.ts`
+  // ("status --json is forwarded and switches the output format").
   if (options.json) {
     console.log(JSON.stringify(codexRateLimits ? { codex: codexRateLimits } : {}, null, 2));
     return;
