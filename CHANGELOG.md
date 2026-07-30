@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **The resident laws are ~39% shorter (18.6 KB → 11.3 KB), and this changes what lands in
+- **The resident laws are ~38% shorter (18.6 KB → 11.4 KB), and this changes what lands in
   your global `CLAUDE.md` on the next `/harry:sync`.** No law was repealed; what left the
   always-loaded layer was mechanism that already had an authoritative home — the dispatch
   cap and role wiring (the executing skill's Model-by-role paragraph and
