@@ -3,7 +3,7 @@
  *
  * The only end-to-end coverage of review's failure path. `ask` has its own
  * (tests/ask.test.ts) and `fix` has its own (tests/fix.test.ts's envelope test);
- * review had none, so removing `failureReason` from review.ts alone left the
+ * review had none, so removing `withCause` from review.ts alone left the
  * whole suite green while the command it matters most for went back to reporting
  * "Review did not complete successfully." and nothing else.
  *
@@ -21,12 +21,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
+import { buildEnv, installFakeCodex, TRUNCATED_CAUSE } from "./fake-codex.mjs";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
-
-/** Declared by tests/fake-codex.mjs's `task-truncated-then-error` behavior. */
-const TRUNCATED_CAUSE = "stream disconnected before completion";
 
 function tempDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -51,7 +48,8 @@ test("review names the backend cause in both its failure signals", () => {
     git(repo, ["commit", "-q", "-m", "base"]);
     writeFileSync(path.join(repo, "a.txt"), "v2\n");
 
-    // Fails WITH a cause — task-stuck would time out, and a timeout has none.
+    // Fails with a BACKEND-reported cause. task-stuck would work too (a timeout
+    // also sets one) but review would discard it in favour of its own wording.
     installFakeCodex(binDir, "task-truncated-then-error");
     const res = spawnSync(process.execPath, [CLI, "review", "--scope", "working-tree"], {
       cwd: repo,

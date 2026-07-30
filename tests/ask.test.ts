@@ -19,7 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
+import { buildEnv, installFakeCodex, TRUNCATED_CAUSE } from "./fake-codex.mjs";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -207,7 +207,7 @@ test("ask marks a truncated answer as failed instead of passing it off as the re
 });
 
 // The full chain, end to end: turn.ts captures a cause -> CodexProvider carries it
-// on RunResult.error -> failureReason frames it -> ask prints it on BOTH signals.
+// on RunResult.error -> withCause frames it -> ask prints it on BOTH signals.
 // The provider test pins the middle link and turn-runtime.test.ts pins the framing;
 // this is the only test that proves a real CLI invocation actually shows a user why.
 //
@@ -216,8 +216,6 @@ test("ask marks a truncated answer as failed instead of passing it off as the re
 // account") reached the job log and stopped there, so every door could say only
 // "Ask did not complete successfully." — indistinguishable from a model that
 // returned nothing.
-const TRUNCATED_CAUSE = "stream disconnected before completion";
-
 test("ask surfaces the backend's cause, not just that something failed", () => {
   const binDir = makeTempDir("harry-ask-bin-");
   installFakeCodex(binDir, "task-truncated-then-error");

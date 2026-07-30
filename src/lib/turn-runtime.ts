@@ -1,12 +1,15 @@
 /**
  * Shared turn-runtime helpers for the agent commands (ask / review / fix).
  *
- * These were previously copy-pasted verbatim across the three command modules
- * (progress writer, the timeout→abort scaffold with its DEBT note, and the
- * codex usage footer). Centralizing them removes the triplication that let the
- * three commands silently drift from each other.
+ * Three of these were previously copy-pasted verbatim across the three command
+ * modules (progress writer, the timeout→abort scaffold with its DEBT note, and
+ * the codex usage footer); centralizing them removed the triplication that let
+ * the three commands silently drift from each other. `withCause` was never
+ * duplicated — it starts here, for the same reason: one rule about how a failure
+ * is presented, shared by all three.
  */
 
+import { truncateUtf8 } from "./git.ts";
 import type { CodexRateLimits } from "./provider.ts";
 
 /** Timestamped stderr progress writer. No-op-free: every line is flushed. */
@@ -82,16 +85,37 @@ export function formatCodexUsage(u: {
  * A cause that is blank or whitespace is treated as absent, so a provider
  * setting `error: ""` cannot produce a dangling colon.
  *
+ * BOUNDED, and this is the presentation boundary on purpose. `turn.ts`'s
+ * `failure()` folds the codex child's whole stderr buffer into the cause, and
+ * that buffer accumulates unbounded (`app-server.ts`'s `stderrBuffer += chunk`).
+ * On the DEFAULT hang path — the turn's own 15-minute ceiling always fires before
+ * a command's 30-minute one, since the provider passes no `timeoutMs` — that is
+ * tens of kilobytes of child output. It must not all land inside ask's
+ * `# Ask Failed` block, which the doors return verbatim and `/debate` folds into
+ * another model's context.
+ *
+ * Capping HERE rather than at the provider keeps `RunResult.error` full-fidelity
+ * for the job log, which is where the rest belongs. The cut is taken off the TAIL
+ * so the upstream message — always first, because `failure()` puts the reason
+ * ahead of the stderr — survives intact; an earlier version of this argued a cap
+ * would be "most likely to cut it off", which had the direction backwards.
+ *
  * Named `withCause` rather than the obvious `failureReason` because `git.ts`
  * already has a private `failureReason(result)` that answers a different question
  * (why a git spawn failed). Two same-named helpers meaning different things is a
  * grep that lies; esbuild renaming one to `failureReason2` in the bundle is what
  * surfaced it.
  */
+const MAX_CAUSE_BYTES = 4096;
+
 export function withCause(generic: string, cause?: string): string {
   const trimmed = cause?.trim();
   if (!trimmed) return generic;
+  const { text, truncated } = truncateUtf8(trimmed, MAX_CAUSE_BYTES);
+  // Say the cut happened and where the rest is. A silently clipped diagnostic is
+  // worse than a short one: the reader cannot tell whether the cause ended there.
+  const shown = truncated ? `${text}\n… (cause truncated; full text in the job log)` : text;
   // Strip a trailing period off the generic so the joined sentence does not read
   // "…successfully.: cause".
-  return `${generic.replace(/\.$/, "")}: ${trimmed}`;
+  return `${generic.replace(/\.$/, "")}: ${shown}`;
 }

@@ -25,8 +25,9 @@ test("withCause appends the backend cause to the command's own sentence", () => 
 });
 
 test("withCause returns the generic sentence untouched when there is no cause", () => {
-  // A timeout has no backend cause — it is observed by the caller's own clock —
-  // and so does any failure the provider reports without a message. The sentence
+  // Reached when the provider reports a failure with no message at all. (A
+  // timeout is NOT this case — turn.ts does set a cause there; the commands just
+  // prefer their own wording. See RunResult.error's doc.) The sentence
   // must come back exactly as passed, INCLUDING its period: these strings are
   // what the doors tell consumers to surface.
   for (const cause of [undefined, "", "   ", "\n\t "]) {
@@ -56,4 +57,36 @@ test("withCause preserves a multi-line cause", () => {
   // that is the whole point of carrying a cause at all.
   const cause = "400 invalid_request_error\nsome stderr line";
   assert.equal(withCause(GENERIC, cause), `Ask did not complete successfully: ${cause}`);
+});
+
+// The cause is BOUNDED, because turn.ts's failure() folds in the codex child's
+// whole stderr buffer and app-server.ts accumulates that without limit. On the
+// default hang path (the turn's 15-minute ceiling fires before any command's
+// 30-minute one) that is tens of kilobytes, and it would otherwise land inside
+// ask's `# Ask Failed` block — which the doors return verbatim and /debate feeds
+// to another model.
+test("withCause bounds a huge cause and says it did", () => {
+  const upstream = "400 invalid_request_error: model not supported";
+  const huge = `${upstream}\n${"x".repeat(60_000)}`;
+  const out = withCause(GENERIC, huge);
+
+  assert.ok(
+    Buffer.byteLength(out, "utf8") < 6_000,
+    `expected a bounded string, got ${Buffer.byteLength(out, "utf8")} bytes`,
+  );
+  // The cut is taken off the TAIL, so the upstream message — which failure()
+  // always puts first — must survive whole. This is the assertion that would
+  // have caught the earlier reasoning that a cap "would cut it off".
+  assert.ok(out.includes(upstream), `the leading upstream message must survive:\n${out}`);
+  // A silently clipped diagnostic is worse than a short one: the reader cannot
+  // otherwise tell whether the cause ended there.
+  assert.match(out, /cause truncated; full text in the job log/);
+});
+
+test("withCause leaves a cause that fits entirely alone", () => {
+  // The other pole: the cap must not touch, or annotate, anything under it.
+  const cause = "400 invalid_request_error: model not supported";
+  const out = withCause(GENERIC, cause);
+  assert.equal(out, `Ask did not complete successfully: ${cause}`);
+  assert.ok(!out.includes("truncated"), "an in-budget cause must not be annotated");
 });

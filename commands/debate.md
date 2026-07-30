@@ -56,7 +56,10 @@ failed `ask` call exits non-zero, but its stdout can still read as a plausible
 answer — the `# Ask Failed` first line exists precisely to keep the partial
 response visible, not to make the body unreadable. Gate on the exit code, never
 on whether the text below the heading looks complete — and never relay that
-body as `gpt`'s position. Same policy as gemini: if `gpt` fails twice, proceed
+body as `gpt`'s position. Do relay its **reason line** (directly under the
+`# Ask Failed` heading): it names the backend's own cause when there is one, and
+that is the one part of a failed body worth carrying — dropping the whole body
+drops the diagnosis with it. Same policy as gemini: if `gpt` fails twice, proceed
 with a two-voice debate (opus + gemini) and say so explicitly in the final
 report (see the failed-voice note under Synthesis below).
 
@@ -146,7 +149,8 @@ Read the three R2 answers and produce exactly these sections. If a voice
 dropped out and you proceeded with two (per the gemini/gpt failure policies
 above), read every section below — including the `三方最終立場` heading itself
 — as covering only the voices that actually responded; replace the dropped
-voice's `三方最終立場` bullet with a short note that it did not respond, and
+voice's `三方最終立場` bullet with a short note that it did not respond — and its
+reason, when the failure carried one — and
 repeat that note in `CC 綜合建議` so the reader knows the verdict rests on two
 voices, not three:
 ```

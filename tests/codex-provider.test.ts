@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { CodexProvider } from "../src/lib/providers/codex.ts";
-import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
+import { buildEnv, installFakeCodex, TRUNCATED_CAUSE } from "./fake-codex.mjs";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "harry-codex-provider-test-"));
@@ -227,7 +227,7 @@ test("CodexProvider.run carries the turn's failure cause onto RunResult", async 
   assert.equal(res.success, false, "the fixture must fail, or there is no cause to carry");
   assert.equal(
     res.error,
-    "stream disconnected before completion",
+    TRUNCATED_CAUSE,
     "RunResult.error must carry the cause turn.ts captured — declared by " +
       "tests/fake-codex.mjs's task-truncated-then-error behavior",
   );

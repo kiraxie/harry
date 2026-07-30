@@ -38,9 +38,15 @@ export interface RunResult {
   success: boolean;
   summary?: string;
   /**
-   * Why the run failed, when the backend said. Set only alongside
-   * `success: false`, and absent when the failure carries no cause (a timeout is
-   * observed by the caller's own clock, not reported by the backend).
+   * Why the run failed, when the turn produced a message. Only ever set
+   * alongside `success: false` — `turn.ts` computes success as `!state.error &&
+   * …`, so the two cannot both be true.
+   *
+   * Set on the abort/timeout paths TOO ("Codex turn aborted.", "Codex turn timed
+   * out…"), not only on a backend rejection. The commands prefer their own
+   * timeout wording when their own clock fired, so they discard it there — that
+   * is a display choice, not an absence. Do not read `error` as proof the
+   * BACKEND said something.
    *
    * This field exists because without it every command could only report that
    * *something* failed. The backend's actual cause — an upstream 400 like

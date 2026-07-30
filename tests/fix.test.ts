@@ -19,7 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { computeStagedDiff } from "../src/commands/fix.ts";
-import { buildEnv, installFakeCodex } from "./fake-codex.mjs";
+import { buildEnv, installFakeCodex, TRUNCATED_CAUSE } from "./fake-codex.mjs";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -446,8 +446,8 @@ test("the report step names runFix's unknown-not-zero contract", () => {
 // This is the machine-read one of the three: an orchestrator keys on the
 // envelope, so a generic string here is what turns a diagnosable model rejection
 // into "the fix just didn't work". The provider carries the cause and
-// `failureReason` frames it; this proves fix's own call site uses them, which
-// nothing else does — removing `failureReason` from this file alone left the
+// `withCause` frames it; this proves fix's own call site uses them, which
+// nothing else does — removing `withCause` from this file alone left the
 // whole suite green until this test existed.
 test("a failed session's envelope carries the backend cause, not just a generic message", () => {
   const dirs: string[] = [];
@@ -455,7 +455,8 @@ test("a failed session's envelope carries the backend cause, not just a generic 
   dirs.push(repo);
   try {
     repoWithCommit(repo);
-    // Fails WITH a cause, unlike task-stuck (which times out and has none).
+    // Fails with a BACKEND-reported cause. A timeout also carries one, but fix
+    // prefers its own timeout wording there, so this is the path that shows it.
     const run = runFixCli(repo, dirs, "task-truncated-then-error");
 
     assert.equal(
