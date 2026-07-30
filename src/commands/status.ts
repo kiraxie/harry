@@ -12,6 +12,9 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
   const stateDir = resolveStateDir(cwd);
   const codexRateLimits = readCodexRateLimits(stateDir);
 
+  // No door forwards this — it is for direct CLI use. Kept deliberately; the
+  // argument and the end-to-end guard both live in `tests/cli-surface.test.ts`
+  // ("status --json is forwarded and switches the output format").
   if (options.json) {
     console.log(JSON.stringify(codexRateLimits ? { codex: codexRateLimits } : {}, null, 2));
     return;
