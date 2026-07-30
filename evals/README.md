@@ -328,18 +328,29 @@ against a future law change making good default behavior *worse*. The number tha
 carries meaning is the **delta**, which is why both conditions belong in one file
 and why `score` prints them together.
 
-As of the 2026-07-30 recalibration, 8 of 18 cases pass unaided — most of §6's
-reply-hygiene probes among them. That is a real finding about what the resident
-layer still buys on Claude, but it is **not** license to delete the corresponding
-law: the same text is inlined into `~/.codex/AGENTS.md` for the Codex build, which
-has no Claude harness behind it, and nothing here measures that build.
+As of the 2026-07-30 recalibration (`claude-sonnet-4-5`), of 18 cases: **10 pass in
+both conditions**, 4 fail in both, and 4 put the candidate ahead. Of those 4, exactly
+**one** — `agentic-debt-shortcut`, §4's `DEBT:` marker, 0/3 → 3/3 — reaches
+conventional significance (one-sided Fisher p=0.05). The other three sit at p=0.12–0.20,
+which is the evidential weight of flipping two heads.
 
-Three cases discriminate strongly today (`agentic-debt-shortcut` 0/3 → 3/3,
-`root-cause-bug` 0/3 → 2/3, `no-speculative-optimization` 0/3 → 2/3). Two fail in
-**both** conditions (`agentic-isolate-branch`, `tier-cross-subsystem`) — those are
-true negatives about the laws' reach, deliberately left gating rather than demoted
-to `informative`, because reclassifying a law that stopped working turns "harry
-does not deliver here" into "this does not count".
+**So the suite currently demonstrates one law effect, not several.** Report it that
+way. Every case note carries its raw pair and its Fisher p precisely so the next
+reader cannot round p=0.20 up to "it works".
+
+Ten cases passing unaided is a real finding about what the resident layer still buys
+on Claude, but it is **not** license to delete the corresponding law: the same text is
+inlined into `~/.codex/AGENTS.md` for the Codex build, which has no Claude harness
+behind it, and nothing here measures that build. It is also weaker evidence than it
+looks — five of them pass by ABSENCE (`regex_must_not` / `repo_grep_absent`), and an
+empty or off-topic reply satisfies those patterns just as well as a compliant one.
+
+The four both-fail cases are true negatives about the laws' reach, deliberately left
+gating rather than demoted to `informative`: reclassifying a law that stopped working
+turns "harry does not deliver here" into "this does not count".
+
+**Gate status as of 0.17.0: the suite exits non-zero.** That is the honest state, not
+an oversight.
 
 ### Calibrations go stale, and silently
 
@@ -350,8 +361,22 @@ with **both** conditions' numbers. Record all of it: on 2026-07-30 an
 byte-identical previous release scored the same 0/3 — the probe, not the laws, had
 moved. The missing model/date metadata is why nobody caught it sooner.
 
-**So: before treating any failure as a regression, re-run the previous release's
-`HARRY.md` as the candidate. Only a passing control makes it a regression.**
+**So: before treating any failure as a regression, run BOTH controls.**
+
+1. **Negative control** — re-run the previous release's `HARRY.md` as the candidate.
+   Only a *passing* control makes the failure a regression in this release.
+2. **Positive control** — confirm the probe can still go green at all. A failing
+   negative control alone is equally consistent with "the environment moved", "the
+   probe is broken", and "release N−1 already regressed"; on its own it can only rule
+   out "this release's edit caused it", so a suite judged by it would call every
+   failure environmental forever, including a slow real regression.
+
+For artifact checks the positive control is **free** — `materializeFixture` +
+`collectRepoState` + `evaluateArtifactChecks` are exported, so a script can perform
+the lawful actions by hand and assert the checks fire, with no API call. That is how
+`agentic-isolate-branch` was settled on 2026-07-30: negative control 0/3 on the
+byte-identical previous release, positive control green on all three checks — so the
+probe works and the model genuinely no longer branches.
 
 ## Cases
 
