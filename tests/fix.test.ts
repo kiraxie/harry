@@ -466,7 +466,7 @@ test("a failed session's envelope carries the backend cause, not just a generic 
     );
     assert.equal(
       run.envelope.error,
-      "Fix session did not complete successfully: stream disconnected before completion",
+      `Fix session did not complete successfully: ${TRUNCATED_CAUSE}`,
       "the envelope must name WHY — the generic sentence as the prefix (it says which " +
         "command failed) plus the cause turn.ts captured",
     );
