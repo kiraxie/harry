@@ -22,7 +22,12 @@ import { buildReviewPrompt, type ReviewKind } from "../lib/review-prompts.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
 import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.ts";
-import { formatCodexUsage, makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
+import {
+  formatCodexUsage,
+  makeProgress,
+  startTurnTimeout,
+  withCause,
+} from "../lib/turn-runtime.ts";
 
 export interface ReviewOptions {
   adversarial?: boolean;
@@ -178,7 +183,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   if (!success) {
     const reason = turn.timedOut()
       ? `Timed out after ${timeoutMs}ms.`
-      : "Review did not complete successfully.";
+      : withCause("Review did not complete successfully.", result.error);
     process.stderr.write(`Review failed: ${reason}\n`);
     process.stdout.write(`# Review Failed\n\n${reason}\n\n${reviewBody}\n`);
     log(`review failed: ${reason}`);

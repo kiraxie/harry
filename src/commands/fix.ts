@@ -33,7 +33,7 @@ import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
 import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.ts";
-import { makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
+import { makeProgress, startTurnTimeout, withCause } from "../lib/turn-runtime.ts";
 
 export interface FixOptions {
   /** Path to the approved-findings JSON (array, or a {findings:[...]} object). */
@@ -409,7 +409,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
         jobId,
         error: turn.timedOut()
           ? `Timed out after ${timeoutMs}ms`
-          : "Fix session did not complete successfully.",
+          : withCause("Fix session did not complete successfully.", result.error),
         ...snapshotInfo(),
       });
     }

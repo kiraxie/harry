@@ -1298,6 +1298,12 @@ var CodexProvider = class {
       lastAssistantMessage: result.finalMessage,
       success: result.success,
       summary: result.finalMessage || void 0,
+      // Carry the turn's cause onto the neutral result, not just into the log
+      // above. `turn.ts`'s failure() already folds the child's stderr in after
+      // the message, so the upstream message leads — deliberately uncapped: the
+      // cause is the first thing in the string, and a cap sized for stderr would
+      // be the thing most likely to cut it off.
+      error: result.error,
       usage: {
         inputTokens: result.usage?.inputTokens,
         outputTokens: result.usage?.outputTokens,
@@ -1423,6 +1429,11 @@ function formatCodexUsage(u) {
   const rate = pct !== void 0 ? ` rate-limit=${pct}%` : "";
   return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
 }
+function withCause(generic, cause) {
+  const trimmed = cause?.trim();
+  if (!trimmed) return generic;
+  return `${generic.replace(/\.$/, "")}: ${trimmed}`;
+}
 
 // src/commands/ask.ts
 var DEFAULT_MODEL = "gpt-5.6-sol";
@@ -1479,7 +1490,7 @@ async function runAsk(cwd, options) {
   const body = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty answer.)_";
   const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Ask did not complete successfully.";
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : withCause("Ask did not complete successfully.", result.error);
     process.stderr.write(`Ask failed: ${reason}
 `);
     process.stdout.write(`# Ask Failed
@@ -2222,7 +2233,7 @@ async function runFix(cwd, options = {}) {
       emit({
         status: "failed",
         jobId,
-        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : "Fix session did not complete successfully.",
+        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : withCause("Fix session did not complete successfully.", result.error),
         ...snapshotInfo()
       });
     }
@@ -2582,7 +2593,7 @@ ${FINDINGS_OUTPUT_INSTRUCTION}`;
   const reviewBody = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty review.)_";
   const success = result.success && !turn.timedOut();
   if (!success) {
-    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : "Review did not complete successfully.";
+    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : withCause("Review did not complete successfully.", result.error);
     process.stderr.write(`Review failed: ${reason}
 `);
     process.stdout.write(`# Review Failed

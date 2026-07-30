@@ -66,3 +66,32 @@ export function formatCodexUsage(u: {
   const rate = pct !== undefined ? ` rate-limit=${pct}%` : "";
   return `tokens(in/out)=${u.inputTokens ?? "?"}/${u.outputTokens ?? "?"}${rate}`;
 }
+
+/**
+ * Frame a command's generic failure sentence with the backend's cause, when
+ * there is one.
+ *
+ * Shared rather than inlined three times because it is one rule about how a
+ * cause is presented, and three copies would let ask/review/fix drift into
+ * reporting the same failure differently — the triplication this module exists
+ * to end.
+ *
+ * The generic sentence is KEPT as the prefix, not replaced. It is what the doors
+ * and any shell consumer see first, and an upstream message alone ("The
+ * 'gpt-5.6-sol' model is not supported…") does not say which command failed.
+ * A cause that is blank or whitespace is treated as absent, so a provider
+ * setting `error: ""` cannot produce a dangling colon.
+ *
+ * Named `withCause` rather than the obvious `failureReason` because `git.ts`
+ * already has a private `failureReason(result)` that answers a different question
+ * (why a git spawn failed). Two same-named helpers meaning different things is a
+ * grep that lies; esbuild renaming one to `failureReason2` in the bundle is what
+ * surfaced it.
+ */
+export function withCause(generic: string, cause?: string): string {
+  const trimmed = cause?.trim();
+  if (!trimmed) return generic;
+  // Strip a trailing period off the generic so the joined sentence does not read
+  // "…successfully.: cause".
+  return `${generic.replace(/\.$/, "")}: ${trimmed}`;
+}

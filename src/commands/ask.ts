@@ -15,7 +15,12 @@ import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
 import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.ts";
-import { formatCodexUsage, makeProgress, startTurnTimeout } from "../lib/turn-runtime.ts";
+import {
+  formatCodexUsage,
+  makeProgress,
+  startTurnTimeout,
+  withCause,
+} from "../lib/turn-runtime.ts";
 
 export interface AskOptions {
   prompt: string;
@@ -91,7 +96,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
   if (!success) {
     const reason = turn.timedOut()
       ? `Timed out after ${timeoutMs}ms.`
-      : "Ask did not complete successfully.";
+      : withCause("Ask did not complete successfully.", result.error);
     process.stderr.write(`Ask failed: ${reason}\n`);
     // The body may be a PARTIAL answer that reads as a finished one. `ask`'s
     // doors tell consumers to return this stdout verbatim (and /debate folds it

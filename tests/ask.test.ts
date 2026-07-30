@@ -206,6 +206,43 @@ test("ask marks a truncated answer as failed instead of passing it off as the re
   assert.notEqual(res.status, 0, "expected a non-zero exit status");
 });
 
+// The full chain, end to end: turn.ts captures a cause -> CodexProvider carries it
+// on RunResult.error -> failureReason frames it -> ask prints it on BOTH signals.
+// The provider test pins the middle link and turn-runtime.test.ts pins the framing;
+// this is the only test that proves a real CLI invocation actually shows a user why.
+//
+// It is the defect the codex-model-pinning item was opened around: an upstream 400
+// ("The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT
+// account") reached the job log and stopped there, so every door could say only
+// "Ask did not complete successfully." — indistinguishable from a model that
+// returned nothing.
+const TRUNCATED_CAUSE = "stream disconnected before completion";
+
+test("ask surfaces the backend's cause, not just that something failed", () => {
+  const binDir = makeTempDir("harry-ask-bin-");
+  installFakeCodex(binDir, "task-truncated-then-error");
+
+  const res = runCli(["ask", "why is it slow"], { cwd: binDir, binDir });
+
+  // stderr is what an operator reads first.
+  assert.match(
+    res.stderr,
+    new RegExp(`^Ask failed: Ask did not complete successfully: ${TRUNCATED_CAUSE}$`, "m"),
+    `expected the cause on the "Ask failed:" line, got:\n${res.stderr}`,
+  );
+  // stdout matters just as much and for a different reason: ask's doors tell
+  // consumers to return it verbatim, and /debate folds it into a synthesis, so a
+  // cause that reached only stderr would be invisible to both.
+  assert.ok(
+    res.stdout.includes(TRUNCATED_CAUSE),
+    `expected the cause in stdout beneath the marker, got:\n${res.stdout}`,
+  );
+  // The generic sentence is KEPT as the prefix, not replaced — it is what names
+  // which command failed, and consumers key on it.
+  assert.match(res.stdout, /Ask did not complete successfully:/);
+  assert.notEqual(res.status, 0);
+});
+
 test("ask leaves the failure marker off a successful answer", () => {
   // The marker is a discriminator, so it needs both poles: proving it appears on
   // failure is only half. If it also appeared on success, every door-following

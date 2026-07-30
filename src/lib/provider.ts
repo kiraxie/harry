@@ -37,6 +37,19 @@ export interface RunResult {
   lastAssistantMessage: string;
   success: boolean;
   summary?: string;
+  /**
+   * Why the run failed, when the backend said. Set only alongside
+   * `success: false`, and absent when the failure carries no cause (a timeout is
+   * observed by the caller's own clock, not reported by the backend).
+   *
+   * This field exists because without it every command could only report that
+   * *something* failed. The backend's actual cause — an upstream 400 like
+   * "The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT
+   * account" — reached the job log and stopped there, so a model rejection and a
+   * model that genuinely returned nothing were indistinguishable in the output.
+   * That cost real diagnosis time.
+   */
+  error?: string;
   usage?: CodexUsage;
   codeChanges?: { linesAdded: number; linesRemoved: number; filesModified: string[] };
 }
