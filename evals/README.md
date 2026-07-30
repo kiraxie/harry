@@ -320,6 +320,39 @@ leftover repos have post-hoc inspection value. There is no cleanup code; the OS
 temp dir is the janitor. Point `EVALS_FIXTURE_ROOT` somewhere you can prune if the
 accumulation ever bothers you.
 
+## Reading the results: a green candidate is not evidence
+
+**A case that passes in BOTH conditions measures the model and its harness, not the
+laws.** Its candidate green proves nothing about `HARRY.md`; it is only a guard
+against a future law change making good default behavior *worse*. The number that
+carries meaning is the **delta**, which is why both conditions belong in one file
+and why `score` prints them together.
+
+As of the 2026-07-30 recalibration, 8 of 18 cases pass unaided — most of §6's
+reply-hygiene probes among them. That is a real finding about what the resident
+layer still buys on Claude, but it is **not** license to delete the corresponding
+law: the same text is inlined into `~/.codex/AGENTS.md` for the Codex build, which
+has no Claude harness behind it, and nothing here measures that build.
+
+Three cases discriminate strongly today (`agentic-debt-shortcut` 0/3 → 3/3,
+`root-cause-bug` 0/3 → 2/3, `no-speculative-optimization` 0/3 → 2/3). Two fail in
+**both** conditions (`agentic-isolate-branch`, `tier-cross-subsystem`) — those are
+true negatives about the laws' reach, deliberately left gating rather than demoted
+to `informative`, because reclassifying a law that stopped working turns "harry
+does not deliver here" into "this does not count".
+
+### Calibrations go stale, and silently
+
+Every case note carries a `CALIBRATION <date> (<model>, <trials>[, sandbox])` line
+with **both** conditions' numbers. Record all of it: on 2026-07-30 an
+`agentic-isolate-branch` failure was read as a regression against a five-day-old
+"3/3", and two law edits were made on that reading before a control run of the
+byte-identical previous release scored the same 0/3 — the probe, not the laws, had
+moved. The missing model/date metadata is why nobody caught it sooner.
+
+**So: before treating any failure as a regression, re-run the previous release's
+`HARRY.md` as the candidate. Only a passing control makes it a regression.**
+
 ## Cases
 
 `cases.jsonl` — one JSON object per line:
