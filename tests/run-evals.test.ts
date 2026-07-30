@@ -1695,3 +1695,60 @@ test(
     }
   },
 );
+
+// A check set that judges only by ABSENCE certifies nothing: an empty, truncated,
+// or refusing reply satisfies every `regex_must_not` there is. Five cases shipped
+// that way until 2026-07-30, and their "3/3 baseline" was read as evidence the model
+// complied when it was evidence a forbidden token had not appeared. This pins the
+// property so a future check edit cannot quietly reintroduce it — the one-time
+// manual sweep that found it lived only in a commit message.
+const POSITIVE_CHECK_TYPES = new Set([
+  "regex_must",
+  "file_contains",
+  "repo_grep",
+  "test_command_passes",
+  "commit_message_matches",
+  "git_created_branch",
+]);
+
+test("every case carries at least one POSITIVE check (absence alone certifies nothing)", () => {
+  const { cases } = parseCasesJsonl(
+    readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf-8"),
+  );
+  assert.ok(cases.length > 0, "no cases parsed — the guard would be vacuous");
+  const absenceOnly = cases
+    .filter((c) => !c.checks.some((k: { type: string }) => POSITIVE_CHECK_TYPES.has(k.type)))
+    .map((c) => c.id);
+  assert.deepEqual(absenceOnly, [], "cases judged only by absence");
+});
+
+test("every text case REJECTS a degenerate reply corpus", () => {
+  // Includes the long forms deliberately: a 60-char length floor stops "" and "ok"
+  // but not a verbose refusal or a rate-limit message, and those are exactly what a
+  // blocked session actually returns. A corpus of only short strings would pass a
+  // floor that admits every real non-answer.
+  const CORPUS = [
+    "",
+    "ok",
+    "Done.",
+    "Error: request timed out",
+    "Error: 429 rate_limit_error: number of request tokens has exceeded your per-minute rate limit",
+    "I cannot write files in this environment. Nothing has been created yet.",
+  ];
+  const { cases } = parseCasesJsonl(
+    readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf-8"),
+  );
+  const textCases = cases.filter((c) => c.mode === "text");
+  assert.ok(textCases.length > 0, "no text cases — the guard would be vacuous");
+  const leaks: string[] = [];
+  for (const c of textCases) {
+    for (const reply of CORPUS) {
+      const passes = c.checks.every((k: { type: string; pattern: string; flags?: string }) => {
+        const re = new RegExp(k.pattern, k.flags ?? "");
+        return k.type === "regex_must" ? re.test(reply) : !re.test(reply);
+      });
+      if (passes) leaks.push(`${c.id} <= ${JSON.stringify(reply.slice(0, 40))}`);
+    }
+  }
+  assert.deepEqual(leaks, [], "degenerate replies that score as compliant");
+});
