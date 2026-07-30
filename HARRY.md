@@ -28,7 +28,7 @@ Any red line here (the user-requested entry excepted) promotes the task to **Maj
 
 ## §3 Complexity threshold (the master switch)
 
-Classify every non-trivial task; take the highest tier whose trigger is hit (when in doubt, go higher). Any red line (§2) → Major. A user-declared **incident** ("incident", "ship it now") inverts the order — fix and verify first, back-fill process the same day; never self-declared. For Standard and above, state the tier before acting — in a one-shot or headless reply, where the whole flow compresses into one message, state the plan too. A Trivial call needs no announcement — a gate the table prescribes away is not a skip; skipping a gate your tier does require needs a declaration (§7).
+Classify every non-trivial task; take the highest tier whose trigger is hit (when in doubt, go higher). Any red line (§2) → Major. Any branching logic upgrades Trivial → Standard. A user-declared **incident** ("incident", "ship it now") inverts the order — fix and verify first, back-fill process the same day; never self-declared. State the classification before acting — name the tier out loud (a Trivial call included), even in a one-shot or headless session where nothing prompts for it, and there — where the whole flow compresses into one reply — the plan too; an unstated tier is a silent skip (§7).
 
 | Tier | Trigger | brainstorm | item | TDD | review | execution |
 |------|---------|:--:|:--:|:--:|:--:|:--:|

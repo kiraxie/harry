@@ -19,11 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by over 80% with no measured loss, the Claude 5 prompting docs warn that instructions
   written for prior models are "often too prescriptive… and can degrade output quality",
   and the Claude Code docs target under 200 lines per `CLAUDE.md` because a bloated file
-  loses adherence. Two behavior changes are deliberate: a **Trivial** task no longer owes
-  an out-loud tier announcement (skipping a gate your tier *does* require still does), and
-  §6's reply-hygiene rules are one line instead of a checklist. They stay resident rather
-  than moving to a skill because the same text also serves the Codex build, which has no
-  Claude harness enforcing them.
+  loses adherence. One behavior change is deliberate: §6's reply-hygiene rules are one line
+  instead of a checklist — and they stay resident rather than moving to a skill because the
+  same text also serves the Codex build, which has no Claude harness enforcing them.
+  §3's tier-declaration sentence, by contrast, is kept **verbatim**: the behavioral evals
+  measured two independent rewrites of it at 0/3 where the original scores 3/3, so its exact
+  scoping — not its gist — is what makes a one-shot reply state its tier at all.
 - Doors no longer restate rules their references own (`grill`, `distill`, `review`,
   `audit` on both builds). One of those duplicates had already drifted: the Codex `review`
   door was missing the `# Review Failed` branch its own full-mode path checks for, so a
