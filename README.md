@@ -136,7 +136,7 @@ upstream.json       tracks the five upstreams by commit (see references/upstream
 
 ## Upstream
 
-harry is distilled from `superpowers`, `ponytail`, `codex-plugin-cc`, `mattpocock-skills` (the `grill` family), and `anthropics-skills` (skill-authoring principles) — all five pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Two more sources are historical influences, not pinned: `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's pre-send check and lawful-exit rules). Note: `review`'s design upstream is **codex-plugin-cc** (it was originally ported for the Copilot backend).
+harry is distilled from `superpowers`, `ponytail`, `codex-plugin-cc`, `mattpocock-skills` (the `grill` family), and `anthropics-skills` (skill-authoring principles) — all five pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Two more sources are historical influences, not pinned: `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's talk-like-an-engineer and lawful-exit rules). Note: `review`'s design upstream is **codex-plugin-cc** (it was originally ported for the Copilot backend).
 
 ## License
 
