@@ -1244,7 +1244,9 @@ function formatCodexRateLimits(rl) {
     used.push(`${windowLabel(rl.primaryWindowMinutes) ?? "primary"} ${rl.primaryUsedPercent}%`);
   }
   if (rl.secondaryUsedPercent !== void 0) {
-    used.push(`${windowLabel(rl.secondaryWindowMinutes) ?? "secondary"} ${rl.secondaryUsedPercent}%`);
+    used.push(
+      `${windowLabel(rl.secondaryWindowMinutes) ?? "secondary"} ${rl.secondaryUsedPercent}%`
+    );
   }
   if (used.length > 0) parts.push(`${used.join(" / ")} used`);
   if (rl.planType) parts.push(`plan ${rl.planType}`);
