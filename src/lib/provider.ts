@@ -7,6 +7,15 @@
 export interface CodexRateLimits {
   primaryUsedPercent?: number;
   secondaryUsedPercent?: number;
+  /**
+   * How long each quota window runs, in minutes, when codex reports it
+   * (`rateLimits.primary.windowDurationMins`). This is what "primary" and
+   * "secondary" actually MEAN — they are slot names on the wire, not something a
+   * reader can interpret, so the renderer says "the 30-day limit" instead of
+   * "primary" whenever the duration is known.
+   */
+  primaryWindowMinutes?: number;
+  secondaryWindowMinutes?: number;
   planType?: string;
   resetsAt?: string;
 }

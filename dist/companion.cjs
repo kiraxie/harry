@@ -709,6 +709,14 @@ function parseAccountRateLimits(params) {
   if (secondary !== void 0) {
     parsed.secondaryUsedPercent = secondary;
   }
+  const primaryWindow = toFiniteNumber(rateLimits.primary?.windowDurationMins);
+  if (primaryWindow !== void 0) {
+    parsed.primaryWindowMinutes = primaryWindow;
+  }
+  const secondaryWindow = toFiniteNumber(rateLimits.secondary?.windowDurationMins);
+  if (secondaryWindow !== void 0) {
+    parsed.secondaryWindowMinutes = secondaryWindow;
+  }
   if (typeof rateLimits.planType === "string") {
     parsed.planType = rateLimits.planType;
   }
@@ -731,6 +739,8 @@ function foldRateLimits(prev, next) {
   return {
     primaryUsedPercent: next.primaryUsedPercent ?? prev.primaryUsedPercent,
     secondaryUsedPercent: next.secondaryUsedPercent ?? prev.secondaryUsedPercent,
+    primaryWindowMinutes: next.primaryWindowMinutes ?? prev.primaryWindowMinutes,
+    secondaryWindowMinutes: next.secondaryWindowMinutes ?? prev.secondaryWindowMinutes,
     planType: next.planType ?? prev.planType,
     resetsAt: next.resetsAt ?? prev.resetsAt
   };
@@ -1215,11 +1225,27 @@ function readCodexRateLimits(stateDir) {
     return null;
   }
 }
+function windowLabel(minutes) {
+  if (minutes === void 0 || !Number.isFinite(minutes) || minutes <= 0) return null;
+  if (minutes % (60 * 24) === 0) {
+    const days = minutes / (60 * 24);
+    return `${days}-day`;
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours}-hour`;
+  }
+  return `${minutes}-minute`;
+}
 function formatCodexRateLimits(rl) {
   const parts = [];
   const used = [];
-  if (rl.primaryUsedPercent !== void 0) used.push(`primary ${rl.primaryUsedPercent}%`);
-  if (rl.secondaryUsedPercent !== void 0) used.push(`secondary ${rl.secondaryUsedPercent}%`);
+  if (rl.primaryUsedPercent !== void 0) {
+    used.push(`${windowLabel(rl.primaryWindowMinutes) ?? "primary"} ${rl.primaryUsedPercent}%`);
+  }
+  if (rl.secondaryUsedPercent !== void 0) {
+    used.push(`${windowLabel(rl.secondaryWindowMinutes) ?? "secondary"} ${rl.secondaryUsedPercent}%`);
+  }
   if (used.length > 0) parts.push(`${used.join(" / ")} used`);
   if (rl.planType) parts.push(`plan ${rl.planType}`);
   if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);

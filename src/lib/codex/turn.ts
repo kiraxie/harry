@@ -255,6 +255,16 @@ function parseAccountRateLimits(params: any): CodexTurnUsage {
   if (secondary !== undefined) {
     parsed.secondaryUsedPercent = secondary;
   }
+  // Window durations are what make the slots legible: "primary"/"secondary" are
+  // wire names, "the 30-day limit" is the same fact a reader can act on.
+  const primaryWindow = toFiniteNumber(rateLimits.primary?.windowDurationMins);
+  if (primaryWindow !== undefined) {
+    parsed.primaryWindowMinutes = primaryWindow;
+  }
+  const secondaryWindow = toFiniteNumber(rateLimits.secondary?.windowDurationMins);
+  if (secondaryWindow !== undefined) {
+    parsed.secondaryWindowMinutes = secondaryWindow;
+  }
   if (typeof rateLimits.planType === "string") {
     parsed.planType = rateLimits.planType;
   }
@@ -290,6 +300,8 @@ function foldRateLimits(
   return {
     primaryUsedPercent: next.primaryUsedPercent ?? prev.primaryUsedPercent,
     secondaryUsedPercent: next.secondaryUsedPercent ?? prev.secondaryUsedPercent,
+    primaryWindowMinutes: next.primaryWindowMinutes ?? prev.primaryWindowMinutes,
+    secondaryWindowMinutes: next.secondaryWindowMinutes ?? prev.secondaryWindowMinutes,
     planType: next.planType ?? prev.planType,
     resetsAt: next.resetsAt ?? prev.resetsAt
   };
