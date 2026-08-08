@@ -43,6 +43,42 @@ test("runCodexTurn parses token_count rate limits into usage", async () => {
   assert.equal(result.usage?.outputTokens, 7);
 });
 
+// codex 0.144.4 renamed `token_count` and SPLIT it in two, so every field harry
+// read moved: snake_case became camelCase, usage nested under `tokenUsage.last`,
+// and `resets_at` moved onto `primary` as epoch seconds instead of an ISO string
+// at the root. Nothing failed when that happened — the fixture spoke the old
+// protocol too, so the pair agreed with each other and disagreed with reality,
+// leaving /harry:status structurally unable to ever show data. Traced live and
+// fixed 2026-08-08; this pins the new shape beside the old one.
+test("runCodexTurn folds the SPLIT usage + rate-limit notifications (codex 0.144.4)", async () => {
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "task-with-split-usage");
+
+  const result = await runCodexTurn({
+    cwd: binDir,
+    prompt: "do the thing",
+    env: buildEnv(binDir),
+    readOnly: true,
+  });
+
+  assert.equal(result.success, true);
+  // Two notifications, one usage object: proof the fold survives fields arriving
+  // separately, which under the old protocol was an optimization and here is the
+  // only thing that makes either half survive the other.
+  assert.equal(result.usage?.inputTokens, 11, "reads tokenUsage.LAST, not .total");
+  assert.equal(result.usage?.outputTokens, 13);
+  assert.equal(result.usage?.rateLimits?.primaryUsedPercent, 21);
+  assert.equal(result.usage?.rateLimits?.planType, "free");
+  // Epoch seconds converted to the ISO string CodexRateLimits promises, so status
+  // never has to know which protocol produced the snapshot.
+  assert.equal(result.usage?.rateLimits?.resetsAt, new Date(1788750597 * 1000).toISOString());
+  assert.equal(
+    result.usage?.rateLimits?.secondaryUsedPercent,
+    undefined,
+    "null secondary stays absent",
+  );
+});
+
 test("runCodexTurn completes even when turn/start omits a turn id (cr-1)", async () => {
   const binDir = makeTempDir();
   installFakeCodex(binDir, "task-no-turnid");
