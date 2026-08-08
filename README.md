@@ -113,9 +113,10 @@ them. One-time setup: install the `codex` CLI, then `codex login`.
 Not every login can reach every model. A ChatGPT login **without an OpenAI
 subscription** is rejected for `gpt-5.6-sol` with a hard 400 (*"not supported when
 using Codex with a ChatGPT account"*, probed 2026-08-08) while `gpt-5.6-terra` and
-`gpt-5.6-luna` answer. The defaults stay on the capable model rather than the
-weakest account; if yours is rejected, the failure names itself and you set the
-model once instead of per command:
+`gpt-5.6-luna` answer. No subscribed account has been probed, so `sol`'s status
+there is unverified — the defaults stay on it because downgrading on one account's
+evidence would degrade every other account on none. If yours is rejected, the
+failure names itself and you set the model once instead of per command:
 
 ```sh
 export HARRY_MODEL_JUDGMENT=gpt-5.6-luna     # ask, fix, /debate's gpt voice
