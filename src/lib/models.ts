@@ -21,11 +21,11 @@
  *                   "The 'gpt-5.6-sol' model is not supported when using Codex
  *                   with a ChatGPT account."
  *
- * That is ONE account, and an unsubscribed one — not evidence that every ChatGPT
- * login rejects sol. A subscribed (or company/Enterprise) account is expected to
- * reach it, and downgrading the shipped defaults to satisfy the weakest account
- * would silently degrade every stronger one. So sol stays the default for the
- * judgment and adversarial paths.
+ * That is ONE account, and an unsubscribed one. **No subscribed account has been
+ * probed**, so whether sol is reachable there is unverified either way — the reason
+ * the defaults stay on sol is not evidence that it works elsewhere, it is that
+ * downgrading a shipped default to satisfy the weakest observed account would
+ * degrade every account that is not that one, on no evidence at all.
  *
  * ON AN ACCOUNT THAT REJECTS IT the failure is now self-describing — ff6475c
  * surfaces the upstream 400 verbatim, naming the model and the reason — and the fix
