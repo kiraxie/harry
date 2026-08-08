@@ -141,9 +141,13 @@ paths, not bare filenames: this is now the only hand-maintained copy of that lis
 `tests/prose-refs.test.ts` can only verify a path, so a bare filename here would go stale
 silently on a rename.
 
-`CLAUDE.local.md` (gitignored, present in this repo) is harry's own convention for
-project-specific rules that refine `HARRY.md` for a single repo — not a task list. Active in-flight
-work lives in the also-gitignored `.local/INDEX.md` `## In flight` section instead.
+`CLAUDE.local.md` is harry's own convention for project-specific rules that refine
+`HARRY.md` for a single repo — not a task list. It is gitignored and **untracked**, so it
+exists only in your working copy: it was listed in `.gitignore` from the start but stayed
+tracked until 2026-08-08 (git does not apply an ignore to an already-tracked path), which
+made the ignore a no-op and shipped one repo's personal rules to everyone who cloned.
+Active in-flight work lives in the also-gitignored `.local/INDEX.md` `## In flight` section
+instead.
 
 ## Codex CLI compatibility (`.codex-plugin/`, `codex-skills/`)
 
