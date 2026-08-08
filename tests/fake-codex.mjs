@@ -249,7 +249,7 @@ rl.on("line", (line) => {
           break;
         }
 
-        if (BEHAVIOR === "task-ok" || BEHAVIOR === "task-with-ratelimits") {
+        if (BEHAVIOR === "task-ok" || BEHAVIOR === "task-with-ratelimits" || BEHAVIOR === "task-with-split-usage") {
           send({ method: "turn/started", params: { threadId: thread.id, turn: buildTurn(turnId) } });
           send({
             method: "item/completed",
@@ -260,6 +260,8 @@ rl.on("line", (line) => {
             }
           });
           if (BEHAVIOR === "task-with-ratelimits") {
+            // Legacy single-notification protocol (pre-0.144.4): usage and rate
+            // limits together, snake_case, resets_at at the root as an ISO string.
             send({
               method: "token_count",
               params: {
@@ -267,6 +269,37 @@ rl.on("line", (line) => {
                 turnId,
                 rate_limits: { primary: { used_percent: 12 } },
                 last_token_usage: { input_tokens: 5, output_tokens: 7 }
+              }
+            });
+          }
+          if (BEHAVIOR === "task-with-split-usage") {
+            // codex 0.144.4's shape, captured from a live trace 2026-08-08: two
+            // notifications, camelCase, usage nested under tokenUsage.last, and
+            // resetsAt moved onto primary as EPOCH SECONDS. Kept beside the
+            // legacy branch above because the runtime must serve both codex
+            // generations, and because a fixture that only speaks one of them is
+            // how the rename went unnoticed for a whole protocol version.
+            send({
+              method: "thread/tokenUsage/updated",
+              params: {
+                threadId: thread.id,
+                turnId,
+                tokenUsage: {
+                  total: { inputTokens: 999, outputTokens: 999 },
+                  last: { inputTokens: 11, outputTokens: 13, cachedInputTokens: 4 },
+                  modelContextWindow: 258400
+                }
+              }
+            });
+            send({
+              method: "account/rateLimits/updated",
+              params: {
+                rateLimits: {
+                  limitId: "codex",
+                  primary: { usedPercent: 21, windowDurationMins: 43200, resetsAt: 1788750597 },
+                  secondary: null,
+                  planType: "free"
+                }
               }
             });
           }

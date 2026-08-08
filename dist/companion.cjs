@@ -686,6 +686,41 @@ function parseTokenCount(params) {
   }
   return usage;
 }
+function parseThreadTokenUsage(params) {
+  const usage = {};
+  const last = params?.tokenUsage?.last;
+  if (last && typeof last === "object") {
+    usage.inputTokens = toFiniteNumber(last.inputTokens);
+    usage.outputTokens = toFiniteNumber(last.outputTokens);
+  }
+  return usage;
+}
+function parseAccountRateLimits(params) {
+  const rateLimits = params?.rateLimits;
+  if (!rateLimits || typeof rateLimits !== "object") {
+    return {};
+  }
+  const parsed = {};
+  const primary = toFiniteNumber(rateLimits.primary?.usedPercent);
+  if (primary !== void 0) {
+    parsed.primaryUsedPercent = primary;
+  }
+  const secondary = toFiniteNumber(rateLimits.secondary?.usedPercent);
+  if (secondary !== void 0) {
+    parsed.secondaryUsedPercent = secondary;
+  }
+  if (typeof rateLimits.planType === "string") {
+    parsed.planType = rateLimits.planType;
+  }
+  const resetsAt = toFiniteNumber(rateLimits.primary?.resetsAt);
+  if (resetsAt !== void 0) {
+    const asDate = new Date(resetsAt * 1e3);
+    if (!Number.isNaN(asDate.getTime())) {
+      parsed.resetsAt = asDate.toISOString();
+    }
+  }
+  return Object.keys(parsed).length > 0 ? { rateLimits: parsed } : {};
+}
 function foldRateLimits(prev, next) {
   if (!prev) {
     return next;
@@ -745,7 +780,7 @@ function shouldApplyNotification(state, message) {
   if (message.method === "thread/started") {
     return true;
   }
-  if (message.method === "token_count" || message.method === "error") {
+  if (message.method === "token_count" || message.method === "thread/tokenUsage/updated" || message.method === "account/rateLimits/updated" || message.method === "error") {
     return true;
   }
   return belongsToTurn(state, message);
@@ -877,8 +912,14 @@ function applyTurnNotification(state, message) {
       }
       break;
     }
+    // Three method names for one concern. `token_count` is the older codex
+    // protocol (ONE notification carrying usage AND rate limits); 0.144.4 splits
+    // it into the two below and renames every field. Both generations are handled
+    // because a shipped plugin cannot know which codex the operator has.
+    case "thread/tokenUsage/updated":
+    case "account/rateLimits/updated":
     case "token_count": {
-      const next = parseTokenCount(message.params);
+      const next = message.method === "thread/tokenUsage/updated" ? parseThreadTokenUsage(message.params) : message.method === "account/rateLimits/updated" ? parseAccountRateLimits(message.params) : parseTokenCount(message.params);
       const prev = state.usage ?? {};
       const folded = {
         inputTokens: next.inputTokens ?? prev.inputTokens,

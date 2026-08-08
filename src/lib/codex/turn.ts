@@ -1,6 +1,7 @@
 // Portions Copyright 2026 OpenAI, licensed under Apache-2.0.
 // Modified from codex-plugin-cc (broker transport removed; ported to TypeScript;
-// token_count/rate-limits handling and an anti-hang turn timeout added).
+// token_count AND codex 0.144.4's split tokenUsage/rateLimits handling, plus an
+// anti-hang turn timeout, added).
 // See NOTICE.
 
 /**
@@ -206,6 +207,70 @@ function parseTokenCount(params: any): CodexTurnUsage {
 }
 
 /**
+ * Parse `thread/tokenUsage/updated` — codex 0.144.4's replacement for the usage
+ * half of `token_count`. Traced live 2026-08-08:
+ *
+ *   { threadId, turnId, tokenUsage: { total: {...}, last: { totalTokens,
+ *     inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens },
+ *     modelContextWindow } }
+ *
+ * Reads `last` (this turn) rather than `total` (the thread), matching what
+ * `last_token_usage` meant — the commands report per-run cost, and a thread-wide
+ * total would inflate every subsequent turn's figure.
+ */
+function parseThreadTokenUsage(params: any): CodexTurnUsage {
+  const usage: CodexTurnUsage = {};
+  const last = params?.tokenUsage?.last;
+  if (last && typeof last === "object") {
+    usage.inputTokens = toFiniteNumber(last.inputTokens);
+    usage.outputTokens = toFiniteNumber(last.outputTokens);
+  }
+  return usage;
+}
+
+/**
+ * Parse `account/rateLimits/updated` — codex 0.144.4's replacement for the
+ * rate-limit half of `token_count`. Traced live 2026-08-08:
+ *
+ *   { rateLimits: { limitId, primary: { usedPercent, windowDurationMins,
+ *     resetsAt }, secondary, credits, planType, ... } }
+ *
+ * Three shape changes a rename alone would not have caught: snake_case became
+ * camelCase, `resets_at` moved from the rate-limits root onto `primary`, and it is
+ * now EPOCH SECONDS where the old field was an ISO string.
+ * {@link CodexRateLimits.resetsAt} stays ISO, so the conversion happens here
+ * rather than leaking a second format to `status`.
+ */
+function parseAccountRateLimits(params: any): CodexTurnUsage {
+  const rateLimits = params?.rateLimits;
+  if (!rateLimits || typeof rateLimits !== "object") {
+    return {};
+  }
+  const parsed: CodexRateLimits = {};
+  const primary = toFiniteNumber(rateLimits.primary?.usedPercent);
+  if (primary !== undefined) {
+    parsed.primaryUsedPercent = primary;
+  }
+  const secondary = toFiniteNumber(rateLimits.secondary?.usedPercent);
+  if (secondary !== undefined) {
+    parsed.secondaryUsedPercent = secondary;
+  }
+  if (typeof rateLimits.planType === "string") {
+    parsed.planType = rateLimits.planType;
+  }
+  const resetsAt = toFiniteNumber(rateLimits.primary?.resetsAt);
+  // Guard the conversion: a bogus epoch makes toISOString throw, and a usage
+  // snapshot must never be able to kill an otherwise-completed turn.
+  if (resetsAt !== undefined) {
+    const asDate = new Date(resetsAt * 1000);
+    if (!Number.isNaN(asDate.getTime())) {
+      parsed.resetsAt = asDate.toISOString();
+    }
+  }
+  return Object.keys(parsed).length > 0 ? { rateLimits: parsed } : {};
+}
+
+/**
  * Field-wise fold of rate-limit snapshots. `parseTokenCount` emits a rateLimits
  * object whenever any single sub-field is present, so a later partial snapshot
  * (e.g. only primaryUsedPercent) must NOT wholesale-replace the prior object and
@@ -312,7 +377,12 @@ function shouldApplyNotification(state: TurnCaptureState, message: AppServerNoti
   if (message.method === "thread/started") {
     return true;
   }
-  if (message.method === "token_count" || message.method === "error") {
+  if (
+    message.method === "token_count" ||
+    message.method === "thread/tokenUsage/updated" ||
+    message.method === "account/rateLimits/updated" ||
+    message.method === "error"
+  ) {
     return true;
   }
   return belongsToTurn(state, message);
@@ -461,13 +531,25 @@ function applyTurnNotification(state: TurnCaptureState, message: AppServerNotifi
       }
       break;
     }
+    // Three method names for one concern. `token_count` is the older codex
+    // protocol (ONE notification carrying usage AND rate limits); 0.144.4 splits
+    // it into the two below and renames every field. Both generations are handled
+    // because a shipped plugin cannot know which codex the operator has.
+    case "thread/tokenUsage/updated":
+    case "account/rateLimits/updated":
     case "token_count": {
       // FOLD field-wise rather than replace: real codex emits multiple
-      // token_count notifications per multi-step turn and `rate_limits` is often
-      // null/absent on later snapshots — a full replace would WIPE the
-      // previously-captured rate limits. Keep prior values when the new snapshot
-      // lacks a field.
-      const next = parseTokenCount(message.params);
+      // notifications per multi-step turn and a later snapshot is often missing
+      // fields an earlier one had — a full replace would WIPE them. Under the
+      // SPLIT protocol this stops being an optimization and becomes load-bearing:
+      // usage and rate limits arrive in separate notifications, so each one
+      // necessarily lacks everything the other carries.
+      const next =
+        message.method === "thread/tokenUsage/updated"
+          ? parseThreadTokenUsage(message.params)
+          : message.method === "account/rateLimits/updated"
+            ? parseAccountRateLimits(message.params)
+            : parseTokenCount(message.params);
       const prev = state.usage ?? {};
       const folded: CodexTurnUsage = {
         inputTokens: next.inputTokens ?? prev.inputTokens,

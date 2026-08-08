@@ -38,6 +38,13 @@ Modifications made by harry, to src/lib/codex/:
     - Added an already-aborted-signal short-circuit ahead of connect(), so a
       turn cancelled before it starts spawns no codex child at all; upstream
       observes the signal only after connect() has returned.
+    - Added handling for codex 0.144.4's SPLIT usage protocol
+      (`thread/tokenUsage/updated` + `account/rateLimits/updated`) alongside the
+      older single `token_count` notification the source models. Traced from a
+      live 0.144.4 session: the rename also moved every field (snake_case to
+      camelCase, usage nested under `tokenUsage.last`, `resets_at` relocated onto
+      `primary` as epoch seconds). Both generations are accepted because a shipped
+      plugin cannot know which codex an operator runs.
     - Trimmed to the subset needed by harry's ask/review/fix commands.
 
 Modifications made by harry, to tests/fake-codex.mjs:
@@ -46,7 +53,9 @@ Modifications made by harry, to tests/fake-codex.mjs:
     - Removed the broker behaviors, matching the provider above.
     - Trimmed to the app-server turn/auth surface.
     - Added harry-specific test behaviors (additive `BEHAVIOR` branches) that
-      drive harry's own commands through failure modes the source did not model,
+      drive harry's own commands through failure modes the source did not model
+      — including `task-with-split-usage`, which speaks codex 0.144.4's two-event
+      usage protocol beside the legacy single-event one,
       plus one export (`TRUNCATED_CAUSE`) so a behavior's own message belongs to
       the fixture rather than being hand-copied into each asserting test.
 
