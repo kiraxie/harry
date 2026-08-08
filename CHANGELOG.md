@@ -5,6 +5,62 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-08-08
+
+### Added
+
+- **`HARRY_MODEL_STANDARD` / `HARRY_MODEL_ADVERSARIAL` / `HARRY_MODEL_JUDGMENT`** — set the
+  model each Codex path uses, once, instead of passing `--model` on every invocation.
+  This matters if your login cannot reach a default: a ChatGPT login **without an OpenAI
+  subscription** is refused `gpt-5.6-sol` with a hard 400 (probed 2026-08-08; `gpt-5.6-terra`
+  and `gpt-5.6-luna` answer), which left `ask`, `fix` and `review --adversarial` with no
+  working path at all. The shipped defaults are unchanged — downgrading them on one
+  account's evidence would degrade every account that is not that one — and `--model` still
+  wins per invocation. Deliberately read only from harry's own variables, not from
+  `~/.codex/config.toml`'s `model`: yielding to that would put a judgment task back on
+  whatever you last set for an unrelated session.
+
+### Fixed
+
+- **`/harry:status` reports something.** It could not, ever: harry listened for a
+  `token_count` notification that codex 0.144.4 no longer sends. That version splits it in
+  two — `thread/tokenUsage/updated` and `account/rateLimits/updated` — and renamed every
+  field on the way (snake_case to camelCase, usage nested under `tokenUsage.last`,
+  `resets_at` moved onto `primary` *and* changed from an ISO string to epoch seconds). So no
+  rate-limit snapshot was ever written and `status` could only print "run a review, ask, or
+  fix first", which did not help. Both protocol generations are now handled, since a shipped
+  plugin cannot know which codex you run.
+- Job logs and the run footer report real token counts instead of `tokens(in/out)=?/?`,
+  from the same fix.
+- A Codex-side failure names the model and the reason it was refused, rather than being
+  flattened into "the model returned an empty answer" (shipped in 0.17.0, and the first
+  thing that made the above diagnosable).
+
+### Changed
+
+- `/harry:status` labels a quota window by its **duration** — `30-day 5% used` — instead of
+  codex's wire slot name (`primary 5% used`), which named a field rather than telling you
+  anything. The slot name still appears for a snapshot taken through the legacy protocol,
+  where codex reports no duration and the name is the only distinguishing thing left.
+- **`CLAUDE.local.md` is no longer part of the repo.** It had been listed in `.gitignore`
+  from the start but was also committed, and git does not apply an ignore to an
+  already-tracked path — so the entry was a no-op and one repo's personal rules shipped to
+  everyone who cloned. It is now untracked; your own copy is untouched.
+- The docs no longer state that a subscribed or company account can reach `gpt-5.6-sol`.
+  Only an unsubscribed account has been probed, so its status elsewhere is unverified in
+  both directions.
+
+### Internal
+
+- The behavioral evals were recalibrated after their recorded numbers were shown not to
+  reproduce — a control run of the byte-identical previous release scored the same as the
+  new one, so the probe had drifted, not the laws. Result lines now record the law text's
+  hash, and `score` flags a group whose trials span two of them.
+- Six eval cases judged only by what was ABSENT, so an empty or error reply scored as
+  compliant; each now carries a positivity floor, and two guards keep it that way (every
+  case must have a positive check; a degenerate corpus must fail every text case).
+- New drift guard: a model id named in shipped prose must be one the code actually pins.
+
 ## [0.17.0] - 2026-07-30
 
 ### Changed
