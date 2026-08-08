@@ -26,6 +26,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 // src/companion.ts
 var import_node_process3 = __toESM(require("node:process"), 1);
 
+// src/lib/models.ts
+var MODEL_STANDARD = "gpt-5.6-terra";
+var MODEL_ADVERSARIAL = "gpt-5.6-sol";
+var MODEL_JUDGMENT = "gpt-5.6-sol";
+var MODEL_WITHOUT_SOL = "gpt-5.6-luna";
+var PINNED_MODELS = [MODEL_STANDARD, MODEL_ADVERSARIAL, MODEL_JUDGMENT];
+var KNOWN_MODELS = [...PINNED_MODELS, MODEL_WITHOUT_SOL];
+
 // src/lib/codex/app-server.ts
 var import_node_child_process2 = require("node:child_process");
 var import_node_process2 = __toESM(require("node:process"), 1);
@@ -1833,7 +1841,7 @@ function withCause(generic, cause) {
 }
 
 // src/commands/ask.ts
-var DEFAULT_MODEL = "gpt-5.6-sol";
+var DEFAULT_MODEL = MODEL_JUDGMENT;
 var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
 var DEFAULT_EFFORT = "high";
 async function runAsk(cwd, options) {
@@ -1997,7 +2005,7 @@ Rules:
 `;
 
 // src/commands/fix.ts
-var DEFAULT_MODEL2 = "gpt-5.6-sol";
+var DEFAULT_MODEL2 = MODEL_JUDGMENT;
 var DEFAULT_EFFORT2 = "high";
 var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
 function tryGit(args, cwd) {
@@ -2503,9 +2511,9 @@ function buildReviewPrompt(kind, vars) {
 
 // src/commands/review.ts
 var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
-var DEFAULT_MODEL_STANDARD = "gpt-5.6-terra";
-var DEFAULT_MODEL_ADVERSARIAL = "gpt-5.6-sol";
-var DEFAULT_MODEL_SIMPLIFY = "gpt-5.6-terra";
+var DEFAULT_MODEL_STANDARD = MODEL_STANDARD;
+var DEFAULT_MODEL_ADVERSARIAL = MODEL_ADVERSARIAL;
+var DEFAULT_MODEL_SIMPLIFY = MODEL_STANDARD;
 var DEFAULT_EFFORT_STANDARD = "xhigh";
 var DEFAULT_EFFORT_ADVERSARIAL = "xhigh";
 var DEFAULT_EFFORT_SIMPLIFY = "xhigh";

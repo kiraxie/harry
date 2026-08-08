@@ -19,3 +19,12 @@ Judgment-heavy implementation has **no** role — use the most capable model
 mech's effort is deliberately one notch above CC's binding (medium vs low, user-tuned
 2026-07-24): a Codex session has no orchestrator bounding it, so mechanical work carries its own
 verification.
+
+**If your login cannot reach `gpt-5.6-sol`** it fails loudly, not silently — the run
+prints the upstream reason verbatim: *"The 'gpt-5.6-sol' model is not supported when
+using Codex with a ChatGPT account."* Probed 2026-08-08 (codex-cli 0.144.4) on a
+ChatGPT login with **no OpenAI subscription**: `terra` and `luna` answer, `sol` 400s
+regardless of quota. A subscribed or company account is expected to reach `sol`, so
+the rows above stay pinned to it rather than being downgraded to the weakest account.
+On an account that rejects it, substitute `gpt-5.6-luna` for those rows (and pass
+`--model gpt-5.6-luna` to `ask` / `review --adversarial` / `fix`).

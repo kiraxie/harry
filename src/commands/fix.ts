@@ -19,7 +19,7 @@
  * only supplies the prompt/options and its single JSON-envelope stdout
  * contract. Best-effort: findings the model could not apply are reported under
  * `skipped` rather than failing the whole run. Defaults to a capable model
- * (gpt-5.6-sol) rather than leaving it to `~/.codex/config.toml` — applying
+ * (gpt-5.6-luna) rather than leaving it to `~/.codex/config.toml` — applying
  * vetted findings is a judgment task, same principle as the implementer/fixer
  * model routing in HARRY.md §5.
  */
@@ -29,6 +29,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { extractJsonBlock, type Finding, normalizeFindings } from "../lib/findings.ts";
 import { ensureGitRepository } from "../lib/git.ts";
+import { MODEL_JUDGMENT } from "../lib/models.ts";
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
@@ -51,10 +52,8 @@ export interface FixOptions {
   context?: string;
 }
 
-// Capable-by-default model: applying vetted findings is a judgment task, same
-// principle as the implementer/fixer model routing in HARRY.md §5 — don't let
-// it silently inherit whatever ~/.codex/config.toml happens to default to.
-const DEFAULT_MODEL = "gpt-5.6-sol";
+// Model policy (which id, and why it is reachable at all) lives in ../lib/models.ts.
+const DEFAULT_MODEL = MODEL_JUDGMENT;
 const DEFAULT_EFFORT: ReasoningEffort = "high";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 

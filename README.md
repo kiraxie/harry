@@ -110,6 +110,13 @@ override. `review`'s three lanes (standard/adversarial/simplify) each pin their 
 default model to keep their perspectives distinct; pass `--model` to override any of
 them. One-time setup: install the `codex` CLI, then `codex login`.
 
+Not every login can reach every model. A ChatGPT login **without an OpenAI
+subscription** is rejected for `gpt-5.6-sol` with a hard 400 (*"not supported when
+using Codex with a ChatGPT account"*, probed 2026-08-08) while `gpt-5.6-terra` and
+`gpt-5.6-luna` answer. The defaults stay on the capable model rather than the
+weakest account; if yours is rejected, the failure names itself and the fix is
+`--model gpt-5.6-luna`.
+
 ## Skills
 
 These auto-trigger (no slash command); they are the pipeline:

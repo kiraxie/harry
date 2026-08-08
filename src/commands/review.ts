@@ -17,6 +17,7 @@ import {
   normalizeFindings,
 } from "../lib/findings.ts";
 import { collectReviewContext, type ReviewScope, resolveReviewTarget } from "../lib/git.ts";
+import { MODEL_ADVERSARIAL, MODEL_STANDARD } from "../lib/models.ts";
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { buildReviewPrompt, type ReviewKind } from "../lib/review-prompts.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
@@ -53,15 +54,13 @@ export interface ReviewOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-// gpt-5.3-codex is deprecated by OpenAI for ChatGPT-signed-in Codex sessions;
-// gpt-5.6-terra is its balanced-tier successor (GPT-5.5-competitive, lower cost).
-const DEFAULT_MODEL_STANDARD = "gpt-5.6-terra";
-// Adversarial wants the deepest scrutiny available, so it gets the flagship tier.
-const DEFAULT_MODEL_ADVERSARIAL = "gpt-5.6-sol";
+// Model policy (which id, and why it is reachable at all) lives in ../lib/models.ts.
+const DEFAULT_MODEL_STANDARD = MODEL_STANDARD;
+const DEFAULT_MODEL_ADVERSARIAL = MODEL_ADVERSARIAL;
 // Cleanup lane: codex's code specialization is well-suited to behavior-preserving
 // simplification, and keeping it off the adversarial model leaves the design
 // lane distinct.
-const DEFAULT_MODEL_SIMPLIFY = "gpt-5.6-terra";
+const DEFAULT_MODEL_SIMPLIFY = MODEL_STANDARD;
 const DEFAULT_EFFORT_STANDARD: ReasoningEffort = "xhigh";
 const DEFAULT_EFFORT_ADVERSARIAL: ReasoningEffort = "xhigh";
 const DEFAULT_EFFORT_SIMPLIFY: ReasoningEffort = "xhigh";
