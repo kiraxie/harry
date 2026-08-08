@@ -53,7 +53,7 @@ var import_node_readline = __toESM(require("node:readline"), 1);
 // package.json
 var package_default = {
   name: "harry",
-  version: "0.17.0",
+  version: "0.18.0",
   description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
   type: "module",
   license: "MIT",
