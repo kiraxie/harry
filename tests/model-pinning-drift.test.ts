@@ -3,7 +3,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { KNOWN_MODELS } from "../src/lib/models.ts";
+import {
+  KNOWN_MODELS,
+  MODEL_WITHOUT_SOL,
+  modelEnvVar,
+  PINNED_MODELS,
+  resolveModel,
+} from "../src/lib/models.ts";
 
 // Every shipped door, reference and manifest that NAMES a Codex model is claiming
 // what harry will actually send, and eleven sites name one. On 2026-08-08 a
@@ -90,4 +96,36 @@ test("the unavailability exception cannot swallow a stale claim", () => {
 
   assert.equal(excused(staleClaim), false, "a stale claim must NOT be excused");
   assert.equal(excused(honestNote), true, "the documented rejection must be excused");
+});
+
+// The durable escape hatch for a login that cannot reach a default. Without it the
+// only remedy is `--model` on every invocation, which is why an unsubscribed account
+// had no working ask/fix/adversarial path at all.
+test("HARRY_MODEL_* overrides the shipped default, and only when set", () => {
+  assert.equal(resolveModel("judgment", {}), "gpt-5.6-sol", "default when unset");
+  assert.equal(
+    resolveModel("judgment", { HARRY_MODEL_JUDGMENT: MODEL_WITHOUT_SOL }),
+    MODEL_WITHOUT_SOL,
+    "override wins",
+  );
+  // Blank / whitespace is treated as unset: an exported-but-empty variable is the
+  // shape a shell profile produces by accident, and it must not blank the model.
+  for (const blank of ["", "   "]) {
+    assert.equal(
+      resolveModel("judgment", { HARRY_MODEL_JUDGMENT: blank }),
+      "gpt-5.6-sol",
+      `blank override (${JSON.stringify(blank)}) falls back to the default`,
+    );
+  }
+  // Roles are independent — overriding one must not move another.
+  const env = { HARRY_MODEL_JUDGMENT: MODEL_WITHOUT_SOL };
+  assert.equal(resolveModel("standard", env), "gpt-5.6-terra", "standard untouched");
+  assert.equal(resolveModel("adversarial", env), "gpt-5.6-sol", "adversarial untouched");
+  assert.equal(modelEnvVar("adversarial"), "HARRY_MODEL_ADVERSARIAL");
+});
+
+test("PINNED_MODELS describes the SHIPPED defaults, not the overridden ones", () => {
+  // The prose guard checks documentation against this list, so an operator's local
+  // override must not silently redefine what the docs are held to.
+  assert.deepEqual([...PINNED_MODELS].sort(), ["gpt-5.6-sol", "gpt-5.6-sol", "gpt-5.6-terra"]);
 });

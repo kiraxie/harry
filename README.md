@@ -114,8 +114,19 @@ Not every login can reach every model. A ChatGPT login **without an OpenAI
 subscription** is rejected for `gpt-5.6-sol` with a hard 400 (*"not supported when
 using Codex with a ChatGPT account"*, probed 2026-08-08) while `gpt-5.6-terra` and
 `gpt-5.6-luna` answer. The defaults stay on the capable model rather than the
-weakest account; if yours is rejected, the failure names itself and the fix is
-`--model gpt-5.6-luna`.
+weakest account; if yours is rejected, the failure names itself and you set the
+model once instead of per command:
+
+```sh
+export HARRY_MODEL_JUDGMENT=gpt-5.6-luna     # ask, fix, /debate's gpt voice
+export HARRY_MODEL_ADVERSARIAL=gpt-5.6-luna  # review --adversarial
+export HARRY_MODEL_STANDARD=gpt-5.6-terra    # review, review --simplify
+```
+
+`--model` still wins per invocation. These are read only from harry's own
+variables, deliberately not from `~/.codex/config.toml`'s `model` — yielding to
+that would put a judgment task back on whatever you last set for an unrelated
+session, which is what the pins exist to prevent.
 
 ## Skills
 

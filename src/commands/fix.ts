@@ -29,7 +29,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { extractJsonBlock, type Finding, normalizeFindings } from "../lib/findings.ts";
 import { ensureGitRepository } from "../lib/git.ts";
-import { MODEL_JUDGMENT } from "../lib/models.ts";
+import { resolveModel } from "../lib/models.ts";
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
@@ -52,8 +52,6 @@ export interface FixOptions {
   context?: string;
 }
 
-// Model policy (which id, and why it is reachable at all) lives in ../lib/models.ts.
-const DEFAULT_MODEL = MODEL_JUDGMENT;
 const DEFAULT_EFFORT: ReasoningEffort = "high";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -248,7 +246,7 @@ export async function runFix(cwd: string, options: FixOptions = {}): Promise<voi
   const jobId = generateJobId();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  const requestedModel = options.model ?? DEFAULT_MODEL;
+  const requestedModel = options.model ?? resolveModel("judgment");
   const log = (msg: string): void => appendLog(stateDir, jobId, msg);
 
   // 1. Load + validate findings ----------------------------------------------

@@ -11,7 +11,7 @@
  * principle as `fix`'s model default (HARRY.md §5).
  */
 
-import { MODEL_JUDGMENT } from "../lib/models.ts";
+import { resolveModel } from "../lib/models.ts";
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
 import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
@@ -31,8 +31,6 @@ export interface AskOptions {
   context?: string;
 }
 
-// Model policy (which id, and why it is reachable at all) lives in ../lib/models.ts.
-const DEFAULT_MODEL = MODEL_JUDGMENT;
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_EFFORT: ReasoningEffort = "high";
 
@@ -40,7 +38,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
   const progress = makeProgress();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  const requestedModel = options.model ?? DEFAULT_MODEL;
+  const requestedModel = options.model ?? resolveModel("judgment");
 
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");

@@ -17,7 +17,7 @@ import {
   normalizeFindings,
 } from "../lib/findings.ts";
 import { collectReviewContext, type ReviewScope, resolveReviewTarget } from "../lib/git.ts";
-import { MODEL_ADVERSARIAL, MODEL_STANDARD } from "../lib/models.ts";
+import { resolveModel } from "../lib/models.ts";
 import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
 import { buildReviewPrompt, type ReviewKind } from "../lib/review-prompts.ts";
 import { runAgentSession } from "../lib/run-agent-session.ts";
@@ -54,13 +54,6 @@ export interface ReviewOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-// Model policy (which id, and why it is reachable at all) lives in ../lib/models.ts.
-const DEFAULT_MODEL_STANDARD = MODEL_STANDARD;
-const DEFAULT_MODEL_ADVERSARIAL = MODEL_ADVERSARIAL;
-// Cleanup lane: codex's code specialization is well-suited to behavior-preserving
-// simplification, and keeping it off the adversarial model leaves the design
-// lane distinct.
-const DEFAULT_MODEL_SIMPLIFY = MODEL_STANDARD;
 const DEFAULT_EFFORT_STANDARD: ReasoningEffort = "xhigh";
 const DEFAULT_EFFORT_ADVERSARIAL: ReasoningEffort = "xhigh";
 const DEFAULT_EFFORT_SIMPLIFY: ReasoningEffort = "xhigh";
@@ -72,10 +65,12 @@ function resolveKind(options: ReviewOptions): ReviewKind {
   return "standard";
 }
 
+// Which id each lane sends, and why it is reachable at all, lives in ../lib/models.ts.
+// The cleanup lane shares standard's model on purpose: codex's code specialization
+// suits behavior-preserving simplification, and keeping it off the adversarial model
+// leaves the design lane distinct.
 function defaultModelFor(kind: ReviewKind): string {
-  if (kind === "adversarial") return DEFAULT_MODEL_ADVERSARIAL;
-  if (kind === "simplify") return DEFAULT_MODEL_SIMPLIFY;
-  return DEFAULT_MODEL_STANDARD;
+  return resolveModel(kind === "adversarial" ? "adversarial" : "standard");
 }
 
 function defaultEffortFor(kind: ReviewKind): ReasoningEffort {

@@ -27,11 +27,22 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var import_node_process3 = __toESM(require("node:process"), 1);
 
 // src/lib/models.ts
-var MODEL_STANDARD = "gpt-5.6-terra";
-var MODEL_ADVERSARIAL = "gpt-5.6-sol";
-var MODEL_JUDGMENT = "gpt-5.6-sol";
+var DEFAULTS = {
+  standard: "gpt-5.6-terra",
+  adversarial: "gpt-5.6-sol",
+  judgment: "gpt-5.6-sol"
+};
+var ENV_VAR = {
+  standard: "HARRY_MODEL_STANDARD",
+  adversarial: "HARRY_MODEL_ADVERSARIAL",
+  judgment: "HARRY_MODEL_JUDGMENT"
+};
+function resolveModel(role, env = process.env) {
+  const override = env[ENV_VAR[role]]?.trim();
+  return override || DEFAULTS[role];
+}
 var MODEL_WITHOUT_SOL = "gpt-5.6-luna";
-var PINNED_MODELS = [MODEL_STANDARD, MODEL_ADVERSARIAL, MODEL_JUDGMENT];
+var PINNED_MODELS = Object.values(DEFAULTS);
 var KNOWN_MODELS = [...PINNED_MODELS, MODEL_WITHOUT_SOL];
 
 // src/lib/codex/app-server.ts
@@ -1841,14 +1852,13 @@ function withCause(generic, cause) {
 }
 
 // src/commands/ask.ts
-var DEFAULT_MODEL = MODEL_JUDGMENT;
 var DEFAULT_TIMEOUT_MS = 30 * 60 * 1e3;
 var DEFAULT_EFFORT = "high";
 async function runAsk(cwd, options) {
   const progress = makeProgress();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  const requestedModel = options.model ?? DEFAULT_MODEL;
+  const requestedModel = options.model ?? resolveModel("judgment");
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");
   const stateDir = resolveStateDir(cwd);
@@ -2005,7 +2015,6 @@ Rules:
 `;
 
 // src/commands/fix.ts
-var DEFAULT_MODEL2 = MODEL_JUDGMENT;
 var DEFAULT_EFFORT2 = "high";
 var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
 function tryGit(args, cwd) {
@@ -2125,7 +2134,7 @@ async function runFix(cwd, options = {}) {
   const jobId = generateJobId();
   const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
-  const requestedModel = options.model ?? DEFAULT_MODEL2;
+  const requestedModel = options.model ?? resolveModel("judgment");
   const log = (msg) => appendLog(stateDir, jobId, msg);
   if (!options.findingsPath) {
     emit({
@@ -2511,9 +2520,6 @@ function buildReviewPrompt(kind, vars) {
 
 // src/commands/review.ts
 var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
-var DEFAULT_MODEL_STANDARD = MODEL_STANDARD;
-var DEFAULT_MODEL_ADVERSARIAL = MODEL_ADVERSARIAL;
-var DEFAULT_MODEL_SIMPLIFY = MODEL_STANDARD;
 var DEFAULT_EFFORT_STANDARD = "xhigh";
 var DEFAULT_EFFORT_ADVERSARIAL = "xhigh";
 var DEFAULT_EFFORT_SIMPLIFY = "xhigh";
@@ -2523,9 +2529,7 @@ function resolveKind(options) {
   return "standard";
 }
 function defaultModelFor(kind) {
-  if (kind === "adversarial") return DEFAULT_MODEL_ADVERSARIAL;
-  if (kind === "simplify") return DEFAULT_MODEL_SIMPLIFY;
-  return DEFAULT_MODEL_STANDARD;
+  return resolveModel(kind === "adversarial" ? "adversarial" : "standard");
 }
 function defaultEffortFor(kind) {
   if (kind === "adversarial") return DEFAULT_EFFORT_ADVERSARIAL;

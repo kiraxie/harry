@@ -26,5 +26,7 @@ using Codex with a ChatGPT account."* Probed 2026-08-08 (codex-cli 0.144.4) on a
 ChatGPT login with **no OpenAI subscription**: `terra` and `luna` answer, `sol` 400s
 regardless of quota. A subscribed or company account is expected to reach `sol`, so
 the rows above stay pinned to it rather than being downgraded to the weakest account.
-On an account that rejects it, substitute `gpt-5.6-luna` for those rows (and pass
-`--model gpt-5.6-luna` to `ask` / `review --adversarial` / `fix`).
+On an account that rejects it, substitute `gpt-5.6-luna` for those rows, and set it
+once for the runtime rather than per command:
+`export HARRY_MODEL_JUDGMENT=gpt-5.6-luna` (likewise `HARRY_MODEL_ADVERSARIAL`,
+`HARRY_MODEL_STANDARD`). `--model` still wins per invocation.
