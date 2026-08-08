@@ -163,14 +163,44 @@ export function readCodexRateLimits(stateDir: string): CodexRateLimitSnapshot | 
 }
 
 /**
+ * Render a quota window as a duration a reader can act on: "30-day", "7-day",
+ * "5-hour". Falls back to `null` when codex did not report the window, which is
+ * every snapshot taken through the legacy `token_count` protocol.
+ */
+function windowLabel(minutes: number | undefined): string | null {
+  if (minutes === undefined || !Number.isFinite(minutes) || minutes <= 0) return null;
+  if (minutes % (60 * 24) === 0) {
+    const days = minutes / (60 * 24);
+    return `${days}-day`;
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours}-hour`;
+  }
+  return `${minutes}-minute`;
+}
+
+/**
  * Pure one-line formatter for a codex rate-limit snapshot. Absent fields are
- * omitted, e.g. `primary 42% / secondary 10% used · plan pro · resets <iso>`.
+ * omitted, e.g. `30-day 42% / 7-day 10% used · plan pro · resets <iso>`.
+ *
+ * "primary" and "secondary" are the WIRE names for the two quota slots and mean
+ * nothing to a reader, so they never reach the output: each slot is labelled by
+ * its own reported window duration. Only when codex omits the duration — every
+ * legacy `token_count` snapshot does — does the slot name appear, because at that
+ * point it is the only distinguishing thing left.
  */
 export function formatCodexRateLimits(rl: CodexRateLimits): string {
   const parts: string[] = [];
   const used: string[] = [];
-  if (rl.primaryUsedPercent !== undefined) used.push(`primary ${rl.primaryUsedPercent}%`);
-  if (rl.secondaryUsedPercent !== undefined) used.push(`secondary ${rl.secondaryUsedPercent}%`);
+  if (rl.primaryUsedPercent !== undefined) {
+    used.push(`${windowLabel(rl.primaryWindowMinutes) ?? "primary"} ${rl.primaryUsedPercent}%`);
+  }
+  if (rl.secondaryUsedPercent !== undefined) {
+    used.push(
+      `${windowLabel(rl.secondaryWindowMinutes) ?? "secondary"} ${rl.secondaryUsedPercent}%`,
+    );
+  }
   if (used.length > 0) parts.push(`${used.join(" / ")} used`);
   if (rl.planType) parts.push(`plan ${rl.planType}`);
   if (rl.resetsAt) parts.push(`resets ${rl.resetsAt}`);

@@ -77,6 +77,8 @@ test("runCodexTurn folds the SPLIT usage + rate-limit notifications (codex 0.144
     undefined,
     "null secondary stays absent",
   );
+  // Captured so status can name the window instead of the wire slot.
+  assert.equal(result.usage?.rateLimits?.primaryWindowMinutes, 43200);
 });
 
 test("runCodexTurn completes even when turn/start omits a turn id (cr-1)", async () => {
