@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-09-01
+
+### Added
+
+- **HARRY.md §6 forbids fabricated remediations.** "Talk like an engineer" now bars
+  inventing a remediation, job, follow-up, or capability that was not discussed or does not
+  exist — in a PR comment, Slack message, or Jira update as much as in code. Closes a gap
+  where neither "Honesty & evidence" (completion claims only) nor "Talk like an engineer"
+  (tone) covered a fabricated suggestion in drafted external comms: a PR-comment draft
+  invented a nonexistent "periodic non-gating job" as a remediation, which had to be
+  manually removed before publishing.
+
 ## [0.18.0] - 2026-08-08
 
 ### Added
