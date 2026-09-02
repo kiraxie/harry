@@ -13,7 +13,15 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const TOP_LEVEL_FILES = ["HARRY.md", "README.md", "CLAUDE.md"];
-const PROSE_DIRS = ["skills", "commands", "codex-skills", "references", "agents", "evals"];
+const PROSE_DIRS = [
+  "skills",
+  "commands",
+  "codex-skills",
+  "references",
+  "agents",
+  "evals",
+  ".claude/commands",
+];
 
 function listMarkdownFiles(dir: string): string[] {
   const abs = path.join(repoRoot, dir);
@@ -28,7 +36,7 @@ const proseFiles = [
   ...PROSE_DIRS.flatMap(listMarkdownFiles),
 ].filter((f) => f !== "CHANGELOG.md");
 
-// Two reference shapes:
+// Three reference shapes:
 // 1. `${CLAUDE_PLUGIN_ROOT}/<path>` — path is everything after the prefix. Checked
 //    everywhere (fenced or not) — this is how the plugin's own docs express real
 //    runtime invocations (e.g. commands/sync.md's `node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"`).
@@ -39,9 +47,30 @@ const proseFiles = [
 //    shown as a shell snippet), not real cross-references. A `(?<!\/)` guard also
 //    stops a longer real path like `src/commands/fix.ts` from being mis-sliced into
 //    the shorter bare candidate `commands/fix.ts`.
+// 3. `.claude/commands/…` and `.claude/scripts/…` — the same bare-mention shape as
+//    (2), scoped to exactly those two subdirs (see CLAUDE_DIR_PATH_RE below for why).
 const PLUGIN_ROOT_RE = /\$\{CLAUDE_PLUGIN_ROOT\}\/([\w./-]+)/g;
-const BARE_PATH_RE =
-  /(?<!\/)\b(?:references|scripts|dist|tests|skills|commands|codex-skills)\/[\w./-]+\.(?:md|json|cjs|mjs|ts|sh)\b/g;
+// Extension whitelist shared by both path regexes below — kept as one constant
+// composed into each pattern's source rather than duplicated literally, after
+// this file's own `mts` addition had to edit two copies to stay in sync
+// (HARRY.md §2 drift test: shared knowledge, not incidental duplication).
+const EXT_SRC = String.raw`\.(?:md|json|cjs|mjs|mts|ts|sh)\b`;
+const BARE_PATH_RE = new RegExp(
+  String.raw`(?<!\/)\b(?:references|scripts|dist|tests|skills|commands|codex-skills)\/[\w./-]+${EXT_SRC}`,
+  "g",
+);
+// A `\b` word-boundary anchor cannot match immediately before a literal `.` —
+// both sides are non-word characters, so there is no \w|\W transition — hence
+// the `(?<![\w./])` lookbehind instead (the `/` guards a home-relative mention
+// like `~/.claude/commands/foo.md` from matching, same reason BARE_PATH_RE
+// above guards with `(?<!\/)`). Deliberately NOT a blanket `\.claude\/` — that
+// would sweep in `.claude/worktrees/…` mentions, which are per-worktree,
+// gitignored, and never meant to resolve against a static path on disk. Only
+// the two subdirs that hold real, checked-in, referenceable content are named.
+const CLAUDE_DIR_PATH_RE = new RegExp(
+  String.raw`(?<![\w./])\.claude\/(?:commands|scripts)\/[\w./-]+${EXT_SRC}`,
+  "g",
+);
 // Markdown fences nest by backtick-run length (CommonMark): a ```` fence isn't
 // closed by a shorter ``` line inside it, so track the opening run length rather
 // than a plain boolean toggle.
@@ -60,6 +89,7 @@ function extractCandidates(line: string, inFence: boolean): string[] {
   for (const m of line.matchAll(PLUGIN_ROOT_RE)) found.push(m[1]);
   if (!inFence) {
     for (const m of line.matchAll(BARE_PATH_RE)) found.push(m[0]);
+    for (const m of line.matchAll(CLAUDE_DIR_PATH_RE)) found.push(m[0]);
   }
   return found.filter((c) => !isPlaceholder(c));
 }
