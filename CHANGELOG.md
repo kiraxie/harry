@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-09-02
+
+### Added
+
+- **`/release` command** (repo-local, `.claude/commands/release.md` — not shipped in the
+  plugin) automates cutting a harry release: bump the four version fields, draft and
+  approve a CHANGELOG entry, rebuild `dist/`, verify, commit, then (after the merge lands
+  on `main`, since this repo's tags land on the merge commit) re-verify, tag, and push.
+  State detection (`.claude/scripts/release-state.mjs`) is resumable across that merge
+  boundary rather than assuming a fixed invocation order — this release was cut with it.
+
+### Fixed
+
+- `tests/prose-refs.test.ts`'s drift guard now scans `.claude/commands` and recognizes
+  `.claude/scripts/…` path mentions, and its file-extension whitelist now includes `.mts`
+  (closing a second gap — `.d.mts` references were never checked at all). A follow-up
+  review round fixed a lookbehind that would have matched a home-relative `~/.claude/...`
+  mention and failed the guard on an innocent future docs edit.
+
 ## [0.20.0] - 2026-09-02
 
 ### Added
