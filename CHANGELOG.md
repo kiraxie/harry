@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-09-02
+
+### Added
+
+- **HARRY.md §5/§6 ops-safety laws.** Three additions distilled from a review of 21
+  sessions across 11 repos, no new sections:
+  - **§5 "Running systems: state the blast radius before touching them."** Before any
+    command that stops, disables, deletes, or reconfigures a running service, state the
+    exact command, what breaks if it is wrong, the exact rollback command, and whether a
+    replacement is registered and verified healthy — then wait for the go-ahead. Read-only
+    diagnostics are exempt.
+  - **§5 "Secrets stay out of the transcript."** Dotfile / `.env` / shell rc reads print
+    variable names only, or mask the values. Motivating incident: a grep of a shell env
+    file put a GitHub PAT and an OpenAI key into the transcript; both had to be rotated.
+  - **§6 "Root cause before any fix"** now requires a proposed fix to list its side-effect
+    flags — every setting it flips beyond the one it targets. Motivating incident: a
+    password reset that also set `shouldChangePassword=true` created the next bug.
+
 ## [0.19.0] - 2026-09-01
 
 ### Added
