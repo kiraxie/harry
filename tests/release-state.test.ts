@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  compareVersions,
-  detectState,
-  parseVersion,
-} from "../.claude/scripts/release-state.mjs";
+import { compareVersions, detectState, parseVersion } from "../.claude/scripts/release-state.mjs";
 
 // `.claude/scripts/release-state.mjs` is a repo-local tool (not shipped in the
 // plugin), so it sits outside tsconfig/biome's include globs — this test file is
