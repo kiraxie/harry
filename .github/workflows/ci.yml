@@ -16,6 +16,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # Full history + tags: tests/release-state.test.ts asserts against this
+          # repo's real commits and tags (gitBumpCommitExists/gitTagExists). The
+          # default fetch-depth: 1 checkout carries neither, so those tests read
+          # empty history and fail here while passing on any full local clone.
+          fetch-depth: 0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
