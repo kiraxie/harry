@@ -1,7 +1,7 @@
 ---
 description: Cut a harry release — bump the four version fields, add a CHANGELOG entry, rebuild dist, verify, commit, then (after the merge lands on main) tag and push. Repo-local; resumable across the merge boundary.
 argument-hint: '<version>'
-allowed-tools: Bash(node:*), Bash(git:*), Bash(pnpm:*), Bash(sed:*), Read, Edit, AskUserQuestion
+allowed-tools: Bash(node:*), Bash(git:*), Bash(pnpm:*), Bash(sed:*), Bash(grep:*), Bash(head:*), Read, Edit, AskUserQuestion
 ---
 
 # `/release` — cut a harry release
@@ -24,21 +24,26 @@ node .claude/scripts/release-state.mjs <version>
 ```
 
 This reads real repo state (package.json version, `git tag`, `git log --grep` for the bump
-commit) — never assume which phase you're in. Branch on its exact stdout line (see
-`.claude/scripts/release-state.d.mts` for the full contract):
+commit) — never assume which phase you're in.
 
-- **`already-tagged`** — this version is already released. Report it and stop.
-- **`invalid-version`** — the CLI already printed why to stderr (exit 1). Report it, ask
-  for a corrected `<version>`.
-- **`invalid-target`** — `<version>` is behind or equal to the current `package.json`
-  version, with no matching tag or bump commit. Report it, ask for a corrected `<version>`
-  — never proceed as if it were a fresh bump.
-- **`version-mismatch-untracked`** — `package.json` already reads `<version>`, but no
-  `chore(release): bump version to <version>` commit is reachable from HEAD. Someone
-  edited the version outside this flow. **Stop and ask the user how to proceed** — do not
-  guess whether it's safe to keep going.
-- **`not-bumped`** → go to **Phase A**.
-- **`bumped-not-tagged`** → go to **Phase B**.
+- **Non-zero exit** — stderr explains an environment/git problem (not a git repo, git
+  missing, `package.json` unreadable). This is **not** a version-format problem — report
+  it and stop; do not ask for a "corrected" version, a different `<version>` won't fix it.
+- **Exit 0** — branch on its exact stdout line, one of six states (see
+  `.claude/scripts/release-state.d.mts` for the full contract):
+
+  - **`already-tagged`** — this version is already released. Report it and stop.
+  - **`invalid-version`** — `<version>` itself is not a valid `x.y.z` string. Report it,
+    ask for a corrected `<version>`.
+  - **`invalid-target`** — `<version>` is behind or equal to the current `package.json`
+    version, with no matching tag or bump commit. Report it, ask for a corrected
+    `<version>` — never proceed as if it were a fresh bump.
+  - **`version-mismatch-untracked`** — `package.json` already reads `<version>`, but no
+    `chore(release): bump version to <version>` commit is reachable from HEAD. Someone
+    edited the version outside this flow. **Stop and ask the user how to proceed** — do
+    not guess whether it's safe to keep going.
+  - **`not-bumped`** → go to **Phase A**.
+  - **`bumped-not-tagged`** → go to **Phase B**.
 
 ## Phase A — bump, verify, commit (pre-merge)
 

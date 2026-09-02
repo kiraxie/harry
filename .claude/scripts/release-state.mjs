@@ -6,8 +6,12 @@
 //
 // Usage:
 //   node .claude/scripts/release-state.mjs <version>
-// Prints exactly one of the state names below to stdout (exit 0), or an error
-// message to stderr (exit 1) when <version> itself is malformed.
+// Exit 0: prints exactly one of the six state names to stdout (parseVersion
+// failure is itself a state — "invalid-version" — not a separate exit path, so
+// every classification, valid or not, comes back the same way).
+// Exit 1: an unexpected environment/git failure (not a git repo, git missing,
+// package.json unreadable) — stderr explains; this is NOT a version-format
+// problem, so it must not be read as one.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -55,18 +59,35 @@ export function detectState({ currentVersion, targetVersion, tagExists, bumpComm
 
 function currentPackageVersion(repoRoot) {
   const pkg = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8"));
-  return pkg.version ?? "";
+  if (typeof pkg.version !== "string") {
+    throw new Error(`package.json at ${repoRoot} has no string "version" field`);
+  }
+  return pkg.version;
 }
 
-function gitTagExists(repoRoot, version) {
+export function gitTagExists(repoRoot, version) {
   const out = execFileSync("git", ["tag", "-l", `v${version}`], { cwd: repoRoot }).toString();
   return out.trim().length > 0;
 }
 
-function gitBumpCommitExists(repoRoot, version) {
+// --basic-regexp is explicit, not the default: `git log --grep`'s pattern syntax
+// follows the caller's `grep.patternType` config, and under extended-regexp mode
+// the literal "(release)" becomes a capture group — the pattern then requires the
+// text "chorerelease" and silently never matches. Verified in this repo: `git log
+// -E --grep '^chore(release): bump version to 0.19.0$'` finds nothing while the
+// same pattern under basic-regexp finds 995c654. Pinning the mode makes this
+// correct regardless of the caller's gitconfig.
+export function gitBumpCommitExists(repoRoot, version) {
   const out = execFileSync(
     "git",
-    ["log", "--grep", `^chore(release): bump version to ${version}$`, "--format=%H", "-1"],
+    [
+      "log",
+      "--basic-regexp",
+      "--grep",
+      `^chore(release): bump version to ${version}$`,
+      "--format=%H",
+      "-1",
+    ],
     { cwd: repoRoot },
   ).toString();
   return out.trim().length > 0;
@@ -87,10 +108,9 @@ export function run(targetVersion, repoRoot) {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const target = process.argv[2];
   try {
-    parseVersion(target);
+    console.log(run(target));
   } catch (err) {
-    process.stderr.write(`${err.message}\n`);
+    process.stderr.write(`release-state: ${err.message}\n`);
     process.exit(1);
   }
-  console.log(run(target));
 }

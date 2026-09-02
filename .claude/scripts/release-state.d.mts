@@ -16,4 +16,10 @@ export function detectState(facts: {
   bumpCommitExists: boolean;
 }): ReleaseState;
 
+export function gitTagExists(repoRoot: string, version: string): boolean;
+export function gitBumpCommitExists(repoRoot: string, version: string): boolean;
+
+// Throws on an unexpected environment/git failure (not a git repo, git missing,
+// package.json unreadable) — a malformed `targetVersion` is NOT such a failure,
+// it classifies cleanly to "invalid-version" instead.
 export function run(targetVersion: string, repoRoot?: string): ReleaseState;
