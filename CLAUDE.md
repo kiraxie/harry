@@ -64,6 +64,8 @@ Deliberately not backfilled — reconstructing six tags from CHANGELOG commits c
 verified, and a wrong tag is worse than a missing one. Audit gaps with
 `git tag --sort=v:refname`: plain `git tag` sorts lexically, filing `v0.10.0` ahead of
 `v0.2.0`, so a `tail` of it hides the newest tags and makes the gap look far older than it is.
+`/release <version>` (repo-local, `.claude/commands/release.md`) automates the
+bump/build/verify/commit steps above; re-run it after the merge to tag.
 
 ## Runtime architecture (`src/`)
 
