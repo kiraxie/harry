@@ -20,8 +20,9 @@ import { pathToFileURL } from "node:url";
 
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 
-// Strict x.y.z only — no leading "v", no pre-release/build suffix. Throws with a
-// message meant to reach a human (invalid-version's stderr output).
+// Strict x.y.z only — no leading "v", no pre-release/build suffix. Throws; callers
+// that need a state rather than an exception catch it (detectState turns this into
+// "invalid-version" instead of letting it escape).
 export function parseVersion(v) {
   const m = typeof v === "string" ? v.match(SEMVER_RE) : null;
   if (!m) {

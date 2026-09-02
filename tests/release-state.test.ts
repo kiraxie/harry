@@ -154,9 +154,7 @@ test("release.md Step 0 names exactly the six canonical states", () => {
   const end = md.indexOf("## Phase A");
   assert.ok(start >= 0 && end > start, "release.md: could not locate the Step 0 section");
   const section = md.slice(start, end);
-  const names = [...section.matchAll(/`([a-z-]+)`/g)]
-    .map((m) => m[1])
-    .filter((n) => CANONICAL_STATES.includes(n));
+  const names = [...section.matchAll(/`([a-z-]+)`/g)].map((m) => m[1]);
   assert.deepEqual(
     new Set(names),
     new Set(CANONICAL_STATES),
