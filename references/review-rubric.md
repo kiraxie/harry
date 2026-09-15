@@ -55,6 +55,21 @@ never Critical. Acknowledge what was done well before listing issues.
   finding beside the plan text; do not silently fix against the plan, or dismiss
   the finding because the plan mandated it.
 - Give a clear verdict. No "looks good" without evidence read.
+- **Review it yourself.** Never dispatch a subagent to review part of the diff or
+  for a second opinion; every review seat is already provided. A diff too large
+  for one pass is reviewed in passes — say so in the report.
+- **Unreadable evidence is a gap, not a failure.** If the report or its test
+  evidence looks truncated, or you cannot locate results it claims, re-read the
+  file at its stated path first; a run of your own does not fill the report's
+  gap — report the gap either way. Where a report was handed (subagent mode),
+  missing or genuinely illegible test evidence in it is at least Important and
+  blocks Spec ✅ for that requirement (report it as evidence missing) until the
+  implementer supplies it — even though it is not itself a finding against the
+  code.
+- **Batched briefs are checked file by file.** When the brief lists several
+  files each with its own change, every listed file must have its hunk in the
+  diff; a listed file the diff never touches is a missing-requirement (spec)
+  finding, however clean the rest looks.
 
 ## Output
 
