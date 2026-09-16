@@ -35,10 +35,10 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 | Brainstorm | full — explore intent, requirements, design before any code |
 | Item | one `.local/items/<slug>.md`, `status: active` — `## Why / What` is a full decision record (Discussion → Decision → considered-but-rejected), `## Plan` is full step-by-step. If the work spans several items, add a `type: milestone` item linking them. |
 | TDD | full red-green-refactor, **watch-it-fail mandatory** (`references/red-green.md`) |
-| Review | `/review` |
+| Review | per-task reviewer subagents, then a whole-branch reviewer subagent **plus** the Codex CLI review lane where the build has one (`skills/executing/SKILL.md` step 6) |
 | Execution | subagent (parallelize independent units in isolated worktrees) |
 
-**Gate scaling on a red-line promotion.** When a red line — not file count — is what forces Major, the promotion exists to guarantee the **verification** gates: a failing-reproduction / red-green test with watch-it-fail, frontier `/review`, and full evidence discipline (§6), because the domain risk is exactly what those gates guard. The **design** gates scale with the change's actual design complexity — a mechanically-trivial red-line change (one-glance diff, no alternatives to weigh) takes a compressed brainstorm and a one-line `## Why / What`, not the full decision record. Scaling never reaches verification: a trivial-looking change in a red-line domain still ships red-green + review.
+**Gate scaling on a red-line promotion.** When a red line — not file count — is what forces Major, the promotion exists to guarantee the **verification** gates: a failing-reproduction / red-green test with watch-it-fail, the Major review gate (reviewer subagent plus the Codex lane), and full evidence discipline (§6), because the domain risk is exactly what those gates guard. The **design** gates scale with the change's actual design complexity — a mechanically-trivial red-line change (one-glance diff, no alternatives to weigh) takes a compressed brainstorm and a one-line `## Why / What`, not the full decision record. Scaling never reaches verification: a trivial-looking change in a red-line domain still ships red-green + review.
 
 ## Promotion rules
 
