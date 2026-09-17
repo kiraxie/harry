@@ -1,19 +1,54 @@
 ---
-description: Ask a single frontier model one prompt (read-only) and print the answer. This is the gpt-5.6-sol backend used by /debate.
-argument-hint: '"<prompt>" [--model <id>] [--reasoning <low|medium|high>]'
-allowed-tools: Bash(node:*)
+description: Ask a single frontier model one read-only prompt through codex exec and print the answer verbatim.
+argument-hint: '"<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]'
+allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask:*)
 ---
 
-Ask one frontier model a single prompt and return its answer. Read-only — the model touches no filesystem, shell, or URLs.
+Ask one frontier model a single prompt through Codex and return its answer.
 
 Raw slash-command arguments:
 `$ARGUMENTS`
 
+## What this does
+
+`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask` spawns
+`codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
+with the prompt on stdin. Read-only means the model may read files and run
+read-only commands under Codex's own read-only sandbox — not the no-filesystem,
+no-shell isolation an earlier version of `ask` had (a fixed preamble on every
+prompt tells the model not to explore the working directory or run commands
+unless the prompt asks about files in it). It never passes a model —
+`~/.codex/config.toml` decides which one runs; `--reasoning` overrides effort
+for that one call.
+
 Execute:
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]
 ```
 
-- The first quoted argument is the prompt. `--model <id>` (default is the runtime's frontier model, gpt-5.6-sol for debate use) and `--reasoning <low|medium|high>` override defaults; forward all of `$ARGUMENTS` verbatim.
-- Return the command stdout verbatim, exactly as-is. Do not paraphrase, summarize, or add commentary before or after it (HARRY.md §6) — that applies only once you've confirmed the run succeeded (next bullet). `ask` has no JSON mode or `status` field; its output is plain markdown either way.
-- Failure signals: a non-zero exit, a `# Ask Failed` first line of stdout, or a `Fatal error: <message>` line on stderr. If you see any of these, report the failure and stop — never present that body as the model's answer. **Name the reason line, do not just say it failed:** the line under the marker carries the backend's own cause when there is one (an upstream model rejection, say), which is the difference between a fixable report and "it didn't work".
+## Success
+
+The answer is printed verbatim to stdout; stderr ends with `Log: <path>`.
+Return the stdout content verbatim — no paraphrase, summary, or commentary
+before or after it (HARRY.md §6) — but only once you've confirmed the run
+succeeded (see Failure below).
+
+## Failure
+
+An argument error (unknown flag, `--context` with no value, a bad `--reasoning`)
+fails before any run: empty stdout, a `Fatal error: <message>` line on stderr,
+non-zero exit.
+
+Failure is explicit: stdout's first line is `# Ask Failed`, followed by a
+reason line naming the cause; the exit code is non-zero. When codex ran,
+stderr carries the tail of codex's log and then `Log: <path>` (a missing CLI, an unreadable or empty
+`--context`, or an empty prompt fails before codex starts, with no log).
+Surface the reason line and any stderr tail — never present a failed run's
+stdout as the model's answer, and do not retry silently.
+
+## `--context` — facts, never verdicts
+
+`--context <text|@file|@->` carries **facts** the model doesn't already
+have — same rule as `/harry:review`: it never carries verdicts, never tells
+the model what *not* to say. An unreadable `@file`, or an `@-` or `@file` with nothing in it, fails the run before codex
+starts.

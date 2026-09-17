@@ -1,5 +1,5 @@
 ---
-description: Three frontier models (opus, gpt-5.6-sol, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
+description: Three frontier models (opus, gpt via Codex, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
 argument-hint: '"<topic>" [--context <text|@file|@->]'
 allowed-tools: Read, Agent, Bash(node:*), Bash(agy:*), AskUserQuestion
 ---
@@ -22,7 +22,7 @@ Google subscription via `agy`.
 | Voice | How you call it |
 |-------|-----------------|
 | `opus` | Dispatch a subagent via the Agent tool, `model: opus`. Prompt it to "ultrathink". |
-| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high`, run with `run_in_background: true` (a high-effort `ask` turn can run past the 10-min foreground Bash timeout before `ask`'s own 30-min timeout ever fires — see below) |
+| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high`, run with `run_in_background: true` (a high-effort `ask` turn — harry sets no timeout of its own on the `codex exec` call it spawns — can run past the 10-min foreground Bash timeout — see below) |
 | `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
 
 `${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when this command runs. The `ask` and
@@ -51,24 +51,25 @@ setting still ran 18 min). Practical consequences for the conductor:
   (Low)` was consistently fast (~14s) in testing — but the fixed routing calls for
   High, so only drop to Low if the user opts in.
 
-**`gpt`'s failure signal is simpler: check the exit code, not the wording.** A
-failed `ask` call exits non-zero, but its stdout can still read as a plausible
-answer — the `# Ask Failed` first line exists precisely to keep the partial
-response visible, not to make the body unreadable. Gate on the exit code, never
-on whether the text below the heading looks complete — and never relay that
-body as `gpt`'s position. Do relay its **reason line** (directly under the
-`# Ask Failed` heading): it names the backend's own cause when there is one, and
-that is the one part of a failed body worth carrying — dropping the whole body
-drops the diagnosis with it. Same policy as gemini: if `gpt` fails twice, proceed
-with a two-voice debate (opus + gemini) and say so explicitly in the final
-report (see the failed-voice note under Synthesis below).
+**`gpt`'s failure signal is simpler: gate on the exit code.** A failed `ask`
+call exits non-zero and prints exactly three lines to stdout: `# Ask Failed`, a
+blank line, and one reason line. The reason is the line after the marker — it
+names the backend's own cause when there is one, so carry it into the report.
+Whatever it prints, never relay a failed run as `gpt`'s position. A `gpt` call
+that hangs past 20 minutes with no result counts as a failure too, the same rule
+as gemini (mere slowness does not). Same fallback as gemini: if `gpt` fails
+twice, proceed with a two-voice debate (opus + gemini) and say so explicitly in
+the final report (see the failed-voice note under Synthesis below).
 
 ## Permissions (do not widen)
 
-No voice touches the filesystem. YOU read any needed files (you already have read
-permission) and inject them as text. Do not pass `--add-dir`,
-`--dangerously-skip-permissions`, or any write/shell flag to `agy`. The `ask`
-command is already read-only.
+Prefer injecting context as text over letting a voice go read files on its own —
+YOU read any needed files (you already have read permission) and inject them
+into the prompt. Do not pass `--add-dir`, `--dangerously-skip-permissions`, or
+any write/shell flag to `agy`. `gpt` runs under `ask`, which is read-only —
+the model may read files and run read-only commands under Codex's own
+read-only sandbox, but it cannot write (`ask` itself writes only its answer
+file and log, under the plugin state dir).
 
 ## Input
 

@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    and `brainstorm → plan → execute → finish` pipeline that ship to consumers. This is prose/markdown,
    not code.
 2. **The `companion` runtime** (`src/` → bundled to `dist/companion.cjs`) — a TypeScript CLI that
-   backs the `review` and `ask` slash commands, talking to a Codex backend.
+   backs the `review` and `ask` slash commands by spawning the `codex` CLI.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
 required to install it. Rebuild `dist/` when changing `src/` **or `package.json`** —
@@ -23,7 +23,7 @@ drift gate fails otherwise).
 pnpm install                    # install deps
 pnpm run build                  # bundle src/companion.ts -> dist/companion.cjs (esbuild)
 pnpm test                       # node --test — runs tests/*.test.ts directly (Node >=26 native TS)
-node --test tests/codex-auth.test.ts   # run a single test file
+node --test tests/review-cli.test.ts   # run a single test file
 pnpm run typecheck              # tsc --noEmit
 pnpm run lint                   # biome check .
 pnpm run format                 # biome format --write .
@@ -39,11 +39,8 @@ conscious trade (newer-than-LTS floor, narrower contributor base) bought for a z
 path; don't "fix" it by lowering the floor without restoring a transpile step for tests.
 
 **Lint scope** (`biome.json` `files.includes`): `src/**/*.ts`, `tests/**/*.ts`, `scripts/**/*.mjs`,
-`build.mjs`, `*.json`. The vendored Apache-2.0 Codex code is deliberately excluded from lint
-(`!src/lib/codex/**`, `!tests/fake-codex.*`) — it tracks upstream, so we don't churn it for style.
-`pnpm run lint` currently emits one benign warning (`useBiomeIgnoreFolder` on the exclude glob;
-biome's suggested folder form doesn't actually exclude under `includes`, so the `**` form stays);
-it exits 0. `pnpm run typecheck` covers the whole TS source including the vendored dir.
+`build.mjs`, `*.json` — no excludes; `pnpm run lint` exits 0. `pnpm run typecheck` covers the whole
+TS source.
 
 **Behavioral evals** (`evals/`, `scripts/run-evals.mjs`) measure whether the resident laws actually
 change a model's first-response behavior — each case runs the same prompt twice, once with an empty
@@ -70,25 +67,25 @@ bump/build/verify/commit steps above; re-run it after the merge to tag.
 ## Runtime architecture (`src/`)
 
 Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/commands/*.ts`
-(`review`, `ask`, `status`, `setup`). Bundled by `build.mjs`
+(`review`, `ask`, `setup`). Bundled by `build.mjs`
 (esbuild, CJS, Node built-ins kept external) into the one committed file `dist/companion.cjs`.
 
-**Codex session driver** (`src/lib/provider.ts`, `src/lib/run-agent-session.ts`,
-`src/lib/providers/codex.ts`): `ask` runs through a single Codex-only `CodexSession`. No
-provider selection — the `codex` CLI on `PATH`, logged in via `codex login`, is the only
-backend. `review` does not use this driver: it spawns `codex exec review` directly as a
-separate, ephemeral, read-only subprocess (`sandbox_mode="read-only"`), with the review
-rubric and context built into its prompt, and writes findings to a file rather than
-streaming a session turn. The `fix` command and its apply backends are gone — review is
-read-only only, with no in-runtime path to apply what it finds.
+There is no in-process session driver any more: both `ask` and `review` spawn the `codex` CLI
+as a separate, ephemeral, read-only subprocess and read its output back. `ask` runs
+`codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
+with the prompt on stdin. `review` spawns `codex exec review` (`sandbox_mode="read-only"`),
+with the review rubric and context built into its prompt, and writes findings to a file
+rather than streaming a session turn. Neither passes a model — `~/.codex/config.toml`
+decides which one runs. There is no fix backend or apply path in-runtime; both commands are
+read-only, full stop.
 
-`src/lib/codex/` (protocol, process, app-server, turn, auth) and `tests/fake-codex.mjs` /
-`tests/fake-codex.d.mts` are derived from `codex-plugin-cc` and are **Apache-2.0**, not MIT — see
-`NOTICE`. Everything else in the repo is MIT.
+Everything in the repo is MIT except `references/skill-authoring.md`, which distills
+parts of an Apache-2.0 source (`anthropics/skills`) — see `NOTICE`.
 
-`upstream.json` pins the four upstream sources (`ponytail`, `codex-plugin-cc`,
-`mattpocock-skills`, `anthropics-skills`) by commit; `superpowers`, the origin of the pipeline
-skills, is retired to `historical_sources` (attribution only, not synced);
+`upstream.json` pins three upstream sources (`ponytail`, `mattpocock-skills`,
+`anthropics-skills`) by commit; `superpowers` (origin of the pipeline skills) and
+`codex-plugin-cc` (origin of the retired vendored runtime) are retired to
+`historical_sources` (attribution only, not synced);
 `references/upstream-sync.md` documents how to diff an upstream's newer philosophy against
 harry's customized version when pulling in changes.
 
@@ -176,7 +173,7 @@ authenticated Codex CLI install (0.128.0) via `codex debug prompt-input`, not
 guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the portable
-`commands/*.md` slash commands (`ask`, `status`, `debt`, `review`,
+`commands/*.md` slash commands (`ask`, `debt`, `review`,
 `sync`, `audit`, `distill`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:

@@ -150,7 +150,7 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
 // one had none. The cross-check below is that, added when section C started
 // deriving from `PAIRS` too: until then a door pair landing on disk without
 // being listed here was invisible to the WHOLE suite, content guard included.
-const PAIRS = ["ask", "status", "debt", "review", "sync", "audit", "grill", "distill"];
+const PAIRS = ["ask", "debt", "review", "sync", "audit", "grill", "distill"];
 
 // CC commands with no Codex twin, each an explicit decision rather than an
 // oversight. An entry here is a conscious exemption, not a silencer.
@@ -241,10 +241,10 @@ for (const name of PAIRS) {
 // true only while the hoist introduces a NEW path on one side. Measured after
 // every hoist landed, that property is gone for every pair without exception:
 //
-//   ask, status                              both sides cite NO reference path
+//   ask                                      both sides cite NO reference path
 //   debt, review, sync, audit, grill, distill  1 shared path, zero asymmetry
 //
-// So B passes vacuously against re-inlining on 8 of 8 pairs. It still does what
+// So B passes vacuously against re-inlining on every pair. It still does what
 // its name says — path-set parity, which catches a path added to one side only —
 // but the content guard nobody had to write turned out not to exist.
 //
@@ -259,13 +259,10 @@ for (const name of PAIRS) {
 //    BREAKS fall — reflowing to a different width, or joining a paragraph into
 //    one line — and re-wording. A plain copy-paste, the actual failure mode, does
 //    not.
-//  - `ask` and `status` are NOT covered: no shared reference means no hoisted
-//    content to protect. For `ask` that is literal — its two doors share zero
-//    prose lines. `status` shares two, one of them a real duplicated description
-//    sentence; it is left alone because both doors are five prose lines long, so
-//    hoisting two of them would be textbook speculative abstraction. Their
-//    divergence risk is the opposite shape — content that was never shared (see
-//    the `--context` case) — and needs its own answer.
+//  - `ask` is NOT covered: no shared reference means no hoisted content to
+//    protect — its two doors share zero prose lines. Its divergence risk is the
+//    opposite shape — content that was never shared (see the `--context` case) —
+//    and needs its own answer.
 //  - Door↔REFERENCE only, never door↔door. Six of the eight pairs still carry
 //    verbatim cross-build duplication; for most of them it is the pointer
 //    sentences, which are duplicated BY DESIGN — that is what a thin door looks

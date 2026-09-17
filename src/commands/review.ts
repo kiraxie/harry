@@ -6,19 +6,13 @@
  * `codex exec review --ephemeral -c sandbox_mode="read-only" -o <file> -` at the
  * repo root with the prompt on stdin. The review file is printed verbatim.
  *
- * codex writes its whole session transcript to stderr (prompt echo, rubric,
- * every command's output) — hundreds of KB on a real branch — so it goes to a
- * `.log` beside the review file, never to the caller.
- *
- * No fallback anywhere: a missing CLI, a non-zero exit, or an absent/empty
- * output file each fail the command, printing the log's tail (where codex puts
- * its `ERROR:` line) verbatim.
+ * Spawning, the `.log` beside the review file, and the loud no-fallback failure
+ * handling live in `src/lib/run-codex.ts`, shared with `ask`.
  */
 
-import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
-
+import { resolveExtraContext } from "../lib/context.ts";
 import {
   countBranchChanges,
   getBranchOrShortSha,
@@ -26,10 +20,9 @@ import {
   getRepoRoot,
   resolveReviewTarget,
 } from "../lib/git.ts";
-import type { ReasoningEffort } from "../lib/provider.ts";
 import { buildReviewPrompt, loadReviewRubric } from "../lib/review-prompts.ts";
+import { type ReasoningEffort, reserveRunFiles, runCodexExec } from "../lib/run-codex.ts";
 import { ensureDir, resolveStateDir } from "../lib/state.ts";
-import { resolveExtraContext } from "../lib/system-message.ts";
 
 export interface ReviewOptions {
   base?: string;
@@ -41,9 +34,6 @@ export interface ReviewOptions {
 
 /** The stderr line naming the review file. The doors tell callers to read that path. */
 export const REVIEW_WRITTEN = "Review written to";
-
-/** How much of codex's log a failure prints — enough to carry its closing `ERROR:` line. */
-const FAILURE_TAIL_LINES = 40;
 
 /**
  * Where the review lands. The MAIN checkout's `.local/tmp/<branch>/` when that
@@ -61,47 +51,13 @@ function resolveOutputDir(repoRoot: string): string {
   return dir;
 }
 
-function timestamp(now: Date): string {
-  const p = (n: number): string => String(n).padStart(2, "0");
-  return (
-    `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-` +
-    `${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`
-  );
-}
-
-/**
- * One review file per run: `codex-review-<YYYYMMDD-HHMMSS>[-N].md` plus the
- * matching `.log`, so a re-review never clobbers an earlier round and a failed
- * run can never print an older review. A stem is taken when either file exists;
- * the log is created exclusively (`wx`) to claim the stem against a concurrent run.
- */
+/** One review file per run: `codex-review-<YYYYMMDD-HHMMSS>[-N].md` plus its `.log`. */
 export function reserveReviewFiles(
   dir: string,
   now: Date = new Date(),
 ): { reviewPath: string; logPath: string } {
-  const base = `codex-review-${timestamp(now)}`;
-  for (let n = 1; ; n++) {
-    const stem = join(dir, n === 1 ? base : `${base}-${n}`);
-    const reviewPath = `${stem}.md`;
-    const logPath = `${stem}.log`;
-    if (existsSync(reviewPath)) continue;
-    try {
-      closeSync(openSync(logPath, "wx"));
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "EEXIST") continue;
-      throw err;
-    }
-    return { reviewPath, logPath };
-  }
-}
-
-/** Print the log's last lines verbatim, then its path, for a failed run. */
-function reportLogTail(logPath: string): void {
-  const lines = readFileSync(logPath, "utf8").split("\n");
-  if (lines.at(-1) === "") lines.pop();
-  const tail = lines.slice(-FAILURE_TAIL_LINES);
-  if (tail.length > 0) process.stderr.write(`${tail.join("\n")}\n`);
-  process.stderr.write(`Log: ${logPath}\n`);
+  const { outputPath, logPath } = reserveRunFiles(dir, "codex-review", now);
+  return { reviewPath: outputPath, logPath };
 }
 
 export async function runReview(cwd: string, options: ReviewOptions = {}): Promise<void> {
@@ -118,7 +74,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
     target,
     rubric: loadReviewRubric(),
     // Strict: a reviewer silently missing its facts would review a different question.
-    context: resolveExtraContext(cwd, { context: options.context, strict: true }),
+    context: resolveExtraContext(cwd, options.context),
     focusText: options.focusText,
   });
 
@@ -137,40 +93,15 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   args.push("-");
 
   process.stderr.write(`Reviewing ${target.label} with codex exec review…\n`);
-  // stdout is ignored: codex echoes its final message there, and the review is
-  // printed from the -o file instead. stderr (the session transcript) goes to
-  // the log; a failure prints its tail.
-  const logFd = openSync(logPath, "w");
-  let res: ReturnType<typeof spawnSync>;
-  try {
-    res = spawnSync("codex", args, {
-      cwd: repoRoot,
-      input: prompt,
-      stdio: ["pipe", "ignore", logFd],
-    });
-  } finally {
-    closeSync(logFd);
-  }
-  if ((res.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
-    // codex never ran, so the reserved log is empty and nothing names it.
-    rmSync(logPath, { force: true });
-    throw new Error(
-      "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry.",
-    );
-  }
-  if (res.error) throw res.error;
-  if (res.status !== 0) {
-    reportLogTail(logPath);
-    throw new Error(
-      `codex exec review failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
-    );
-  }
-
-  const review = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "";
-  if (!review.trim()) {
-    reportLogTail(logPath);
-    throw new Error(`codex exec review exited 0 but wrote no review to ${outputPath}.`);
-  }
+  const review = runCodexExec({
+    args,
+    cwd: repoRoot,
+    input: prompt,
+    outputPath,
+    logPath,
+    label: "codex exec review",
+    outputNoun: "review",
+  });
   process.stdout.write(review);
   process.stderr.write(`${REVIEW_WRITTEN} ${outputPath}\nLog: ${logPath}\n`);
 }

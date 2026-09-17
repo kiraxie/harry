@@ -22,8 +22,7 @@ export const BOOLEAN_FLAGS = new Set<string>(["help", "json"]);
 export const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
   setup: new Set(["json"]),
   review: new Set(["base", "reasoning", "context"]),
-  ask: new Set(["task", "model", "reasoning", "timeout", "context"]),
-  status: new Set(["json"]),
+  ask: new Set(["task", "reasoning", "context"]),
 };
 
 /** Throw on any `--flag` not in the command's allow-list (typos error loudly). */
@@ -119,15 +118,6 @@ export function extractTask(args: string[], flags: Record<string, string | boole
   return typeof flag === "string" ? flag.trim() : "";
 }
 
-/** A `--key <value>` string flag, or undefined when absent/boolean. */
-export function flagString(
-  flags: Record<string, string | boolean>,
-  key: string,
-): string | undefined {
-  const v = flags[key];
-  return typeof v === "string" ? v : undefined;
-}
-
 /**
  * A `--key <value>` string flag that must carry its value when present:
  * undefined when absent, and an error naming the flag when it was given bare
@@ -142,20 +132,4 @@ export function flagRequiredString(
   if (v === undefined) return undefined;
   if (typeof v !== "string") throw new Error(`Flag --${key} requires a value.`);
   return v;
-}
-
-/**
- * A `--key <n>` positive number flag. Strict: `Number()` rejects trailing
- * garbage ("30sec" → NaN) that parseInt would accept, and NaN/zero/negative
- * return undefined so a downstream `?? DEFAULT` applies instead of arming a 0ms
- * timer.
- */
-export function flagNumber(
-  flags: Record<string, string | boolean>,
-  key: string,
-): number | undefined {
-  const v = flags[key];
-  if (typeof v !== "string") return undefined;
-  const n = Number(v.trim());
-  return Number.isFinite(n) && n > 0 ? n : undefined;
 }

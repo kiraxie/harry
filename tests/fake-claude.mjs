@@ -1,4 +1,4 @@
-// Fake `claude` CLI shim for the eval-runner tests, mirroring tests/fake-codex.mjs.
+// Fake `claude` CLI shim for the eval-runner tests.
 // It is NOT the real claude binary and never makes an API call: the runner
 // resolves it via EVALS_CLAUDE_BIN, so tests exercise run/score without spend.
 //

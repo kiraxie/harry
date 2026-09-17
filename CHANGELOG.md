@@ -38,6 +38,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `codex exec review` call. A lane failure is now blocking: it's recorded
   verbatim and taken to the user, not silently skipped in favor of the CC lane
   alone.
+- **`/harry:ask` collapsed onto `codex exec` too.** It now spawns
+  `codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c
+  model_reasoning_effort="<v>"] -` with the prompt on stdin, the same shape as
+  `review`, instead of running through harry's own in-process Codex session.
+  Read-only now means the model may read files and run read-only commands
+  under Codex's read-only sandbox (previously `ask` had no filesystem, shell,
+  or URL access at all — the vendored session gave it none). It never picks a
+  model itself; `~/.codex/config.toml` decides, and `--reasoning` overrides
+  effort for that one call. Surface is now `ask "<prompt>" [--reasoning
+  <low|medium|high|xhigh>] [--context <text|@file|@->]`. On success the answer
+  prints verbatim to stdout and stderr ends with `Log: <path>`; on failure
+  stdout's first line is `# Ask Failed` followed by a reason line, the exit
+  is non-zero, and — when codex ran — stderr carries the log's tail plus
+  `Log: <path>`.
+  `--context` follows the same facts-never-verdicts rule as `review`'s.
+  Every ask prompt opens with a fixed preamble framing the model as one
+  independent voice: answer from the prompt and any Background, do not explore
+  the working directory or run commands unless the prompt asks about files in
+  it, be concrete and decisive, and state key assumptions and the strongest
+  counter-argument.
+- Standalone `ask`'s default reasoning effort is now the Codex config's
+  (`~/.codex/config.toml`); it was hard-coded to `high`. `/debate`'s gpt voice
+  passes `--reasoning high` explicitly, so it is unchanged.
+- A failed `ask` run reports its reason on stderr once, as `Ask failed:
+  <reason>`, and no longer also prints `Fatal error: <reason>`. `Fatal error:`
+  now means only an argument error caught before `ask` runs.
+- `setup --json` fields changed: `availabilityDetail` and `authMethod` are
+  removed, and `version` (the `codex-cli` version, or `null` when unavailable)
+  is added. `setup` now reads `codex --version` and `codex login status`.
+- The Codex role map (`references/codex-role-mapping.md`, inlined into
+  `~/.codex/AGENTS.md` by `/sync`) binds the security row and judgment-heavy
+  work to `gpt-5.6-luna` instead of `gpt-5.6-sol`, which a ChatGPT login
+  rejects with a 400. Re-run `/sync` on the Codex build to pick it up.
 
 ### Removed
 
@@ -51,7 +84,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `standard` and `adversarial` Codex model roles and their
   `HARRY_MODEL_STANDARD` / `HARRY_MODEL_ADVERSARIAL` overrides (added in 0.18.0).
   Nothing reads them any more — `review` passes no model — so setting either now
-  does nothing. `HARRY_MODEL_JUDGMENT` (`ask`, `/debate`'s gpt voice) is unchanged.
+  does nothing.
+- **`--model` and `--timeout` on `ask`**, and the `HARRY_MODEL_JUDGMENT`
+  override that used to set `ask`/`/debate`'s gpt voice's default model. `ask`
+  passes no model any more — `~/.codex/config.toml` decides — and the
+  `codex exec` process it spawns has no timeout of harry's own to configure.
+- **`/harry:status`.** It only ever showed a Codex rate-limit snapshot that
+  the deleted vendored session recorded after each `ask` turn; there is no
+  source left for that snapshot. `commands/status.md` and
+  `codex-skills/status/` are deleted.
+- **The vendored in-process Codex runtime** (`src/lib/codex/` — app-server,
+  process, protocol, turn, auth — and its test fixture
+  `tests/fake-codex.mjs`), ported and modified from `codex-plugin-cc`. Both
+  `ask` and `review` now spawn the `codex` CLI directly instead of driving it
+  as an in-process session; the `NOTICE` file's Apache-2.0 section for that
+  runtime is removed along with it (the remaining Apache-2.0 attribution,
+  for `references/skill-authoring.md`, stays). `codex-plugin-cc` is retired
+  from `upstream.json`'s pinned `sources` to `historical_sources` (attribution
+  only, not synced) — harry now pins three upstreams instead of four.
 
 ## [0.21.0] - 2026-09-02
 

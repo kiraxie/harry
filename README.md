@@ -36,8 +36,8 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 /harry:sync                             # wire the resident laws + set up this project
 ```
 
-harry's commands share the `/harry:` namespace. The ones whose bare name collides
-with a Claude Code built-in — `/harry:review`, `/harry:status` —
+harry's commands share the `/harry:` namespace. The one whose bare name collides
+with a Claude Code built-in — `/harry:review` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
 (`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:distill`)
 accept the bare name when unambiguous.
@@ -73,7 +73,7 @@ Then, inside an interactive `codex` session, run `/plugins` and install `harry`
 from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
-`codex-skills/` holds the Codex-only conversions (`ask`, `status`, `debt`,
+`codex-skills/` holds the Codex-only conversions (`ask`, `debt`,
 `review`, `sync`, `audit`, `grill`, `distill`); the four pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
@@ -86,47 +86,30 @@ Claude-native or local scripts.
 | Command | What it does |
 |---------|--------------|
 | `/harry:review [--base <ref>] [--reasoning <effort>] [--context <text\|@file\|@->]` | Read-only code review via `codex exec review` — working tree, a branch against its default, or a diff against `--base` |
-| `/harry:ask "<prompt>"` | One read-only prompt to Codex |
+| `/harry:ask "<prompt>" [--reasoning <effort>] [--context <text\|@file\|@->]` | One read-only prompt to Codex via `codex exec` |
 | `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
-| `/harry:status` | Codex rate-limit snapshot (quota usage + reset windows) |
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
 | `/harry:distill <repo>` | Evaluate an external repo as a distillation candidate — survey it against harry's laws and deviation record, rule pull/adapt/skip per candidate, record the outcome in upstream tracking |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 
-Cheap-first smoke test: `/harry:status` → `/harry:ask` → `/harry:review`/`/harry:debate`.
+Cheap-first smoke test: `/harry:ask` → `/harry:review`/`/harry:debate`.
 
 ## Codex
 
-`ask` runs through the OpenAI **Codex** CLI (spawned as a subprocess, JSON-RPC over
-stdio) via harry's own Codex session; `review` instead spawns a separate,
-ephemeral `codex exec review` process, read-only. Neither has an SDK
-dependency — only the `codex` binary on `PATH`.
+`ask` and `review` both spawn the `codex` CLI directly as a separate, ephemeral,
+read-only subprocess — no SDK dependency, no in-process session, only the
+`codex` binary on `PATH`. `ask` runs
+`codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
+with the prompt on stdin; `review` spawns `codex exec review`. Read-only means
+the model may read files and run read-only commands under Codex's own
+read-only sandbox, but cannot write; the command itself writes only its output
+file and a transcript log beside it.
 
-`ask` defaults to a capable model (`gpt-5.6-sol`) rather than inheriting whatever
-`~/.codex/config.toml` happens to set — answering a one-shot prompt is a judgment
-task (HARRY.md §5); pass `--model` to override. `review` passes no model at
-all — `~/.codex/config.toml` decides which one `codex exec review` runs, and
+Neither passes a model — `~/.codex/config.toml` decides which one runs;
 `--reasoning` overrides effort for that one call. One-time setup: install the
 `codex` CLI, then `codex login`.
-
-Not every login can reach every model. A ChatGPT login **without an OpenAI
-subscription** is rejected for `gpt-5.6-sol` with a hard 400 (*"not supported when
-using Codex with a ChatGPT account"*, probed 2026-08-08) while `gpt-5.6-terra` and
-`gpt-5.6-luna` answer. No subscribed account has been probed, so `sol`'s status
-there is unverified — the default stays on it because downgrading on one account's
-evidence would degrade every other account on none. If yours is rejected, the
-failure names itself and you set the model once instead of per command:
-
-```sh
-export HARRY_MODEL_JUDGMENT=gpt-5.6-luna     # ask, /debate's gpt voice
-```
-
-`--model` still wins per invocation. These are read only from harry's own
-variables, deliberately not from `~/.codex/config.toml`'s `model` — yielding to
-that would put a judgment task back on whatever you last set for an unrelated
-session, which is what the pins exist to prevent.
 
 ## Skills
 
@@ -142,23 +125,21 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · writing-plans · executing · finishing (shared, both builds)
-commands/           review · ask · status · debate · debt · sync · audit · grill · distill (Claude Code)
-codex-skills/       ask · status · debt · review · sync · audit · grill · distill (Codex CLI)
+commands/           review · ask · debate · debt · sync · audit · grill · distill (Claude Code)
+codex-skills/       ask · debt · review · sync · audit · grill · distill (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
-src/ + dist/        agent runtime — Codex provider (bundled via build.mjs, shared, both builds)
+src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs, shared, both builds)
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
 .claude-plugin/     Claude Code plugin manifest
 .codex-plugin/ + .agents/plugins/   Codex CLI plugin manifest
-upstream.json       tracks the four upstreams by commit (see references/upstream-sync.md)
+upstream.json       tracks the three upstreams by commit (see references/upstream-sync.md)
 ```
 
 ## Upstream
 
-harry is distilled from `ponytail`, `codex-plugin-cc`, `mattpocock-skills` (the `grill` family), and `anthropics-skills` (skill-authoring principles) — all four pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Three more sources are historical influences, not pinned: `superpowers` (origin of the pipeline skills and the TDD/debugging/verification laws; retired as a pinned upstream in 2026-09 once harry's versions had diverged), `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's talk-like-an-engineer and lawful-exit rules). Note: `review`'s design upstream is **codex-plugin-cc** (it was originally ported for the Copilot backend).
+harry is distilled from `ponytail`, `mattpocock-skills` (the `grill` family), and `anthropics-skills` (skill-authoring principles) — all three pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Four more sources are historical influences, not pinned: `superpowers` (origin of the pipeline skills and the TDD/debugging/verification laws; retired as a pinned upstream in 2026-09 once harry's versions had diverged), `codex-plugin-cc` (origin of `review`'s design and of the vendored in-process Codex runtime; retired 2026-09 once that runtime was deleted in favor of spawning the `codex` CLI directly), `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's talk-like-an-engineer and lawful-exit rules).
 
 ## License
 
-MIT, except the Codex provider. The files under `src/lib/codex/` and the test
-fixture `tests/fake-codex.mjs` are derived from
-[`codex-plugin-cc`](https://github.com/openai/codex) (Copyright 2026 OpenAI) and
-are licensed under Apache-2.0; see [`NOTICE`](NOTICE). All other code is MIT.
+MIT. Parts of `references/skill-authoring.md` are distilled from an
+Apache-2.0 source (`anthropics/skills`); see [`NOTICE`](NOTICE).

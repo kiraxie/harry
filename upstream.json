@@ -7,12 +7,6 @@
       "synced_commit": "16f29800fd2681bdf24f3eb4ccffe38be3baec6b",
       "synced_date": "2026-07-27"
     },
-    "codex-plugin-cc": {
-      "repo": "https://github.com/openai/codex-plugin-cc",
-      "synced_version": "1.0.6",
-      "synced_commit": "db52e28f4d9ded852ab3942cea316258ae4ef346",
-      "synced_date": "2026-07-27"
-    },
     "mattpocock-skills": {
       "repo": "https://github.com/mattpocock/skills",
       "synced_version": "1.1.0",
@@ -33,6 +27,13 @@
       "last_harvested_commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
       "retired_date": "2026-09-15",
       "note": "Retired as a pinned upstream: harry's derived laws and skills have diverged to near-zero shared lines, so tracking yielded only alerts harry mostly declined. v6.3.0 was harvested once before retiring. Kept for attribution of the derived[] entries naming superpowers; do not sync. Re-compare on demand only."
+    },
+    "codex-plugin-cc": {
+      "repo": "https://github.com/openai/codex-plugin-cc",
+      "last_harvested_version": "1.0.6",
+      "last_harvested_commit": "db52e28f4d9ded852ab3942cea316258ae4ef346",
+      "retired_date": "2026-09-17",
+      "note": "Retired as a pinned upstream: the vendored in-process Codex runtime (src/lib/codex/), ported and modified from this repo, is deleted — ask and review now spawn the codex CLI directly (codex exec / codex exec review) instead of running an in-process session against it. Kept for attribution of the derived[] entries naming codex-plugin-cc; do not sync."
     }
   },
   "derived": [
@@ -73,18 +74,18 @@
     },
     {
       "skill": "review",
-      "from": "codex-plugin-cc",
-      "note": "REVIEW'S TRUE UPSTREAM IS codex-plugin-cc (copilot review is ported from it). Sync review against codex-plugin-cc, not copilot."
+      "from": "codex-plugin-cc (historical)",
+      "note": "REVIEW'S TRUE UPSTREAM IS codex-plugin-cc (copilot review is ported from it), now retired to historical_sources — codex-plugin-cc is not synced any more. review no longer runs any code ported from it: it spawns `codex exec review` directly, read-only. Kept for attribution only."
     },
     {
       "skill": "debate",
       "from": "copilot-plugin-cc",
-      "note": "3-model debate (opus/gpt-5.6-sol/gemini-3.1-pro); judge-panel for Major decisions. No Codex build (the 'self' voice is Claude/opus by design)."
+      "note": "3-model debate (opus / gpt via Codex / gemini-3.1-pro); judge-panel for Major decisions. No Codex build (the 'self' voice is Claude/opus by design)."
     },
     {
       "skill": "ask / status / result",
-      "from": "copilot-plugin-cc + codex-plugin-cc",
-      "note": "runtime commands; setup+status merged into status. Originally had a Copilot premium-quota fallback at <5% remaining; removed along with the Copilot backend. result retired 2026-07 — the background-job subsystem behind it never had a shipped producer (no commit in harry's history ever passed --background to the node CLI), so /harry:result could only ever report no completed jobs and exit 1; /harry:status lost its job tables at the same time and is now Codex-rate-limit-only. Do not re-add a standalone /result, and do not restore a job-status block to /status, without first building a producer."
+      "from": "copilot-plugin-cc + codex-plugin-cc (historical)",
+      "note": "runtime commands; setup+status merged into status. Originally had a Copilot premium-quota fallback at <5% remaining; removed along with the Copilot backend. result retired 2026-07 — the background-job subsystem behind it never had a shipped producer (no commit in harry's history ever passed --background to the node CLI), so /harry:result could only ever report no completed jobs and exit 1; /harry:status lost its job tables at the same time and was Codex-rate-limit-only until its own retirement 2026-09-17, when the in-process Codex session it read quota off of (codex-plugin-cc, now historical) was deleted along with it — there is no source left for a quota snapshot. ask itself moved onto spawning `codex exec` directly at the same time, so it no longer runs any code ported from codex-plugin-cc either. Do not re-add a standalone /result or /status without first building a producer."
     },
     {
       "skill": "grill",

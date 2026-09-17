@@ -1,25 +1,26 @@
 /**
- * `ask`'s failure contract.
+ * `companion ask` — a thin wrapper over the Codex CLI's `codex exec`, and its
+ * failure contract.
+ *
+ * The CLI tests run the real CLI (`node src/companion.ts ask …`) with
+ * `tests/fake-codex-cli.mjs` installed as `codex` first on PATH, and pin the
+ * argv it spawns, the prompt it sends on stdin, where the answer lands, and
+ * that every failure is self-describing.
  *
  * Both of `ask`'s doors instruct their consumers to "Return the command stdout
  * verbatim, exactly as-is", and `/debate` folds that stdout into a three-voice
- * synthesis. So a failed turn MUST be self-describing on stdout: without a
- * marker, a truncated answer is indistinguishable from a complete one and gets
- * presented (or synthesized) as the model's real answer.
- *
- * This mirrors `review`'s failure shape — `# Review Failed` on stdout plus a
- * `Review failed:` line on stderr — because the two commands share a stdout
- * contract and drifting apart is what produced this gap in the first place.
+ * synthesis. So a failed run MUST be self-describing on stdout: `# Ask Failed`
+ * as the first line, then the reason, and a non-zero exit.
  */
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildEnv, installFakeCodex, TRUNCATED_CAUSE } from "./fake-codex.mjs";
+import { ASK_PREAMBLE } from "../src/commands/ask.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -29,7 +30,8 @@ const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
  * every door move together instead of drifting apart.
  *
  * `Fatal error:` comes from companion.ts's top-level handler rather than from
- * ask itself, but two doors name it as a signal to watch for, so it needs the
+ * ask itself, and only for argument errors caught before ask runs (a failure ask
+ * reports never reaches it), but two doors name it as a signal to watch for, so it needs the
  * same pinning — a door quoting a string nothing asserts is exactly the drift
  * this file exists to stop. (`Ask failed:` is asserted against the CLI too but
  * is deliberately absent here: no door names it, so it cannot go stale in prose.)
@@ -158,128 +160,338 @@ const DISCOVERED_ASK_DOORS = DOOR_DIRS.flatMap(listMarkdownFiles).filter((rel) =
   /companion\.cjs"?\s+ask\b/.test(fs.readFileSync(path.join(repoRoot, rel), "utf-8")),
 );
 
-function makeTempDir(prefix: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
+const FAKE = path.join(repoRoot, "tests/fake-codex-cli.mjs");
 
-/** Run the CLI in an isolated cwd + state dir. */
-function runCli(
-  args: string[],
-  opts: { cwd?: string; binDir?: string } = {},
-): { status: number | null; stdout: string; stderr: string } {
-  const dataDir = makeTempDir("harry-ask-data-");
-  const cwd = opts.cwd ?? makeTempDir("harry-ask-cwd-");
-  const base = opts.binDir ? buildEnv(opts.binDir) : process.env;
-  const res = spawnSync(process.execPath, [CLI, ...args], {
-    cwd,
-    encoding: "utf8",
-    env: { ...base, CLAUDE_PLUGIN_DATA: dataDir },
-  });
-  return { status: res.status, stdout: res.stdout, stderr: res.stderr };
-}
-
-test("ask marks a truncated answer as failed instead of passing it off as the reply", () => {
-  const binDir = makeTempDir("harry-ask-bin-");
-  installFakeCodex(binDir, "task-truncated-then-error");
-
-  const res = runCli(["ask", "why is it slow"], { cwd: binDir, binDir });
-
-  // The headline defect: the body arrives and reads like a finished answer.
-  assert.match(
-    res.stdout,
-    /The three main causes are:/,
-    `expected the partial body to be preserved, got:\n${res.stdout}`,
-  );
-  // ...so stdout must say, in the stdout itself, that it is NOT a real answer.
-  // Opening with the marker also pins it ABOVE the body: a consumer quoting
-  // stdout verbatim has to hit the warning before the text it qualifies.
-  assert.ok(
-    res.stdout.startsWith(`${ASK_FAILED_MARKER}\n`),
-    `expected stdout to open with the "${ASK_FAILED_MARKER}" marker, got:\n${res.stdout}`,
-  );
-  assert.match(res.stderr, /^Ask failed: /m, `expected an "Ask failed:" line on stderr`);
-  // The other stderr signal the doors tell consumers to watch for.
-  assert.ok(
-    res.stderr.includes(FATAL_ERROR_PREFIX),
-    `expected a "${FATAL_ERROR_PREFIX}" line on stderr, got:\n${res.stderr}`,
-  );
-  assert.notEqual(res.status, 0, "expected a non-zero exit status");
+const cleanup: string[] = [];
+test.after(() => {
+  for (const d of cleanup) fs.rmSync(d, { recursive: true, force: true });
 });
 
-// The full chain, end to end: turn.ts captures a cause -> CodexProvider carries it
-// on RunResult.error -> withCause frames it -> ask prints it on BOTH signals.
-// The provider test pins the middle link and turn-runtime.test.ts pins the framing;
-// this is the only test that proves a real CLI invocation actually shows a user why.
-//
-// It is the defect the codex-model-pinning item was opened around: an upstream 400
-// ("The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT
-// account") reached the job log and stopped there, so every door could say only
-// "Ask did not complete successfully." — indistinguishable from a model that
-// returned nothing.
-test("ask surfaces the backend's cause, not just that something failed", () => {
-  const binDir = makeTempDir("harry-ask-bin-");
-  installFakeCodex(binDir, "task-truncated-then-error");
+function makeTempDir(prefix: string): string {
+  const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  cleanup.push(d);
+  return d;
+}
 
-  const res = runCli(["ask", "why is it slow"], { cwd: binDir, binDir });
-
-  // stderr is what an operator reads first.
-  assert.match(
-    res.stderr,
-    new RegExp(`^Ask failed: Ask did not complete successfully: ${TRUNCATED_CAUSE}$`, "m"),
-    `expected the cause on the "Ask failed:" line, got:\n${res.stderr}`,
+/** A bin dir whose `codex` records its cwd, then execs the fake CLI. */
+function makeBin(): string {
+  const bin = makeTempDir("harry-ask-bin-");
+  const shim = path.join(bin, "codex");
+  fs.writeFileSync(
+    shim,
+    `#!/bin/sh\npwd > "$FAKE_CODEX_CLI_RECORD_DIR/cwd.txt"\nexec "${process.execPath}" "${FAKE}" "$@"\n`,
   );
-  // stdout matters just as much and for a different reason: ask's doors tell
-  // consumers to return it verbatim, and /debate folds it into a synthesis, so a
-  // cause that reached only stderr would be invisible to both.
+  fs.chmodSync(shim, 0o755);
+  return bin;
+}
+
+interface Run {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  record: string;
+  dataDir: string;
+  cwd: string;
+}
+
+/** Run `ask` in an isolated cwd + state dir. `bin: null` leaves no `codex` on PATH. */
+function runAsk(
+  args: string[],
+  opts: { cwd?: string; fake?: Record<string, string>; bin?: null; input?: string } = {},
+): Run {
+  const record = makeTempDir("harry-ask-record-");
+  const dataDir = makeTempDir("harry-ask-data-");
+  const cwd = opts.cwd ?? makeTempDir("harry-ask-cwd-");
+  const basePath =
+    opts.bin === null ? ["/usr/bin", "/bin"].join(path.delimiter) : (process.env.PATH ?? "");
+  const res = spawnSync(process.execPath, [CLI, "ask", ...args], {
+    cwd,
+    encoding: "utf8",
+    timeout: 15_000,
+    input: opts.input ?? "",
+    env: {
+      ...process.env,
+      PATH: opts.bin === null ? basePath : `${makeBin()}${path.delimiter}${basePath}`,
+      CLAUDE_PLUGIN_DATA: dataDir,
+      FAKE_CODEX_CLI_RECORD_DIR: record,
+      ...opts.fake,
+    },
+  });
+  return { status: res.status, stdout: res.stdout, stderr: res.stderr, record, dataDir, cwd };
+}
+
+function spawned(run: Run): boolean {
+  return fs.existsSync(path.join(run.record, "argv.json"));
+}
+
+function recordedArgv(run: Run): string[] {
+  return JSON.parse(fs.readFileSync(path.join(run.record, "argv.json"), "utf8"));
+}
+
+function recordedPrompt(run: Run): string {
+  return fs.readFileSync(path.join(run.record, "stdin.txt"), "utf8");
+}
+
+function answerPathOf(run: Run): string {
+  const argv = recordedArgv(run);
+  return argv[argv.indexOf("-o") + 1];
+}
+
+function logPathOf(run: Run): string {
+  return answerPathOf(run).replace(/\.md$/, ".log");
+}
+
+/** Stdout of a failed ask: the marker, a blank line, one reason line. */
+function assertFailedStdout(run: Run, reason: RegExp): void {
+  assert.notEqual(run.status, 0, "expected a non-zero exit status");
   assert.ok(
-    res.stdout.includes(TRUNCATED_CAUSE),
-    `expected the cause in stdout beneath the marker, got:\n${res.stdout}`,
+    run.stdout.startsWith(`${ASK_FAILED_MARKER}\n\n`),
+    `expected stdout to open with "${ASK_FAILED_MARKER}" and a blank line, got:\n${run.stdout}`,
   );
-  // The generic sentence is KEPT as the prefix, not replaced — it is what names
-  // which command failed, and consumers key on it.
-  assert.match(res.stdout, /Ask did not complete successfully:/);
-  assert.notEqual(res.status, 0);
+  const rest = run.stdout.slice(`${ASK_FAILED_MARKER}\n\n`.length);
+  assert.equal(rest.trimEnd().split("\n").length, 1, `expected one reason line, got:\n${rest}`);
+  assert.match(rest, reason);
+  // The reason reaches stderr once, as `Ask failed:` — not again as `Fatal error:`,
+  // which the doors reserve for argument errors caught before ask runs.
+  assert.equal(
+    run.stderr.match(/^Ask failed: /gm)?.length,
+    1,
+    `expected exactly one "Ask failed:" line on stderr, got:\n${run.stderr}`,
+  );
+  assert.ok(
+    !run.stderr.includes(FATAL_ERROR_PREFIX),
+    `a failure ask reported must not also print "${FATAL_ERROR_PREFIX}", got:\n${run.stderr}`,
+  );
+}
+
+/** One file per run: `ask-<YYYYMMDD-HHMMSS>[-N].md`. */
+const ASK_FILE_RE = /ask-\d{8}-\d{6}(-\d+)?\.md$/;
+
+// ─── flag surface ───────────────────────────────────────────────────────────
+
+for (const flag of ["--model", "--timeout"]) {
+  test(`ask rejects the removed flag ${flag}, naming it, and never spawns codex`, () => {
+    const run = runAsk(["hello", flag, "x"]);
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, new RegExp(`Unknown flag ${flag}\\b`), run.stderr);
+    assert.ok(run.stderr.includes(FATAL_ERROR_PREFIX), run.stderr);
+    assert.equal(run.stdout, "", "an argument error prints nothing on stdout");
+    assert.ok(!spawned(run), "codex must not be spawned");
+  });
+}
+
+test("ask --context with no value errors naming the flag", () => {
+  const run = runAsk(["hello", "--context", "--reasoning", "high"]);
+  assert.notEqual(run.status, 0);
+  assert.ok(
+    run.stderr.includes(`${FATAL_ERROR_PREFIX} Flag --context requires a value`),
+    run.stderr,
+  );
+  assert.ok(!spawned(run));
+});
+
+test("ask with an empty prompt fails and never spawns codex", () => {
+  const run = runAsk(["   "]);
+  assertFailedStdout(run, /empty prompt/);
+  assert.ok(!spawned(run));
+});
+
+// ─── exact spawned argv + prompt ────────────────────────────────────────────
+
+test("ask spawns codex exec read-only and ephemeral, prompt on stdin, no effort override and never -m", () => {
+  const run = runAsk(["why", "is", "it", "slow"]);
+  assert.equal(run.status, 0, run.stderr);
+  const argv = recordedArgv(run);
+  assert.deepEqual(argv, [
+    "exec",
+    "--ephemeral",
+    "-s",
+    "read-only",
+    "--skip-git-repo-check",
+    "-o",
+    answerPathOf(run),
+    "-",
+  ]);
+  assert.ok(!argv.includes("-m"));
+  assert.equal(recordedPrompt(run), `${ASK_PREAMBLE}\n\nwhy is it slow\n`);
+});
+
+test("ask --reasoning adds exactly one TOML-quoted effort override before the stdin marker", () => {
+  const run = runAsk(["hello", "--reasoning", "xhigh"]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(recordedArgv(run), [
+    "exec",
+    "--ephemeral",
+    "-s",
+    "read-only",
+    "--skip-git-repo-check",
+    "-o",
+    answerPathOf(run),
+    "-c",
+    'model_reasoning_effort="xhigh"',
+    "-",
+  ]);
+});
+
+test("ask takes the prompt from --task when there are no positionals", () => {
+  const run = runAsk(["--task", "from the flag"]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(recordedPrompt(run), `${ASK_PREAMBLE}\n\nfrom the flag\n`);
+});
+
+test("ask runs codex in the invoking cwd, which need not be a git repo", () => {
+  const run = runAsk(["hello"]);
+  assert.equal(run.status, 0, run.stderr);
+  const cwd = fs.readFileSync(path.join(run.record, "cwd.txt"), "utf8").trim();
+  assert.equal(fs.realpathSync(cwd), run.cwd);
+});
+
+test("ask opens every prompt with the independent-voice preamble", () => {
+  // codex exec is an agentic harness in the user's repo; without the framing the
+  // model treats the question as a task and explores instead of answering.
+  assert.match(ASK_PREAMBLE, /one independent voice/);
+  assert.match(ASK_PREAMBLE, /Do not explore the working directory or run commands unless/);
+  assert.match(ASK_PREAMBLE, /strongest counter-argument/);
+  const run = runAsk(["hello"]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.ok(recordedPrompt(run).startsWith(`${ASK_PREAMBLE}\n\n`), recordedPrompt(run));
+});
+
+test("ask --context prepends a Background section, then the prompt under ## Prompt", () => {
+  const run = runAsk(["what", "next", "--context", "the cache is intentional"]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(
+    recordedPrompt(run),
+    `${ASK_PREAMBLE}\n\n## Background (settled facts from the working session)\n\nthe cache is intentional\n\n## Prompt\n\nwhat next\n`,
+  );
+});
+
+test("ask --context @file and @- are expanded", () => {
+  const ctxFile = path.join(makeTempDir("harry-ask-ctx-"), "ctx.md");
+  fs.writeFileSync(ctxFile, "from a file\n");
+  const fromFile = runAsk(["q", "--context", `@${ctxFile}`]);
+  assert.equal(fromFile.status, 0, fromFile.stderr);
+  assert.match(recordedPrompt(fromFile), /## Background[^\n]*\n\nfrom a file\n\n## Prompt\n\nq\n$/);
+
+  const fromStdin = runAsk(["q", "--context", "@-"], { input: "from stdin\n" });
+  assert.equal(fromStdin.status, 0, fromStdin.stderr);
+  assert.match(recordedPrompt(fromStdin), /## Background[^\n]*\n\nfrom stdin\n\n## Prompt/);
+});
+
+test("ask with an unreadable --context @file fails naming the path and never spawns codex", () => {
+  const missing = path.join(makeTempDir("harry-ask-ctx-"), "nope.md");
+  const run = runAsk(["q", "--context", `@${missing}`]);
+  assertFailedStdout(run, new RegExp(missing.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.ok(!spawned(run), "codex must not be spawned");
+});
+
+test("ask with --context @- and nothing on stdin fails naming stdin and never spawns codex", () => {
+  const run = runAsk(["q", "--context", "@-"], { input: "" });
+  assertFailedStdout(run, /--context .*stdin/);
+  assert.ok(!spawned(run), "codex must not be spawned");
+});
+
+// ─── where the answer lands ─────────────────────────────────────────────────
+
+test("ask writes its answer and log under the plugin state dir, never into a .local/", () => {
+  const repo = makeTempDir("harry-ask-repo-");
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  fs.mkdirSync(path.join(repo, ".local"));
+  const run = runAsk(["hello"], { cwd: repo });
+  assert.equal(run.status, 0, run.stderr);
+  const out = answerPathOf(run);
+  assert.ok(out.startsWith(`${run.dataDir}${path.sep}`), `expected under ${run.dataDir}: ${out}`);
+  assert.equal(path.basename(path.dirname(out)), "asks");
+  assert.match(path.basename(out), ASK_FILE_RE);
+  assert.deepEqual(fs.readdirSync(path.join(repo, ".local")), [], "nothing lands in .local/");
+});
+
+// ─── success ────────────────────────────────────────────────────────────────
+
+test("ask prints the answer file verbatim on stdout and the log path on stderr", () => {
+  const answer = "The three main causes are:\n\n1. locking\n";
+  const noise = "codex-session-transcript-noise\n".repeat(50);
+  const run = runAsk(["hello there"], {
+    fake: { FAKE_CODEX_CLI_REVIEW: answer, FAKE_CODEX_CLI_STDERR: noise },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stdout, answer, "stdout must be exactly the answer file (no codex stdout)");
+  assert.ok(run.stderr.includes(`Log: ${logPathOf(run)}`), run.stderr);
+  assert.ok(
+    !run.stderr.includes("codex-session-transcript-noise"),
+    "the transcript stays in the log",
+  );
+  assert.equal(fs.readFileSync(logPathOf(run), "utf8"), noise);
 });
 
 test("ask leaves the failure marker off a successful answer", () => {
   // The marker is a discriminator, so it needs both poles: proving it appears on
   // failure is only half. If it also appeared on success, every door-following
-  // consumer would refuse every good answer — and the failure-path tests above
-  // would still pass.
-  const binDir = makeTempDir("harry-ask-bin-");
-  installFakeCodex(binDir, "task-ok");
-
-  const res = runCli(["ask", "hello there"], { cwd: binDir, binDir });
-
-  assert.equal(res.status, 0, `ask failed:\n${res.stderr}`);
-  assert.match(res.stdout, /Handled the requested task\./);
+  // consumer would refuse every good answer — and the failure-path tests would
+  // still pass.
+  const run = runAsk(["hello there"]);
+  assert.equal(run.status, 0, `ask failed:\n${run.stderr}`);
   assert.ok(
-    !res.stdout.includes(ASK_FAILED_MARKER),
-    `a successful ask must not emit the "${ASK_FAILED_MARKER}" marker, got:\n${res.stdout}`,
+    !run.stdout.includes(ASK_FAILED_MARKER),
+    `a successful ask must not emit the "${ASK_FAILED_MARKER}" marker, got:\n${run.stdout}`,
   );
   assert.ok(
-    !res.stderr.includes(FATAL_ERROR_PREFIX),
-    `a successful ask must not emit a "${FATAL_ERROR_PREFIX}" line, got:\n${res.stderr}`,
+    !run.stderr.includes(FATAL_ERROR_PREFIX),
+    `a successful ask must not emit a "${FATAL_ERROR_PREFIX}" line, got:\n${run.stderr}`,
   );
 });
 
-test("ask marks a timed-out turn as failed and names the timeout", () => {
-  const binDir = makeTempDir("harry-ask-bin-");
-  installFakeCodex(binDir, "task-stuck");
+// ─── failure ────────────────────────────────────────────────────────────────
 
-  const res = runCli(["ask", "hello there", "--timeout", "500"], { cwd: binDir, binDir });
+test("ask surfaces codex's last ERROR: line as the reason on a non-zero exit", () => {
+  const lines = Array.from({ length: 60 }, (_, i) => `transcript line ${i + 1}`);
+  lines.push("ERROR: unexpected status 400 Bad Request: first");
+  lines.push("more transcript");
+  lines.push("ERROR: unexpected status 401 Unauthorized: token expired");
+  const run = runAsk(["hello"], {
+    fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: `${lines.join("\n")}\n` },
+  });
+  assertFailedStdout(run, /^ERROR: unexpected status 401 Unauthorized: token expired$/m);
+  assert.ok(run.stderr.includes(lines.slice(-40).join("\n")), "stderr carries the log tail");
+  assert.ok(!run.stderr.includes("transcript line 21\n"), "only the last 40 lines");
+  assert.ok(run.stderr.includes(`Log: ${logPathOf(run)}`), run.stderr);
+});
 
-  assert.ok(
-    res.stdout.startsWith(`${ASK_FAILED_MARKER}\n`),
-    `expected stdout to open with the "${ASK_FAILED_MARKER}" marker, got:\n${res.stdout}`,
-  );
-  assert.match(
-    res.stdout,
-    /Timed out after 500ms\./,
-    `expected the timeout reason on stdout, got:\n${res.stdout}`,
-  );
-  assert.match(res.stderr, /^Ask failed: Timed out after 500ms\./m);
-  assert.notEqual(res.status, 0, "expected a non-zero exit status");
+test("ask ignores an ERROR: line that scrolled out of the log tail (command output, not codex's)", () => {
+  // Early in the transcript an ERROR: line is output of a command the model ran
+  // (a grep, a test log), not codex's own closing error.
+  const lines = ["exec: grep -rn ERROR: src", "ERROR: from grep output"];
+  for (let i = 0; i < 45; i++) lines.push(`transcript line ${i + 1}`);
+  const run = runAsk(["hello"], {
+    fake: { FAKE_CODEX_CLI_EXIT: "2", FAKE_CODEX_CLI_STDERR: `${lines.join("\n")}\n` },
+  });
+  assertFailedStdout(run, /codex exec failed \(exit 2\)/);
+  assert.ok(!run.stdout.includes("from grep output"), run.stdout);
+});
+
+test("ask names the exit code when codex fails without an ERROR: line", () => {
+  const run = runAsk(["hello"], {
+    fake: { FAKE_CODEX_CLI_EXIT: "3", FAKE_CODEX_CLI_STDERR: "something broke\n" },
+  });
+  assertFailedStdout(run, /codex exec failed \(exit 3\)/);
+  assert.ok(run.stderr.includes("something broke"), run.stderr);
+});
+
+for (const mode of ["skip", "empty"] as const) {
+  test(`ask fails when codex exits 0 with a ${mode === "skip" ? "missing" : "empty"} answer file`, () => {
+    const run = runAsk(["hello"], { fake: { FAKE_CODEX_CLI_OUTPUT: mode } });
+    assertFailedStdout(run, new RegExp(`wrote no answer to ${answerPathOf(run)}`));
+    assert.ok(run.stderr.includes(`Log: ${logPathOf(run)}`), run.stderr);
+  });
+}
+
+test("ask with codex missing from PATH fails naming the Codex CLI and leaves no log", () => {
+  const run = runAsk(["hello"], { bin: null });
+  assertFailedStdout(run, /Codex CLI was not found on PATH/);
+  const leftovers = fs
+    .readdirSync(run.dataDir, { recursive: true })
+    .filter((f) => String(f).endsWith(".log"));
+  assert.deepEqual(leftovers, [], "a run that never started codex leaves no log behind");
 });
 
 test("every door that tells a consumer to trust ask's stdout quotes the failure signals", () => {

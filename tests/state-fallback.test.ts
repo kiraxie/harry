@@ -16,8 +16,8 @@ test("resolveStateDir keys on the git repo root, not the invoking subdir (C2)", 
     const sub = path.join(repo, "pkg", "nested");
     fs.mkdirSync(sub, { recursive: true });
 
-    // A provider invoked with repoRoot and a command invoked from a subdir must
-    // resolve to the SAME state dir, else their quota/rate-limit caches diverge.
+    // A command invoked at the repo root and one invoked from a subdir must
+    // resolve to the SAME state dir, else their run files scatter across two.
     assert.equal(resolveStateDir(sub), resolveStateDir(repo));
   } finally {
     if (prev !== undefined) process.env.CLAUDE_PLUGIN_DATA = prev;

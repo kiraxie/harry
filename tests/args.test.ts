@@ -28,8 +28,6 @@ import {
   BOOLEAN_FLAGS,
   extractTask,
   flagEnum,
-  flagNumber,
-  flagString,
   KNOWN_FLAGS,
   parseArgs,
 } from "../src/lib/args.ts";
@@ -87,66 +85,66 @@ const PARSE_CASES: ParseCase[] = [
   },
   {
     name: "a value flag followed by another flag becomes true (does not eat the flag)",
-    argv: ["review", "--base", "--model", "gpt-5.6"],
+    argv: ["review", "--base", "--reasoning", "high"],
     command: "review",
     args: [],
-    flags: { base: true, model: "gpt-5.6" },
+    flags: { base: true, reasoning: "high" },
   },
   {
     name: "a boolean flag never swallows the following positional",
-    argv: ["status", "--json", "race", "condition"],
-    command: "status",
+    argv: ["setup", "--json", "race", "condition"],
+    command: "setup",
     args: ["race", "condition"],
     flags: { json: true },
   },
   {
     name: "--boolean=true coerces to true",
-    argv: ["status", "--json=true"],
-    command: "status",
+    argv: ["setup", "--json=true"],
+    command: "setup",
     args: [],
     flags: { json: true },
   },
   {
     name: "--boolean=1 coerces to true",
-    argv: ["status", "--json=1"],
-    command: "status",
+    argv: ["setup", "--json=1"],
+    command: "setup",
     args: [],
     flags: { json: true },
   },
   {
     name: "--boolean= (empty value) coerces to true",
-    argv: ["status", "--json="],
-    command: "status",
+    argv: ["setup", "--json="],
+    command: "setup",
     args: [],
     flags: { json: true },
   },
   {
     name: "--boolean=false coerces to false, not the truthy string",
-    argv: ["status", "--json=false"],
-    command: "status",
+    argv: ["setup", "--json=false"],
+    command: "setup",
     args: [],
     flags: { json: false },
   },
   {
     name: "--boolean=no coerces to false",
-    argv: ["status", "--json=no"],
-    command: "status",
+    argv: ["setup", "--json=no"],
+    command: "setup",
     args: [],
     flags: { json: false },
   },
   {
     name: "boolean value coercion is case-insensitive",
-    argv: ["status", "--json=TRUE"],
-    command: "status",
+    argv: ["setup", "--json=TRUE"],
+    command: "setup",
     args: [],
     flags: { json: true },
   },
   {
     name: "flags and positionals interleave freely",
-    argv: ["ask", "why", "--model", "gpt-5.6", "not", "--json"],
+    argv: ["ask", "why", "--reasoning", "high", "not", "--json"],
     command: "ask",
     args: ["why", "not"],
-    flags: { model: "gpt-5.6", json: true },
+    flags: { reasoning: "high", json: true },
   },
 ];
 
@@ -158,7 +156,7 @@ for (const c of PARSE_CASES) {
 
 test("parseArgs rejects a garbage value on a boolean flag instead of binding a truthy string", () => {
   assert.throws(
-    () => parseArgs(["status", "--json=maybe"]),
+    () => parseArgs(["setup", "--json=maybe"]),
     /Flag --json is boolean and cannot take value "maybe"/,
   );
 });
@@ -330,17 +328,32 @@ const KNOWN_FLAG_CASES: KnownFlagCase[] = [
   {
     name: "setup rejects a flag that belongs to another command",
     command: "setup",
-    flags: { model: "gpt-5.6" },
-    throws: /Unknown flag --model for 'setup'/,
+    flags: { reasoning: "high" },
+    throws: /Unknown flag --reasoning for 'setup'/,
   },
-  { name: "ask accepts its own flags", command: "ask", flags: { task: "why", context: "@-" } },
+  {
+    name: "ask accepts its own flags",
+    command: "ask",
+    flags: { task: "why", reasoning: "high", context: "@-" },
+  },
   {
     name: "ask rejects --fix",
     command: "ask",
     flags: { fix: true },
     throws: /Unknown flag --fix for 'ask'/,
   },
-  { name: "status accepts --json", command: "status", flags: { json: true } },
+  {
+    name: "ask rejects the removed --model",
+    command: "ask",
+    flags: { model: "gpt-5.6" },
+    throws: /Unknown flag --model for 'ask'/,
+  },
+  {
+    name: "ask rejects the removed --timeout",
+    command: "ask",
+    flags: { timeout: "500" },
+    throws: /Unknown flag --timeout for 'ask'/,
+  },
   {
     name: "an unknown command has no allow-list and defers to the dispatch switch",
     command: "bogus",
@@ -357,6 +370,10 @@ for (const c of KNOWN_FLAG_CASES) {
     }
   });
 }
+
+test("KNOWN_FLAGS lists exactly the live commands (status is retired)", () => {
+  assert.deepEqual(Object.keys(KNOWN_FLAGS).sort(), ["ask", "review", "setup"]);
+});
 
 // Generative: a newly added command must accept --help too.
 for (const command of Object.keys(KNOWN_FLAGS)) {
@@ -394,7 +411,7 @@ test("flagEnum rejects a valueless enum flag (`--scope` with nothing after it)",
 });
 
 // ---------------------------------------------------------------------------
-// extractTask / flagString / flagNumber
+// extractTask
 // ---------------------------------------------------------------------------
 
 test("extractTask joins positionals and prefers them over --task", () => {
@@ -412,42 +429,3 @@ test("extractTask returns empty string when --task carries no value", () => {
 test("extractTask treats whitespace-only positionals as absent", () => {
   assert.equal(extractTask(["  "], { task: "flag value" }), "flag value");
 });
-
-test("flagString returns the string value", () => {
-  assert.equal(flagString({ base: "main" }, "base"), "main");
-});
-
-test("flagString returns undefined for a valueless flag rather than leaking `true`", () => {
-  assert.equal(flagString({ base: true }, "base"), undefined);
-  assert.equal(flagString({}, "base"), undefined);
-});
-
-interface NumberCase {
-  name: string;
-  value: string | boolean;
-  expected: number | undefined;
-}
-
-const NUMBER_CASES: NumberCase[] = [
-  { name: "a plain integer parses", value: "30000", expected: 30000 },
-  { name: "surrounding whitespace is tolerated", value: " 30000 ", expected: 30000 },
-  {
-    name: "trailing garbage is rejected (parseInt would accept it)",
-    value: "30sec",
-    expected: undefined,
-  },
-  {
-    name: "zero is rejected so `?? DEFAULT` applies, not a 0ms timer",
-    value: "0",
-    expected: undefined,
-  },
-  { name: "a negative value is rejected", value: "-5", expected: undefined },
-  { name: "Infinity is rejected", value: "Infinity", expected: undefined },
-  { name: "a valueless flag is rejected, not coerced to 1", value: true, expected: undefined },
-];
-
-for (const c of NUMBER_CASES) {
-  test(`flagNumber: ${c.name}`, () => {
-    assert.equal(flagNumber({ timeout: c.value }, "timeout"), c.expected);
-  });
-}

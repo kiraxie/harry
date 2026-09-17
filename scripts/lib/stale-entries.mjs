@@ -7,7 +7,10 @@ export const STALE = [
     pattern: /copilot:implement/i,
     why: "harry removed /copilot:implement; implementer = CC subagents",
   },
-  { pattern: /copilot:status/i, why: "renamed to `status` in harry" },
+  {
+    pattern: /copilot:status/i,
+    why: "retired in harry: no quota source since the in-process Codex runtime was removed",
+  },
   { pattern: /gemini:investigate/i, why: "research dispatch deferred in harry; remove for now" },
 ];
 

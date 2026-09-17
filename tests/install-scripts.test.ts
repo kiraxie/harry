@@ -387,9 +387,12 @@ test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
       for (const role of ["scout", "mech", "writer", "security"]) {
         assert.ok(out.includes(role), `role map names ${role}`);
       }
-      for (const model of ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]) {
+      for (const model of ["gpt-5.6-luna", "gpt-5.6-terra"]) {
         assert.ok(out.includes(model), `role map binds ${model}`);
       }
+      // gpt-5.6-sol 400s on a ChatGPT login; it may appear only in the note saying so.
+      const solRows = out.split("\n").filter((l) => l.startsWith("|") && l.includes("gpt-5.6-sol"));
+      assert.deepEqual(solRows, [], "no role-map row binds gpt-5.6-sol");
       assert.ok(existsSync(`${g}.bak`), "one-time .bak created");
       assert.equal(readFileSync(`${g}.bak`, "utf8"), original, ".bak holds the pristine original");
       assertNoTempResidue(dir, "install-codex.mjs");
