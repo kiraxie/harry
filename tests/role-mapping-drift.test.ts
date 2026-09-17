@@ -184,10 +184,8 @@ test("B · every command with a Codex twin is declared in PAIRS", () => {
 // Deliberate-divergence allowlist: reference paths permitted to appear on ONE side
 // only, per pair. Key → set of `references/...` paths exempt from the equality check.
 const REF_ALLOWLIST: Record<string, Set<string>> = {
-  // `review --fix`/`--harry-fix` material lives on the CC side; the Codex build drops
-  // `--harry-fix` (redundant when the orchestrator already is Codex — see CLAUDE.md),
-  // so any fix-only reference path may exist on the CC side without a Codex twin.
-  // (Currently the two sides' reference sets happen to match; this guards the policy.)
+  // Empty: review has no fix backend on either build any more, so both sides must cite
+  // the same references. Add a path here only for a deliberate one-sided divergence.
   review: new Set<string>(),
 };
 
@@ -290,7 +288,7 @@ for (const name of PAIRS) {
 // clear the non-vacuity guard (29 and 72 qualifying lines).
 const HOISTED: Record<string, string[]> = {
   debt: ["references/debt-audit.md", "references/doc-types.md"],
-  review: ["references/review-orchestration.md", "references/review-rubric.md"],
+  review: ["references/review-rubric.md"],
   sync: ["references/sync-migration.md", "references/doc-types.md", "references/debt-audit.md"],
   audit: [
     "references/audit/ORCHESTRATION.md",

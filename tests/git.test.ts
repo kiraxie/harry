@@ -1,15 +1,12 @@
-// Repo-detection safety for src/lib/git.ts. `ensureGitRepository`'s return value
-// becomes the cwd of a WRITE-enabled Codex session (src/commands/fix.ts), so
-// "could not run git" must never be reported as "here is your repo root" — an
-// empty root would point the session at the process cwd instead of the repo.
-// Everything here runs against throwaway temp dirs; no real repo is touched.
+// Repo-detection safety for src/lib/git.ts: "could not run git" must never be
+// reported as "here is your repo root". Everything here runs against throwaway
+// temp dirs; no real repo is touched.
 //
-// The rest of the file covers the review *input* path: `resolveReviewTarget`
-// (which diff gets reviewed) and `collectReviewContext` (how much of it is
-// handed to the model inline). A regression in either silently reviews the
-// WRONG diff — the model still returns a confident, well-formed review, so
-// nothing looks broken. Each test below is pinned by a mutation that makes it
-// fail; a plausible mutation no test notices is untested behavior.
+// The rest of the file covers `resolveReviewTarget` (which diff gets reviewed).
+// A regression there silently reviews the WRONG diff — the model still returns
+// a confident, well-formed review, so nothing looks broken. Each test below is
+// pinned by a mutation that makes it fail; a plausible mutation no test notices
+// is untested behavior.
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -17,13 +14,7 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  collectReviewContext,
-  ensureGitRepository,
-  type ReviewScope,
-  resolveReviewTarget,
-  truncateUtf8,
-} from "../src/lib/git.ts";
+import { ensureGitRepository, resolveReviewTarget, truncateUtf8 } from "../src/lib/git.ts";
 
 function tmpDir(): string {
   return mkdtempSync(path.join(os.tmpdir(), "harry-git-test-"));
@@ -51,37 +42,6 @@ function commitAll(dir: string, message: string): void {
 
 function write(dir: string, name: string, body: string): void {
   writeFileSync(path.join(dir, name), body);
-}
-
-/**
- * A file git will treat as binary (it contains NUL). This is what makes the
- * `--binary` measurement flag load-bearing: on text-only content git emits
- * byte-identical output with and without it, so an all-text fixture cannot
- * notice `--binary` being dropped from the measured command.
- *
- * Scope, so the next reader does not re-derive it: this pins `--binary` and
- * nothing else. The other two flags in that command stay unpinned — mutating
- * `--submodule=diff` to `--submodule=short`, or dropping `--no-ext-diff`
- * outright, leaves the whole suite green, because this fixture has no submodule
- * and no configured `diff.external` driver, so neither flag changes a byte.
- * Closing them costs a submodule fixture and a gitconfig respectively — far
- * heavier than a NUL file, guarding drift that matters much less than
- * `--binary`'s. Deliberately not bought.
- */
-function writeBinary(dir: string, name: string, bytes: number[]): void {
-  writeFileSync(path.join(dir, name), Buffer.from(bytes));
-}
-
-/**
- * `count` lines of multi-byte UTF-8. This is what makes the measurement's UNIT
- * observable: on ASCII, `Buffer.byteLength(s, "utf8")` and `s.length` are equal,
- * so an all-ASCII fixture cannot tell a byte count from a UTF-16 code-unit
- * count — and the review budget is denominated in bytes. Traditional Chinese
- * runs about 2.5x, and is this tool's own workload rather than an exotic edge.
- */
-function multiByteLines(count: number): string {
-  const lines = Array.from({ length: count }, (_, i) => `第 ${i} 行：這是一段中文測試內容`);
-  return `${lines.join("\n")}\n`;
 }
 
 /**
@@ -155,26 +115,14 @@ test("ensureGitRepository: a non-repo directory is rejected", () => {
 
 // --- resolveReviewTarget: which diff gets reviewed --------------------------
 
-test("resolveReviewTarget: an explicit base outranks an explicit working-tree scope", () => {
+test("resolveReviewTarget: an explicit base outranks a dirty working tree", () => {
   inTempRepo("main", (dir) => {
     onFeatureBranch(dir);
-    write(dir, "a.txt", "two\n"); // dirty, so both other rules would say working-tree
-    assert.deepEqual(resolveReviewTarget(dir, { scope: "working-tree", base: "release-2.0" }), {
+    write(dir, "a.txt", "two\n"); // dirty, so auto would say working-tree
+    assert.deepEqual(resolveReviewTarget(dir, { base: "release-2.0" }), {
       mode: "branch",
       label: "branch diff against release-2.0",
       baseRef: "release-2.0",
-      explicit: true,
-    });
-  });
-});
-
-test("resolveReviewTarget: an explicit working-tree scope stays working-tree on a clean tree", () => {
-  inTempRepo("main", (dir) => {
-    onFeatureBranch(dir); // clean: auto would resolve to a branch diff against main
-    assert.deepEqual(resolveReviewTarget(dir, { scope: "working-tree" }), {
-      mode: "working-tree",
-      label: "working tree diff",
-      explicit: true,
     });
   });
 });
@@ -186,7 +134,6 @@ test("resolveReviewTarget: auto picks the working tree when it is dirty", () => 
     assert.deepEqual(resolveReviewTarget(dir, {}), {
       mode: "working-tree",
       label: "working tree diff",
-      explicit: false,
     });
   });
 });
@@ -206,7 +153,6 @@ test("resolveReviewTarget: auto falls back to a branch diff when the tree is cle
       mode: "branch",
       label: "branch diff against main",
       baseRef: "main",
-      explicit: false,
     });
   });
 });
@@ -219,7 +165,7 @@ test("resolveReviewTarget: a remote main outranks a local master as the default 
     run(dir, "checkout", "-q", "-b", "feature");
     // Candidate order is main-then-master, and each candidate checks local
     // before remote — so origin/main wins over the local master.
-    assert.equal(resolveReviewTarget(dir, { scope: "branch" }).baseRef, "origin/main");
+    assert.equal(resolveReviewTarget(dir, {}).baseRef, "origin/main");
   });
 });
 
@@ -231,7 +177,7 @@ test("resolveReviewTarget: origin/HEAD wins and is reported without the refs/rem
     run(dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
     run(dir, "checkout", "-q", "-b", "feature");
     // Without the symbolic ref the main-first candidate loop would answer "main".
-    assert.equal(resolveReviewTarget(dir, { scope: "branch" }).baseRef, "origin/trunk");
+    assert.equal(resolveReviewTarget(dir, {}).baseRef, "origin/trunk");
   });
 });
 
@@ -240,456 +186,10 @@ test("resolveReviewTarget: an undetectable default branch throws instead of gues
     write(dir, "a.txt", "one\n");
     commitAll(dir, "init"); // no main/master/trunk anywhere, no remote
     assert.throws(
-      () => resolveReviewTarget(dir, { scope: "branch" }),
+      () => resolveReviewTarget(dir, {}),
       /Unable to detect the repository default branch/,
       "a silent fallback would diff against a ref the user never chose",
     );
-  });
-});
-
-test("resolveReviewTarget: an unsupported scope throws instead of falling through to auto", () => {
-  inTempRepo("main", (dir) => {
-    onFeatureBranch(dir);
-    write(dir, "a.txt", "two\n"); // dirty, so a fall-through would quietly answer working-tree
-    assert.throws(
-      () => resolveReviewTarget(dir, { scope: "staged" as unknown as ReviewScope }),
-      /Unsupported review scope "staged"/,
-    );
-  });
-});
-
-// --- collectReviewContext: how much of the diff is inlined ------------------
-
-/** Commits `a.txt`/`b.txt`/`c.txt`, then dirties the first `changed` of them. */
-function repoWithChangedFiles(dir: string, changed: number): void {
-  for (const name of ["a.txt", "b.txt", "c.txt"]) write(dir, name, "one\n");
-  commitAll(dir, "init");
-  for (const name of ["a.txt", "b.txt", "c.txt"].slice(0, changed)) write(dir, name, "two\n");
-}
-
-test("collectReviewContext: a working tree at the inline file cap stays inline", () => {
-  inTempRepo("main", (dir) => {
-    repoWithChangedFiles(dir, 2);
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    const context = collectReviewContext(dir, target, { maxInlineFiles: 2 });
-    assert.equal(context.fileCount, 2);
-    assert.equal(context.inputMode, "inline-diff");
-    assert.match(context.content, /## Unstaged Diff/);
-  });
-});
-
-test("collectReviewContext: one file over the inline cap switches to self-collect", () => {
-  inTempRepo("main", (dir) => {
-    repoWithChangedFiles(dir, 3);
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    const context = collectReviewContext(dir, target, { maxInlineFiles: 2 });
-    assert.equal(context.fileCount, 3);
-    assert.equal(context.inputMode, "self-collect");
-    assert.match(context.content, /## Changed Files/);
-  });
-});
-
-test("collectReviewContext: untracked files count toward the inline file cap", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    for (const name of ["x.txt", "y.txt", "z.txt"]) write(dir, name, "new\n");
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    const context = collectReviewContext(dir, target, { maxInlineFiles: 2 });
-    // Untracked files produce no diff bytes at all, so only the file count can
-    // have made this decision.
-    assert.equal(context.diffBytes, 0);
-    assert.equal(context.inputMode, "self-collect");
-  });
-});
-
-test("collectReviewContext: the inline byte cap is inclusive", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "unstaged.txt", "one\n");
-    write(dir, "staged.txt", "one\n");
-    writeBinary(dir, "staged.bin", [0, 1, 2, 253, 254, 255]);
-    writeBinary(dir, "unstaged.bin", [7, 0, 7, 0, 255]);
-    commitAll(dir, "init");
-    write(dir, "unstaged.txt", multiByteLines(40));
-    write(dir, "staged.txt", multiByteLines(40));
-    writeBinary(dir, "staged.bin", [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
-    writeBinary(dir, "unstaged.bin", [1, 1, 2, 3, 5, 8, 13, 0]);
-    // The working-tree measurement is a sum over a staged and an unstaged
-    // command, so each half needs to carry every property the assertion below
-    // relies on. A half with nothing in it cannot notice being dropped from the
-    // sum; a half carrying only text cannot notice --binary being dropped from
-    // it; and a half carrying only ASCII cannot notice bytes being counted as
-    // characters. Hence four changes, two per half, one binary and one
-    // multi-byte on each side.
-    run(dir, "add", "staged.txt", "staged.bin");
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    // The exact byte size of a git diff is git's to decide, so the cap below is
-    // derived from what the code measured. That alone would let the code measure
-    // the WRONG COMMAND — a summary instead of the diff — and still satisfy every
-    // threshold assertion, because both sides of the comparison would shrink
-    // together. So pin the measurement itself first, by re-running the commands
-    // independently: the working-tree number is the staged and unstaged binary
-    // diffs added together.
-    const baseline = collectReviewContext(dir, target, { maxInlineFiles: 8 });
-    const measured = baseline.diffBytes;
-    assert.ok(measured > 0, "the fixture must produce a non-empty diff");
-    assert.equal(baseline.fileCount, 4, "four changed files, so the cap of 8 never decides");
-    const staged = run(dir, "diff", "--cached", "--binary", "--no-ext-diff", "--submodule=diff");
-    const unstaged = run(dir, "diff", "--binary", "--no-ext-diff", "--submodule=diff");
-    assert.equal(
-      measured,
-      Buffer.byteLength(staged, "utf8") + Buffer.byteLength(unstaged, "utf8"),
-      "diffBytes must measure the full staged + unstaged binary diff",
-    );
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured })
-        .inputMode,
-      "inline-diff",
-      "a diff exactly at the byte cap must still inline",
-    );
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured - 1 })
-        .inputMode,
-      "self-collect",
-      "one byte past the cap must fall back to self-collect",
-    );
-  });
-});
-
-// The inline path emits full untracked file BODIES, which appear in no diff and
-// so were never counted against maxInlineDiffBytes — `fileCount` included them
-// while `diffBytes` did not. At shipped defaults that let ~48 KB through an
-// unmeasured door (2 files x MAX_UNTRACKED_BYTES); a caller raising
-// maxInlineFiles to 50 would have let through ~1.2 MB against a 256 KB cap.
-test("collectReviewContext: untracked file bodies count against the inline BYTE cap", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    // Nothing tracked is touched, so diffBytes is 0 by construction and only the
-    // untracked measurement can decide anything.
-    write(dir, "notes.txt", multiByteLines(60));
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-
-    const one = collectReviewContext(dir, target, { maxInlineFiles: 8 });
-    assert.equal(one.diffBytes, 0, "the fixture must produce no diff at all");
-    assert.equal(one.inputMode, "inline-diff");
-    assert.ok(one.untrackedBytes !== null, "the untracked body must have been measured");
-
-    // The hole being closed is a MULTI-file one — the sizing above is
-    // "2 files x MAX_UNTRACKED_BYTES". A single-file fixture cannot tell a sum
-    // from `untracked[0]`, since with one file the two are the same number, so
-    // add a second and require the measurement to move. The untracked list is
-    // sorted, so "extra.txt" sorts FIRST: a first-file-only bug measures the
-    // smaller file here and the total goes DOWN, not merely sideways.
-    write(dir, "extra.txt", multiByteLines(11));
-    const both = collectReviewContext(dir, target, { maxInlineFiles: 8 });
-    assert.ok(both.untrackedBytes !== null);
-    assert.ok(
-      both.untrackedBytes > one.untrackedBytes,
-      `a second untracked file must raise the measurement: ${one.untrackedBytes} -> ` +
-        `${both.untrackedBytes}. Equal or lower means only one file was counted.`,
-    );
-    assert.match(both.content, /### notes\.txt/);
-    assert.match(both.content, /### extra\.txt/);
-
-    // Same inclusive-boundary contract the diff cap has. Derived from what the
-    // code measured, never hardcoded — a hardcoded number would also be
-    // satisfied by measuring the wrong thing.
-    const measured = both.untrackedBytes;
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured })
-        .inputMode,
-      "inline-diff",
-      "untracked bytes exactly at the cap must still inline",
-    );
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured - 1 })
-        .inputMode,
-      "self-collect",
-      "one byte of untracked body past the cap must fall back to self-collect",
-    );
-  });
-});
-
-// `untrackedBytes` is null on four paths, and the three cheap ones share a
-// mechanism worth pinning on its own: the measurement is LAZY. Reporting 0
-// instead of null on any of them left the suite green, and so did rewriting the
-// decision to measure eagerly — which is not just a reporting difference. Eager
-// measurement stats and reads every untracked file in a tree that was already
-// going to self-collect, and /review runs against arbitrary repos where an
-// un-gitignored node_modules makes that set enormous. Asserting null IS the
-// assertion that nothing was read.
-test("collectReviewContext: a cheaper check that already decided measures no untracked bytes", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    for (const name of ["x.txt", "y.txt", "z.txt"]) write(dir, name, multiByteLines(20));
-    // A tracked change too, so the byte-cap case below has a non-zero diff to
-    // exceed its cap with — with untracked files alone diffBytes is 0, which no
-    // cap of 0 is greater than, and the check would fall through instead of
-    // short-circuiting.
-    write(dir, "a.txt", "two\n");
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-
-    // Rejected by the FILE cap, with untracked bodies present and substantial —
-    // an eager measurement would report a large number here instead of null.
-    const byFileCap = collectReviewContext(dir, target, { maxInlineFiles: 2 });
-    assert.equal(byFileCap.inputMode, "self-collect");
-    assert.equal(
-      byFileCap.untrackedBytes,
-      null,
-      "the file cap short-circuits before the untracked bodies are read, so this is " +
-        "'not measured' (null) — a number here means the laziness is gone",
-    );
-
-    // Rejected by the BYTE cap instead: the file cap admits all three, so the
-    // decision has to reach the byte check and stop there.
-    const byByteCap = collectReviewContext(dir, target, {
-      maxInlineFiles: 8,
-      maxInlineDiffBytes: 0,
-    });
-    assert.equal(byByteCap.inputMode, "self-collect");
-    assert.equal(byByteCap.untrackedBytes, null, "the byte-cap short-circuit measures nothing");
-  });
-});
-
-// Pins WHY the measurement formats each file instead of summing stat sizes.
-// formatUntrackedFile emits a one-line note for a binary, so a binary's real
-// size is not what the inline path spends — charging it would force self-collect
-// on payloads that are in fact tiny.
-test("collectReviewContext: an untracked binary is measured at its note, not its size", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    const bytes = Array.from({ length: 2048 }, (_, i) => (i % 7 === 0 ? 0 : (i % 255) + 1));
-    writeBinary(dir, "blob.bin", bytes);
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-
-    const context = collectReviewContext(dir, target, { maxInlineFiles: 8 });
-    assert.equal(context.diffBytes, 0);
-    // Pinned to the note itself, not to a band between the two numbers that
-    // matter. "< 200" would have been a guess: the real value is 35 and the
-    // claim being made is "not the file's 2048 bytes", so state the contract.
-    assert.equal(
-      context.untrackedBytes,
-      Buffer.byteLength("### blob.bin\n(skipped: binary file)", "utf8"),
-      `a ${bytes.length}-byte untracked binary must be charged only its skip note ` +
-        `— a stat-based sum would report ~${bytes.length}`,
-    );
-    assert.match(context.content, /\(skipped: binary file\)/);
-  });
-});
-
-// measureGitOutputBytes passes maxBytes+1 to spawnSync as maxBuffer and returns
-// the maxBytes+1 SENTINEL when git overflows it (ENOBUFS). That return is the
-// only thing standing between an over-budget diff and being judged small enough
-// to inline — the precise inversion of what the cap is for — and nothing
-// exercised it: mutating it to 0 left the whole suite green.
-test("collectReviewContext: a diff that overflows the measure buffer reads as over-cap", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    write(dir, "a.txt", multiByteLines(40));
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    // A 10-byte cap makes spawnSync's buffer 11 bytes, which this diff blows
-    // past, so the measurement never completes and can only return the sentinel.
-    const context = collectReviewContext(dir, target, {
-      maxInlineFiles: 8,
-      maxInlineDiffBytes: 10,
-    });
-    assert.equal(context.fileCount, 1, "the file cap must not be what decided this");
-    assert.ok(
-      context.diffBytes > 10,
-      `an unmeasurable diff must report as over-cap, got ${context.diffBytes}`,
-    );
-    assert.equal(context.inputMode, "self-collect");
-  });
-});
-
-// A negative cap is a caller bug, but it must not become an EXCEPTION: it
-// reaches spawnSync as a negative maxBuffer, which throws RangeError out of
-// collectReviewContext. Normalizing at the entry is what lets the arithmetic
-// downstream assume a non-negative budget.
-//
-// NaN is in the sweep because it is the shape the idiom does NOT handle on its
-// own: `Math.max(0, Math.trunc(NaN))` is still NaN, and the first version of
-// this normalization used exactly that and still threw on NaN — while this
-// test, named "never throws", swept only [-5, -1, 0.5] and passed. The sibling
-// truncateUtf8 test pins NaN for the same reason and says so.
-test("collectReviewContext: an invalid cap of either kind degrades to self-collect, never throws", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    write(dir, "a.txt", "two\n");
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    for (const cap of [-5, -1, 0.5, Number.NaN]) {
-      const context = collectReviewContext(dir, target, {
-        maxInlineFiles: 8,
-        maxInlineDiffBytes: cap,
-      });
-      assert.equal(
-        context.inputMode,
-        "self-collect",
-        `maxInlineDiffBytes=${cap} must normalize to a 0 budget and self-collect`,
-      );
-    }
-    // The file cap needs the same treatment for a different reason: it never
-    // reaches spawnSync, so it cannot throw — instead NaN SILENTLY DISABLES it,
-    // because `fileCount > NaN` is false for every count.
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: Number.NaN }).inputMode,
-      "self-collect",
-      "a NaN file cap must not silently admit every file",
-    );
-  });
-});
-
-// The explicit override wins over BOTH caps, in both directions. Only the
-// `false` direction was covered; the `true` direction went unpinned through a
-// rewrite of this exact branch (`??` to ordered `if`s), where mutating it to
-// `if (options.includeDiff === false)` left the whole suite green.
-test("collectReviewContext: an explicit includeDiff:true overrides a would-be self-collect", () => {
-  inTempRepo("main", (dir) => {
-    repoWithChangedFiles(dir, 3);
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    const capped = collectReviewContext(dir, target, { maxInlineFiles: 1, maxInlineDiffBytes: 1 });
-    // Both caps are set below this tree, so it self-collects without the
-    // override. Which one fired is not asserted — the file check short-circuits
-    // first, so this cannot distinguish "both reject it" from "either does".
-    assert.equal(capped.inputMode, "self-collect", "the caps must reject this tree unaided");
-    const forced = collectReviewContext(dir, target, {
-      maxInlineFiles: 1,
-      maxInlineDiffBytes: 1,
-      includeDiff: true,
-    });
-    assert.equal(forced.inputMode, "inline-diff");
-    assert.match(forced.content, /## Unstaged Diff/);
-    assert.equal(
-      forced.untrackedBytes,
-      null,
-      "an override skips the decision, so nothing was measured — null, not 0",
-    );
-  });
-});
-
-test("collectReviewContext: the inline file cap also applies to branch targets", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    run(dir, "checkout", "-q", "-b", "feature");
-    for (const name of ["a.txt", "b.txt", "c.txt"]) write(dir, name, "two\n");
-    commitAll(dir, "work");
-    const target = resolveReviewTarget(dir, { base: "main" });
-    assert.equal(target.mode, "branch");
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: 3 }).inputMode,
-      "inline-diff",
-      "three changed files under a cap of three must inline",
-    );
-    const narrow = collectReviewContext(dir, target, { maxInlineFiles: 2 });
-    assert.equal(narrow.changedFiles.length, 3);
-    assert.equal(narrow.inputMode, "self-collect");
-    assert.equal(
-      narrow.untrackedBytes,
-      null,
-      "a branch range has no untracked concept, so the measurement is not applicable",
-    );
-  });
-});
-
-test("collectReviewContext: the inline byte cap also applies to branch targets", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    writeBinary(dir, "blob.bin", [0, 1, 2, 253, 254, 255]);
-    commitAll(dir, "init");
-    run(dir, "checkout", "-q", "-b", "feature");
-    write(dir, "a.txt", multiByteLines(40));
-    writeBinary(dir, "blob.bin", [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
-    commitAll(dir, "work");
-    const target = resolveReviewTarget(dir, { base: "main" });
-    // Two changed files against a cap of eight, so only the byte cap can decide
-    // — this is the arm whose byte cap once had no guard at all while the file
-    // cap had two. One change is binary and one is multi-byte text, for the
-    // reasons in writeBinary and multiByteLines.
-    const baseline = collectReviewContext(dir, target, { maxInlineFiles: 8 });
-    const measured = baseline.diffBytes;
-    assert.ok(measured > 0, "the fixture must produce a non-empty branch diff");
-    assert.equal(baseline.fileCount, 2, "two changed files, so the cap of 8 never decides");
-    // Pin the measurement, not just which side of the cap it lands on — see the
-    // working-tree byte test.
-    //
-    // Read this equality as a guard on the FLAGS and the unit, not on the range.
-    // The range half is decoration here: `main` has not moved since the branch
-    // point in this fixture, so every spelling of it — merge-base..HEAD,
-    // main..HEAD, HEAD~1..HEAD — selects the same commits, and replacing the
-    // code's merge-base with the raw base ref leaves the whole suite green.
-    // Pinning the range needs a fixture where the base advanced independently,
-    // and the behavior it would pin belongs to buildBranchComparison, which is
-    // outside this test's subject. Tracked in the backlog, not guarded here.
-    const mergeBase = run(dir, "merge-base", "HEAD", "main").trim();
-    assert.equal(
-      measured,
-      Buffer.byteLength(
-        run(dir, "diff", "--binary", "--no-ext-diff", "--submodule=diff", `${mergeBase}..HEAD`),
-        "utf8",
-      ),
-      "diffBytes must measure the full binary diff over the merge-base range",
-    );
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured })
-        .inputMode,
-      "inline-diff",
-      "a branch diff exactly at the byte cap must still inline",
-    );
-    assert.equal(
-      collectReviewContext(dir, target, { maxInlineFiles: 8, maxInlineDiffBytes: measured - 1 })
-        .inputMode,
-      "self-collect",
-      "a branch diff past the byte cap must fall back to self-collect",
-    );
-  });
-});
-
-test("collectReviewContext: an explicit includeDiff:false overrides a would-be-inline diff", () => {
-  inTempRepo("main", (dir) => {
-    repoWithChangedFiles(dir, 1);
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    assert.equal(collectReviewContext(dir, target).inputMode, "inline-diff");
-    assert.equal(
-      collectReviewContext(dir, target, { includeDiff: false }).inputMode,
-      "self-collect",
-      "an explicit false must not be treated as 'unset'",
-    );
-  });
-});
-
-test("collectReviewContext: a truncated self-collect diff is cut at a line boundary", () => {
-  inTempRepo("main", (dir) => {
-    write(dir, "a.txt", "one\n");
-    commitAll(dir, "init");
-    write(
-      dir,
-      "a.txt",
-      `${Array.from({ length: 30 }, (_, i) => `line ${i} ${"x".repeat(30)}`).join("\n")}\n`,
-    );
-    const target = resolveReviewTarget(dir, { scope: "working-tree" });
-    const context = collectReviewContext(dir, target, {
-      includeDiff: false,
-      maxInlineDiffBytes: 233,
-    });
-    const section = context.content.split("## Truncated Diff\n\n")[1]?.split("\n## ")[0] ?? "";
-    const lines = section.split("\n");
-    const marker = lines.indexOf("... (diff truncated; read individual files for the rest)");
-    assert.ok(marker > 0, "the fixture must be large enough to truncate");
-
-    // Every surviving line must be a whole line of the real diff. A mid-line cut
-    // hands the model a corrupted hunk it will read as fact.
-    const full = run(dir, "diff", "--no-ext-diff", "--submodule=short").split("\n");
-    const kept = lines.slice(0, marker - 1);
-    assert.ok(kept.length > 1, "truncation must keep something");
-    for (const [index, line] of kept.entries()) {
-      assert.equal(line, full[index], `truncated line ${index} must be a whole original line`);
-    }
   });
 });
 

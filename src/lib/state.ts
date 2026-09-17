@@ -57,10 +57,10 @@ export function resolveStateDir(cwd: string): string {
 }
 
 // State dirs/files are 0700/0600: the fallback root is under a world-readable
-// /tmp (see FALLBACK_STATE_ROOT), and job logs hold prompts, review findings,
-// diffs, and the model's reasoning text — not readable by other users on a
+// /tmp (see FALLBACK_STATE_ROOT), and job logs hold prompts and the model's
+// reasoning text — not readable by other users on a
 // shared host.
-function ensureDir(dir: string): void {
+export function ensureDir(dir: string): void {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
 
@@ -80,8 +80,8 @@ function atomicWrite(filePath: string, content: string): void {
 
 // ─── Job Log ─────────────────────────────────────────────────────────────────
 //
-// A "job" is just one command run: `ask`/`review`/`fix` each allocate an id,
-// append their progress to `jobs/<id>.log`, and print that path so the user can
+// A "job" is just one command run: `ask` allocates an id,
+// appends its progress to `jobs/<id>.log`, and prints that path so the user can
 // read it. There is no job *record* — the log file is the whole artifact, and
 // the user is its only reader.
 
@@ -99,7 +99,7 @@ export function generateJobId(): string {
   return `job-${ts}-${rand}`;
 }
 
-// DEBT: `jobs/` grows without bound — every ask/review/fix run creates one more
+// DEBT: `jobs/` grows without bound — every ask run creates one more
 // `jobs/<id>.log` and nothing ever deletes one. The per-command log() calls are
 // only a few lines each; the volume is the model's reasoning text (see the 0600
 // note above), which reaches this same sink because each command hands `log` to

@@ -11,51 +11,18 @@ export interface ParsedArgs {
 }
 
 // Flags that never take a value. Without this set, a positional like
-// `--adversarial race condition` would bind "race" to --adversarial (string,
-// not boolean) and silently disable strict `=== true` checks downstream.
-export const BOOLEAN_FLAGS = new Set<string>([
-  "adversarial",
-  "allow-shell",
-  "allow-url",
-  "fix",
-  "full",
-  "harry-fix",
-  "help",
-  "simplify",
-  "json",
-]);
+// `--json extra` would bind "extra" to --json (string, not boolean) and
+// silently disable strict `=== true` checks downstream.
+export const BOOLEAN_FLAGS = new Set<string>(["help", "json"]);
 
 // Allowed flag keys per command. An unrecognized `--flag` errors loudly instead
-// of being silently swallowed (a typo like `--adversaria` must not quietly run a
-// plain review). `help` is accepted everywhere and handled before dispatch.
-// `full`/`harry-fix` are listed for `review` so their targeted guidance (in
-// `companion.ts`) fires instead of a generic "unknown flag".
+// of being silently swallowed — a typo, or a flag `review` no longer takes
+// (`--adversarial`, `--scope`, `--model`, …), must not quietly run a plain
+// review. `help` is accepted everywhere and handled before dispatch.
 export const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
   setup: new Set(["json"]),
-  review: new Set([
-    "adversarial",
-    "simplify",
-    "full",
-    "harry-fix",
-    "scope",
-    "base",
-    "model",
-    "reasoning",
-    "timeout",
-    "fix",
-    "context",
-  ]),
+  review: new Set(["base", "reasoning", "context"]),
   ask: new Set(["task", "model", "reasoning", "timeout", "context"]),
-  fix: new Set([
-    "findings",
-    "model",
-    "reasoning",
-    "timeout",
-    "allow-shell",
-    "allow-url",
-    "write",
-    "context",
-  ]),
   status: new Set(["json"]),
 };
 
@@ -159,6 +126,22 @@ export function flagString(
 ): string | undefined {
   const v = flags[key];
   return typeof v === "string" ? v : undefined;
+}
+
+/**
+ * A `--key <value>` string flag that must carry its value when present:
+ * undefined when absent, and an error naming the flag when it was given bare
+ * (`--base --reasoning high` parses `base` as `true`), rather than silently
+ * reading as absent.
+ */
+export function flagRequiredString(
+  flags: Record<string, string | boolean>,
+  key: string,
+): string | undefined {
+  const v = flags[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== "string") throw new Error(`Flag --${key} requires a value.`);
+  return v;
 }
 
 /**

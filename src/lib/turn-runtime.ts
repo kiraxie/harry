@@ -1,12 +1,12 @@
 /**
- * Shared turn-runtime helpers for the agent commands (ask / review / fix).
+ * Turn-runtime helpers for the in-process Codex session command (`ask`).
  *
- * Three of these were previously copy-pasted verbatim across the three command
- * modules (progress writer, the timeout→abort scaffold with its DEBT note, and
- * the codex usage footer); centralizing them removed the triplication that let
- * the three commands silently drift from each other. `withCause` was never
- * duplicated — it starts here, for the same reason: one rule about how a failure
- * is presented, shared by all three.
+ * The progress writer, the timeout→abort scaffold with its DEBT note, and the
+ * codex usage footer were once copy-pasted across three command modules;
+ * `withCause` started here for the same reason — one rule about how a failure is
+ * presented. `ask` is the only in-process caller left (`review` runs
+ * `codex exec review`, and `fix` was removed), and the helpers stay here as
+ * that one home.
  */
 
 import { truncateUtf8 } from "./git.ts";
@@ -57,7 +57,7 @@ export function startTurnTimeout(opts: {
 }
 
 /**
- * Format the codex token/rate-limit footer fragment shared by ask and review,
+ * Format the codex token/rate-limit footer fragment `ask` prints,
  * e.g. `tokens(in/out)=12/34 rate-limit=42%`.
  */
 export function formatCodexUsage(u: {
@@ -74,10 +74,9 @@ export function formatCodexUsage(u: {
  * Frame a command's generic failure sentence with the backend's cause, when
  * there is one.
  *
- * Shared rather than inlined three times because it is one rule about how a
- * cause is presented, and three copies would let ask/review/fix drift into
- * reporting the same failure differently — the triplication this module exists
- * to end.
+ * Kept as one function because it is one rule about how a cause is presented;
+ * inlining it per command is how copies drift into reporting the same failure
+ * differently.
  *
  * The generic sentence is KEPT as the prefix, not replaced. It is what the doors
  * and any shell consumer see first, and an upstream message alone ("The

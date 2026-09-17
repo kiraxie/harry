@@ -194,9 +194,8 @@ test("CodexProvider.checkAuth reports a ChatGPT login as ok", async () => {
 });
 
 // The single producer of `RunResult.error`. Everything downstream — ask's stdout
-// marker, review's `# Review Failed` block, fix's envelope — can only report a
-// cause the provider carried across this boundary, so this is the one place a
-// break silently blinds all three at once.
+// marker and its stderr cause — can only report a cause the provider carried
+// across this boundary, so this is the one place a break silently blinds it.
 //
 // Before this field existed, `turn.ts` captured the cause and codex.ts logged it
 // (`turn error: …`) without ever attaching it, so a backend rejection and a model

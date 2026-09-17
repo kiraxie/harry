@@ -1,131 +1,72 @@
 ---
 name: review
-description: Run a code review against local git state via harry's companion runtime. Read-only by default; read-write only when the user explicitly asks to apply fixes. Angles are standard (gpt-5.6-terra defects), design-challenge, or cleanup (gpt-5.6-terra cleanups run in parallel with a sub-agent over-engineering & readability lane, consolidated into one table); full runs design + the cleanup dual-lane together. Use when the user asks for a code review, or to review and fix.
+description: Run a read-only code review through harry's companion runtime (codex exec review) — reviews the working tree, a branch against its default, or a diff against --base. Use when the user asks for a code review.
 ---
 
 # Review
 
 Run a code review through the harry runtime.
 
-## Known limitation vs. the Claude Code build
+## What this does
 
-This skill's RO/RW boundary is **convention, not tool-enforced** — and so is the
-Claude Code version's. CC's `allowed-tools` frontmatter is one static allowlist
-that must include the write tools for its RW `--fix` path, so it cannot gate
-read-only vs read-write per invocation either; both builds enforce the RO
-discipline by instruction. (The only edge CC has here is that Codex exposes no
-per-skill tool allowlist at all.) Follow the RO/RW rule below as a hard
-instruction — do not edit repo-tracked files or run `git add`/`git commit` unless
-the user explicitly asked for fixes to be applied.
-Writing a scratch file **outside the repo** that a review lane needs as a handoff
-(e.g. the simplify dual-lane's Lane B diff file, written to `/tmp/...`) is fine even
-in RO mode — that boundary (repo-tracked vs. scratch) is the actual trust boundary,
-not "no writes at all."
+`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review` spawns `codex exec review`
+read-only (`sandbox_mode="read-only"`, `--ephemeral`) with a prompt built from the
+target diff, the full `references/review-rubric.md`, a `## Background` section from
+`--context`, and a `## Focus` section from the focus text. It never passes a
+model — `~/.codex/config.toml` decides which one runs; `--reasoning` overrides
+effort for that one call. Each run writes its findings to its own
+`codex-review-<YYYYMMDD-HHMMSS>.md` (codex's session transcript goes to the
+matching `.log`, never to the terminal), and stderr ends with
+`Review written to <path>` and `Log: <path>`; your job is to run it, wait, and
+hand back the findings verbatim.
 
-## RO vs RW — decide this first
+This skill has no fix backend — it is read-only, full stop. Nothing here edits
+the working tree, stages, or commits.
 
-- **No apply request → READ-ONLY (RO).** Produce findings and stop. Do not edit
-  repo-tracked files or run `git add`/`git commit`. (A scratch/temp file outside
-  the repo, like Lane B's diff handoff, is fine — see above.)
-- **User asks to apply/fix → READ-WRITE (RW).** Review → judge → apply.
+## Target
 
-## Review angle (what produces findings)
+- `--base <ref>` → reviews `git diff <ref>...HEAD`.
+- No `--base`, dirty working tree (including untracked files) → reviews the
+  uncommitted changes.
+- No `--base`, clean working tree → reviews the current branch against the
+  repository's default branch.
 
-Mutually exclusive:
-- default → standard defect review, `gpt-5.6-terra`.
-- adversarial (design-challenge review, `gpt-5.6-sol`) — questions the approach.
-- simplify (cleanup review): `gpt-5.6-terra` behavior-preserving reuse /
-  simplification / efficiency pass, run in parallel with a sub-agent
-  over-engineering & readability lane (see **The simplify dual-lane** below) and
-  consolidated into one table. NOT bugs.
-- full → orchestrate three dispatches — adversarial (design) and the simplify
-  dual-lane's two lanes (the Codex cleanup pass and the sub-agent
-  over-engineering & readability pass) — in parallel, then consolidate into one deduped table
-  (see **Full mode**). Same three lanes as the Claude Code build.
+## Run it
 
-**Shared overrides:** a base ref (`--base <ref>`) sets a base-branch review. A
-scope override (`--scope <auto|working-tree|branch>`) forces working-tree-only or
-branch-diff-only when auto-detection would guess wrong. Extra context text
-(`--context <text|@file|@->`) injects reviewer intent. A model/reasoning override
-applies to a single review (ignored under full, where each lane is
-model-specialized). Anything else is focus text, forwarded verbatim.
-
-## The structured-review envelope (one definition)
-
-See **The structured-review envelope** in
-`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
-
----
-
-## The simplify dual-lane (one definition)
-
-See **The simplify dual-lane** in
-`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
-
-**Parity note vs. the Claude Code build:** Lane B ports cleanly here because it
-is ordinary sub-agent delegation — the same capability this skill's other sections
-already assume Codex has, not something Claude-Code-specific. Both builds run the
-same dual-lane, so there is no asymmetry to work around here.
-
----
-
-## Plain review (RO)
-
-**If the active angle is simplify:** skip the single-call path below entirely —
-run **the simplify dual-lane** (defined above) and present its consolidated table
-as the final output.
-
-**Otherwise (standard or adversarial):** the review session runs with
-writes/shell/URL denied on the Codex runtime side. Do not fix anything or suggest
-you are about to. Return the review session's output verbatim (HARRY.md §6). Do
-not use any write action on this path.
+Codex has no background-task tool — just run it and wait:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--adversarial|--simplify] [--base <ref>] [--scope <auto|working-tree|branch>] [--context <text|@file|@->] [focus...]
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [focus...]
 ```
 
-Return stdout verbatim (markdown). No paraphrase, summary, or commentary.
+A run can take several minutes — a five-file branch has taken ~5.5 minutes, a
+small one 35–90s. Read the file named on the `Review written to <path>` line and
+return it verbatim (markdown). No paraphrase, summary, or commentary (HARRY.md §6).
 
----
+**Nothing to review:** when the output has no `Review written to` line and prints
+a `# Review Summary` saying there are no changes to review, the target is empty —
+return that summary as-is. It is not a failure.
 
-## Full mode (`--full`)
+## Failure
 
-Three dispatches (two Codex, one sub-agent), all read-only, in parallel,
-then one deduped table.
+Failure is explicit: a non-zero exit prints the last 40 lines of codex's log
+(its closing `ERROR:` line carries the cause) and then `Log: <path>` — never
+present a failure as an empty review. Surface that stderr tail verbatim and name
+the cause; do not retry silently and do not fabricate a result.
 
-### Stage 1 — Fan out three dispatches in parallel
-Forwarded args = the user's base/scope/context/focus args, minus `--full`,
-`--adversarial`, `--simplify`, `--model`, `--reasoning` (each lane is
-model-specialized); keep `--base`/`--scope`/`--context`/focus.
+## `--context` — facts, never verdicts
 
-1. Background Codex adversarial review:
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review --adversarial --fix <forwarded>
-```
-2. **The simplify dual-lane** (defined above) — Lane A (Codex `--simplify --fix`)
-   and Lane B (the over-engineering & readability sub-agent dispatch) both count
-   as their own lanes here; do not consolidate them yet — Stage 2 below merges
-   all three together in one pass. Lane A here uses *this Stage 1 preamble's* "Forwarded
-   args" (computed just above, which already strips `--full` too) — not the
-   dual-lane definition's own narrower `<forwarded>` rule, which would let a bare
-   `--full` reach the node CLI here, which it rejects.
+`--context <text|@file|@->` carries **facts** the reviewer doesn't already
+have: constraints, decisions already taken, a prior round's ruling and its
+reasoning. It never carries verdicts — never tell the reviewer what *not* to
+flag ("this is deliberate, skip it"). Focus text says where to look; context
+says what is true.
 
-Wait until all three have produced output before Stage 2.
+An `@file` that cannot be read, or an `@-` or `@file` with nothing in it, fails
+the run before codex starts — the review never runs without the context it was
+given.
 
-### Stage 2 — Consolidate into a table (your job)
-See **Full-mode Stage 2 — consolidate into one table** in
-`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
+## Findings are suggestions
 
-### Stage 3 — Output / hand off
-- RO: the table + `## Design Concerns` is the final report. Stop.
-- Apply requested: confirm the Keep set with the user, then follow **The apply steps
-  — baseline snapshot, apply, report** in
-  `${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md` (same steps the single
-  review + fix path reaches, reused here).
-
----
-
-## Single review + fix (RW)
-
-See **Single review + fix** in
-`${CLAUDE_PLUGIN_ROOT}/references/review-orchestration.md`.
+Per HARRY.md §6, automated review findings are suggestions to verify against
+this codebase, not orders — judge them, don't rubber-stamp them.

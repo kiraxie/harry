@@ -100,7 +100,7 @@ test("the unavailability exception cannot swallow a stale claim", () => {
 
 // The durable escape hatch for a login that cannot reach a default. Without it the
 // only remedy is `--model` on every invocation, which is why an unsubscribed account
-// had no working ask/fix/adversarial path at all.
+// had no working ask path at all.
 test("HARRY_MODEL_* overrides the shipped default, and only when set", () => {
   assert.equal(resolveModel("judgment", {}), "gpt-5.6-sol", "default when unset");
   assert.equal(
@@ -117,15 +117,11 @@ test("HARRY_MODEL_* overrides the shipped default, and only when set", () => {
       `blank override (${JSON.stringify(blank)}) falls back to the default`,
     );
   }
-  // Roles are independent — overriding one must not move another.
-  const env = { HARRY_MODEL_JUDGMENT: MODEL_WITHOUT_SOL };
-  assert.equal(resolveModel("standard", env), "gpt-5.6-terra", "standard untouched");
-  assert.equal(resolveModel("adversarial", env), "gpt-5.6-sol", "adversarial untouched");
-  assert.equal(modelEnvVar("adversarial"), "HARRY_MODEL_ADVERSARIAL");
+  assert.equal(modelEnvVar("judgment"), "HARRY_MODEL_JUDGMENT");
 });
 
 test("PINNED_MODELS describes the SHIPPED defaults, not the overridden ones", () => {
   // The prose guard checks documentation against this list, so an operator's local
   // override must not silently redefine what the docs are held to.
-  assert.deepEqual([...PINNED_MODELS].sort(), ["gpt-5.6-sol", "gpt-5.6-sol", "gpt-5.6-terra"]);
+  assert.deepEqual([...PINNED_MODELS], ["gpt-5.6-sol"]);
 });

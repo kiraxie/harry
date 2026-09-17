@@ -5,6 +5,54 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`/review` collapsed onto `codex exec review`.** The runtime command now
+  spawns `codex exec review` directly as a separate, ephemeral, read-only
+  process (`sandbox_mode="read-only"`), with a prompt built from the target
+  diff, the full `references/review-rubric.md`, a `--context` background
+  section, and a focus-text section — instead of running through harry's own
+  Codex session driver. It never picks a model itself; `~/.codex/config.toml`
+  decides, and `--reasoning` overrides effort for that one call. Surface is now
+  `review [--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context
+  <text|@file|@->] [focus text...]`. Each run writes its findings to its own
+  `codex-review-<YYYYMMDD-HHMMSS>.md` (under the main checkout's
+  `.local/tmp/<branch>/` when present, else the plugin state dir), so a
+  re-review never overwrites an earlier round; the CLI prints them to stdout
+  and names the file on a `Review written to <path>` stderr line. codex's
+  session transcript goes to a matching `.log`, not the terminal. Failure is
+  explicit — non-zero exit, the log's last 40 lines verbatim plus its path, no
+  fallback.
+- `commands/review.md` no longer sets `disable-model-invocation`, so both the
+  `SlashCommand`/`Skill` tools and `skills/executing`'s final review step can
+  invoke it directly. Read-only is enforced by codex's `sandbox_mode="read-only"`
+  on the spawned run; the command's `allowed-tools` only pre-approves the review
+  invocation, read-only `git status`/`git diff`, and `Read` — it does not block
+  other tools.
+- `skills/executing/SKILL.md` step 6's Codex lane now writes a facts-only
+  context file (the unit's binding constraints and rulings so far, with their
+  reasoning — never verdicts or "don't flag X") and invokes `/harry:review
+  --base <base-branch> --context @<file>` instead of hand-rolling its own
+  `codex exec review` call. A lane failure is now blocking: it's recorded
+  verbatim and taken to the user, not silently skipped in favor of the CC lane
+  alone.
+
+### Removed
+
+- `--adversarial`, `--simplify`, `--full`, `--fix`, `--harry-fix`, `--scope`,
+  `--wait`, `--background`, `--model`, and `--timeout` on `review` — the CLI
+  now rejects each by name.
+- The `fix` command and both apply backends (`--fix` Claude-applies, `--harry-fix`
+  isolated Codex fix session), the structured-findings envelope, the simplify
+  dual-lane, and `--full` mode. `references/review-orchestration.md` (the
+  shared definitions those modes pointed at) is deleted.
+- The `standard` and `adversarial` Codex model roles and their
+  `HARRY_MODEL_STANDARD` / `HARRY_MODEL_ADVERSARIAL` overrides (added in 0.18.0).
+  Nothing reads them any more — `review` passes no model — so setting either now
+  does nothing. `HARRY_MODEL_JUDGMENT` (`ask`, `/debate`'s gpt voice) is unchanged.
+
 ## [0.21.0] - 2026-09-02
 
 ### Added

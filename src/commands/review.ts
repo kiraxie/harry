@@ -1,231 +1,176 @@
 /**
- * review command — sends a review prompt to Codex and prints the assistant's
- * markdown verbatim (or a structured `reviewed` JSON envelope in --fix mode).
+ * review command — a thin wrapper over the Codex CLI's `codex exec review`.
  *
- * Read-only: no worktree, no file writes regardless of path. Default model and
- * reasoning effort differ between the standard / --adversarial / --simplify
- * modes — each lane runs its own model so adversarial/simplify get a genuinely
- * different perspective from standard, not just a different prompt. The whole
- * agent lifecycle (auth, run) is delegated to {@link runAgentSession}; review
- * only supplies the prompt/options and the three output contracts (markdown,
- * `reviewed` envelope, failure text).
+ * Resolves what to review (branch vs working tree), builds a prompt naming that
+ * target plus harry's review rubric, and runs
+ * `codex exec review --ephemeral -c sandbox_mode="read-only" -o <file> -` at the
+ * repo root with the prompt on stdin. The review file is printed verbatim.
+ *
+ * codex writes its whole session transcript to stderr (prompt echo, rubric,
+ * every command's output) — hundreds of KB on a real branch — so it goes to a
+ * `.log` beside the review file, never to the caller.
+ *
+ * No fallback anywhere: a missing CLI, a non-zero exit, or an absent/empty
+ * output file each fail the command, printing the log's tail (where codex puts
+ * its `ERROR:` line) verbatim.
  */
 
+import { spawnSync } from "node:child_process";
+import { closeSync, existsSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
+import { join } from "node:path";
+
 import {
-  extractJsonBlock,
-  FINDINGS_OUTPUT_INSTRUCTION,
-  normalizeFindings,
-} from "../lib/findings.ts";
-import { collectReviewContext, type ReviewScope, resolveReviewTarget } from "../lib/git.ts";
-import { resolveModel } from "../lib/models.ts";
-import type { ReasoningEffort, RunResult } from "../lib/provider.ts";
-import { buildReviewPrompt, type ReviewKind } from "../lib/review-prompts.ts";
-import { runAgentSession } from "../lib/run-agent-session.ts";
-import { appendLog, generateJobId, jobLogPath, resolveStateDir } from "../lib/state.ts";
-import { buildSystemMessage, resolveExtraContext } from "../lib/system-message.ts";
-import {
-  formatCodexUsage,
-  makeProgress,
-  startTurnTimeout,
-  withCause,
-} from "../lib/turn-runtime.ts";
+  countBranchChanges,
+  getBranchOrShortSha,
+  getMainCheckoutRoot,
+  getRepoRoot,
+  resolveReviewTarget,
+} from "../lib/git.ts";
+import type { ReasoningEffort } from "../lib/provider.ts";
+import { buildReviewPrompt, loadReviewRubric } from "../lib/review-prompts.ts";
+import { ensureDir, resolveStateDir } from "../lib/state.ts";
+import { resolveExtraContext } from "../lib/system-message.ts";
 
 export interface ReviewOptions {
-  adversarial?: boolean;
-  /** Cleanup/simplification review (codex lane) — behavior-preserving cleanups, not defects. */
-  simplify?: boolean;
-  scope?: ReviewScope;
   base?: string;
-  focusText?: string;
-  model?: string;
   reasoning?: ReasoningEffort;
-  timeout?: number;
-  /**
-   * Extra context appended to the model's system message. Literal text, or
-   * `@file` / `@-` (stdin) to read from a source — see `resolveExtraContext`.
-   */
+  /** Background for the reviewer: literal text, or `@file` / `@-` — see `resolveExtraContext`. */
   context?: string;
-  /**
-   * Structured-findings mode. Instead of markdown, emit a `reviewed` JSON
-   * envelope (findings + metadata) on stdout so Claude Code can judge each
-   * finding and hand the approved subset to the `fix` command.
-   */
-  fix?: boolean;
+  focusText?: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-const DEFAULT_EFFORT_STANDARD: ReasoningEffort = "xhigh";
-const DEFAULT_EFFORT_ADVERSARIAL: ReasoningEffort = "xhigh";
-const DEFAULT_EFFORT_SIMPLIFY: ReasoningEffort = "xhigh";
+/** The stderr line naming the review file. The doors tell callers to read that path. */
+export const REVIEW_WRITTEN = "Review written to";
 
-/** Resolve the review kind from the (mutually exclusive) angle flags. */
-function resolveKind(options: ReviewOptions): ReviewKind {
-  if (options.simplify) return "simplify";
-  if (options.adversarial) return "adversarial";
-  return "standard";
+/** How much of codex's log a failure prints — enough to carry its closing `ERROR:` line. */
+const FAILURE_TAIL_LINES = 40;
+
+/**
+ * Where the review lands. The MAIN checkout's `.local/tmp/<branch>/` when that
+ * checkout already has a `.local/` (even when run from a linked worktree),
+ * otherwise the plugin state dir. A `.local/` is never created here.
+ */
+function resolveOutputDir(repoRoot: string): string {
+  const branch = getBranchOrShortSha(repoRoot);
+  const local = join(getMainCheckoutRoot(repoRoot), ".local");
+  const dir =
+    existsSync(local) && statSync(local).isDirectory()
+      ? join(local, "tmp", branch)
+      : join(resolveStateDir(repoRoot), "reviews", branch);
+  ensureDir(dir);
+  return dir;
 }
 
-// Which id each lane sends, and why it is reachable at all, lives in ../lib/models.ts.
-// The cleanup lane shares standard's model on purpose: codex's code specialization
-// suits behavior-preserving simplification, and keeping it off the adversarial model
-// leaves the design lane distinct.
-function defaultModelFor(kind: ReviewKind): string {
-  return resolveModel(kind === "adversarial" ? "adversarial" : "standard");
+function timestamp(now: Date): string {
+  const p = (n: number): string => String(n).padStart(2, "0");
+  return (
+    `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-` +
+    `${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`
+  );
 }
 
-function defaultEffortFor(kind: ReviewKind): ReasoningEffort {
-  if (kind === "adversarial") return DEFAULT_EFFORT_ADVERSARIAL;
-  if (kind === "simplify") return DEFAULT_EFFORT_SIMPLIFY;
-  return DEFAULT_EFFORT_STANDARD;
+/**
+ * One review file per run: `codex-review-<YYYYMMDD-HHMMSS>[-N].md` plus the
+ * matching `.log`, so a re-review never clobbers an earlier round and a failed
+ * run can never print an older review. A stem is taken when either file exists;
+ * the log is created exclusively (`wx`) to claim the stem against a concurrent run.
+ */
+export function reserveReviewFiles(
+  dir: string,
+  now: Date = new Date(),
+): { reviewPath: string; logPath: string } {
+  const base = `codex-review-${timestamp(now)}`;
+  for (let n = 1; ; n++) {
+    const stem = join(dir, n === 1 ? base : `${base}-${n}`);
+    const reviewPath = `${stem}.md`;
+    const logPath = `${stem}.log`;
+    if (existsSync(reviewPath)) continue;
+    try {
+      closeSync(openSync(logPath, "wx"));
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") continue;
+      throw err;
+    }
+    return { reviewPath, logPath };
+  }
+}
+
+/** Print the log's last lines verbatim, then its path, for a failed run. */
+function reportLogTail(logPath: string): void {
+  const lines = readFileSync(logPath, "utf8").split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const tail = lines.slice(-FAILURE_TAIL_LINES);
+  if (tail.length > 0) process.stderr.write(`${tail.join("\n")}\n`);
+  process.stderr.write(`Log: ${logPath}\n`);
 }
 
 export async function runReview(cwd: string, options: ReviewOptions = {}): Promise<void> {
-  const progress = makeProgress();
-  const kind: ReviewKind = resolveKind(options);
-  const reasoning = options.reasoning ?? defaultEffortFor(kind);
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-  // The model actually sent: explicit --model wins, else the per-lane default.
-  const requestedModel = options.model ?? defaultModelFor(kind);
+  const target = resolveReviewTarget(cwd, { base: options.base });
+  const repoRoot = getRepoRoot(cwd);
 
-  const stateDir = resolveStateDir(cwd);
-  const jobId = generateJobId();
-  const log = (msg: string): void => appendLog(stateDir, jobId, msg);
-  log(
-    `review start: kind=${kind} model=${requestedModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`,
-  );
-
-  // 1. Resolve target + collect context (read-only git ops). -----------------
-  const target = resolveReviewTarget(cwd, { scope: options.scope, base: options.base });
-  const context = collectReviewContext(cwd, target, { shellAvailable: false });
-
-  if (context.fileCount === 0) {
-    process.stdout.write(
-      `# Review Summary\n\nNo changes to review under ${context.target.label}.\n`,
-    );
-    log("review aborted: empty target");
+  // Only a branch target can be empty: auto picks working-tree mode only when dirty.
+  if (target.mode === "branch" && countBranchChanges(repoRoot, target.baseRef ?? "") === 0) {
+    process.stdout.write(`# Review Summary\n\nNo changes to review under ${target.label}.\n`);
     return;
   }
 
-  // Untracked bodies ride the same budget as the diff but are measured
-  // separately, so name them separately whenever they were measured at all —
-  // otherwise a self-collect driven entirely by untracked files reads as
-  // "~1024B diff (self-collect)" with nothing explaining the decision. On a
-  // self-collect line the figure is what the inline path WOULD have spent, not
-  // what was sent: self-collect emits filenames only.
-  const untrackedNote =
-    context.untrackedBytes === null ? "" : ` + ~${context.untrackedBytes}B untracked`;
-  progress(
-    `Target: ${context.target.label} — ${context.fileCount} file(s), ~${context.diffBytes}B diff${untrackedNote} (${context.inputMode}).`,
-  );
-
-  // 2. Build prompt ----------------------------------------------------------
-  const fixMode = options.fix === true;
-  let prompt = buildReviewPrompt(kind, { context, focusText: options.focusText ?? "" });
-  if (fixMode) prompt += `\n${FINDINGS_OUTPUT_INSTRUCTION}`;
-  log(`prompt built: ${prompt.length} chars${fixMode ? " (structured findings mode)" : ""}`);
-
-  const extraContext = resolveExtraContext(cwd, {
-    context: options.context,
-    onWarn: (m) => {
-      progress(m);
-      log(m);
-    },
+  const prompt = buildReviewPrompt({
+    target,
+    rubric: loadReviewRubric(),
+    // Strict: a reviewer silently missing its facts would review a different question.
+    context: resolveExtraContext(cwd, { context: options.context, strict: true }),
+    focusText: options.focusText,
   });
 
-  // 3. Timeout → abort signal. -----------------------------------------------
-  const turn = startTurnTimeout({ timeoutMs, progress, log });
+  const { reviewPath: outputPath, logPath } = reserveReviewFiles(resolveOutputDir(repoRoot));
 
-  // 4. Run the agent session. -------------------------------------------------
-  let result: RunResult;
+  const args = [
+    "exec",
+    "review",
+    "--ephemeral",
+    "-c",
+    'sandbox_mode="read-only"',
+    "-o",
+    outputPath,
+  ];
+  if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
+  args.push("-");
+
+  process.stderr.write(`Reviewing ${target.label} with codex exec review…\n`);
+  // stdout is ignored: codex echoes its final message there, and the review is
+  // printed from the -o file instead. stderr (the session transcript) goes to
+  // the log; a failure prints its tail.
+  const logFd = openSync(logPath, "w");
+  let res: ReturnType<typeof spawnSync>;
   try {
-    ({ result } = await runAgentSession({
-      cwd: context.repoRoot,
-      run: {
-        cwd: context.repoRoot,
-        prompt,
-        model: requestedModel,
-        reasoning,
-        readOnly: true,
-        allowShell: false,
-        allowUrl: false,
-        systemMessage: buildSystemMessage("review", { extraContext }),
-        appendLog: log,
-        progress,
-        signal: turn.signal,
-      },
-      log,
-    }));
-  } catch (err) {
-    turn.clear();
-    const msg = (err as Error).message;
-    process.stderr.write(`Review failed: ${msg}\n`);
-    log(`review failed: ${msg}`);
-    throw err instanceof Error ? err : new Error(msg);
+    res = spawnSync("codex", args, {
+      cwd: repoRoot,
+      input: prompt,
+      stdio: ["pipe", "ignore", logFd],
+    });
   } finally {
-    turn.clear();
+    closeSync(logFd);
   }
-
-  // 5. Compose output --------------------------------------------------------
-  // Prefer the verbatim assistant markdown over the structured task_complete
-  // summary (which may be a condensed recap and is not emitted by every run).
-  const reviewBody =
-    result.lastAssistantMessage?.trim() ||
-    result.summary?.trim() ||
-    "_(The model returned an empty review.)_";
-
-  const success = result.success && !turn.timedOut();
-  if (!success) {
-    const reason = turn.timedOut()
-      ? `Timed out after ${timeoutMs}ms.`
-      : withCause("Review did not complete successfully.", result.error);
-    process.stderr.write(`Review failed: ${reason}\n`);
-    process.stdout.write(`# Review Failed\n\n${reason}\n\n${reviewBody}\n`);
-    log(`review failed: ${reason}`);
-    // Signal failure to the caller via a non-zero shell exit code. Whatever came
-    // back is already on stdout above — genuinely partial markdown on the
-    // incomplete-turn path, but only the empty-review placeholder on the timeout
-    // path, where codex/turn.ts's `failure()` returns an empty finalMessage and
-    // so discards the partial text. `ask` behaves identically.
-    throw new Error(reason);
-  }
-
-  if (fixMode) {
-    // Structured mode: emit a single JSON envelope on stdout so Claude Code can
-    // parse the findings, judge each against its conversation context, and pass
-    // the approved subset to `fix`. The markdown stays available for humans.
-    const findings = normalizeFindings(extractJsonBlock(reviewBody));
-    const envelope = {
-      status: "reviewed" as const,
-      kind,
-      model: requestedModel,
-      target: context.target.label,
-      fileCount: context.fileCount,
-      findings,
-      reviewMarkdown: reviewBody.trim(),
-    };
-    process.stdout.write(`${JSON.stringify(envelope)}\n`);
-    log(`review (fix mode) done: ${findings.length} structured finding(s)`);
-  } else {
-    // Stdout is the model's markdown verbatim — slash-command consumers and
-    // anything piping the output should see exactly what the model produced.
-    process.stdout.write(`${reviewBody.trim()}\n`);
-  }
-
-  // Run metadata goes to stderr (same channel as progress) so the user still
-  // sees it and the job log captures it, while stdout stays clean.
-  if (result.usage) {
-    const u = result.usage;
-    progress(
-      `Review done — kind=${kind} model=${requestedModel} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`,
+  if ((res.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+    // codex never ran, so the reserved log is empty and nothing names it.
+    rmSync(logPath, { force: true });
+    throw new Error(
+      "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry.",
     );
-    log(
-      `review done: kind=${kind} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`,
-    );
-  } else {
-    progress(
-      `Review done — kind=${kind} model=${requestedModel} effort=${reasoning} files=${context.fileCount}`,
-    );
-    log(`review done: kind=${kind} files=${context.fileCount}`);
   }
-  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
+  if (res.error) throw res.error;
+  if (res.status !== 0) {
+    reportLogTail(logPath);
+    throw new Error(
+      `codex exec review failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
+    );
+  }
+
+  const review = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "";
+  if (!review.trim()) {
+    reportLogTail(logPath);
+    throw new Error(`codex exec review exited 0 but wrote no review to ${outputPath}.`);
+  }
+  process.stdout.write(review);
+  process.stderr.write(`${REVIEW_WRITTEN} ${outputPath}\nLog: ${logPath}\n`);
 }

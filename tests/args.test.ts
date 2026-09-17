@@ -19,9 +19,7 @@
  */
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -37,10 +35,6 @@ import {
 } from "../src/lib/args.ts";
 
 const COMPANION_TS = path.resolve(import.meta.dirname, "../src/companion.ts");
-const REVIEW_ORCHESTRATION_MD = path.resolve(
-  import.meta.dirname,
-  "../references/review-orchestration.md",
-);
 
 // ---------------------------------------------------------------------------
 // parseArgs — the flag matrix
@@ -100,52 +94,52 @@ const PARSE_CASES: ParseCase[] = [
   },
   {
     name: "a boolean flag never swallows the following positional",
-    argv: ["review", "--adversarial", "race", "condition"],
-    command: "review",
+    argv: ["status", "--json", "race", "condition"],
+    command: "status",
     args: ["race", "condition"],
-    flags: { adversarial: true },
+    flags: { json: true },
   },
   {
     name: "--boolean=true coerces to true",
-    argv: ["review", "--adversarial=true"],
-    command: "review",
+    argv: ["status", "--json=true"],
+    command: "status",
     args: [],
-    flags: { adversarial: true },
+    flags: { json: true },
   },
   {
     name: "--boolean=1 coerces to true",
-    argv: ["review", "--adversarial=1"],
-    command: "review",
+    argv: ["status", "--json=1"],
+    command: "status",
     args: [],
-    flags: { adversarial: true },
+    flags: { json: true },
   },
   {
     name: "--boolean= (empty value) coerces to true",
-    argv: ["review", "--adversarial="],
-    command: "review",
+    argv: ["status", "--json="],
+    command: "status",
     args: [],
-    flags: { adversarial: true },
+    flags: { json: true },
   },
   {
     name: "--boolean=false coerces to false, not the truthy string",
-    argv: ["review", "--adversarial=false"],
-    command: "review",
+    argv: ["status", "--json=false"],
+    command: "status",
     args: [],
-    flags: { adversarial: false },
+    flags: { json: false },
   },
   {
     name: "--boolean=no coerces to false",
-    argv: ["review", "--adversarial=no"],
-    command: "review",
+    argv: ["status", "--json=no"],
+    command: "status",
     args: [],
-    flags: { adversarial: false },
+    flags: { json: false },
   },
   {
     name: "boolean value coercion is case-insensitive",
-    argv: ["review", "--adversarial=TRUE"],
-    command: "review",
+    argv: ["status", "--json=TRUE"],
+    command: "status",
     args: [],
-    flags: { adversarial: true },
+    flags: { json: true },
   },
   {
     name: "flags and positionals interleave freely",
@@ -164,8 +158,8 @@ for (const c of PARSE_CASES) {
 
 test("parseArgs rejects a garbage value on a boolean flag instead of binding a truthy string", () => {
   assert.throws(
-    () => parseArgs(["review", "--adversarial=maybe"]),
-    /Flag --adversarial is boolean and cannot take value "maybe"/,
+    () => parseArgs(["status", "--json=maybe"]),
+    /Flag --json is boolean and cannot take value "maybe"/,
   );
 });
 
@@ -183,6 +177,9 @@ for (const flag of BOOLEAN_FLAGS) {
   });
 }
 
+// One pattern for the scan and for its own non-vacuity check, so the two cannot drift.
+const TRUE_READ_RE = /flags\??(?:\.([A-Za-z_$][\w$]*)|\["([^"]+)"\])\s*===\s*true/g;
+
 test("every flag consumed as `=== true` is registered in BOOLEAN_FLAGS", () => {
   // The bug class in one assertion: a flag whose consumer compares `=== true`
   // but which is missing from BOOLEAN_FLAGS binds the next positional as a
@@ -190,19 +187,19 @@ test("every flag consumed as `=== true` is registered in BOOLEAN_FLAGS", () => {
   // dispatcher's source means a NEWLY added flag is caught too.
   const source = fs.readFileSync(COMPANION_TS, "utf-8");
   const consumers = new Set<string>();
-  for (const m of source.matchAll(/flags\??(?:\.([A-Za-z_$][\w$]*)|\["([^"]+)"\])\s*===\s*true/g)) {
+  for (const m of source.matchAll(TRUE_READ_RE)) {
     consumers.add(m[1] ?? m[2]);
   }
 
-  // Guard against a vacuous pass if the scan pattern ever drifts from the
-  // source: both access forms must have matched something.
-  assert.ok(
-    consumers.has("adversarial"),
-    `no dot-form consumer found; scan drifted: ${COMPANION_TS}`,
-  );
-  assert.ok(
-    consumers.has("allow-shell"),
-    `no bracket-form consumer found; scan drifted: ${COMPANION_TS}`,
+  // Guard against a vacuous pass if the scan pattern ever drifts. Only the dot
+  // form has a live consumer since `fix` (and its `flags["allow-shell"]`) was
+  // removed, so the bracket form is proven against a literal instead.
+  assert.ok(consumers.has("json"), `no dot-form consumer found; scan drifted: ${COMPANION_TS}`);
+  const bracket = [...'flags["allow-shell"] === true'.matchAll(TRUE_READ_RE)];
+  assert.equal(
+    bracket[0]?.[2],
+    "allow-shell",
+    "the bracket-form branch of the scan no longer matches",
   );
 
   for (const key of consumers) {
@@ -309,7 +306,13 @@ const KNOWN_FLAG_CASES: KnownFlagCase[] = [
   {
     name: "review accepts its own flags",
     command: "review",
-    flags: { adversarial: true, base: "main" },
+    flags: { base: "main", reasoning: "high", context: "@-" },
+  },
+  {
+    name: "review rejects a removed angle flag by name",
+    command: "review",
+    flags: { adversarial: true },
+    throws: /Unknown flag --adversarial for 'review'/,
   },
   {
     name: "review rejects a near-miss typo",
@@ -336,17 +339,6 @@ const KNOWN_FLAG_CASES: KnownFlagCase[] = [
     command: "ask",
     flags: { fix: true },
     throws: /Unknown flag --fix for 'ask'/,
-  },
-  {
-    name: "fix accepts its own flags",
-    command: "fix",
-    flags: { findings: "/tmp/f.json", "allow-shell": true },
-  },
-  {
-    name: "fix rejects --adversarial",
-    command: "fix",
-    flags: { adversarial: true },
-    throws: /Unknown flag --adversarial for 'fix'/,
   },
   { name: "status accepts --json", command: "status", flags: { json: true } },
   {
@@ -459,53 +451,3 @@ for (const c of NUMBER_CASES) {
     assert.equal(flagNumber({ timeout: c.value }, "timeout"), c.expected);
   });
 }
-
-// ---------------------------------------------------------------------------
-// The orchestration-only guards in companion.ts (--full / --harry-fix)
-//
-// These stay in the dispatcher, so they are exercised through the real CLI —
-// which is exactly what references/review-orchestration.md asserts about them.
-// ---------------------------------------------------------------------------
-
-function runCli(args: string[]): { status: number | null; stderr: string } {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "harry-args-data-"));
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "harry-args-cwd-"));
-  const res = spawnSync(process.execPath, [COMPANION_TS, ...args], {
-    cwd,
-    encoding: "utf8",
-    env: { ...process.env, CLAUDE_PLUGIN_DATA: dataDir },
-  });
-  return { status: res.status, stderr: res.stderr };
-}
-
-test("the CLI rejects --full (it is a /review orchestrator flag)", () => {
-  const res = runCli(["review", "--full"]);
-  assert.notEqual(res.status, 0, "expected --full to be rejected");
-  assert.match(res.stderr, /--full is handled by the \/review command orchestrator, not the CLI\./);
-});
-
-test("the CLI rejects --full=false too — the guard fires on presence, not truth", () => {
-  const res = runCli(["review", "--full=false"]);
-  assert.notEqual(res.status, 0, "expected --full=false to be rejected");
-  assert.match(res.stderr, /--full is handled by the \/review command orchestrator, not the CLI\./);
-});
-
-test("a raw --harry-fix throws with the exact message references/review-orchestration.md quotes", () => {
-  // Live prose↔code contract: that file tells the orchestrator to strip
-  // --harry-fix before invoking the node CLI, and quotes this throw as the
-  // consequence of not doing so. Rewording either side alone must fail here.
-  const quoted = "--harry-fix is a /review fix-backend selector, not a CLI flag";
-
-  const prose = fs.readFileSync(REVIEW_ORCHESTRATION_MD, "utf-8");
-  assert.ok(
-    prose.includes(quoted),
-    `references/review-orchestration.md no longer quotes the CLI's --harry-fix error: ${quoted}`,
-  );
-
-  const res = runCli(["review", "--harry-fix"]);
-  assert.notEqual(res.status, 0, "expected --harry-fix to be rejected");
-  assert.ok(
-    res.stderr.includes(quoted),
-    `CLI error drifted from the prose contract. Expected it to contain:\n  ${quoted}\ngot:\n${res.stderr}`,
-  );
-});

@@ -1,10 +1,8 @@
 /**
- * Unit guards on `withCause` — the rule for how ask/review/fix present a
- * backend cause.
+ * Unit guards on `withCause` — the rule for how `ask` presents a backend cause.
  *
- * Shared rather than inlined three times, so the rule needs one home and one set
- * of tests; three copies would let the commands drift into reporting the same
- * failure differently, which is the triplication `turn-runtime.ts` exists to end.
+ * One home and one set of tests for the rule, so a future caller cannot drift
+ * into reporting the same failure differently.
  */
 
 import assert from "node:assert/strict";

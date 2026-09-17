@@ -283,8 +283,8 @@ test("ask marks a timed-out turn as failed and names the timeout", () => {
 });
 
 test("every door that tells a consumer to trust ask's stdout quotes the failure signals", () => {
-  // Live prose↔code contract, the same shape as tests/args.test.ts's --harry-fix
-  // guard. Each door instructs consumers to return ask's stdout verbatim and
+  // Live prose↔code contract, the same shape as tests/review-cli.test.ts's
+  // `Review written to` door guard. Each door instructs consumers to return ask's stdout verbatim and
   // names these signals as the reasons not to. The signals are declared once
   // above and asserted against the LIVE CLI by the tests above, so renaming one
   // in src/ fails there and rewording any single door fails here — neither side

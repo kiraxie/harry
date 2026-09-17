@@ -85,7 +85,7 @@ Claude-native or local scripts.
 
 | Command | What it does |
 |---------|--------------|
-| `/harry:review [--adversarial] [--fix]` | Multi-model code review (gpt-5.6-terra defect; `--adversarial` gpt-5.6-sol design challenge; `--fix` Claude-judged repair) |
+| `/harry:review [--base <ref>] [--reasoning <effort>] [--context <text\|@file\|@->]` | Read-only code review via `codex exec review` — working tree, a branch against its default, or a diff against `--base` |
 | `/harry:ask "<prompt>"` | One read-only prompt to Codex |
 | `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
 | `/harry:status` | Codex rate-limit snapshot (quota usage + reset windows) |
@@ -99,29 +99,28 @@ Cheap-first smoke test: `/harry:status` → `/harry:ask` → `/harry:review`/`/h
 
 ## Codex
 
-The agent commands (`ask`, `review`, `review --fix`) all run through the OpenAI **Codex**
-CLI (spawned as a subprocess, JSON-RPC over stdio). No SDK dependency — only the `codex`
-binary on `PATH`.
+`ask` runs through the OpenAI **Codex** CLI (spawned as a subprocess, JSON-RPC over
+stdio) via harry's own Codex session; `review` instead spawns a separate,
+ephemeral `codex exec review` process, read-only. Neither has an SDK
+dependency — only the `codex` binary on `PATH`.
 
-`ask` and `fix` default to a capable model (`gpt-5.6-sol`) rather than inheriting
-whatever `~/.codex/config.toml` happens to set — applying vetted findings and
-answering a one-shot prompt are judgment tasks (HARRY.md §5); pass `--model` to
-override. `review`'s three lanes (standard/adversarial/simplify) each pin their own
-default model to keep their perspectives distinct; pass `--model` to override any of
-them. One-time setup: install the `codex` CLI, then `codex login`.
+`ask` defaults to a capable model (`gpt-5.6-sol`) rather than inheriting whatever
+`~/.codex/config.toml` happens to set — answering a one-shot prompt is a judgment
+task (HARRY.md §5); pass `--model` to override. `review` passes no model at
+all — `~/.codex/config.toml` decides which one `codex exec review` runs, and
+`--reasoning` overrides effort for that one call. One-time setup: install the
+`codex` CLI, then `codex login`.
 
 Not every login can reach every model. A ChatGPT login **without an OpenAI
 subscription** is rejected for `gpt-5.6-sol` with a hard 400 (*"not supported when
 using Codex with a ChatGPT account"*, probed 2026-08-08) while `gpt-5.6-terra` and
 `gpt-5.6-luna` answer. No subscribed account has been probed, so `sol`'s status
-there is unverified — the defaults stay on it because downgrading on one account's
+there is unverified — the default stays on it because downgrading on one account's
 evidence would degrade every other account on none. If yours is rejected, the
 failure names itself and you set the model once instead of per command:
 
 ```sh
-export HARRY_MODEL_JUDGMENT=gpt-5.6-luna     # ask, fix, /debate's gpt voice
-export HARRY_MODEL_ADVERSARIAL=gpt-5.6-luna  # review --adversarial
-export HARRY_MODEL_STANDARD=gpt-5.6-terra    # review, review --simplify
+export HARRY_MODEL_JUDGMENT=gpt-5.6-luna     # ask, /debate's gpt voice
 ```
 
 `--model` still wins per invocation. These are read only from harry's own

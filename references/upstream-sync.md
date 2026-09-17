@@ -39,7 +39,7 @@ Then compare that upstream diff against harry's customized version and decide â€
 
 | Source | Tracks |
 |--------|--------|
-| ponytail | HARRY.md philosophy, `debt`, historically `lean` (absorbed into `/audit` dimension 10 + `/review --simplify`, 2026-07) |
+| ponytail | HARRY.md philosophy, `debt`, historically `lean` (absorbed into `/audit` dimension 10 + `/review`'s simplify lane, 2026-07; the simplify lane was itself retired 2026-09 when `/review` collapsed onto `codex exec review`) |
 | codex-plugin-cc | `review` |
 | mattpocock-skills | `grill` (+ survey distills into `root-cause-tracing.md`, `skill-authoring.md`, `red-green.md`, brainstorming) |
 | anthropics-skills | `skill-authoring.md` (authoring-principles distills: bundling signal, trigger evals, why-over-MUST guard) |

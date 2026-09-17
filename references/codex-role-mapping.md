@@ -29,5 +29,5 @@ is unverified; the rows stay pinned to it because downgrading on one account's
 evidence would degrade every other account on none.
 On an account that rejects it, substitute `gpt-5.6-luna` for those rows, and set it
 once for the runtime rather than per command:
-`export HARRY_MODEL_JUDGMENT=gpt-5.6-luna` (likewise `HARRY_MODEL_ADVERSARIAL`,
-`HARRY_MODEL_STANDARD`). `--model` still wins per invocation.
+`export HARRY_MODEL_JUDGMENT=gpt-5.6-luna` (`ask`, `/debate`'s gpt voice). `--model`
+still wins per invocation.

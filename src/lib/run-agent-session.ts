@@ -1,7 +1,6 @@
 /**
- * runAgentSession — the single lifecycle every agent command (ask/review/fix)
- * calls. It auth-checks, runs the codex precheck gate, runs the session, and
- * returns the result.
+ * runAgentSession — the session lifecycle `ask` (the only in-process Codex
+ * command) calls. It auth-checks, runs the session, and returns the result.
  */
 
 import type { CodexSession, RunOpts, RunResult } from "./provider.ts";
@@ -12,20 +11,6 @@ export interface RunAgentSessionArgs {
   run: RunOpts;
   /** Build the session. Defaults to a real CodexProvider. Injectable for tests. */
   buildSession?: () => CodexSession;
-  /**
-   * Pre-run hook, invoked AFTER precheckRun passes and just BEFORE
-   * `session.run`. Lets a command perform side effects that must not happen
-   * when the run is refused — e.g. `fix`'s pre-fix snapshot commit.
-   */
-  beforeRun?: (session: CodexSession) => void | Promise<void>;
-  /**
-   * Command-specific reaction to a SIGINT/SIGTERM that arrives mid-run,
-   * invoked synchronously by the centralized interrupt handler BEFORE the
-   * session is force-stopped and the process exits 130. Do NOT call
-   * `process.exit` here — the handler owns the exit.
-   */
-  onInterrupt?: () => void;
-  log?: (m: string) => void;
 }
 
 /** Hard ceiling on interrupt teardown so a wedged forceStop cannot hang exit. */
@@ -37,15 +22,13 @@ function defaultSession(): CodexSession {
 
 export async function runAgentSession(args: RunAgentSessionArgs): Promise<{ result: RunResult }> {
   // Centralized interrupt handling, installed across the WHOLE session span
-  // (auth → precheck → run), not just the run: a command's `onInterrupt` (e.g.
-  // fix's terminal `failed` envelope) and the live session's forceStop must
-  // fire for an interrupt anywhere in here.
+  // (auth → run), not just the run: the live session's forceStop must fire for
+  // an interrupt anywhere in here.
   let activeSession: CodexSession | undefined;
   let interrupting = false;
-  const onInterrupt = (): void => {
+  const handleInterrupt = (): void => {
     if (interrupting) return;
     interrupting = true;
-    args.onInterrupt?.();
     const exit = (): never => process.exit(130);
     const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
     guard.unref();
@@ -55,8 +38,8 @@ export async function runAgentSession(args: RunAgentSessionArgs): Promise<{ resu
       })
       .finally(exit);
   };
-  process.on("SIGINT", onInterrupt);
-  process.on("SIGTERM", onInterrupt);
+  process.on("SIGINT", handleInterrupt);
+  process.on("SIGTERM", handleInterrupt);
 
   try {
     const session = args.buildSession ? args.buildSession() : defaultSession();
@@ -67,17 +50,10 @@ export async function runAgentSession(args: RunAgentSessionArgs): Promise<{ resu
       throw new Error(`codex not authenticated: ${auth.message}`);
     }
 
-    // Capability gate BEFORE beforeRun: a run codex cannot honor (e.g.
-    // write-without-shell) must refuse here, so the refusal precedes fix's
-    // pre-fix snapshot commit rather than leaving the user's work committed by
-    // a run that then throws.
-    session.precheckRun?.(args.run);
-
-    await args.beforeRun?.(session);
     const result = await session.run(args.run);
     return { result };
   } finally {
-    process.removeListener("SIGINT", onInterrupt);
-    process.removeListener("SIGTERM", onInterrupt);
+    process.removeListener("SIGINT", handleInterrupt);
+    process.removeListener("SIGTERM", handleInterrupt);
   }
 }

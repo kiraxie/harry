@@ -4,9 +4,8 @@
  * Codex already loads the repository's instruction files (`AGENTS.md`,
  * `CLAUDE.md`) from the working directory on its own, so we do NOT re-inject
  * those. What the delegated session lacks is:
- *   1. the framing — that it is a headless subtask delegated by Claude Code's
- *      orchestrator, with mode-specific guardrails (isolated worktree / real
- *      tree / read-only); and
+ *   1. the framing — that it is a headless, read-only subtask delegated by
+ *      Claude Code's orchestrator; and
  *   2. CC-only context — decisions, constraints, and intent that live in the
  *      Claude Code conversation and never made it into a repo file.
  *
@@ -16,7 +15,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-export type SessionKind = "fix" | "review" | "ask";
+// `ask` is the only in-process session left: `review` runs `codex exec review`
+// (no system message) and `fix` was removed.
+export type SessionKind = "ask";
 
 export interface SystemMessageInput {
   /** Caller-supplied extra context/instructions (already resolved to text). */
@@ -24,15 +25,6 @@ export interface SystemMessageInput {
 }
 
 const FRAMING: Record<SessionKind, string> = {
-  fix: [
-    "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
-    "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
-    "If a finding cannot be safely applied, skip it and report why rather than forcing a change.",
-  ].join("\n"),
-  review: [
-    "You are performing a code review delegated by Claude Code's orchestrator. You run headless.",
-    "This session is read-only: do not attempt to modify files. Report findings; another stage applies any fixes.",
-  ].join("\n"),
   ask: [
     "You are one independent voice being consulted on a question or topic.",
     "Reason carefully and state your own honest conclusion. Use only the context",
@@ -49,29 +41,33 @@ const FRAMING: Record<SessionKind, string> = {
  *   - `--context "some text"` → the literal string
  *   - `--context @path/to/file.md` → the file's contents (resolved vs cwd)
  *   - `--context @-` → read from stdin
- * A read failure is surfaced via `onWarn` and yields no context rather than
- * aborting the run. (To pass a literal string that starts with `@`, there is
- * no escape today — use `@-` and pipe it, or a file.)
+ * By default a read failure is surfaced via `onWarn` and yields no context
+ * rather than aborting the run. With `strict`, a read failure or an empty
+ * source throws instead — for a caller where silently dropping the context
+ * would change the result (`review`). (To pass a literal string that starts
+ * with `@`, there is no escape today — use `@-` and pipe it, or a file.)
  */
 export function resolveExtraContext(
   cwd: string,
-  opts: { context?: string; onWarn?: (m: string) => void },
+  opts: { context?: string; onWarn?: (m: string) => void; strict?: boolean },
 ): string | undefined {
   const raw = opts.context;
   if (!raw?.trim()) return undefined;
   if (!raw.startsWith("@")) return raw.trim();
 
   const ref = raw.slice(1);
+  const source = ref === "-" ? "from stdin" : `file ${ref}`;
+  let text: string;
   try {
-    const source = ref === "-" ? 0 : resolve(cwd, ref);
-    const text = readFileSync(source, "utf-8").trim();
-    return text || undefined;
+    text = readFileSync(ref === "-" ? 0 : resolve(cwd, ref), "utf-8").trim();
   } catch (err) {
-    opts.onWarn?.(
-      `Could not read --context ${ref === "-" ? "from stdin" : `file ${ref}`}: ${(err as Error).message}`,
-    );
+    const message = `Could not read --context ${source}: ${(err as Error).message}`;
+    if (opts.strict) throw new Error(message);
+    opts.onWarn?.(message);
     return undefined;
   }
+  if (!text && opts.strict) throw new Error(`--context ${source} is empty.`);
+  return text || undefined;
 }
 
 /** Assemble the `systemMessage.content` string for a delegated session. */

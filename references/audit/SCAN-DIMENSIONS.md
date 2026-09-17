@@ -98,10 +98,10 @@ recommendation still needs a named cost, or it's taste. "This `Strategy` interfa
 has had exactly one implementation for 8 months; the next reader has to trace an
 extra indirection layer to find the one real code path, and PR #N had to `grep`
 past the interface to find the actual logic" is a finding. "This is unnecessary"
-alone is not. Same red-line carve-out as `/review --simplify`'s Lane B (HARRY.md
-§2): never flag cross-boundary contracts, input validation at trust boundaries,
-error handling that prevents data loss, security/access checks, or a single smoke
-test — apply the drift test before recommending any deletion.
+alone is not. Same red-line carve-out as HARRY.md §2's drift test: never flag
+cross-boundary contracts, input validation at trust boundaries, error handling
+that prevents data loss, security/access checks, or a single smoke test — apply
+the drift test before recommending any deletion.
 
 ---
 

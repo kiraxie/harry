@@ -23,7 +23,7 @@ export async function runStatus(cwd: string, options: StatusOptions = {}): Promi
   if (!codexRateLimits) {
     // Snapshots are written by an actual codex turn, so an empty cache means
     // "nothing has run here yet", not an error.
-    console.log("_No Codex rate-limit snapshot yet — run a review, ask, or fix first._");
+    console.log("_No Codex rate-limit snapshot yet — run an ask first._");
     return;
   }
 

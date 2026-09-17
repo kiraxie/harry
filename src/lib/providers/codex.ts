@@ -39,24 +39,6 @@ export class CodexProvider implements CodexSession {
   }
 
   /**
-   * Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
-   * turn is `workspace-write` + approvalPolicy:"never", which lets codex run
-   * shell commands autonomously. It has no "write files but no shell" mode, so a
-   * caller that grants writes while withholding shell (`fix` defaults to
-   * allowShell:false) CANNOT be honored. Refuse rather than silently run MORE
-   * permissively than asked. Runs via the precheckRun seam BEFORE fix's snapshot.
-   */
-  precheckRun(opts: RunOpts): void {
-    if (!opts.readOnly && !opts.allowShell) {
-      throw new Error(
-        "Codex cannot grant write access without also allowing shell commands " +
-          "(its workspace-write sandbox runs commands autonomously). Re-run with " +
-          "shell explicitly allowed.",
-      );
-    }
-  }
-
-  /**
    * Probe codex auth without running a turn. Codex has no login/host concept in
    * the neutral summary, so those stay undefined; `message` carries the codex
    * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
@@ -79,9 +61,19 @@ export class CodexProvider implements CodexSession {
   async run(opts: RunOpts): Promise<RunResult> {
     const { appendLog, progress } = opts;
 
-    // Defense in depth: the same fail-closed gate runAgentSession runs via
-    // precheckRun, in case run() is ever reached directly.
-    this.precheckRun(opts);
+    // Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
+    // turn is `workspace-write` + approvalPolicy:"never", which runs shell
+    // commands autonomously. It has no "write files but no shell" mode, so a
+    // caller granting writes while withholding shell cannot be honored. Refuse
+    // rather than silently run MORE permissively than asked. (`ask` is
+    // read-only today; this guards the RunOpts combination, not a caller.)
+    if (!opts.readOnly && !opts.allowShell) {
+      throw new Error(
+        "Codex cannot grant write access without also allowing shell commands " +
+          "(its workspace-write sandbox runs commands autonomously). Re-run with " +
+          "shell explicitly allowed.",
+      );
+    }
     // NOTE: opts.allowUrl is not mapped to codex network access yet; codex's
     // workspace-write sandbox keeps network OFF by default, so we under-grant
     // (deny URL even when allowed) — the safe direction. Enabling it needs the
@@ -155,10 +147,6 @@ export class CodexProvider implements CodexSession {
       writeCodexRateLimits(resolveStateDir(opts.cwd), result.usage.rateLimits);
     }
 
-    // DEBT: codeChanges is always undefined — the turn runner does not collect
-    // file changes in v1 (codex write-flows are out of scope). A future codex
-    // implement/fix path would need fileChange collection in turn.ts and a
-    // {linesAdded, linesRemoved, filesModified} accumulator surfaced here.
     return {
       lastAssistantMessage: result.finalMessage,
       success: result.success,

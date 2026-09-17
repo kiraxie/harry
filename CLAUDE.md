@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    and `brainstorm → plan → execute → finish` pipeline that ship to consumers. This is prose/markdown,
    not code.
 2. **The `companion` runtime** (`src/` → bundled to `dist/companion.cjs`) — a TypeScript CLI that
-   backs the `review`, `ask`, and `fix` slash commands, talking to a Codex backend.
+   backs the `review` and `ask` slash commands, talking to a Codex backend.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
 required to install it. Rebuild `dist/` when changing `src/` **or `package.json`** —
@@ -70,13 +70,17 @@ bump/build/verify/commit steps above; re-run it after the merge to tag.
 ## Runtime architecture (`src/`)
 
 Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/commands/*.ts`
-(`review`, `ask`, `fix`, `status`, `setup`). Bundled by `build.mjs`
+(`review`, `ask`, `status`, `setup`). Bundled by `build.mjs`
 (esbuild, CJS, Node built-ins kept external) into the one committed file `dist/companion.cjs`.
 
 **Codex session driver** (`src/lib/provider.ts`, `src/lib/run-agent-session.ts`,
-`src/lib/providers/codex.ts`): `review`, `ask`, and `fix` all run through a single Codex-only
-`CodexSession`. No provider selection — the `codex` CLI on `PATH`, logged in via `codex login`,
-is the only backend.
+`src/lib/providers/codex.ts`): `ask` runs through a single Codex-only `CodexSession`. No
+provider selection — the `codex` CLI on `PATH`, logged in via `codex login`, is the only
+backend. `review` does not use this driver: it spawns `codex exec review` directly as a
+separate, ephemeral, read-only subprocess (`sandbox_mode="read-only"`), with the review
+rubric and context built into its prompt, and writes findings to a file rather than
+streaming a session turn. The `fix` command and its apply backends are gone — review is
+read-only only, with no in-runtime path to apply what it finds.
 
 `src/lib/codex/` (protocol, process, app-server, turn, auth) and `tests/fake-codex.mjs` /
 `tests/fake-codex.d.mts` are derived from `codex-plugin-cc` and are **Apache-2.0**, not MIT — see
@@ -182,19 +186,18 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   Code; Codex has no structured picker, so its skill falls back to the numbered
   text rounds defined in `references/grilling.md` — same technique file,
   different delivery.
-- `review --full` never had a CC `/code-review max` leg on either build: that
-  command sets `disable-model-invocation`, which blocks both the `SlashCommand`
-  and `Skill` tools from invoking it programmatically — no agent can drive it,
-  on Codex or Claude Code, regardless of project settings. Both builds' `--full`
-  run the same three lanes (adversarial + simplify dual-lane). Codex also drops
-  `--harry-fix` (redundant when the orchestrator already is Codex) — only
-  `--fix` remains there.
-- `review`'s RO/RW boundary is instruction-only on **both** builds. Claude
-  Code's `allowed-tools` frontmatter is a single static allowlist that must
-  include the write tools (`Edit`/`git add`/`git commit`) for the RW `--fix`
-  path, so it cannot conditionally gate read-only vs read-write — the RO
-  discipline is enforced by instruction, same as Codex. (CC's allowlist still
-  bounds the overall tool universe; it just doesn't enforce the RO/RW split.)
+- `review` is read-only on both builds — there is no fix backend, dual-lane, or
+  full mode any more, and no in-runtime path to apply what it finds. On both
+  builds the review itself is held read-only by the spawned `codex exec review`
+  process's own `sandbox_mode="read-only"` override. On Claude Code,
+  `commands/review.md`'s `allowed-tools` only **pre-approves** the review
+  invocation (`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review`), read-only
+  `git status`/`git diff`, and `Read` — it does not block other tools, so the
+  orchestrator side stays read-only by instruction. Every command line in that
+  doc starts with that exact invocation so it matches the pattern (an unmatched
+  one only costs a permission prompt). The frontmatter no longer sets
+  `disable-model-invocation`, so both the `SlashCommand` and `Skill` tools — and
+  `skills/executing/SKILL.md`'s final review step — can invoke it directly.
 - Codex `audit`'s RO round-boundaries are likewise instruction-only, not
   tool-enforced (see its skill's own "Known limitation" note); it shares the same
   `references/audit/` reference bundle and `report-schema.json`/

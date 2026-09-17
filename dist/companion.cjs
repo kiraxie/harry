@@ -28,13 +28,9 @@ var import_node_process3 = __toESM(require("node:process"), 1);
 
 // src/lib/models.ts
 var DEFAULTS = {
-  standard: "gpt-5.6-terra",
-  adversarial: "gpt-5.6-sol",
   judgment: "gpt-5.6-sol"
 };
 var ENV_VAR = {
-  standard: "HARRY_MODEL_STANDARD",
-  adversarial: "HARRY_MODEL_ADVERSARIAL",
   judgment: "HARRY_MODEL_JUDGMENT"
 };
 function resolveModel(role, env = process.env) {
@@ -43,7 +39,12 @@ function resolveModel(role, env = process.env) {
 }
 var MODEL_WITHOUT_SOL = "gpt-5.6-luna";
 var PINNED_MODELS = Object.values(DEFAULTS);
-var KNOWN_MODELS = [...PINNED_MODELS, MODEL_WITHOUT_SOL];
+var ROLE_MAP_ONLY_MODEL = "gpt-5.6-terra";
+var KNOWN_MODELS = [
+  ...PINNED_MODELS,
+  MODEL_WITHOUT_SOL,
+  ROLE_MAP_ONLY_MODEL
+];
 
 // src/lib/codex/app-server.ts
 var import_node_child_process2 = require("node:child_process");
@@ -218,8 +219,8 @@ var CodexAppServerClient = class _CodexAppServerClient {
   constructor(cwd, options) {
     this.cwd = cwd;
     this.options = options;
-    this.exitPromise = new Promise((resolve4) => {
-      this.resolveExit = resolve4;
+    this.exitPromise = new Promise((resolve3) => {
+      this.resolveExit = resolve3;
     });
   }
   static async connect(cwd, opts = {}) {
@@ -239,8 +240,8 @@ var CodexAppServerClient = class _CodexAppServerClient {
     }
     const id = this.nextId;
     this.nextId += 1;
-    return new Promise((resolve4, reject) => {
-      this.pending.set(id, { resolve: resolve4, reject, method });
+    return new Promise((resolve3, reject) => {
+      this.pending.set(id, { resolve: resolve3, reject, method });
       this.sendMessage({ id, method, params });
     });
   }
@@ -429,8 +430,8 @@ ${stderr}` : ""}`
    */
   async waitForExit() {
     let timer = null;
-    const bound = new Promise((resolve4) => {
-      timer = setTimeout(resolve4, CLOSE_EXIT_WAIT_MS);
+    const bound = new Promise((resolve3) => {
+      timer = setTimeout(resolve3, CLOSE_EXIT_WAIT_MS);
       timer.unref?.();
     });
     try {
@@ -747,8 +748,8 @@ function foldRateLimits(prev, next) {
 }
 function createTurnCaptureState(threadId, onItem) {
   let resolveCompletion;
-  const completion = new Promise((resolve4) => {
-    resolveCompletion = resolve4;
+  const completion = new Promise((resolve3) => {
+    resolveCompletion = resolve3;
   });
   return {
     threadId,
@@ -992,18 +993,18 @@ async function runCodexTurn(opts) {
   }
   let timer = null;
   let timedOut = false;
-  const timeout = new Promise((resolve4) => {
+  const timeout = new Promise((resolve3) => {
     timer = setTimeout(() => {
       timedOut = true;
-      resolve4();
+      resolve3();
     }, timeoutMs);
     timer.unref?.();
   });
   let aborted = false;
   let resolveAbort = () => {
   };
-  const abortGate = new Promise((resolve4) => {
-    resolveAbort = resolve4;
+  const abortGate = new Promise((resolve3) => {
+    resolveAbort = resolve3;
   });
   const onAbort = () => {
     aborted = true;
@@ -1291,21 +1292,6 @@ var CodexProvider = class {
     });
   }
   /**
-   * Trust boundary (fail-closed): codex's sandbox is COARSE — a write-enabled
-   * turn is `workspace-write` + approvalPolicy:"never", which lets codex run
-   * shell commands autonomously. It has no "write files but no shell" mode, so a
-   * caller that grants writes while withholding shell (`fix` defaults to
-   * allowShell:false) CANNOT be honored. Refuse rather than silently run MORE
-   * permissively than asked. Runs via the precheckRun seam BEFORE fix's snapshot.
-   */
-  precheckRun(opts) {
-    if (!opts.readOnly && !opts.allowShell) {
-      throw new Error(
-        "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with shell explicitly allowed."
-      );
-    }
-  }
-  /**
    * Probe codex auth without running a turn. Codex has no login/host concept in
    * the neutral summary, so those stay undefined; `message` carries the codex
    * detail string ("ChatGPT login active for …", "… requires OpenAI auth", etc).
@@ -1326,7 +1312,11 @@ var CodexProvider = class {
    */
   async run(opts) {
     const { appendLog: appendLog2, progress } = opts;
-    this.precheckRun(opts);
+    if (!opts.readOnly && !opts.allowShell) {
+      throw new Error(
+        "Codex cannot grant write access without also allowing shell commands (its workspace-write sandbox runs commands autonomously). Re-run with shell explicitly allowed."
+      );
+    }
     const onItem = (ev) => {
       switch (ev.kind) {
         case "assistant":
@@ -1409,18 +1399,17 @@ function defaultSession() {
 async function runAgentSession(args) {
   let activeSession;
   let interrupting = false;
-  const onInterrupt = () => {
+  const handleInterrupt = () => {
     if (interrupting) return;
     interrupting = true;
-    args.onInterrupt?.();
     const exit = () => process.exit(130);
     const guard = setTimeout(exit, INTERRUPT_TEARDOWN_CEILING_MS);
     guard.unref();
     void Promise.resolve(activeSession?.forceStop?.()).catch(() => {
     }).finally(exit);
   };
-  process.on("SIGINT", onInterrupt);
-  process.on("SIGTERM", onInterrupt);
+  process.on("SIGINT", handleInterrupt);
+  process.on("SIGTERM", handleInterrupt);
   try {
     const session = args.buildSession ? args.buildSession() : defaultSession();
     activeSession = session;
@@ -1428,13 +1417,11 @@ async function runAgentSession(args) {
     if (!auth.ok) {
       throw new Error(`codex not authenticated: ${auth.message}`);
     }
-    session.precheckRun?.(args.run);
-    await args.beforeRun?.(session);
     const result = await session.run(args.run);
     return { result };
   } finally {
-    process.removeListener("SIGINT", onInterrupt);
-    process.removeListener("SIGTERM", onInterrupt);
+    process.removeListener("SIGINT", handleInterrupt);
+    process.removeListener("SIGTERM", handleInterrupt);
   }
 }
 
@@ -1442,15 +1429,6 @@ async function runAgentSession(args) {
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
 var FRAMING = {
-  fix: [
-    "You are applying code-review findings that a human has already vetted and approved, delegated by Claude Code's orchestrator. You run headless.",
-    "Edit the real working tree directly. Make the minimal, correct change for each approved finding; do not refactor unrelated code and do NOT run `git commit` (the plugin manages commits and leaves your edits staged for review).",
-    "If a finding cannot be safely applied, skip it and report why rather than forcing a change."
-  ].join("\n"),
-  review: [
-    "You are performing a code review delegated by Claude Code's orchestrator. You run headless.",
-    "This session is read-only: do not attempt to modify files. Report findings; another stage applies any fixes."
-  ].join("\n"),
   ask: [
     "You are one independent voice being consulted on a question or topic.",
     "Reason carefully and state your own honest conclusion. Use only the context",
@@ -1464,16 +1442,18 @@ function resolveExtraContext(cwd, opts) {
   if (!raw?.trim()) return void 0;
   if (!raw.startsWith("@")) return raw.trim();
   const ref = raw.slice(1);
+  const source = ref === "-" ? "from stdin" : `file ${ref}`;
+  let text;
   try {
-    const source = ref === "-" ? 0 : (0, import_node_path2.resolve)(cwd, ref);
-    const text = (0, import_node_fs2.readFileSync)(source, "utf-8").trim();
-    return text || void 0;
+    text = (0, import_node_fs2.readFileSync)(ref === "-" ? 0 : (0, import_node_path2.resolve)(cwd, ref), "utf-8").trim();
   } catch (err) {
-    opts.onWarn?.(
-      `Could not read --context ${ref === "-" ? "from stdin" : `file ${ref}`}: ${err.message}`
-    );
+    const message = `Could not read --context ${source}: ${err.message}`;
+    if (opts.strict) throw new Error(message);
+    opts.onWarn?.(message);
     return void 0;
   }
+  if (!text && opts.strict) throw new Error(`--context ${source} is empty.`);
+  return text || void 0;
 }
 function buildSystemMessage(kind, input = {}) {
   const sections = [];
@@ -1491,26 +1471,10 @@ ${input.extraContext.trim()}`
 
 // src/lib/git.ts
 var import_node_child_process4 = require("node:child_process");
-var import_node_fs3 = require("node:fs");
 var import_node_path3 = require("node:path");
-var MAX_UNTRACKED_BYTES = 24 * 1024;
-var DEFAULT_INLINE_DIFF_MAX_FILES = 2;
-var DEFAULT_INLINE_DIFF_MAX_BYTES = 256 * 1024;
-var SELF_COLLECT_BUFFER_BYTES = 64 * 1024 * 1024;
 function failureReason(result) {
   if (result.stderr.trim()) return result.stderr.trim();
   return result.status === null ? "killed by a signal or failed to spawn" : `exit ${result.status}`;
-}
-function gitDiffTolerant(cwd, args) {
-  const result = git(cwd, args, SELF_COLLECT_BUFFER_BYTES);
-  if (result.error?.code === "ENOBUFS") {
-    return { stdout: "", overflow: true };
-  }
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
-  }
-  return { stdout: result.stdout, overflow: false };
 }
 function truncateUtf8(s, maxBytes) {
   const cap = Math.max(0, Math.trunc(maxBytes));
@@ -1523,11 +1487,10 @@ function truncateUtf8(s, maxBytes) {
   if (lastNl > 0) cut = cut.slice(0, lastNl);
   return { text: cut, truncated: true };
 }
-function git(cwd, args, maxBuffer) {
+function git(cwd, args) {
   const result = (0, import_node_child_process4.spawnSync)("git", args, {
     cwd,
     encoding: "utf8",
-    maxBuffer,
     windowsHide: true
   });
   return {
@@ -1537,54 +1500,13 @@ function git(cwd, args, maxBuffer) {
     error: result.error ?? null
   };
 }
-function gitChecked(cwd, args, maxBuffer) {
-  const result = git(cwd, args, maxBuffer);
+function gitChecked(cwd, args) {
+  const result = git(cwd, args);
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
   }
   return result;
-}
-function isProbablyText(buffer) {
-  const sample = buffer.subarray(0, Math.min(buffer.length, 4096));
-  for (const value of sample) {
-    if (value === 0) return false;
-  }
-  return true;
-}
-function listUniqueFiles(...groups) {
-  return [...new Set(groups.flat().filter(Boolean))].sort();
-}
-function measureGitOutputBytes(cwd, args, maxBytes) {
-  const result = git(cwd, args, maxBytes + 1);
-  if (result.error && result.error.code === "ENOBUFS") return maxBytes + 1;
-  if (result.error) throw result.error;
-  if (result.status !== 0)
-    throw new Error(`git ${args.join(" ")} failed: ${failureReason(result)}`);
-  return Buffer.byteLength(result.stdout, "utf8");
-}
-function measureCombinedGitOutputBytes(cwd, argSets, maxBytes) {
-  let total = 0;
-  for (const args of argSets) {
-    total += measureGitOutputBytes(cwd, args, maxBytes - total);
-    if (total > maxBytes) return total;
-  }
-  return total;
-}
-function normalizeCap(value, fallback) {
-  const raw = value ?? fallback;
-  return Number.isNaN(raw) ? 0 : Math.max(0, Math.trunc(raw));
-}
-function measureUntrackedInlineBytes(cwd, untracked) {
-  let total = 0;
-  for (const file of untracked) {
-    total += Buffer.byteLength(formatUntrackedFile(cwd, file), "utf8");
-  }
-  return total;
-}
-function buildBranchComparison(cwd, baseRef) {
-  const mergeBase = gitChecked(cwd, ["merge-base", "HEAD", baseRef]).stdout.trim();
-  return { mergeBase, commitRange: `${mergeBase}..HEAD` };
 }
 function ensureGitRepository(cwd) {
   const result = git(cwd, ["rev-parse", "--show-toplevel"]);
@@ -1595,6 +1517,21 @@ function ensureGitRepository(cwd) {
 }
 function getRepoRoot(cwd) {
   return gitChecked(cwd, ["rev-parse", "--show-toplevel"]).stdout.trim();
+}
+function getMainCheckoutRoot(cwd) {
+  const commonDir = gitChecked(cwd, [
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-common-dir"
+  ]).stdout.trim();
+  return (0, import_node_path3.dirname)(commonDir);
+}
+function getBranchOrShortSha(cwd) {
+  const branch = gitChecked(cwd, ["branch", "--show-current"]).stdout.trim();
+  return branch || gitChecked(cwd, ["rev-parse", "--short", "HEAD"]).stdout.trim();
+}
+function countBranchChanges(cwd, baseRef) {
+  return gitChecked(cwd, ["diff", "--name-only", `${baseRef}...HEAD`]).stdout.split("\n").filter(Boolean).length;
 }
 function detectDefaultBranch(cwd) {
   const symbolic = git(cwd, ["symbolic-ref", "refs/remotes/origin/HEAD"]);
@@ -1608,12 +1545,7 @@ function detectDefaultBranch(cwd) {
     if (git(cwd, ["show-ref", "--verify", "--quiet", `refs/remotes/origin/${candidate}`]).status === 0)
       return `origin/${candidate}`;
   }
-  throw new Error(
-    "Unable to detect the repository default branch. Pass --base <ref> or use --scope working-tree."
-  );
-}
-function getCurrentBranch(cwd) {
-  return gitChecked(cwd, ["branch", "--show-current"]).stdout.trim() || "HEAD";
+  throw new Error("Unable to detect the repository default branch. Pass --base <ref>.");
 }
 function getWorkingTreeState(cwd) {
   const split = (s) => s.trim().split("\n").filter(Boolean);
@@ -1629,257 +1561,14 @@ function getWorkingTreeState(cwd) {
 }
 function resolveReviewTarget(cwd, options = {}) {
   ensureGitRepository(cwd);
-  const requestedScope = options.scope ?? "auto";
-  const baseRef = options.base ?? null;
-  const supported = /* @__PURE__ */ new Set(["auto", "working-tree", "branch"]);
-  if (baseRef) {
-    return { mode: "branch", label: `branch diff against ${baseRef}`, baseRef, explicit: true };
+  if (options.base) {
+    return { mode: "branch", label: `branch diff against ${options.base}`, baseRef: options.base };
   }
-  if (requestedScope === "working-tree") {
-    return { mode: "working-tree", label: "working tree diff", explicit: true };
-  }
-  if (!supported.has(requestedScope)) {
-    throw new Error(
-      `Unsupported review scope "${requestedScope}". Use one of: auto, working-tree, branch, or pass --base <ref>.`
-    );
-  }
-  if (requestedScope === "branch") {
-    const detected2 = detectDefaultBranch(cwd);
-    return {
-      mode: "branch",
-      label: `branch diff against ${detected2}`,
-      baseRef: detected2,
-      explicit: true
-    };
-  }
-  const state = getWorkingTreeState(cwd);
-  if (state.isDirty) {
-    return { mode: "working-tree", label: "working tree diff", explicit: false };
+  if (getWorkingTreeState(cwd).isDirty) {
+    return { mode: "working-tree", label: "working tree diff" };
   }
   const detected = detectDefaultBranch(cwd);
-  return {
-    mode: "branch",
-    label: `branch diff against ${detected}`,
-    baseRef: detected,
-    explicit: false
-  };
-}
-function formatSection(title, body) {
-  return [`## ${title}`, "", body.trim() ? body.trim() : "(none)", ""].join("\n");
-}
-function formatUntrackedFile(cwd, relativePath) {
-  const absolute = (0, import_node_path3.join)(cwd, relativePath);
-  if (!(0, import_node_fs3.existsSync)(absolute)) return `### ${relativePath}
-(skipped: missing)`;
-  let stat;
-  try {
-    stat = (0, import_node_fs3.statSync)(absolute);
-  } catch {
-    return `### ${relativePath}
-(skipped: unreadable)`;
-  }
-  if (stat.isDirectory()) return `### ${relativePath}
-(skipped: directory)`;
-  if (stat.size > MAX_UNTRACKED_BYTES)
-    return `### ${relativePath}
-(skipped: ${stat.size} bytes exceeds ${MAX_UNTRACKED_BYTES} byte limit)`;
-  let buffer;
-  try {
-    buffer = (0, import_node_fs3.readFileSync)(absolute);
-  } catch {
-    return `### ${relativePath}
-(skipped: unreadable)`;
-  }
-  if (!isProbablyText(buffer)) return `### ${relativePath}
-(skipped: binary file)`;
-  return [`### ${relativePath}`, "```", buffer.toString("utf8").trimEnd(), "```"].join("\n");
-}
-function collectWorkingTreeContext(cwd, state, includeDiff, truncatedDiffBytes) {
-  const status = gitChecked(cwd, ["status", "--short", "--untracked-files=all"]).stdout.trim();
-  const changedFiles = listUniqueFiles(state.staged, state.unstaged, state.untracked);
-  let parts;
-  if (includeDiff) {
-    parts = [
-      formatSection("Git Status", status),
-      formatSection(
-        "Staged Diff",
-        gitChecked(cwd, ["diff", "--cached", "--binary", "--no-ext-diff", "--submodule=diff"]).stdout
-      ),
-      formatSection(
-        "Unstaged Diff",
-        gitChecked(cwd, ["diff", "--binary", "--no-ext-diff", "--submodule=diff"]).stdout
-      ),
-      // Inline path: include full untracked file bodies (small diffs only).
-      formatSection(
-        "Untracked Files",
-        state.untracked.map((f) => formatUntrackedFile(cwd, f)).join("\n\n")
-      )
-    ];
-  } else {
-    const staged = gitDiffTolerant(cwd, ["diff", "--cached", "--no-ext-diff", "--submodule=short"]);
-    const unstaged = gitDiffTolerant(cwd, ["diff", "--no-ext-diff", "--submodule=short"]);
-    const overflow = staged.overflow || unstaged.overflow;
-    const combined = [staged.stdout, unstaged.stdout].filter(Boolean).join("\n");
-    const trimmed = truncateUtf8(combined, truncatedDiffBytes);
-    let diffBlock = trimmed.truncated ? `${trimmed.text}
-
-... (diff truncated; read individual files for the rest)` : trimmed.text;
-    if (overflow) {
-      diffBlock = `(diff exceeded ${SELF_COLLECT_BUFFER_BYTES} bytes; inline omitted \u2014 use the read tool on the changed files listed above)
-
-${diffBlock}`;
-    }
-    parts = [
-      formatSection("Git Status", status),
-      formatSection(
-        "Staged Diff Stat",
-        gitChecked(cwd, ["diff", "--shortstat", "--cached"]).stdout.trim()
-      ),
-      formatSection("Unstaged Diff Stat", gitChecked(cwd, ["diff", "--shortstat"]).stdout.trim()),
-      formatSection("Changed Files", changedFiles.join("\n")),
-      formatSection("Truncated Diff", diffBlock),
-      formatSection("Untracked Files", state.untracked.join("\n"))
-    ];
-  }
-  return {
-    mode: "working-tree",
-    summary: `Reviewing ${state.staged.length} staged, ${state.unstaged.length} unstaged, and ${state.untracked.length} untracked file(s).`,
-    content: parts.join("\n"),
-    changedFiles
-  };
-}
-function collectBranchContext(cwd, baseRef, comparison, includeDiff, truncatedDiffBytes) {
-  const currentBranch = getCurrentBranch(cwd);
-  const changedFiles = gitChecked(cwd, ["diff", "--name-only", comparison.commitRange]).stdout.trim().split("\n").filter(Boolean);
-  const log = gitChecked(cwd, [
-    "log",
-    "--oneline",
-    "--decorate",
-    comparison.commitRange
-  ]).stdout.trim();
-  const stat = gitChecked(cwd, ["diff", "--stat", comparison.commitRange]).stdout.trim();
-  let parts;
-  if (includeDiff) {
-    parts = [
-      formatSection("Commit Log", log),
-      formatSection("Diff Stat", stat),
-      formatSection(
-        "Branch Diff",
-        gitChecked(cwd, [
-          "diff",
-          "--binary",
-          "--no-ext-diff",
-          "--submodule=diff",
-          comparison.commitRange
-        ]).stdout
-      )
-    ];
-  } else {
-    const branchDiff = gitDiffTolerant(cwd, [
-      "diff",
-      "--no-ext-diff",
-      "--submodule=short",
-      comparison.commitRange
-    ]);
-    const trimmed = truncateUtf8(branchDiff.stdout, truncatedDiffBytes);
-    let diffBlock = trimmed.truncated ? `${trimmed.text}
-
-... (diff truncated; read individual files for the rest)` : trimmed.text;
-    if (branchDiff.overflow) {
-      diffBlock = `(diff exceeded ${SELF_COLLECT_BUFFER_BYTES} bytes; inline omitted \u2014 use the read tool on the changed files listed above)
-
-${diffBlock}`;
-    }
-    parts = [
-      formatSection("Commit Log", log),
-      formatSection("Diff Stat", stat),
-      formatSection("Changed Files", changedFiles.join("\n")),
-      formatSection("Truncated Diff", diffBlock)
-    ];
-  }
-  return {
-    mode: "branch",
-    summary: `Reviewing branch ${currentBranch} against ${baseRef} from merge-base ${comparison.mergeBase}.`,
-    content: parts.join("\n"),
-    changedFiles
-  };
-}
-function collectReviewContext(cwd, target, options = {}) {
-  const repoRoot = getRepoRoot(cwd);
-  const branch = getCurrentBranch(repoRoot);
-  const maxInlineFiles = normalizeCap(options.maxInlineFiles, DEFAULT_INLINE_DIFF_MAX_FILES);
-  const maxInlineDiffBytes = normalizeCap(
-    options.maxInlineDiffBytes,
-    DEFAULT_INLINE_DIFF_MAX_BYTES
-  );
-  const decideInline = (measured) => {
-    if (options.includeDiff !== void 0) {
-      return { inline: options.includeDiff, extraBytes: null };
-    }
-    if (measured.fileCount > maxInlineFiles) return { inline: false, extraBytes: null };
-    if (measured.diffBytes > maxInlineDiffBytes) return { inline: false, extraBytes: null };
-    if (!measured.extraBytes) return { inline: true, extraBytes: null };
-    const extra = measured.extraBytes();
-    return { inline: measured.diffBytes + extra <= maxInlineDiffBytes, extraBytes: extra };
-  };
-  let details;
-  let includeDiff;
-  let diffBytes;
-  let untrackedBytes;
-  if (target.mode === "working-tree") {
-    const state = getWorkingTreeState(repoRoot);
-    diffBytes = measureCombinedGitOutputBytes(
-      repoRoot,
-      [
-        ["diff", "--cached", "--binary", "--no-ext-diff", "--submodule=diff"],
-        ["diff", "--binary", "--no-ext-diff", "--submodule=diff"]
-      ],
-      maxInlineDiffBytes
-    );
-    const fileCount = listUniqueFiles(state.staged, state.unstaged, state.untracked).length;
-    const decision = decideInline({
-      fileCount,
-      diffBytes,
-      extraBytes: () => measureUntrackedInlineBytes(repoRoot, state.untracked)
-    });
-    includeDiff = decision.inline;
-    untrackedBytes = decision.extraBytes;
-    details = collectWorkingTreeContext(repoRoot, state, includeDiff, maxInlineDiffBytes);
-  } else {
-    if (!target.baseRef) throw new Error("Branch target requires baseRef.");
-    const comparison = buildBranchComparison(repoRoot, target.baseRef);
-    const fileCount = gitChecked(repoRoot, ["diff", "--name-only", comparison.commitRange]).stdout.trim().split("\n").filter(Boolean).length;
-    diffBytes = measureGitOutputBytes(
-      repoRoot,
-      ["diff", "--binary", "--no-ext-diff", "--submodule=diff", comparison.commitRange],
-      maxInlineDiffBytes
-    );
-    includeDiff = decideInline({ fileCount, diffBytes }).inline;
-    untrackedBytes = null;
-    details = collectBranchContext(
-      repoRoot,
-      target.baseRef,
-      comparison,
-      includeDiff,
-      maxInlineDiffBytes
-    );
-  }
-  const collectionGuidance = includeDiff ? "Use the repository context below as primary evidence." : options.shellAvailable ? "The repository context below is a lightweight summary. Inspect the target diff yourself with read-only git commands before finalizing findings." : 'The repository context below is a lightweight summary because the diff is too large to inline. Shell execution is disabled. Use the read tool to open individual changed files listed under "Changed Files" and ground findings in their actual contents before finalizing.';
-  return {
-    cwd: repoRoot,
-    repoRoot,
-    branch,
-    target,
-    mode: details.mode,
-    summary: details.summary,
-    content: details.content,
-    changedFiles: details.changedFiles,
-    fileCount: details.changedFiles.length,
-    diffBytes,
-    untrackedBytes,
-    inputMode: includeDiff ? "inline-diff" : "self-collect",
-    collectionGuidance
-  };
+  return { mode: "branch", label: `branch diff against ${detected}`, baseRef: detected };
 }
 
 // src/lib/turn-runtime.ts
@@ -1958,8 +1647,7 @@ async function runAsk(cwd, options) {
         appendLog: log,
         progress,
         signal: turn.signal
-      },
-      log
+      }
     }));
   } catch (err) {
     turn.clear();
@@ -2000,729 +1688,175 @@ ${body}
   progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
 }
 
-// src/commands/fix.ts
+// src/commands/review.ts
 var import_node_child_process5 = require("node:child_process");
 var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
-
-// src/lib/findings.ts
-var VALID_SEVERITIES = /* @__PURE__ */ new Set(["blocker", "major", "minor"]);
-function extractJsonBlock(text) {
-  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
-  const fenced = [];
-  for (const m of text.matchAll(fenceRe)) {
-    if (m[1]?.trim()) fenced.push(m[1]);
-  }
-  const candidates = fenced.reverse();
-  const lastSpan = (open, close) => {
-    const start = text.lastIndexOf(open);
-    const end = text.lastIndexOf(close);
-    return start !== -1 && end > start ? text.slice(start, end + 1) : void 0;
-  };
-  const spans = [lastSpan("[", "]"), lastSpan("{", "}")].filter((s) => !!s).sort((a, b) => b.length - a.length);
-  candidates.push(...spans);
-  for (const c of candidates) {
-    try {
-      return JSON.parse(c.trim());
-    } catch {
-    }
-  }
-  return null;
-}
-function normalizeFindings(parsed) {
-  const arr = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray(parsed.findings) ? parsed.findings : [];
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (let i = 0; i < arr.length; i++) {
-    const raw = arr[i];
-    if (!raw || typeof raw !== "object") continue;
-    const r = raw;
-    const file = typeof r.file === "string" ? r.file : "";
-    const title = typeof r.title === "string" ? r.title : "";
-    if (!file || !title) continue;
-    const sev = typeof r.severity === "string" && VALID_SEVERITIES.has(r.severity) ? r.severity : "major";
-    let id = typeof r.id === "string" && r.id.trim() ? r.id.trim() : `finding-${i + 1}`;
-    if (seen.has(id)) id = `${id}-${i + 1}`;
-    seen.add(id);
-    out.push({
-      id,
-      file,
-      line: typeof r.line === "string" ? r.line : typeof r.line === "number" ? String(r.line) : void 0,
-      severity: sev,
-      title,
-      rationale: typeof r.rationale === "string" ? r.rationale : "",
-      suggestedFix: typeof r.suggestedFix === "string" ? r.suggestedFix : ""
-    });
-  }
-  return out;
-}
-var FINDINGS_OUTPUT_INSTRUCTION = `
-<structured_findings>
-This review feeds an automated fix pipeline. After your markdown review, output
-ONE fenced code block tagged \`json\` containing an array of the material
-findings (and ONLY material findings \u2014 omit notes, praise, and style nits):
-
-\`\`\`json
-[
-  {
-    "id": "kebab-case-stable-id",
-    "file": "relative/path.ts",
-    "line": "42-50",
-    "severity": "blocker | major | minor",
-    "title": "one-sentence statement of the defect",
-    "rationale": "why this is a real defect",
-    "suggestedFix": "concrete change to make"
-  }
-]
-\`\`\`
-
-Rules:
-- If there are no material findings, output an empty array: \`[]\`.
-- "line" is optional; omit it for file-wide findings.
-- Keep ids stable and descriptive \u2014 they are how a human approves each fix.
-</structured_findings>
-`;
-
-// src/commands/fix.ts
-var DEFAULT_EFFORT2 = "high";
-var DEFAULT_TIMEOUT_MS2 = 30 * 60 * 1e3;
-function tryGit(args, cwd) {
-  const res = (0, import_node_child_process5.spawnSync)("git", args, { cwd, encoding: "utf-8" });
-  return {
-    ok: res.status === 0,
-    stdout: (res.stdout ?? "").trim(),
-    // A spawn failure (git missing, bad cwd) produces no stderr at all — fall
-    // back to the spawn error so the caller always has something to report.
-    stderr: (res.stderr ?? "").trim() || (res.error?.message ?? "")
-  };
-}
-function gitHead(cwd) {
-  try {
-    return (0, import_node_child_process5.execFileSync)("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf-8" }).trim();
-  } catch {
-    return "";
-  }
-}
-function emit(env) {
-  const json = JSON.stringify(env);
-  process.stdout.write(`${json}
-`);
-  return json;
-}
-function loadFindings(path) {
-  const raw = (0, import_node_fs4.readFileSync)(path, "utf-8");
-  return normalizeFindings(JSON.parse(raw));
-}
-function buildFixPrompt(findings) {
-  const blocks = findings.map((f, i) => {
-    const loc = f.line ? `${f.file}:${f.line}` : f.file;
-    return [
-      `### Finding ${i + 1} \u2014 id: ${f.id} (${f.severity})`,
-      `Location: ${loc}`,
-      `Issue: ${f.title}`,
-      f.rationale ? `Why: ${f.rationale}` : "",
-      f.suggestedFix ? `Suggested fix: ${f.suggestedFix}` : ""
-    ].filter(Boolean).join("\n");
-  }).join("\n\n");
-  return [
-    "Apply the following code-review fixes to this repository. Each finding has",
-    "already been vetted by a human reviewer \u2014 implement the fix for each one.",
-    "",
-    "Guidelines:",
-    "- Make the minimal, correct change for each finding. Do not refactor unrelated code.",
-    "- If a finding cannot be safely applied (already fixed, no longer applies, or",
-    "  the suggested fix would break something), skip it and explain why.",
-    "- Do not commit; just edit the files.",
-    "",
-    "FINDINGS TO FIX:",
-    "",
-    blocks,
-    "",
-    "When done, output ONE fenced ```json block reporting what you did:",
-    "```json",
-    '{ "applied": ["finding-id", ...], "skipped": [{ "id": "finding-id", "reason": "..." }] }',
-    "```"
-  ].join("\n");
-}
-function parseApplyReport(text, findings) {
-  const parsed = extractJsonBlock(text);
-  const ids = new Set(findings.map((f) => f.id));
-  const applied = [];
-  const skipped = [];
-  if (parsed && typeof parsed === "object") {
-    const p = parsed;
-    if (Array.isArray(p.applied)) {
-      for (const a of p.applied) if (typeof a === "string" && ids.has(a)) applied.push(a);
-    }
-    if (Array.isArray(p.skipped)) {
-      for (const s of p.skipped) {
-        if (s && typeof s === "object") {
-          const id = s.id;
-          const reason = s.reason;
-          if (typeof id === "string")
-            skipped.push({ id, reason: typeof reason === "string" ? reason : "no reason given" });
-        }
-      }
-    }
-  }
-  const accounted = /* @__PURE__ */ new Set([...applied, ...skipped.map((s) => s.id)]);
-  for (const f of findings) {
-    if (!accounted.has(f.id)) skipped.push({ id: f.id, reason: "not reported by the model" });
-  }
-  return { applied, skipped };
-}
-function computeStagedDiff(cwd, baseline, log) {
-  const staged = tryGit(["add", "-A"], cwd);
-  const names = tryGit(["diff", "--cached", "--name-only", baseline], cwd);
-  const numstat = tryGit(["diff", "--cached", "--numstat", baseline], cwd);
-  for (const [what, res] of [
-    ["git add -A", staged],
-    ["git diff --cached --name-only", names],
-    ["git diff --cached --numstat", numstat]
-  ]) {
-    if (!res.ok) {
-      log(`fix diff stats unavailable: ${what} failed: ${res.stderr || "no output"}`);
-      return null;
-    }
-  }
-  const filesModified = names.stdout ? names.stdout.split("\n").filter(Boolean) : [];
-  let linesAdded = 0;
-  let linesRemoved = 0;
-  for (const line of numstat.stdout ? numstat.stdout.split("\n") : []) {
-    const [addStr, delStr] = line.split("	");
-    const add = Number.parseInt(addStr ?? "0", 10);
-    const del = Number.parseInt(delStr ?? "0", 10);
-    if (Number.isFinite(add)) linesAdded += add;
-    if (Number.isFinite(del)) linesRemoved += del;
-  }
-  return { filesModified, linesAdded, linesRemoved };
-}
-async function runFix(cwd, options = {}) {
-  const progress = makeProgress();
-  const stateDir = resolveStateDir(cwd);
-  const jobId = generateJobId();
-  const reasoning = options.reasoning ?? DEFAULT_EFFORT2;
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS2;
-  const requestedModel = options.model ?? resolveModel("judgment");
-  const log = (msg) => appendLog(stateDir, jobId, msg);
-  if (!options.findingsPath) {
-    emit({
-      status: "failed",
-      jobId,
-      error: "Missing --findings <path>; provide the approved findings JSON."
-    });
-    process.exit(1);
-  }
-  const findingsAbs = (0, import_node_path4.resolve)(cwd, options.findingsPath);
-  let findings;
-  try {
-    findings = loadFindings(findingsAbs);
-  } catch (err) {
-    emit({
-      status: "failed",
-      jobId,
-      error: `Could not read findings file ${findingsAbs}: ${err.message}`
-    });
-    process.exit(1);
-  }
-  if (findings.length === 0) {
-    emit({ status: "failed", jobId, error: "No findings to fix (empty list after parsing)." });
-    process.exit(1);
-  }
-  log(`fix start: model=${requestedModel} findings=${findings.length} source=${findingsAbs}`);
-  let repoRoot;
-  try {
-    repoRoot = ensureGitRepository(cwd);
-  } catch (err) {
-    emit({ status: "failed", jobId, error: `Not a git repository: ${err.message}` });
-    process.exit(1);
-  }
-  let preFixDirty = false;
-  let baselineCommit = "";
-  let diffBase = "";
-  const snapshotInfo = () => baselineCommit ? { baselineCommit, ...preFixDirty ? { preFixDirty } : {} } : {};
-  const turn = startTurnTimeout({ timeoutMs, progress, log });
-  let envelopeDone = false;
-  const onInterrupt = () => {
-    if (envelopeDone) return;
-    envelopeDone = true;
-    turn.clear();
-    progress("Received interrupt signal; aborting fix session.");
-    emit({ status: "failed", jobId, error: "Interrupted by signal" });
-  };
-  const extraContext = resolveExtraContext(cwd, {
-    context: options.context,
-    onWarn: (m) => {
-      progress(m);
-      log(m);
-    }
-  });
-  progress(`Applying ${findings.length} approved fix(es) (model=${requestedModel})\u2026`);
-  let result;
-  try {
-    ({ result } = await runAgentSession({
-      cwd: repoRoot,
-      run: {
-        cwd: repoRoot,
-        prompt: buildFixPrompt(findings),
-        model: requestedModel,
-        reasoning,
-        readOnly: false,
-        allowShell: options.allowShell ?? false,
-        allowUrl: options.allowUrl ?? false,
-        systemMessage: buildSystemMessage("fix", { extraContext }),
-        appendLog: log,
-        progress,
-        signal: turn.signal
-      },
-      onInterrupt,
-      // Post-precheck / pre-run: snapshot pre-existing changes so the fix diff
-      // is isolated. Runs ONLY after precheckRun passes. Uses `git stash create`
-      // — an ephemeral snapshot object — so NOTHING (working tree, index, branch
-      // history, stash ref) is mutated, unlike the prior baseline-commit design.
-      beforeRun: () => {
-        baselineCommit = gitHead(repoRoot);
-        if (!baselineCommit) {
-          envelopeDone = true;
-          turn.clear();
-          emit({
-            status: "failed",
-            jobId,
-            error: "fix requires at least one commit to diff against (repository has no commits yet)."
-          });
-          process.exit(1);
-        }
-        const dirty = tryGit(["status", "--porcelain"], repoRoot);
-        preFixDirty = dirty.ok && dirty.stdout.trim().length > 0;
-        if (preFixDirty) {
-          const snap = tryGit(["stash", "create"], repoRoot);
-          diffBase = snap.ok && snap.stdout.trim() ? snap.stdout.trim() : baselineCommit;
-          progress("Isolating the fix diff from your uncommitted changes (no commit made).");
-          log(
-            `pre-fix dirty; diff base = ${diffBase === baselineCommit ? "HEAD" : "stash-create snapshot"}`
-          );
-        } else {
-          diffBase = baselineCommit;
-        }
-      },
-      log
-    }));
-  } catch (err) {
-    turn.clear();
-    if (!envelopeDone) {
-      envelopeDone = true;
-      emit({ status: "failed", jobId, error: err.message, ...snapshotInfo() });
-    }
-    process.exit(1);
-  }
-  turn.clear();
-  const success = result.success && !turn.timedOut();
-  if (!success) {
-    if (!envelopeDone) {
-      envelopeDone = true;
-      emit({
-        status: "failed",
-        jobId,
-        error: turn.timedOut() ? `Timed out after ${timeoutMs}ms` : withCause("Fix session did not complete successfully.", result.error),
-        ...snapshotInfo()
-      });
-    }
-    process.exit(1);
-  }
-  envelopeDone = true;
-  const report = parseApplyReport(result.lastAssistantMessage, findings);
-  const diff = computeStagedDiff(repoRoot, diffBase, log);
-  const summary = result.summary?.trim() || `Applied ${report.applied.length}/${findings.length} finding(s); ${report.skipped.length} skipped.`;
-  const envelope = {
-    status: "fixed",
-    jobId,
-    summary,
-    baselineCommit,
-    preFixDirty,
-    filesModified: diff?.filesModified ?? null,
-    linesAdded: diff?.linesAdded ?? null,
-    linesRemoved: diff?.linesRemoved ?? null,
-    applied: report.applied,
-    skipped: report.skipped,
-    model: requestedModel
-  };
-  const envelopeJson = emit(envelope);
-  if (options.writePath) {
-    const outPath = (0, import_node_path4.resolve)(cwd, options.writePath);
-    (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(outPath), { recursive: true });
-    (0, import_node_fs4.writeFileSync)(outPath, `${envelopeJson}
-`, "utf-8");
-    progress(`Report saved to ${outPath}`);
-  }
-  const diffSummary = diff ? `files=${diff.filesModified.length} (+${diff.linesAdded}/-${diff.linesRemoved})` : "diff stats unavailable (git failed \u2014 see the job log)";
-  progress(
-    `Fix done \u2014 applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`
-  );
-  log(`fix done: applied=${report.applied.length} skipped=${report.skipped.length} ${diffSummary}`);
-  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
-}
+var import_node_path5 = require("node:path");
 
 // src/lib/review-prompts.ts
-var STANDARD = `<role>
-You are a careful, technically rigorous code reviewer.
-Your job is to find real defects in the change provided.
-</role>
-
-<task>
-Review the repository context below.
-Target: {{TARGET_LABEL}}
-{{USER_FOCUS_BLOCK}}
-</task>
-
-<focus_areas>
-Prioritize material defects:
-- correctness bugs (off-by-one, null deref, wrong branch taken)
-- error handling gaps and unhandled failure paths
-- concurrency, ordering, and re-entrancy issues
-- input validation and trust boundaries
-- resource leaks and lifecycle bugs
-- regressions to existing behavior
-- security: auth, permissions, injection, data exposure
-</focus_areas>
-
-<finding_bar>
-Report only material findings. Skip style nits, naming preferences, and speculative concerns.
-Each finding should answer:
-1. What is wrong?
-2. Where is it (file + line range)?
-3. Why does it fail?
-4. What concrete change would fix it?
-</finding_bar>
-
-<output_format>
-Return markdown. Structure:
-
-# Review Summary
-One terse paragraph: ship / needs-attention / blocker, plus the overall risk read.
-
-## Findings
-For each finding, a level-3 heading with the file path and line range, then:
-- **Issue**: one sentence
-- **Why it matters**: one to three sentences
-- **Fix**: concrete recommendation
-
-## Notes
-Optional. Anything notable that is not a finding (e.g., test coverage gaps, follow-up work).
-
-If there are no material findings, say so directly under "Review Summary" and skip "Findings".
-</output_format>
-
-<grounding_rules>
-Ground every finding in the repository context or in evidence you can collect with read-only commands.
-Do not invent files, line numbers, or behavior you cannot support.
-Keep confidence honest \u2014 if a conclusion depends on inference, say so.
-</grounding_rules>
-
-<collection_guidance>
-{{REVIEW_COLLECTION_GUIDANCE}}
-</collection_guidance>
-
-<repository_context>
-{{REVIEW_INPUT}}
-</repository_context>
-`;
-var ADVERSARIAL = `<role>
-You are performing an adversarial software review.
-Your job is to break confidence in the change, not to validate it.
-</role>
-
-<task>
-Review the repository context below as if you are trying to find the strongest reasons this change should not ship yet.
-Target: {{TARGET_LABEL}}
-{{USER_FOCUS_BLOCK}}
-</task>
-
-<operating_stance>
-Default to skepticism.
-Assume the change can fail in subtle, high-cost, or user-visible ways until the evidence says otherwise.
-Do not give credit for good intent, partial fixes, or likely follow-up work.
-If something only works on the happy path, treat that as a real weakness.
-</operating_stance>
-
-<attack_surface>
-Prioritize the kinds of failures that are expensive, dangerous, or hard to detect:
-- auth, permissions, tenant isolation, and trust boundaries
-- data loss, corruption, duplication, and irreversible state changes
-- rollback safety, retries, partial failure, and idempotency gaps
-- race conditions, ordering assumptions, stale state, and re-entrancy
-- empty-state, null, timeout, and degraded dependency behavior
-- version skew, schema drift, migration hazards, and compatibility regressions
-- observability gaps that would hide failure or make recovery harder
-- design choices that work today but constrain future changes
-</attack_surface>
-
-<review_method>
-Actively try to disprove the change.
-Look for violated invariants, missing guards, unhandled failure paths, and assumptions that stop being true under stress.
-Trace how bad inputs, retries, concurrent actions, or partially completed operations move through the code.
-If the user supplied a focus area, weight it heavily, but still report any other material issue you can defend.
-Question the design itself: is this the right approach, or is it a local optimum that will hurt later?
-</review_method>
-
-<finding_bar>
-Report only material findings.
-Do not include style feedback, naming feedback, low-value cleanup, or speculative concerns without evidence.
-A finding should answer:
-1. What can go wrong?
-2. Why is this code path vulnerable?
-3. What is the likely impact?
-4. What concrete change would reduce the risk?
-</finding_bar>
-
-<output_format>
-Return markdown. Structure:
-
-# Adversarial Review
-One paragraph: ship / needs-attention / no-ship, written as a terse risk verdict, not a neutral recap.
-
-## Findings
-For each finding, a level-3 heading with the file path and line range, then:
-- **Risk**: what fails, in one sentence
-- **Why it is plausible**: defensible reasoning grounded in the code
-- **Impact**: concrete consequence (data loss, auth bypass, regression, etc.)
-- **Mitigation**: what change would reduce the risk
-
-## Design Concerns
-Optional. Higher-level concerns about the chosen approach, tradeoffs, or assumptions that may not hold.
-</output_format>
-
-<grounding_rules>
-Be aggressive, but stay grounded.
-Every finding must be defensible from the provided repository context or tool outputs.
-Do not invent files, lines, code paths, incidents, attack chains, or runtime behavior you cannot support.
-If a conclusion depends on an inference, state that explicitly and keep the confidence honest.
-</grounding_rules>
-
-<calibration_rules>
-Prefer one strong finding over several weak ones.
-Do not dilute serious issues with filler.
-If the change looks safe, say so directly and return no findings.
-</calibration_rules>
-
-<collection_guidance>
-{{REVIEW_COLLECTION_GUIDANCE}}
-</collection_guidance>
-
-<repository_context>
-{{REVIEW_INPUT}}
-</repository_context>
-`;
-var SIMPLIFY = `<role>
-You are a senior engineer reviewing a change for simplification and cleanup ONLY.
-You do NOT hunt for correctness bugs \u2014 a separate reviewer covers those.
-Your job is to find where the change can be made simpler, smaller, or more reuse-driven without altering behavior.
-</role>
-
-<task>
-Review the repository context below for cleanup opportunities.
-Target: {{TARGET_LABEL}}
-{{USER_FOCUS_BLOCK}}
-</task>
-
-<focus_areas>
-Prioritize quality cleanups that preserve behavior:
-- reuse: duplicated logic, copy-paste, or knowledge that should be extracted to one source of truth (apply the drift test \u2014 extract only when divergence would be a bug)
-- simplification: dead code, redundant branches, needless indirection, over-engineering, an abstraction with a single caller
-- the ladder: hand-rolled code that a stdlib, native platform feature, or an already-installed dependency already provides
-- efficiency: obviously wasteful work (repeated recomputation, O(n^2) where a map suffices) \u2014 only when the simpler form is also faster
-- altitude: logic sitting at the wrong layer, or a one-liner buried in scaffolding
-</focus_areas>
-
-<finding_bar>
-Report only material cleanups. Each must be behavior-preserving \u2014 if a change would alter behavior, it belongs to the bug reviewer, not here. Skip pure style/naming nits.
-Each finding should answer:
-1. What is more complex than it needs to be?
-2. Where is it (file + line range)?
-3. Why is the simpler form equivalent in behavior?
-4. What concrete change makes it simpler?
-</finding_bar>
-
-<output_format>
-Return markdown. Structure:
-
-# Cleanup Review
-One terse paragraph: how much incidental complexity the change carries.
-
-## Cleanups
-For each finding, a level-3 heading with the file path and line range, then:
-- **Complexity**: one sentence on what is over-built
-- **Equivalent because**: why the simpler form preserves behavior
-- **Simpler form**: concrete change
-
-If there is nothing material to simplify, say so directly and skip "Cleanups".
-</output_format>
-
-<grounding_rules>
-Ground every cleanup in the repository context. Do not invent files or behavior.
-If a simplification depends on an assumption about behavior, state it \u2014 never propose a change you cannot show is behavior-preserving.
-</grounding_rules>
-
-<collection_guidance>
-{{REVIEW_COLLECTION_GUIDANCE}}
-</collection_guidance>
-
-<repository_context>
-{{REVIEW_INPUT}}
-</repository_context>
-`;
-function interpolate(template, vars) {
-  return template.replace(
-    /\{\{([A-Z_]+)\}\}/g,
-    (_, key) => Object.hasOwn(vars, key) ? vars[key] : ""
-  );
+var import_node_fs3 = require("node:fs");
+var import_node_path4 = require("node:path");
+function pluginRoot() {
+  return (0, import_node_path4.dirname)((0, import_node_path4.dirname)((0, import_node_fs3.realpathSync)(process.argv[1])));
 }
-function buildReviewPrompt(kind, vars) {
-  const template = kind === "adversarial" ? ADVERSARIAL : kind === "simplify" ? SIMPLIFY : STANDARD;
-  const focusBlock = vars.focusText.trim() ? `User focus: ${vars.focusText.trim()}` : "No extra focus provided.";
-  return interpolate(template, {
-    TARGET_LABEL: vars.context.target.label,
-    USER_FOCUS_BLOCK: focusBlock,
-    REVIEW_COLLECTION_GUIDANCE: vars.context.collectionGuidance,
-    REVIEW_INPUT: vars.context.content
-  });
+function loadReviewRubric(root = pluginRoot()) {
+  const rubricPath = (0, import_node_path4.join)(root, "references", "review-rubric.md");
+  let text;
+  try {
+    text = (0, import_node_fs3.readFileSync)(rubricPath, "utf8");
+  } catch (err) {
+    throw new Error(
+      `Review rubric not found at ${rubricPath} (${err.message}). Reinstall the harry plugin.`
+    );
+  }
+  if (!text.trim()) throw new Error(`Review rubric at ${rubricPath} is empty.`);
+  return text.trim();
+}
+var OUTSIDE_THE_DIFF = "Code outside those changes is context, not a review target: read it to understand the change, but problems that live only outside the changes must not be reported.";
+function targetSection(target) {
+  if (target.mode === "branch") {
+    if (!target.baseRef) throw new Error("Branch target requires baseRef.");
+    return [
+      "# Review target",
+      "",
+      `Review the changes this branch makes against \`${target.baseRef}\`. Run \`git diff ${target.baseRef}...HEAD\` to see them \u2014 that diff is the review target.`,
+      "",
+      OUTSIDE_THE_DIFF
+    ].join("\n");
+  }
+  return [
+    "# Review target",
+    "",
+    "Review the uncommitted changes in this working tree \u2014 staged, unstaged and untracked. See them with:",
+    "",
+    "- `git status --short --untracked-files=all` \u2014 every changed and untracked path",
+    "- `git diff HEAD` \u2014 staged and unstaged changes to tracked files",
+    "- read each untracked file in full \u2014 it has no diff",
+    "",
+    OUTSIDE_THE_DIFF
+  ].join("\n");
+}
+function buildReviewPrompt(input) {
+  const sections = [targetSection(input.target), `# Review standard
+
+${input.rubric.trim()}`];
+  const context = input.context?.trim();
+  if (context) {
+    sections.push(`## Background (settled facts from the working session)
+
+${context}`);
+  }
+  const focus = input.focusText?.trim();
+  if (focus) sections.push(`## Focus
+
+${focus}`);
+  return `${sections.join("\n\n")}
+`;
 }
 
 // src/commands/review.ts
-var DEFAULT_TIMEOUT_MS3 = 30 * 60 * 1e3;
-var DEFAULT_EFFORT_STANDARD = "xhigh";
-var DEFAULT_EFFORT_ADVERSARIAL = "xhigh";
-var DEFAULT_EFFORT_SIMPLIFY = "xhigh";
-function resolveKind(options) {
-  if (options.simplify) return "simplify";
-  if (options.adversarial) return "adversarial";
-  return "standard";
+var REVIEW_WRITTEN = "Review written to";
+var FAILURE_TAIL_LINES = 40;
+function resolveOutputDir(repoRoot) {
+  const branch = getBranchOrShortSha(repoRoot);
+  const local = (0, import_node_path5.join)(getMainCheckoutRoot(repoRoot), ".local");
+  const dir = (0, import_node_fs4.existsSync)(local) && (0, import_node_fs4.statSync)(local).isDirectory() ? (0, import_node_path5.join)(local, "tmp", branch) : (0, import_node_path5.join)(resolveStateDir(repoRoot), "reviews", branch);
+  ensureDir(dir);
+  return dir;
 }
-function defaultModelFor(kind) {
-  return resolveModel(kind === "adversarial" ? "adversarial" : "standard");
+function timestamp(now) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
 }
-function defaultEffortFor(kind) {
-  if (kind === "adversarial") return DEFAULT_EFFORT_ADVERSARIAL;
-  if (kind === "simplify") return DEFAULT_EFFORT_SIMPLIFY;
-  return DEFAULT_EFFORT_STANDARD;
+function reserveReviewFiles(dir, now = /* @__PURE__ */ new Date()) {
+  const base = `codex-review-${timestamp(now)}`;
+  for (let n = 1; ; n++) {
+    const stem = (0, import_node_path5.join)(dir, n === 1 ? base : `${base}-${n}`);
+    const reviewPath = `${stem}.md`;
+    const logPath = `${stem}.log`;
+    if ((0, import_node_fs4.existsSync)(reviewPath)) continue;
+    try {
+      (0, import_node_fs4.closeSync)((0, import_node_fs4.openSync)(logPath, "wx"));
+    } catch (err) {
+      if (err.code === "EEXIST") continue;
+      throw err;
+    }
+    return { reviewPath, logPath };
+  }
+}
+function reportLogTail(logPath) {
+  const lines = (0, import_node_fs4.readFileSync)(logPath, "utf8").split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const tail = lines.slice(-FAILURE_TAIL_LINES);
+  if (tail.length > 0) process.stderr.write(`${tail.join("\n")}
+`);
+  process.stderr.write(`Log: ${logPath}
+`);
 }
 async function runReview(cwd, options = {}) {
-  const progress = makeProgress();
-  const kind = resolveKind(options);
-  const reasoning = options.reasoning ?? defaultEffortFor(kind);
-  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS3;
-  const requestedModel = options.model ?? defaultModelFor(kind);
-  const stateDir = resolveStateDir(cwd);
-  const jobId = generateJobId();
-  const log = (msg) => appendLog(stateDir, jobId, msg);
-  log(
-    `review start: kind=${kind} model=${requestedModel} effort=${reasoning} scope=${options.scope ?? "auto"} base=${options.base ?? "(auto)"}`
-  );
-  const target = resolveReviewTarget(cwd, { scope: options.scope, base: options.base });
-  const context = collectReviewContext(cwd, target, { shellAvailable: false });
-  if (context.fileCount === 0) {
-    process.stdout.write(
-      `# Review Summary
+  const target = resolveReviewTarget(cwd, { base: options.base });
+  const repoRoot = getRepoRoot(cwd);
+  if (target.mode === "branch" && countBranchChanges(repoRoot, target.baseRef ?? "") === 0) {
+    process.stdout.write(`# Review Summary
 
-No changes to review under ${context.target.label}.
-`
-    );
-    log("review aborted: empty target");
+No changes to review under ${target.label}.
+`);
     return;
   }
-  const untrackedNote = context.untrackedBytes === null ? "" : ` + ~${context.untrackedBytes}B untracked`;
-  progress(
-    `Target: ${context.target.label} \u2014 ${context.fileCount} file(s), ~${context.diffBytes}B diff${untrackedNote} (${context.inputMode}).`
-  );
-  const fixMode = options.fix === true;
-  let prompt = buildReviewPrompt(kind, { context, focusText: options.focusText ?? "" });
-  if (fixMode) prompt += `
-${FINDINGS_OUTPUT_INSTRUCTION}`;
-  log(`prompt built: ${prompt.length} chars${fixMode ? " (structured findings mode)" : ""}`);
-  const extraContext = resolveExtraContext(cwd, {
-    context: options.context,
-    onWarn: (m) => {
-      progress(m);
-      log(m);
-    }
+  const prompt = buildReviewPrompt({
+    target,
+    rubric: loadReviewRubric(),
+    // Strict: a reviewer silently missing its facts would review a different question.
+    context: resolveExtraContext(cwd, { context: options.context, strict: true }),
+    focusText: options.focusText
   });
-  const turn = startTurnTimeout({ timeoutMs, progress, log });
-  let result;
+  const { reviewPath: outputPath, logPath } = reserveReviewFiles(resolveOutputDir(repoRoot));
+  const args = [
+    "exec",
+    "review",
+    "--ephemeral",
+    "-c",
+    'sandbox_mode="read-only"',
+    "-o",
+    outputPath
+  ];
+  if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
+  args.push("-");
+  process.stderr.write(`Reviewing ${target.label} with codex exec review\u2026
+`);
+  const logFd = (0, import_node_fs4.openSync)(logPath, "w");
+  let res;
   try {
-    ({ result } = await runAgentSession({
-      cwd: context.repoRoot,
-      run: {
-        cwd: context.repoRoot,
-        prompt,
-        model: requestedModel,
-        reasoning,
-        readOnly: true,
-        allowShell: false,
-        allowUrl: false,
-        systemMessage: buildSystemMessage("review", { extraContext }),
-        appendLog: log,
-        progress,
-        signal: turn.signal
-      },
-      log
-    }));
-  } catch (err) {
-    turn.clear();
-    const msg = err.message;
-    process.stderr.write(`Review failed: ${msg}
-`);
-    log(`review failed: ${msg}`);
-    throw err instanceof Error ? err : new Error(msg);
+    res = (0, import_node_child_process5.spawnSync)("codex", args, {
+      cwd: repoRoot,
+      input: prompt,
+      stdio: ["pipe", "ignore", logFd]
+    });
   } finally {
-    turn.clear();
+    (0, import_node_fs4.closeSync)(logFd);
   }
-  const reviewBody = result.lastAssistantMessage?.trim() || result.summary?.trim() || "_(The model returned an empty review.)_";
-  const success = result.success && !turn.timedOut();
-  if (!success) {
-    const reason = turn.timedOut() ? `Timed out after ${timeoutMs}ms.` : withCause("Review did not complete successfully.", result.error);
-    process.stderr.write(`Review failed: ${reason}
-`);
-    process.stdout.write(`# Review Failed
-
-${reason}
-
-${reviewBody}
-`);
-    log(`review failed: ${reason}`);
-    throw new Error(reason);
-  }
-  if (fixMode) {
-    const findings = normalizeFindings(extractJsonBlock(reviewBody));
-    const envelope = {
-      status: "reviewed",
-      kind,
-      model: requestedModel,
-      target: context.target.label,
-      fileCount: context.fileCount,
-      findings,
-      reviewMarkdown: reviewBody.trim()
-    };
-    process.stdout.write(`${JSON.stringify(envelope)}
-`);
-    log(`review (fix mode) done: ${findings.length} structured finding(s)`);
-  } else {
-    process.stdout.write(`${reviewBody.trim()}
-`);
-  }
-  if (result.usage) {
-    const u = result.usage;
-    progress(
-      `Review done \u2014 kind=${kind} model=${requestedModel} effort=${reasoning} files=${context.fileCount} ${formatCodexUsage(u)}`
+  if (res.error?.code === "ENOENT") {
+    (0, import_node_fs4.rmSync)(logPath, { force: true });
+    throw new Error(
+      "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry."
     );
-    log(
-      `review done: kind=${kind} files=${context.fileCount} inputTokens=${u.inputTokens ?? "?"} outputTokens=${u.outputTokens ?? "?"}`
-    );
-  } else {
-    progress(
-      `Review done \u2014 kind=${kind} model=${requestedModel} effort=${reasoning} files=${context.fileCount}`
-    );
-    log(`review done: kind=${kind} files=${context.fileCount}`);
   }
-  progress(`Job log: ${jobLogPath(stateDir, jobId)}`);
+  if (res.error) throw res.error;
+  if (res.status !== 0) {
+    reportLogTail(logPath);
+    throw new Error(
+      `codex exec review failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`
+    );
+  }
+  const review = (0, import_node_fs4.existsSync)(outputPath) ? (0, import_node_fs4.readFileSync)(outputPath, "utf8") : "";
+  if (!review.trim()) {
+    reportLogTail(logPath);
+    throw new Error(`codex exec review exited 0 but wrote no review to ${outputPath}.`);
+  }
+  process.stdout.write(review);
+  process.stderr.write(`${REVIEW_WRITTEN} ${outputPath}
+Log: ${logPath}
+`);
 }
 
 // src/commands/setup.ts
@@ -2774,50 +1908,18 @@ async function runStatus(cwd, options = {}) {
     return;
   }
   if (!codexRateLimits) {
-    console.log("_No Codex rate-limit snapshot yet \u2014 run a review, ask, or fix first._");
+    console.log("_No Codex rate-limit snapshot yet \u2014 run an ask first._");
     return;
   }
   console.log(renderCodexBlock(codexRateLimits, codexRateLimits.capturedAt));
 }
 
 // src/lib/args.ts
-var BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
-  "adversarial",
-  "allow-shell",
-  "allow-url",
-  "fix",
-  "full",
-  "harry-fix",
-  "help",
-  "simplify",
-  "json"
-]);
+var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "json"]);
 var KNOWN_FLAGS = {
   setup: /* @__PURE__ */ new Set(["json"]),
-  review: /* @__PURE__ */ new Set([
-    "adversarial",
-    "simplify",
-    "full",
-    "harry-fix",
-    "scope",
-    "base",
-    "model",
-    "reasoning",
-    "timeout",
-    "fix",
-    "context"
-  ]),
+  review: /* @__PURE__ */ new Set(["base", "reasoning", "context"]),
   ask: /* @__PURE__ */ new Set(["task", "model", "reasoning", "timeout", "context"]),
-  fix: /* @__PURE__ */ new Set([
-    "findings",
-    "model",
-    "reasoning",
-    "timeout",
-    "allow-shell",
-    "allow-url",
-    "write",
-    "context"
-  ]),
   status: /* @__PURE__ */ new Set(["json"])
 };
 function assertKnownFlags(command, flags) {
@@ -2896,6 +1998,12 @@ function flagString(flags, key) {
   const v = flags[key];
   return typeof v === "string" ? v : void 0;
 }
+function flagRequiredString(flags, key) {
+  const v = flags[key];
+  if (v === void 0) return void 0;
+  if (typeof v !== "string") throw new Error(`Flag --${key} requires a value.`);
+  return v;
+}
 function flagNumber(flags, key) {
   const v = flags[key];
   if (typeof v !== "string") return void 0;
@@ -2909,23 +2017,15 @@ function printUsage() {
     [
       "Usage:",
       "  companion setup [--json]",
-      "  companion review [focus...] [--adversarial] [--base <ref>]",
-      "                           [--scope auto|working-tree|branch] [--fix]",
-      "                           [--model <id>] [--reasoning <low|medium|high|xhigh>]",
-      "                           [--context <text|@file|@->]",
-      "                           [--timeout <ms>]",
+      "  companion review [--base <ref>] [--reasoning <low|medium|high|xhigh>]",
+      "                   [--context <text|@file|@->] [focus...]",
       '  companion ask "<prompt>" [--model <id>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
-      "  companion fix --findings <path> [--model <id>]",
-      "                        [--reasoning <low|medium|high|xhigh>]",
-      "                        [--context <text|@file|@->]",
-      "                        [--timeout <ms>] [--write <path>]",
       "  companion status [--json]",
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
-      "  review      Run a code review (markdown, or JSON findings with --fix)",
+      "  review      Review the branch or working tree via `codex exec review`",
       "  ask         Ask a single prompt (read-only) and print the answer",
-      "  fix         Apply Claude-Code-approved review findings to the working tree",
       "  status      Show the cached Codex rate-limit snapshot"
     ].join("\n")
   );
@@ -2945,31 +2045,11 @@ async function main() {
       break;
     }
     case "review": {
-      if (flags.full !== void 0) {
-        throw new Error(
-          "--full is handled by the /review command orchestrator, not the CLI. Run the simplify/adversarial reviews separately, or use /review --full."
-        );
-      }
-      if (flags["harry-fix"] !== void 0) {
-        throw new Error(
-          "--harry-fix is a /review fix-backend selector, not a CLI flag. To apply findings, run: fix --findings <path> --reasoning xhigh."
-        );
-      }
-      const validScopes = ["auto", "working-tree", "branch"];
-      const validEfforts = ["low", "medium", "high", "xhigh"];
-      const scope = flagEnum(flags, "scope", validScopes);
-      const reasoning = flagEnum(flags, "reasoning", validEfforts);
       await runReview(import_node_process3.default.cwd(), {
-        adversarial: flags.adversarial === true,
-        simplify: flags.simplify === true,
-        scope,
-        base: flagString(flags, "base"),
-        focusText: args.join(" "),
-        model: flagString(flags, "model"),
-        reasoning,
-        timeout: flagNumber(flags, "timeout"),
-        fix: flags.fix === true,
-        context: flagString(flags, "context")
+        base: flagRequiredString(flags, "base"),
+        reasoning: flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"]),
+        context: flagRequiredString(flags, "context"),
+        focusText: args.join(" ")
       });
       break;
     }
@@ -2981,20 +2061,6 @@ async function main() {
         model: flagString(flags, "model"),
         reasoning,
         timeout: flagNumber(flags, "timeout"),
-        context: flagString(flags, "context")
-      });
-      break;
-    }
-    case "fix": {
-      const reasoning = flagEnum(flags, "reasoning", ["low", "medium", "high", "xhigh"]);
-      await runFix(import_node_process3.default.cwd(), {
-        findingsPath: flagString(flags, "findings"),
-        model: flagString(flags, "model"),
-        reasoning,
-        timeout: flagNumber(flags, "timeout"),
-        allowShell: flags["allow-shell"] === true,
-        allowUrl: flags["allow-url"] === true,
-        writePath: flagString(flags, "write"),
         context: flagString(flags, "context")
       });
       break;

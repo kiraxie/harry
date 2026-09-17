@@ -6,9 +6,9 @@
  *
  * The whole agent lifecycle (auth, run) is delegated to {@link runAgentSession};
  * `ask` only supplies the prompt/options and the stdout contract (the verbatim
- * model answer, which `/debate` depends on). Defaults to a capable model
- * (gpt-5.6-luna) rather than leaving it to `~/.codex/config.toml` — same
- * principle as `fix`'s model default (HARRY.md §5).
+ * model answer, which `/debate` depends on). Defaults to a capable model (the
+ * `judgment` role in `src/lib/models.ts`) rather than leaving it to
+ * `~/.codex/config.toml` — a one-shot answer is a judgment task (HARRY.md §5).
  */
 
 import { resolveModel } from "../lib/models.ts";
@@ -75,7 +75,6 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
         progress,
         signal: turn.signal,
       },
-      log,
     }));
   } catch (err) {
     turn.clear();
@@ -108,7 +107,7 @@ export async function runAsk(cwd: string, options: AskOptions): Promise<void> {
     // back is already on stdout above — a genuinely partial answer on the
     // incomplete-turn path, but only the empty-answer placeholder on the timeout
     // path, where codex/turn.ts's `failure()` returns an empty finalMessage and
-    // so discards the partial text. `review` behaves identically.
+    // so discards the partial text.
     throw new Error(reason);
   }
 

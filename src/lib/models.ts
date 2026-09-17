@@ -1,13 +1,12 @@
 /**
- * Codex model policy — the single place that decides which model each command
- * drives, and the only place a probed availability fact is written down.
+ * Codex model policy — the single place that decides which model harry sends, and
+ * the only place a probed availability fact is written down.
  *
- * Hoisted 2026-08-08. It was three `DEFAULT_MODEL` constants in ask.ts, fix.ts and
- * review.ts, two of which carried a comment pointing at the third for the reasoning
- * — a pointer between copies is the signal that the knowledge, not the value, is
- * what is duplicated (HARRY.md §2). Changing the policy previously meant finding
- * three files and eleven prose sites; `tests/model-pinning-drift.test.ts` now holds
- * the prose side to this module.
+ * Hoisted 2026-08-08 from per-command `DEFAULT_MODEL` constants — a pointer between
+ * copies is the signal that the knowledge, not the value, is what is duplicated
+ * (HARRY.md §2). `tests/model-pinning-drift.test.ts` holds the prose side to this
+ * module. Only `ask` sends a model now: `review` runs `codex exec review`, which
+ * passes none and lets `~/.codex/config.toml` decide.
  *
  * AVAILABILITY is per ACCOUNT, and the defaults below are deliberately set for the
  * capable case rather than the weakest one.
@@ -37,21 +36,14 @@
  * environments silently diverge instead of visibly (§1).
  */
 
-export type ModelRole = "standard" | "adversarial" | "judgment";
+export type ModelRole = "judgment";
 
 /**
  * The shipped defaults.
  *
- * - `standard` — balanced tier: defect-hunting review and the cleanup lane.
- * - `adversarial` — deepest scrutiny, and a DIFFERENT model from `standard` on
- *   purpose: the lane exists to supply a second perspective, and two lanes on one
- *   model is one perspective billed twice.
- * - `judgment` — a one-shot `ask` (also `/debate`'s gpt voice) and applying vetted
- *   findings in `fix`.
+ * - `judgment` — a one-shot `ask` (also `/debate`'s gpt voice).
  */
 const DEFAULTS: Readonly<Record<ModelRole, string>> = {
-  standard: "gpt-5.6-terra",
-  adversarial: "gpt-5.6-sol",
   judgment: "gpt-5.6-sol",
 };
 
@@ -71,8 +63,6 @@ const DEFAULTS: Readonly<Record<ModelRole, string>> = {
  * An override for harry has to be addressed to harry.
  */
 const ENV_VAR: Readonly<Record<ModelRole, string>> = {
-  standard: "HARRY_MODEL_STANDARD",
-  adversarial: "HARRY_MODEL_ADVERSARIAL",
   judgment: "HARRY_MODEL_JUDGMENT",
 };
 
@@ -105,8 +95,19 @@ export const MODEL_WITHOUT_SOL = "gpt-5.6-luna";
 export const PINNED_MODELS: readonly string[] = Object.values(DEFAULTS);
 
 /**
- * Every model id harry may legitimately NAME in shipped prose — the defaults plus
- * the documented override. `tests/model-pinning-drift.test.ts` holds prose to this
- * set, so a door cannot name an id the code knows nothing about.
+ * Probed answering on the unsubscribed account above, and bound to the `writer` row
+ * of the advisory `references/codex-role-mapping.md`. harry itself never sends it.
  */
-export const KNOWN_MODELS: readonly string[] = [...PINNED_MODELS, MODEL_WITHOUT_SOL];
+export const ROLE_MAP_ONLY_MODEL = "gpt-5.6-terra";
+
+/**
+ * Every model id harry may legitimately NAME in shipped prose — the defaults, the
+ * documented override, and the advisory role map's extra row.
+ * `tests/model-pinning-drift.test.ts` holds prose to this set, so a door cannot name
+ * an id the code knows nothing about.
+ */
+export const KNOWN_MODELS: readonly string[] = [
+  ...PINNED_MODELS,
+  MODEL_WITHOUT_SOL,
+  ROLE_MAP_ONLY_MODEL,
+];

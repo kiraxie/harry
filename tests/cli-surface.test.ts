@@ -2,13 +2,13 @@
  * End-to-end guards on the companion CLI's user-visible command surface.
  *
  * Two things this file pins:
- *  1. The job-LOG machinery is live — `ask`/`review`/`fix` each allocate a job
- *     id, append to `<stateDir>/jobs/<id>.log`, and print `Job log: <path>` so
- *     the user can inspect a run. Retiring the job-RECORD subsystem must not
- *     take the log with it.
+ *  1. The job-LOG machinery is live — `ask` allocates a job id, appends to
+ *     `<stateDir>/jobs/<id>.log`, and prints `Job log: <path>` so the user can
+ *     inspect a run. Retiring the job-RECORD subsystem must not take the log
+ *     with it. (`review` keeps its own `.log` beside the review file instead.)
  *  2. The retired job-record surface stays retired — the node CLI has no
- *     `result` command and rejects `--background` (which is a SLASH-level flag
- *     the doors strip before invoking node, not a CLI flag).
+ *     `result` command and rejects `--background` (backgrounding is the
+ *     harness's `run_in_background`, not a CLI flag).
  */
 
 import assert from "node:assert/strict";
@@ -81,7 +81,7 @@ test("ask writes its job log and reports the path (job-LOG machinery is live)", 
   assert.match(fs.readFileSync(logPath, "utf-8"), /ask start:/);
 });
 
-test("the node CLI rejects --background (it is a slash-level flag, stripped by the doors)", () => {
+test("the node CLI rejects --background (backgrounding is the harness's job, not a CLI flag)", () => {
   const res = runCli(["review", "--background"]);
   assert.notEqual(res.status, 0, "expected --background to be rejected");
   assert.match(res.stderr, /Unknown flag --background/);

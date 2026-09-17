@@ -66,7 +66,6 @@ export interface RunResult {
    */
   error?: string;
   usage?: CodexUsage;
-  codeChanges?: { linesAdded: number; linesRemoved: number; filesModified: string[] };
 }
 
 export interface AuthSummary {
@@ -78,12 +77,6 @@ export interface AuthSummary {
 
 export interface CodexSession {
   checkAuth(cwd: string): Promise<AuthSummary>;
-  /**
-   * Synchronous capability/permission gate, run by {@link runAgentSession}
-   * BEFORE any side-effecting pre-run hook (e.g. fix's pre-fix snapshot commit).
-   * Throw to refuse a run codex cannot honor — e.g. write-without-shell.
-   */
-  precheckRun?(opts: RunOpts): void;
   run(opts: RunOpts): Promise<RunResult>;
   /**
    * Best-effort immediate teardown of the spawned codex subprocess, for use

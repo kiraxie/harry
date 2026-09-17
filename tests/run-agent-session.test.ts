@@ -32,57 +32,6 @@ test("runAgentSession drives the injected session and returns its result", async
   assert.equal(result.lastAssistantMessage, "done");
 });
 
-test("beforeRun runs after precheckRun and before session.run", async () => {
-  const order: string[] = [];
-  const session: CodexSession = {
-    ...stub(),
-    precheckRun: () => {
-      order.push("precheck");
-    },
-    run: async () => {
-      order.push("run");
-      return { lastAssistantMessage: "done", success: true };
-    },
-  };
-  await runAgentSession({
-    cwd: "/tmp",
-    run: baseRun("/tmp"),
-    buildSession: () => session,
-    beforeRun: () => {
-      order.push("beforeRun");
-    },
-  });
-  assert.deepEqual(order, ["precheck", "beforeRun", "run"]);
-});
-
-test("precheckRun refusal skips beforeRun and run (C1)", async () => {
-  let beforeRunRan = false;
-  let runRan = false;
-  const session: CodexSession = {
-    ...stub(),
-    precheckRun: () => {
-      throw new Error("Codex cannot grant write access without shell");
-    },
-    run: async () => {
-      runRan = true;
-      return { lastAssistantMessage: "done", success: true };
-    },
-  };
-  await assert.rejects(
-    runAgentSession({
-      cwd: "/tmp",
-      run: { ...baseRun("/tmp"), readOnly: false, allowShell: false },
-      buildSession: () => session,
-      beforeRun: () => {
-        beforeRunRan = true;
-      },
-    }),
-    /shell/,
-  );
-  assert.equal(beforeRunRan, false, "precheckRun must refuse BEFORE beforeRun runs");
-  assert.equal(runRan, false);
-});
-
 test("runAgentSession removes its interrupt listeners after the run", async () => {
   const before = process.listenerCount("SIGINT") + process.listenerCount("SIGTERM");
   await runAgentSession({

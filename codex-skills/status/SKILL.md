@@ -11,7 +11,7 @@ Show harry's runtime snapshot: the Codex quota state.
 node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" status
 ```
 
-The quota shown is a cached snapshot — refreshed after every ask/review/fix run —
-with its age labelled in the header.
+The quota shown is a cached snapshot — refreshed after every `ask` run (`review`
+does not refresh it) — with its age labelled in the header.
 
 Return the stdout **verbatim** in the response. Do not paraphrase or summarize it.

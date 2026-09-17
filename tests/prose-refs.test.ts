@@ -278,6 +278,11 @@ test("every §N citation names a section HARRY.md actually has", () => {
 // a trailing parenthetical is stripped before comparing. Nothing else about the
 // heading is normalized: an em dash or casing change should fail, because it
 // means the door and the reference have stopped agreeing on the section's name.
+// One pattern for both the scan and its non-vacuity guard, so the guard proves
+// the regex the scan actually uses. `matchAll` clones a /g regex, so sharing it
+// carries no lastIndex state between uses.
+const SEE_POINTER_RE = /See \*\*(.+?)\*\* in\b/g;
+
 test("every `See **Heading** in <reference>` names a heading that reference has", () => {
   const headings = new Map<string, Set<string>>();
   const headingsOf = (rel: string): Set<string> => {
@@ -294,13 +299,11 @@ test("every `See **Heading** in <reference>` names a heading that reference has"
   };
 
   const failures: string[] = [];
-  let pointers = 0;
 
   for (const relFile of proseFiles) {
     const lines = readFileSync(path.join(repoRoot, relFile), "utf-8").split("\n");
     lines.forEach((line, idx) => {
-      for (const m of line.matchAll(/See \*\*(.+?)\*\* in\b/g)) {
-        pointers++;
+      for (const m of line.matchAll(SEE_POINTER_RE)) {
         // The path usually sits on the NEXT line (these sentences are wrapped),
         // so look at the remainder of this line and the following one. A
         // pointer with no path at all is a FAILURE, never a skip — that is the
@@ -322,13 +325,13 @@ test("every `See **Heading** in <reference>` names a heading that reference has"
     });
   }
 
-  // Guards the parse, not the corpus: every pointer above is checked exactly, so
-  // this only has to catch the regex matching nothing at all — which would make
-  // the whole test vacuous while staying green.
+  // Guards the parse, not the corpus. The corpus may legitimately hold no pointer
+  // (the last users went with references/review-orchestration.md), so the regex is
+  // proven against a literal instead — otherwise a regex that stopped matching
+  // would read the same as a corpus with nothing to check.
   assert.ok(
-    pointers > 0,
-    "no `See **X** in` pointers were found anywhere — the regex above has stopped " +
-      "matching, and this test now asserts nothing.",
+    [..."See **The apply steps** in".matchAll(SEE_POINTER_RE)].length === 1,
+    "the `See **X** in` regex has stopped matching, and this test now asserts nothing.",
   );
   assert.deepEqual(failures, [], "pointers naming a heading their reference does not have");
 });

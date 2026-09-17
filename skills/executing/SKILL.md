@@ -68,17 +68,29 @@ After all tasks:
 
 6. **Final review — two lanes, once per unit.**
    - **CC lane:** one broad whole-branch CC reviewer subagent, dispatched as in step 3 (rubric handed to it). Package the full branch diff (`merge-base..HEAD`) to a file.
-   - **Codex lane** (a reviewer that is not the orchestrator). `exec review` has no `-C` and no sandbox flag: it takes the process cwd, so run it inside the worktree, and pin read-only through config rather than trusting the account default:
+   - **Codex lane** (a reviewer that is not the orchestrator — a fresh, ephemeral `codex exec review` process, not the CC session reviewing itself). Two steps, both from inside the worktree:
 
-     ```bash
-     STORE="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-     codex exec review --base <base-branch> --ephemeral -m gpt-5.6-luna \
-       -c model_reasoning_effort="high" -c sandbox_mode="read-only" \
-       -o "$STORE/.local/tmp/<branch>/codex-review.md"
+     1. Write a facts file at `<store>/.local/tmp/<branch>/review-context.md` holding this unit's binding constraints and the rulings recorded so far, each with its reasoning — **facts only**, never verdicts and never "don't flag X" (the `/harry:review` `--context` contract, `commands/review.md`). Resolve `<store>` in the same command that writes the file, per the Paths rule, and have that command also print the resulting absolute path — it does not survive to the next call, so paste the printed value literally into step 2.
+
+     2. Invoke the slash command (via the `SlashCommand`/`Skill` tool, not `Bash` — it is not a shell command) with that printed absolute path:
+
+     ```
+     /harry:review --base <base-branch> --context @<absolute path printed in step 1>
      ```
 
-     `$STORE` is re-resolved here because it does not survive from the Paths rule's shell. Then **read that file**: the lane's findings only exist there. `-m` names a model **this account can actually reach** — `gpt-5.6-luna` here; `gpt-5.6-sol` hard-400s on a ChatGPT login without an OpenAI subscription. Swap it for yours rather than deleting the flag. If the lane errors out (auth, model, quota), say so in the unit record and continue on the CC lane alone — never silently skip it, never claim it ran.
+     `/harry:review` runs `codex exec review` read-only and writes findings to a
+     fresh `<store>/.local/tmp/<branch>/codex-review-<YYYYMMDD-HHMMSS>.md` per
+     run, reporting that path on `Review written to <path>` — **read that file**:
+     the lane's findings only exist there. It picks the reviewing model from
+     `~/.codex/config.toml`, not from this skill.
 
+     No `Review written to` line plus a no-changes `# Review Summary` means the
+     branch has nothing to review — record that in the unit record; it is not a
+     lane failure.
+
+     If the lane fails (auth, model, quota, or any other error), record the
+     verbatim error in the unit record and take it to the user — never silently
+     skip it, never claim it ran.
 
    Merge whatever lanes ran into **one** findings list before acting, deduped, noting which lane raised each — that record is what later tells you whether the cross-model lane earns its quota. Findings → **one** fix subagent with the complete list (not one fixer per finding). Point it at the item's `## Follow-ups` to triage what must be fixed before merge. After that fix wave lands, run exactly **one scoped re-review** of the fix range (step 4's re-review rules) — the last code on the branch is never left unreviewed. **There is no second fix wave:** residuals are adjudicated per the breaker's exit (park with a recorded ruling / `## Follow-ups`; load-bearing → BLOCKED, surface at finishing).
 7. → **finishing** skill.
