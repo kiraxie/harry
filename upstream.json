@@ -48,11 +48,6 @@
       "note": "HARD-GATE; SCQA+tech design into the item's ## Why / What in .local/ (not committed); tier-aware; Major contested → /debate."
     },
     {
-      "skill": "writing-plans",
-      "from": "superpowers:skills/writing-plans",
-      "note": "tier-aware depth; Global Constraints from the item's ## Why / What §5; Major only full-code + Interfaces; the ## Plan section of the same .local/ item."
-    },
-    {
       "skill": "executing",
       "from": "superpowers:skills/subagent-driven-development + executing-plans",
       "note": "merged; tier auto-routes session/subagent (no choice prompt); implementer = CC subagents."

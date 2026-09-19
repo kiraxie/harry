@@ -60,7 +60,7 @@ h. **Completion evidence.** CI triggers on push, not on a local merge — so the
 
 ### Option 2 — PR (HARRY.md §5 PR discipline)
 
-- Draft the title + body, show it for approval BEFORE `gh pr create` (unless the user said "just open it"). Body must not leak internal planning language (no Sprint/Phase, `.local/` paths, "per the plan").
+- Draft the title + body, show it for approval BEFORE `gh pr create` (unless the user said "just open it"). Body must not leak internal planning language (no Sprint/Phase, `.local/` paths, "per AC-3").
 - Push the branch and open the PR. From a detached HEAD, publish with `git push origin HEAD:refs/heads/<new-branch>`.
 - Before merging a PR — even when not asked — check its reviews, inline comments, and CodeRabbit status. Any unresolved actionable item → report and do NOT merge (unless the user says "force merge").
 - Merge it as a squash (HARRY.md §5): `gh pr merge --squash --subject "<PR title>" --body "<why and what>"` — pass both, or GitHub's default squash message may list every branch commit. Never a merge commit or rebase merge.

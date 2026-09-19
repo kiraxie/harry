@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `harry` is a Claude Code **plugin** with two halves:
 
 1. **Plugin content** (`HARRY.md`, `skills/`, `commands/`, `references/`) — the resident laws
-   and `brainstorm → plan → execute → finish` pipeline that ship to consumers. This is prose/markdown,
+   and `brainstorm → execute → finish` pipeline that ship to consumers. This is prose/markdown,
    not code.
 2. **The `companion` runtime** (`src/` → bundled to `dist/companion.cjs`) — a TypeScript CLI that
    backs the `review` and `ask` slash commands by spawning the `codex` CLI.
@@ -100,9 +100,10 @@ needing a keyword. The import points at the deployed snapshot, NOT the live plug
 direct-repo-path import). "Release" = re-run sync — the same resync model as the Codex build
 (`scripts/install-codex.mjs`), so both builds converge on one mental model.
 
-The four pipeline skills (`skills/brainstorming`, `skills/writing-plans`, `skills/executing`,
-`skills/finishing`) auto-trigger (no slash command) and read `HARRY.md`'s tier table (§3) to decide
-how much process a task gets. `references/` holds on-demand tables/techniques the skills link to
+The three pipeline skills (`skills/brainstorming`, `skills/executing`, `skills/finishing`)
+auto-trigger (no slash command) and read `HARRY.md`'s tier table (§3) to decide
+how much process a task gets. There is no plan stage: brainstorming closes on numbered
+acceptance criteria inside the item's `## Why / What`, and executing builds against them. `references/` holds on-demand tables/techniques the skills link to
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
 skill files themselves short.
 
@@ -133,7 +134,7 @@ opt-in user-level `~/.claude/agents/Explore.md` override that `/harry:sync --exp
 install** (or `claude plugin update`), not a hand-edited plugin cache.
 
 `/audit` (`commands/audit.md`) is a whole-codebase structure/architecture audit — a six-round,
-iterative workflow distinct from the four pipeline skills above (it's user-invoked via slash
+iterative workflow distinct from the three pipeline skills above (it's user-invoked via slash
 command, not tier-triggered). Its round-by-round methodology, JSON schema, and validator script
 are too large to inline in one command file, so they live in `references/audit/`
 (`references/audit/ORCHESTRATION.md` — the shared six-round orchestration both builds' thin
@@ -160,7 +161,7 @@ Alongside the Claude Code plugin, harry ships a parallel `.codex-plugin/plugin.j
 + `.agents/plugins/marketplace.json` for Codex CLI, which has its own Skills/Hooks
 system (`SKILL.md` format is shared with Claude Code; `${CLAUDE_PLUGIN_ROOT}` /
 `${CLAUDE_PLUGIN_DATA}` are aliased by Codex, so `dist/companion.cjs` needs no
-Codex-specific code path). `skills/` (the four pipeline skills) is auto-discovered
+Codex-specific code path). `skills/` (the three pipeline skills) is auto-discovered
 by Codex's default component discovery and `dist/companion.cjs` is shared as-is
 between both builds; `plugin.json`'s `skills` field only needs to name the
 supplemental `./codex-skills` path (it's a single string, not an array — Codex's

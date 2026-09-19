@@ -42,8 +42,8 @@ const proseFiles = [
 //    runtime invocations (e.g. commands/sync.md's `node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"`).
 // 2. Bare repo-relative mentions of known top-level dirs, with a recognized file
 //    extension. Checked only OUTSIDE fenced code blocks — inside fences these are
-//    frequently fabricated illustration (e.g. writing-plans/SKILL.md's fictional
-//    `tests/auth/token.test.ts` example), not real cross-references. A `(?<!\/)` guard also
+//    frequently fabricated illustration (a skill's fenced `tests/auth/token.test.ts`
+//    example, say), not real cross-references. A `(?<!\/)` guard also
 //    stops a longer real path like `src/commands/fix.ts` from being mis-sliced into
 //    the shorter bare candidate `commands/fix.ts`.
 // 3. `.claude/commands/…` and `.claude/scripts/…` — the same bare-mention shape as

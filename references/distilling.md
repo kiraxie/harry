@@ -16,7 +16,7 @@ modes observed in practice:
 
 The session is read-only with respect to harry's laws and skills: its outputs are a
 ruling report, tracking-file bookkeeping, and (with the user's nod) backlog items.
-Actual law or skill changes always go through the normal pipeline (brainstorm → plan →
+Actual law or skill changes always go through the normal pipeline (brainstorm →
 execute) as their own units — never inline in a distill session.
 
 ## Inputs

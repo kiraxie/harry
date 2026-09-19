@@ -1,7 +1,7 @@
 {
   "name": "harry",
   "version": "0.21.0",
-  "description": "Personal engineering workflow plugin for Codex CLI: resident philosophy (correctness > cost, no legacy), tiered discipline, and a brainstorm -> plan -> execute -> finish pipeline. Partial-parity companion to the Claude Code build — see CLAUDE.md for what's Claude-only.",
+  "description": "Personal engineering workflow plugin for Codex CLI: resident philosophy (correctness > cost, no legacy), tiered discipline, and a brainstorm -> execute -> finish pipeline. Partial-parity companion to the Claude Code build — see CLAUDE.md for what's Claude-only.",
   "author": {
     "name": "kiraxie",
     "email": "kiraxie11287@gmail.com"

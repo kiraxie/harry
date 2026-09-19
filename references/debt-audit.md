@@ -13,14 +13,14 @@ inline; a near-identical pair for that is duplication, not a divergence.
 
 ---
 
-`/debt` is not a grep harvester — plan-first already keeps fresh debt in view. It is a **deferred-decision auditor**: it gathers every deliberate "do it later" — plus every still-open backlog item — from across the repo into one overview, then re-judges whether each one is still fresh. One-shot report. Changes nothing.
+`/debt` is not a grep harvester — fresh debt is already in view where it was deferred. It is a **deferred-decision auditor**: it gathers every deliberate "do it later" — plus every still-open backlog item — from across the repo into one overview, then re-judges whether each one is still fresh. One-shot report. Changes nothing.
 
 ## 1. Reconcile the sources into one view
 
 Deferrals — and open backlog — hide in two places. Collect both — this command is the single overview items alone can't give (items are scattered per-feature).
 
 - **Code markers.** **Claude Code build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- $ARGUMENTS` (drop `-- $ARGUMENTS` when no path given). **Codex build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- <path...>` (drop the path filter when none given). `DEBT:` is the sanctioned marker from HARRY.md §4 and carries a ceiling + upgrade path; TODO/FIXME/HACK are unsanctioned debt — flag them as `unmarked` (a violation per §4).
-- **Item deferrals.** Read the `## Why / What` → `### 4. Scope & Non-Goals` subsection and the `## Plan` section of every `status: active` item under `.local/items/` (`Glob: .local/items/**/*.md`, keep only files whose frontmatter has `status: active`). Each "不做 / 移除 / 丟棄 / 延後 / Non-Goal" bullet in Scope & Non-Goals, and each "do later / 延後 / out of scope / follow-up" line in Plan, is one deferral.
+- **Item deferrals.** Read the `## Why / What` (its Scope & Non-Goals content) and the `## Progress` section of every `status: active` item under `.local/items/` (`Glob: .local/items/**/*.md`, keep only files whose frontmatter has `status: active`). Each "不做 / 移除 / 丟棄 / 延後 / Non-Goal" bullet in Scope & Non-Goals, and each "do later / 延後 / out of scope / follow-up" line in `## Progress`, is one deferral. A legacy item that still has a `## Plan` is read there too.
 - **Backlog items.** Read every item under `.local/items/` whose frontmatter has `status: backlog` (`Glob: .local/items/**/*.md`, filter by frontmatter). Each item is one entry — unlike item deferrals, nothing here was ever decided (HARRY.md §5).
 
 ## 2. Freshness verdict — is the landmine now armed, or is the question still open?

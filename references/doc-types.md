@@ -12,8 +12,8 @@ lifecycle. **Read this whenever you create, graduate, or archive any
 One work unit = one `.md` file that accumulates sections as it matures and
 moves through exactly one `status` field — never a new file per stage:
 
-`backlog` (idea, not yet decided) → `active` (design+plan agreed, being
-worked) → `done` (moved to `.local/archive/`, read-only).
+`backlog` (idea, not yet decided) → `active` (design + acceptance criteria
+agreed, being worked) → `done` (moved to `.local/archive/`, read-only).
 
 ```yaml
 ---
@@ -28,12 +28,34 @@ milestone: <slug>      # optional key — omit entirely if standalone
 ## Notes           <!-- backlog stage: freeform accumulation; absorbs what
                         used to be a separate "research" doc -->
 ## Why / What      <!-- filled when promoted to active — what a spec used to hold -->
-## Plan            <!-- filled when promoted to active — what a plan used to hold -->
+### Acceptance criteria  <!-- last subsection of Why / What; approved with the design -->
+## Dispatch        <!-- optional — only when 2+ units are dispatched in parallel -->
+## Progress        <!-- append-only, filled during execution -->
 ## Follow-ups      <!-- filled at brainstorming step 6 or during execution; flushed to new backlog items at finish -->
 ```
 
 Sections accumulate — never delete an earlier section when filling a later
 one (`## Notes` stays as history once `## Why / What` is written).
+
+`### Acceptance criteria` is a numbered `AC-1, AC-2, …` list. Each AC is an
+**outcome** ("invalid input returns 400"), never a step ("add `validate()`"),
+and carries its own verification — a command, a test, or a named manual check.
+They are approved with the design; execution cites their IDs and never rewrites
+them (a wrong or impossible AC stops and asks).
+
+`## Dispatch` exists only when 2+ units are dispatched in parallel — one row per
+unit:
+
+| Unit | AC | Writes | Reads from other units | Lands |
+|---|---|---|---|---|
+
+`Lands` is `first` or `last`; a cross-unit contract test lands last.
+
+`## Progress` is append-only and cites AC IDs and commit ranges. Approved AC
+text is never edited to record progress — progress goes here instead.
+
+**Legacy items.** An item written under the older shape keeps its `## Plan` and
+is read as-is; nothing migrates it, and no acceptance criteria are invented for it.
 
 ## Milestone items
 
@@ -91,10 +113,11 @@ milestone edit.
 
 ## Lifecycle rules
 
-- **Backlog → active promotion**: brainstorming fills `## Why / What` and
-  sets `status: active` once the user approves the design (Standard tier with
-  no real alternatives weighed skips `## Why / What` — the item may go active
-  with only a `## Plan`, per tier-gates) — the file does
+- **Backlog → active promotion**: brainstorming fills `## Why / What`,
+  ending in its `### Acceptance criteria`, and sets `status: active` once the
+  user approves the design and those criteria (Standard tier with no real
+  alternatives weighed writes only the criteria under `## Why / What`, no
+  decision record, per tier-gates) — the file does
   not move, same path, updated frontmatter + sections.
 - **Active → done (archive)**: on finishing (wired into the finishing
   skill), set `status: done` and move `.local/items/<slug>.md` →
@@ -130,7 +153,7 @@ milestone edit.
 
 `/debt` re-judges deferred *decisions* (`DEBT:` markers, and Scope &
 Non-Goals / follow-up lines inside an active item's `## Why / What` /
-`## Plan`) by checking whether each one's premise still holds, and
+`## Progress`) by checking whether each one's premise still holds, and
 separately re-judges every `status: backlog` item by asking whether it's
 still open. `status: backlog` is the **only** deferred-work source read from
 `.local/items/` — there is no separate research/Non-Goals corpus anymore;

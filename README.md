@@ -5,7 +5,7 @@ A personal Claude Code plugin: the **Superpowers** workflow philosophy and **pon
 Two halves:
 
 - **Resident laws** (`HARRY.md`) — deployed as a snapshot into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
-- **A `brainstorm → plan → execute → finish` pipeline** — four skills, plus slash commands for review, debate, adversarial grilling interviews, and over-engineering/debt audits.
+- **A `brainstorm → execute → finish` pipeline** — three skills, plus slash commands for review, debate, adversarial grilling interviews, and over-engineering/debt audits.
 
 ## The three-tier threshold
 
@@ -14,8 +14,8 @@ Every non-trivial task is classified; the tier decides how much process applies 
 | Tier | Trigger | What runs |
 |------|---------|-----------|
 | **Trivial** | 1 file, mechanical, no branching | just do it + verify |
-| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, bullet plan, one test, inline execution + required independent review |
-| **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → item `## Why / What` + `## Plan` → subagent execution with per-task review → finish |
+| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, acceptance criteria, one test, inline execution + required independent review |
+| **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → item `## Why / What` + numbered acceptance criteria → subagent execution with per-AC review → finish |
 
 Any red line (security/auth/money/delete/migration/external contract/cross-boundary contract) forces **Major** regardless of size.
 
@@ -74,7 +74,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `debt`,
-`review`, `sync`, `audit`, `grill`, `distill`); the four pipeline skills and the runtime are
+`review`, `sync`, `audit`, `grill`, `distill`); the three pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -115,16 +115,15 @@ Neither passes a model — `~/.codex/config.toml` decides which one runs;
 
 These auto-trigger (no slash command); they are the pipeline:
 
-- **brainstorming** — turn an idea into an approved item `## Why / What` (SCQA) via the grilling interview (`references/grilling.md`), closing on a residue manifest (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
-- **writing-plans** — turn that `## Why / What` into a tier-appropriate `## Plan` in the same item.
-- **executing** — run the plan; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
+- **brainstorming** — turn an idea into an approved item `## Why / What` (SCQA) via the grilling interview (`references/grilling.md`), closing on a residue manifest and the numbered acceptance criteria approved with it (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
+- **executing** — build against the acceptance criteria, recording progress per AC ID; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
 - **finishing** — verify green, ask merge-vs-PR, then verify the merged result before any cleanup, archive the item, clean up the worktree, and end on the confirmed base (CI as evidence when pushed; the merged-result suite when the merge stays local).
 
 ## Layout
 
 ```
 HARRY.md            resident laws (loaded via @)
-skills/             brainstorming · writing-plans · executing · finishing (shared, both builds)
+skills/             brainstorming · executing · finishing (shared, both builds)
 commands/           review · ask · debate · debt · sync · audit · grill · distill (Claude Code)
 codex-skills/       ask · debt · review · sync · audit · grill · distill (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)

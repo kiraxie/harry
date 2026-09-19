@@ -106,10 +106,17 @@ manifest:
    mere chat history.
 3. **Silent assumptions** — laid open.
 
-What the user approves is **design + manifest**. Nothing raised may evaporate.
+Where the grilling produced buildable work, convergence also restates the settled
+decisions as **numbered acceptance criteria** — each an outcome, never a step, with
+its own verification — presented beside the manifest, not folded into it.
+
+What the user approves is **design + manifest + acceptance criteria**. Nothing raised
+may evaporate.
 
 ## Handoff
 
 When a grilling session produced buildable work, **offer** the handoff rather than
 waiting to be asked. On the user's agreement the settled decisions and the manifest
 **carry into the brainstorming pipeline** — the interview is **not** re-run there.
+The settled decisions carry over restated as the numbered acceptance criteria; the
+pipeline builds the item around them rather than deriving them again.

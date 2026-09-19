@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **The `writing-plans` pipeline stage is gone.** The pipeline is now
+  `brainstorm → execute → finish` (grilling happens inside brainstorming), and
+  `skills/writing-plans/` is deleted. By the time a plan was written the
+  decisions were already settled, so it mostly transcribed `## Why / What`; its
+  two parts that earned their place — the parallel split and the after-the-fact
+  record — survive as `## Dispatch` and `## Progress`.
+
 ### Changed
+
+- **An active `.local/` item is driven by acceptance criteria instead of a
+  `## Plan`.** `## Why / What` ends with `### Acceptance criteria`: numbered
+  `AC-1, AC-2, …`, each an outcome ("invalid input returns 400", never "add
+  validate()") carrying its own verification — a command, a test, or a named
+  manual check. `## Dispatch` is optional and exists only when 2+ units run in
+  parallel (unit · AC covered · write set · cross-unit reads · lands first or
+  last). `## Progress` is append-only, cites AC IDs and commit ranges, and is
+  what a resumed session reads; approved AC text is never edited to record
+  progress. An in-flight item that still carries a legacy `## Plan` is read
+  as-is.
+- **Review's spec verdict is per AC** — pass/fail/partial with evidence per
+  criterion, so subagent reports, review verdicts and progress notes all cite
+  the same IDs. A finding that conflicts with an AC goes to the human beside
+  the AC text rather than being settled by an edit.
+- **`brainstorming`** produces the AC at convergence and presents them in the
+  User Review Gate together with the design and the residue manifest — one
+  approval covers all three. It then runs a premise check at exit (base up to
+  date, premises still hold; AC is built on premises and cannot catch a wrong
+  one) and hands off to `executing` directly.
+- **`executing`** works the AC list: briefs carry AC verbatim, reports and
+  review verdicts cite AC IDs, and task completion, fix rounds and the
+  breaker's rulings are appended to `## Progress`. It never edits an AC — one
+  that is wrong, impossible or ambiguous stops and asks the user. Parallel
+  dispatch reads `## Dispatch` when the item has one.
 
 - **`/review` collapsed onto `codex exec review`.** The runtime command now
   spawns `codex exec review` directly as a separate, ephemeral, read-only

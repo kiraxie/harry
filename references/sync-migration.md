@@ -63,7 +63,11 @@ directories:
 1. **Spec + matching plan** (same topic) → merge into one
    `.local/items/<topic>.md`: `## Why / What` = the spec's five numbered sections as
    prose (the item schema in `references/doc-types.md` numbers nothing inside
-   that section), `## Plan` = the plan's content. `status: active` if the plan is in `.local/plans/` (not yet
+   that section), and the plan's content kept verbatim under `## Plan`, opening
+   with `_(legacy plan — migrated as-is, no acceptance criteria)_` — the heading
+   stays literally `## Plan`, which is what later readers key on, and a migration
+   never invents `### Acceptance criteria`.
+   `status: active` if the plan is in `.local/plans/` (not yet
    archived), `status: done` if the plan is in `.local/plans/archived/` (and
    write straight to `.local/archive/<topic>.md` instead).
 2. **Spec alone** (no matching plan) → `.local/items/<topic>.md` with just
@@ -137,7 +141,11 @@ How to ask:
 1. Rewrite its content into harry's item format, faithfully — never fabricate
    decisions or content. spec-class → the item's `## Why / What` (Context (SCQA)
    / Approaches Considered / Design / Scope & Non-Goals / Constraints
-   subsections). plan-class → the item's `## Plan` in harry step format. Where
+   subsections). plan-class → `## Plan` (that literal heading), opening with
+   `_(legacy plan — migrated as-is, no acceptance criteria)_` and carrying the
+   source's steps as they stand; harry no longer writes plans, and a migration
+   never invents `### Acceptance criteria` — a legacy `## Plan` is read as-is
+   (`references/doc-types.md`). Where
    the source lacks a section, write `_(not present in source)_` rather than
    invent.
 2. Write the new file at its target path (create `.local/items` /
