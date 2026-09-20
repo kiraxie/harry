@@ -21,7 +21,7 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 | Gate | Setting |
 |------|---------|
 | Trigger | 2–5 files, real logic, single subsystem |
-| Brainstorm | compressed — confirm intent + approach in a few lines, no full exploration |
+| Brainstorm | compressed depth — the interview runs, but divergence is brief and convergence covers only the frontier this task's scope raises (`references/grilling.md`); one approach proposal is enough, no full exploration; closes on the reference's exit gate unabridged |
 | Item | one `.local/items/<slug>.md`, `status: active` — `## Why / What` holds only `### Acceptance criteria` (short, each AC an outcome with its check) unless a real design decision was weighed (alternatives existed), in which case the decision record precedes them. Plus an append-only `## Progress`. |
 | TDD | one runnable check left behind (smallest thing that fails if the logic breaks); watch-it-fail encouraged, not mandatory |
 | Review | free subagent review — required (compensates for inline execution) |

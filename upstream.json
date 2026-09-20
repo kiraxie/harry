@@ -85,7 +85,7 @@
     {
       "skill": "grill",
       "from": "mattpocock-skills:skills/productivity/grilling + productivity/grill-me + in-progress/batch-grill-me",
-      "note": "references/grilling.md is the single source; commands/grill.md + codex-skills/grill are thin doors; brainstorming points at the same file. Phase-hybrid delivery (divergence free text, convergence AskUserQuestion rounds) replaces upstream's one-question-at-a-time canon; the residue-manifest exit gate is HARRY-AUTHORED with no upstream counterpart; no question caps (upstream's own out-of-scope ruling). batch-grill-me sits under in-progress/ — its path may move when upstream graduates it."
+      "note": "references/grilling.md is the single source; commands/grill.md + codex-skills/grill are thin doors; brainstorming points at the same file. Harry SHARES upstream's one-question-at-a-time cadence canon (skills/productivity/grilling/SKILL.md:8) — nothing to restore there. HARRY-AUTHORED, with no upstream counterpart: the residue-manifest exit gate, the assumption dispositions (confirmed fact / returned as an open question / pinned by an AC), and the ledger (decided/open/deferred/assumptions) it reads out from; also no question caps (upstream's own out-of-scope ruling). batch-grill-me sits under in-progress/ — its path may move when upstream graduates it."
     },
     {
       "skill": "root-cause-tracing / skill-authoring / red-green / brainstorming (partial)",

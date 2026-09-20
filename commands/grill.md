@@ -8,5 +8,5 @@ Run a grilling session on whatever the user named — a plan, decision, or idea
 `$ARGUMENTS`
 
 Read `${CLAUDE_PLUGIN_ROOT}/references/grilling.md` and follow it. The whole technique —
-its divergence and convergence phases and the residue-manifest exit gate — lives there;
-this file only points at it.
+its divergence and convergence phases, the interview/design loop, and the close — lives
+there; this file only points at it.

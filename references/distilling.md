@@ -10,9 +10,9 @@ modes observed in practice:
   upstream is never checked. (This happened with the grill family: distilled 2026-07-26,
   tracked only a day later when someone asked.)
 - **Re-imported rejects** — harry deliberately deviates from its upstreams (the
-  correctness-over-cost recalibration, the residue manifest, phase-hybrid delivery). A
-  survey that doesn't read the deviation record first will "discover" and re-import the
-  very thing a previous ruling removed.
+  correctness-over-cost recalibration, the residue-manifest exit gate, the assumption
+  dispositions, the ledger). A survey that doesn't read the deviation record first will
+  "discover" and re-import the very thing a previous ruling removed.
 
 The session is read-only with respect to harry's laws and skills: its outputs are a
 ruling report, tracking-file bookkeeping, and (with the user's nod) backlog items.

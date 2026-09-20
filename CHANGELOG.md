@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Grilling asks one question per round, and owns its own close.**
+  `references/grilling.md` reverts the interview's cadence to one question at a
+  time, waiting for the answer before the next — batching is now something the
+  user asks for, never a default. The Codex-build fallback ("no
+  AskUserQuestion, use numbered text rounds") is gone from `grilling.md` and
+  `codex-skills/grill/SKILL.md`: a single question is asked the same way on
+  both builds. The interview is stated as an explicit **loop** —
+  interview → design → re-interview — with three termination conditions: no
+  open questions (closed by answering or by the user's deferral); every
+  silent assumption closed (confirmed fact, returned as an open question, or
+  pinned by an AC — listing one is not closing it); and the destination did
+  not move during the most recent pass. The interview keeps a running ledger
+  (decided / open / deferred / assumptions), in-conversation and written to
+  a file only on request. The close (the residue manifest read from that
+  ledger, restated as acceptance criteria, and what the user's approval
+  covers) now lives entirely in `references/grilling.md`.
+  `skills/brainstorming/SKILL.md` cites the close instead of restating it,
+  and states that tier controls the interview's depth, never its cadence.
 - **An active `.local/` item is driven by acceptance criteria instead of a
   `## Plan`.** `## Why / What` ends with `### Acceptance criteria`: numbered
   `AC-1, AC-2, …`, each an outcome ("invalid input returns 400", never "add

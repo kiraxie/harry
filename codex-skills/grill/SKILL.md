@@ -9,8 +9,5 @@ Run a grilling session on whatever the user named — a plan, decision, or idea 
 topics welcome).
 
 Read `${CLAUDE_PLUGIN_ROOT}/references/grilling.md` and follow it. The whole technique —
-its divergence and convergence phases and the residue-manifest exit gate — lives there;
-this file only points at it.
-
-**Codex has no AskUserQuestion:** the reference's convergence phase falls back to its
-**numbered text rounds** variant (no structured picker).
+its divergence and convergence phases, the interview/design loop, and the close — lives
+there; this file only points at it.

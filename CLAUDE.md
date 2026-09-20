@@ -180,10 +180,12 @@ field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 
 - `debate` has no Codex skill (its "self" voice is Claude/opus by design).
-- `grill`'s convergence phase batches questions via AskUserQuestion on Claude
-  Code; Codex has no structured picker, so its skill falls back to the numbered
-  text rounds defined in `references/grilling.md` — same technique file,
-  different delivery.
+- `grill` is in this list as a *closed* gap — a marker, not a difference, so the
+  build-specific cadence it once had does not get re-added: both builds ask one
+  question per round, in both phases, per `references/grilling.md`. A single
+  question needs no harness-specific question UI, so there is nothing for Codex
+  to do differently — same technique file, same delivery, only the door differs
+  (`commands/grill.md` vs `codex-skills/grill/SKILL.md`).
 - `review` is read-only on both builds — there is no fix backend, dual-lane, or
   full mode any more, and no in-runtime path to apply what it finds. On both
   builds the review itself is held read-only by the spawned `codex exec review`
