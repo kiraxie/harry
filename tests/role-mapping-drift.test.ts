@@ -150,7 +150,7 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
 // one had none. The cross-check below is that, added when section C started
 // deriving from `PAIRS` too: until then a door pair landing on disk without
 // being listed here was invisible to the WHOLE suite, content guard included.
-const PAIRS = ["ask", "debt", "review", "sync", "audit", "grill", "distill"];
+const PAIRS = ["ask", "debt", "review", "sync", "audit", "grill", "distill", "wait-what"];
 
 // CC commands with no Codex twin, each an explicit decision rather than an
 // oversight. An entry here is a conscious exemption, not a silencer.
@@ -242,7 +242,8 @@ for (const name of PAIRS) {
 // every hoist landed, that property is gone for every pair without exception:
 //
 //   ask                                      both sides cite NO reference path
-//   debt, review, sync, audit, grill, distill  1 shared path, zero asymmetry
+//   debt, review, sync, audit, grill, distill, wait-what  1 shared path,
+//                                            zero asymmetry
 //
 // So B passes vacuously against re-inlining on every pair. It still does what
 // its name says — path-set parity, which catches a path added to one side only —
@@ -298,6 +299,7 @@ const HOISTED: Record<string, string[]> = {
   ],
   grill: ["references/grilling.md"],
   distill: ["references/distilling.md", "references/upstream-sync.md"],
+  "wait-what": ["references/plain-language.md"],
 };
 
 /**

@@ -162,7 +162,7 @@ vocabulary is defined in `references/debt-audit.md`, which both builds' `/debt`
 doors read — go there rather than to either door.
 
 **Non-Goals do not survive archiving.** `/debt` only scans `status: active`
-items, and finishing's flush (below) only carries `## Follow-ups` forward —
+items, and finishing's Follow-ups flush (above) only carries `## Follow-ups` forward —
 a Scope & Non-Goals bullet in an item that reaches `status: done` is gone
 the moment it's archived, with nothing left to re-judge it. This is a
 deliberate discipline, not an automated sweep: a Non-Goal worth revisiting

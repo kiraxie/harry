@@ -94,10 +94,10 @@ test("tier-gates.md promotion list has exactly N domain bullets", () => {
 
 test("HARRY.md §2 encodes exactly N domains (N-1 inline + cross-boundary bullet)", () => {
   const region = harrySection2();
-  // The first "- " item after "Never simplify these away:" is the inline red-line bullet:
+  // The first "- " item after "Never simplify these away" is the inline red-line bullet:
   // one line of semicolon-separated domains. The ninth domain — cross-boundary contract —
   // is its own named bullet (asserted by its probe above). The remaining named bullet in
-  // §2 (user-requested; the hoist rules now live inside the cross-boundary bullet) is NOT
+  // §2 (user-requested; the extract-it-now rules live inside the cross-boundary bullet) is NOT
   // a promotion trigger and is deliberately excluded, so a bare bullet count is not lockable here — we lock the
   // honestly-lockable inline list instead.
   // The lock is also brittle toward false POSITIVES: a semicolon added inside one

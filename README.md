@@ -4,7 +4,7 @@ A personal Claude Code plugin: the **Superpowers** workflow philosophy and **pon
 
 Two halves:
 
-- **Resident laws** (`HARRY.md`) — deployed as a snapshot into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence).
+- **Resident laws** (`HARRY.md`) — deployed as a snapshot into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence, and plain language for anything you have to read).
 - **A `brainstorm → execute → finish` pipeline** — three skills, plus slash commands for review, debate, adversarial grilling interviews, and over-engineering/debt audits.
 
 ## The three-tier threshold
@@ -39,7 +39,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 harry's commands share the `/harry:` namespace. The one whose bare name collides
 with a Claude Code built-in — `/harry:review` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
-(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:distill`)
+(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:distill`, `/harry:wait-what`)
 accept the bare name when unambiguous.
 
 `/harry:sync` does three things: deploys harry's resident laws (`HARRY.md`, which
@@ -74,7 +74,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `debt`,
-`review`, `sync`, `audit`, `grill`, `distill`); the three pipeline skills and the runtime are
+`review`, `sync`, `audit`, `grill`, `distill`, `wait-what`); the three pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -93,6 +93,7 @@ Claude-native or local scripts.
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
 | `/harry:distill <repo>` | Evaluate an external repo as a distillation candidate — survey it against harry's laws and deviation record, rule pull/adapt/skip per candidate, record the outcome in upstream tracking |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
+| `/harry:wait-what` | Re-explain harry's previous message once, in plainer words — one-shot, not a mode |
 
 Cheap-first smoke test: `/harry:ask` → `/harry:review`/`/harry:debate`.
 
@@ -124,8 +125,8 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · executing · finishing (shared, both builds)
-commands/           review · ask · debate · debt · sync · audit · grill · distill (Claude Code)
-codex-skills/       ask · debt · review · sync · audit · grill · distill (Codex CLI)
+commands/           review · ask · debate · debt · sync · audit · grill · distill · wait-what (Claude Code)
+codex-skills/       ask · debt · review · sync · audit · grill · distill · wait-what (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs, shared, both builds)
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs

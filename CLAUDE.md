@@ -175,7 +175,7 @@ guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the portable
 `commands/*.md` slash commands (`ask`, `debt`, `review`,
-`sync`, `audit`, `distill`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
+`sync`, `audit`, `distill`, `wait-what`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 
@@ -203,7 +203,7 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   `references/audit/` reference bundle and `report-schema.json`/
   `validate-findings.cjs` as the Claude Code `/audit` command via
   `${CLAUDE_PLUGIN_ROOT}`.
-- `sync`'s law-wiring (`scripts/install-codex.mjs`) inlines HARRY.md's content into
+- `sync` (`scripts/install-codex.mjs`) inlines HARRY.md's content into
   `~/.codex/AGENTS.md` as a snapshot (Codex has no `@`-import syntax), appending the
   advisory Codex role-map table (`references/codex-role-mapping.md`) to the same block —
   re-run after HARRY.md or the role map changes to resync, unlike Claude Code's always-live import.

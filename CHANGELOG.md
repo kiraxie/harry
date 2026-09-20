@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **How a message to the user is paced is now a law, not a habit.**
+  `HARRY.md` §6 states it for prose addressed to the user: the conclusion
+  first, one layer at a time and the next only when it is asked for, at most
+  one new concept per message, and one question per message. The audience is
+  a capable adult who has not read this codebase — competence assumed,
+  context never.
+- **One carve-out to the one-question rule.** Several rulings count as one
+  question when each is an item on a list the user was already shown. A
+  decision that was never shown that way costs a question of its own, even
+  when it arrives in the same message.
+- **The law splits by reader.** What another model reads — subagent briefs,
+  review reports, commit messages — stays precision-first, and may coin no new
+  concept name beyond the ones already defined in the laws, `references/` or
+  `skills/`. A PR body is not one of those: the user approves the draft before
+  the PR is opened and people read it afterwards, so it is written for them.
+- **The technique lives in the new `references/plain-language.md`.** It holds
+  the grounding rule — a concept is established before anything leans on it,
+  and the unit is the concept, not the word for it — plus the two cognitive
+  principles behind it, a worked before/after, a check to run before sending,
+  and two levels of plainness.
+- **New `/wait-what` — re-explain the last message once, in plainer words.**
+  Shipped on both builds (`commands/wait-what.md` on Claude Code,
+  `codex-skills/wait-what/SKILL.md` on Codex), both thin pointers to
+  `references/plain-language.md`'s deeper level. It is one-shot and not a
+  mode: it changes nothing about how later messages are written. A previous
+  message that asked a question is re-asked plainer rather than answered, so
+  the door never picks the side the user was being asked to pick.
+- **Five terms the shipped prose never defined are gone from it.** `breaker`
+  and `law-wiring` are gone outright; `premise check`, `flush` and `hoist`
+  survive only where each is glossed or defined on the spot. A term a model
+  has only this text to resolve is a silently misread instruction, not a style
+  nit, so `tests/plain-language-contract.test.ts` now holds the line: the cut
+  terms are scanned for across every shipped file, the survivors are allowed
+  only in the files that define them, and the nine project terms that stayed
+  (`tier`, `red line`, `squash`, `acceptance criteria`, `frontier`, `residue
+  manifest`, `ledger`, `dispatch cap`, `scope tag`) each keep their defining
+  sentence.
 - **Grilling asks one question per round, and owns its own close.**
   `references/grilling.md` reverts the interview's cadence to one question at a
   time, waiting for the answer before the next — batching is now something the

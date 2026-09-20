@@ -14,7 +14,14 @@ const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "ut
 
 test("HARRY.md §5 makes integration a squash merge", () => {
   const section = read("HARRY.md").split("## §5")[1]?.split("## §6")[0] ?? "";
-  assert.match(section, /lands as a \*\*squash\*\*/, "§5 no longer says a unit lands as a squash");
+  // Through the definition, not just the term: `squash` is one of the project terms
+  // that survives only while the sentence saying what it means survives with it, and
+  // the term alone can stay while that sentence is deleted whole.
+  assert.match(
+    section,
+    /lands as a \*\*squash\*\*: one commit on the base/,
+    "§5 no longer says a unit lands as a squash — one commit on the base",
+  );
   assert.match(section, /never a merge commit/, "§5 no longer rules out merge commits");
 });
 

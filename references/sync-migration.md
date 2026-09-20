@@ -124,17 +124,22 @@ if already complete). Topic: kebab-case, derived from the filename/content.
 Present the full candidate list as a table (source → proposed kind → target
 path).
 
-**Step C — Ask two decisions:**
+**Step C — Ask two decisions, in sequence — these are separate decisions, not one
+batched question:**
 
 - Q_A — Which candidates to migrate? (multiselect; offer "all" and "skip".)
-- Q_B — After rewriting, keep the originals in place or delete them? (Deleting is
-  destructive — this answer IS the confirmation. Default to keep.)
+- **If nothing was selected** (empty, or "skip"): stop here — nothing was chosen to
+  rewrite, so there is nothing to ask about disposing of.
+- **Otherwise ask Q_B** — After rewriting, keep the originals in place or delete
+  them? (Deleting is destructive — this answer IS the confirmation. Default to
+  keep.)
 
-How to ask:
+How to ask each one:
 
-- **Claude Code build:** ask both with `AskUserQuestion`.
+- **Claude Code build:** `AskUserQuestion`, one call per question.
 - **Codex build:** If an interactive multiple-choice question tool is available, use
-  it; otherwise ask in plain text and wait for the user's reply before proceeding.
+  it for each question in turn; otherwise ask in plain text, one question per
+  message, and wait for the user's reply before asking the next.
 
 **Step D — Execute.** For each SELECTED candidate:
 
