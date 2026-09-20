@@ -20,6 +20,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -27,6 +28,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
+import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI = path.join(REPO_ROOT, "src/companion.ts");
@@ -61,6 +63,13 @@ function makeRepo(): string {
   return repo;
 }
 
+/**
+ * A `sh -c` script that sets umask 022, then execs its arguments. A mode test
+ * runs the CLI under it, so a file created without an owner-only mode comes out
+ * 0644 and the 0600 assertion fails, whatever the test runner's own umask is.
+ */
+const UMASK_022_EXEC = 'umask 022; exec "$0" "$@"';
+
 /** A bin dir whose `codex` execs the fake CLI. */
 function makeBin(): string {
   const bin = tempDir("harry-rcli-bin-");
@@ -86,6 +95,10 @@ function runReview(
     bin?: string | null;
     input?: string;
     cli?: string;
+    /** Put only the system dirs after `bin`, so no other `codex` is reachable. */
+    systemPath?: boolean;
+    /** Run the CLI under umask 022 (see {@link UMASK_022_EXEC}). */
+    permissiveUmask?: boolean;
   } = {},
 ): Run {
   const record = tempDir("harry-rcli-record-");
@@ -94,8 +107,14 @@ function runReview(
   // With bin === null nothing named `codex` may be reachable: PATH keeps only
   // the system dirs, which is enough for git.
   const basePath =
-    bin === null ? ["/usr/bin", "/bin"].join(path.delimiter) : (process.env.PATH ?? "");
-  const res = spawnSync(process.execPath, [opts.cli ?? CLI, "review", ...args], {
+    bin === null || opts.systemPath
+      ? ["/usr/bin", "/bin"].join(path.delimiter)
+      : (process.env.PATH ?? "");
+  const argv = [opts.cli ?? CLI, "review", ...args];
+  const [command, commandArgs] = opts.permissiveUmask
+    ? ["/bin/sh", ["-c", UMASK_022_EXEC, process.execPath, ...argv]]
+    : [process.execPath, argv];
+  const res = spawnSync(command, commandArgs, {
     cwd,
     encoding: "utf8",
     timeout: 15_000,
@@ -131,6 +150,9 @@ function logPathOf(run: Run): string {
 
 /** One file per run: `codex-review-<YYYYMMDD-HHMMSS>[-N].md`. */
 const REVIEW_FILE_RE = /codex-review-\d{8}-\d{6}(-\d+)?\.md$/;
+
+/** A credential-shaped transcript line (codex echoing a `.env` it read). Fake value. */
+const PLANTED_SECRET = "API_KEY=fake-planted-secret";
 
 // ─── A1: flag surface ────────────────────────────────────────────────────────
 
@@ -427,6 +449,74 @@ test("F1: codex's stderr transcript goes to a .log next to the review, not to th
   assert.equal(readFileSync(log, "utf8"), noise, "the transcript must land in the log");
 });
 
+/** A file's permission bits. */
+function modeOf(file: string): number {
+  return statSync(file).mode & 0o777;
+}
+
+test("F8: the run log is owner-only (0600)", { skip: process.platform === "win32" }, () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  const ok = runReview(repo, [], { permissiveUmask: true });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(modeOf(logPathOf(ok)).toString(8), "600");
+  const failed = runReview(repo, [], {
+    fake: { FAKE_CODEX_CLI_EXIT: "1" },
+    permissiveUmask: true,
+  });
+  assert.notEqual(failed.status, 0);
+  assert.equal(modeOf(logPathOf(failed)).toString(8), "600");
+});
+
+test("F8: the review file is owner-only (0600) after a successful run", {
+  skip: process.platform === "win32",
+}, () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  const run = runReview(repo, [], { permissiveUmask: true });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(modeOf(outputPathOf(run)).toString(8), "600");
+});
+
+test("F8: a failed run's review file, when codex wrote one, is owner-only (0600) too", {
+  skip: process.platform === "win32",
+}, () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  const cases: Record<string, string>[] = [
+    { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_OUTPUT: "always" },
+    { FAKE_CODEX_CLI_OUTPUT: "empty" },
+  ];
+  for (const fake of cases) {
+    const run = runReview(repo, [], { fake, permissiveUmask: true });
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.ok(existsSync(outputPathOf(run)), `${JSON.stringify(fake)}: no review file`);
+    assert.equal(modeOf(outputPathOf(run)).toString(8), "600", JSON.stringify(fake));
+  }
+});
+
+test("F8: a spawn error's review file, when codex wrote one, is owner-only (0600) too", {
+  skip: process.platform === "win32",
+}, () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // Writes its -o file, then exits 0 without reading its prompt: EPIPE.
+  const bin = makeShimBin(
+    'while [ $# -gt 0 ]; do [ "$1" = -o ] && echo partial > "$2"; shift; done\nexit 0',
+  );
+  const run = runReview(repo, ["--context", `@${hugeContextFile()}`], {
+    bin,
+    permissiveUmask: true,
+  });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /EPIPE/);
+  const review = readdirSync(run.dataDir, { recursive: true })
+    .map(String)
+    .filter((f) => f.endsWith(".md"));
+  assert.equal(review.length, 1, run.stderr);
+  assert.equal(modeOf(path.join(run.dataDir, review[0])).toString(8), "600");
+});
+
 test("F7: each run writes its own file, so a second run never clobbers the first", () => {
   const repo = makeRepo();
   mkdirSync(path.join(repo, ".local"));
@@ -480,7 +570,77 @@ test("A5: codex missing from PATH fails naming the Codex CLI", () => {
   assert.deepEqual(leftovers, [], "a run that never started codex leaves no log behind");
 });
 
-test("A5: a non-zero codex exit propagates with codex's stderr verbatim and no fallback", () => {
+/** Every `.log` left under a run's state dir. */
+function logsIn(run: Run): string[] {
+  return readdirSync(run.dataDir, { recursive: true })
+    .map(String)
+    .filter((f) => f.endsWith(".log"));
+}
+
+/** A bin dir whose only file is a `codex` shell script with `body`. */
+function makeShimBin(body: string, mode = 0o755): string {
+  const bin = tempDir("harry-rcli-bin-");
+  writeFileSync(path.join(bin, "codex"), `#!/bin/sh\n${body}\n`);
+  chmodSync(path.join(bin, "codex"), mode);
+  return bin;
+}
+
+/** A `--context` file far bigger than a pipe buffer, so a codex that never reads stdin EPIPEs. */
+function hugeContextFile(): string {
+  const file = path.join(tempDir("harry-rcli-ctx-"), "big.md");
+  writeFileSync(file, "x".repeat(2_000_000));
+  return file;
+}
+
+test("A5: a codex that cannot be executed (EACCES) fails loudly and leaves no empty log", {
+  skip: process.platform === "win32",
+}, () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // The only `codex` on PATH is not executable, so the spawn itself fails.
+  const bin = makeShimBin("exit 0", 0o644);
+  const run = runReview(repo, [], { bin, systemPath: true });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /EACCES/);
+  assert.equal(run.stdout, "");
+  assert.deepEqual(logsIn(run), [], "a spawn that never ran codex leaves no log behind");
+});
+
+test("A5: a spawn error after codex wrote to its log keeps the log and names it", {
+  skip: process.platform === "win32",
+}, () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // Exits 0 without reading its prompt: writing the rest of stdin fails with EPIPE.
+  const bin = makeShimBin(`echo "${PLANTED_SECRET}" >&2\nexit 0`);
+  const run = runReview(repo, ["--context", `@${hugeContextFile()}`], { bin });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /EPIPE/);
+  const logs = logsIn(run);
+  assert.equal(logs.length, 1, run.stderr);
+  const log = path.join(run.dataDir, logs[0]);
+  assert.ok(run.stderr.includes(`Log: ${log}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+  assert.equal(readFileSync(log, "utf8"), `${PLANTED_SECRET}\n`);
+});
+
+test("A5: a codex that exits non-zero without reading its prompt still reports its error line", {
+  skip: process.platform === "win32",
+}, () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // clap rejects argv before codex reads stdin: the exit, not the EPIPE, is the failure.
+  const cause = "error: unexpected argument '--bogus' found";
+  const bin = makeShimBin(`echo "${cause}" >&2\nexit 2`);
+  const run = runReview(repo, ["--context", `@${hugeContextFile()}`], { bin });
+  assert.notEqual(run.status, 0);
+  const logs = logsIn(run);
+  assert.equal(logs.length, 1, run.stderr);
+  assert.ok(run.stderr.includes(`${cause}\nLog: ${path.join(run.dataDir, logs[0])}\n`), run.stderr);
+  assert.match(run.stderr, /codex exec review failed \(exit 2\)/);
+});
+
+test("A5: a non-zero codex exit propagates with codex's error line and no fallback", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   const cause = "Error: model 'nope' is not supported when using Codex with a ChatGPT account\n";
@@ -494,22 +654,110 @@ test("A5: a non-zero codex exit propagates with codex's stderr verbatim and no f
   assert.equal(run.stdout, "", "no markdown may pretend to be a review");
 });
 
-test("F1: a failure writes the last 40 lines of codex's log to stderr, then the log path", () => {
+test("F1: a failure writes only the error lines of codex's log tail to stderr, then the log path", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // The transcript echoes files the model read; a planted `.env` line sits in the tail.
   const lines = Array.from({ length: 60 }, (_, i) => `transcript line ${i + 1}`);
+  lines.push(PLANTED_SECRET);
   lines.push('ERROR: {"type":"error","status":400,"error":{"message":"model rejected"}}');
   const run = runReview(repo, [], {
     fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: `${lines.join("\n")}\n` },
   });
   assert.notEqual(run.status, 0);
-  const tail = lines.slice(-40).join("\n");
-  assert.ok(run.stderr.includes(tail), run.stderr);
-  assert.ok(!run.stderr.includes("transcript line 21\n"), "only the last 40 lines");
   const log = logPathOf(run);
-  assert.ok(run.stderr.includes(log), run.stderr);
-  assert.ok(existsSync(log));
+  assert.ok(run.stderr.includes(`${lines.at(-1)}\nLog: ${log}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+  assert.ok(!run.stderr.includes("transcript line"), run.stderr);
+  assert.ok(readFileSync(log, "utf8").includes(PLANTED_SECRET), "the log keeps the transcript");
   assert.equal(run.stdout, "");
+});
+
+test("F1: codex's clap `error:` line reaches stderr", () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  const cause = "error: unexpected argument '--bogus' found";
+  const run = runReview(repo, [], {
+    fake: {
+      FAKE_CODEX_CLI_EXIT: "2",
+      FAKE_CODEX_CLI_STDERR: `${cause}\n\nUsage: codex exec review [OPTIONS]\n`,
+    },
+  });
+  assert.notEqual(run.status, 0);
+  assert.ok(run.stderr.includes(`${cause}\nLog: ${logPathOf(run)}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("Usage:"), run.stderr);
+});
+
+test("F1: an indented `error:` line (file content, not codex's) never reaches stderr", () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // A JSON or YAML file codex read, echoed indented into its transcript.
+  const run = runReview(repo, [], {
+    fake: {
+      FAKE_CODEX_CLI_EXIT: "1",
+      FAKE_CODEX_CLI_STDERR: `  error: "fake-planted-secret token"\n\tERROR: fake-planted-secret\n`,
+    },
+  });
+  assert.notEqual(run.status, 0);
+  assert.ok(run.stderr.includes(`${NO_ERROR_LINE}\nLog: ${logPathOf(run)}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+});
+
+test("F1: log lines split on a lone CR too, and printed error lines carry no control characters", () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // A lone CR (a progress line redrawn in place) must not hide a transcript line
+  // behind an error prefix, and an ANSI/OSC sequence must not reach the caller.
+  const stderr = [
+    `ERROR: first\r${PLANTED_SECRET}`,
+    "progress 50%\rError: \x1b[31mboom\x1b]0;title\x07\x1b[0m\x7f",
+    "error: crlf\r",
+  ].join("\n");
+  const run = runReview(repo, [], {
+    fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: `${stderr}\n` },
+  });
+  assert.notEqual(run.status, 0);
+  assert.ok(
+    run.stderr.includes(
+      `ERROR: first\nError: [31mboom]0;title[0m\nerror: crlf\nLog: ${logPathOf(run)}\n`,
+    ),
+    JSON.stringify(run.stderr),
+  );
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+  assert.doesNotMatch(run.stderr, /[^\P{Cc}\t\n]/u, JSON.stringify(run.stderr));
+});
+
+test("F1: a failure with no error line in the log tail says so and names the log", () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  const run = runReview(repo, [], {
+    fake: {
+      FAKE_CODEX_CLI_EXIT: "1",
+      FAKE_CODEX_CLI_STDERR: `${PLANTED_SECRET}\nsomething broke\n`,
+    },
+  });
+  assert.notEqual(run.status, 0);
+  assert.ok(run.stderr.includes(`${NO_ERROR_LINE}\nLog: ${logPathOf(run)}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+  assert.ok(!run.stderr.includes("something broke"), run.stderr);
+});
+
+test("F1: an oversized multibyte error line reaches stderr cut to 1000 bytes of valid UTF-8", () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  // 2-, 3- and 4-byte code points, ~5 KB: the cut lands mid-code-point unless it is careful.
+  const huge = `ERROR: ${"é€𝄞".repeat(560)}`;
+  const run = runReview(repo, [], {
+    fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: `${huge}\n` },
+  });
+  assert.notEqual(run.status, 0);
+  const printed = run.stderr.split("\n").find((l) => l.startsWith("ERROR: "));
+  assert.ok(printed, run.stderr);
+  assert.ok(Buffer.byteLength(printed) <= 1000, `${Buffer.byteLength(printed)} bytes`);
+  assert.ok(printed.endsWith("…[truncated]"), printed.slice(-40));
+  assert.ok(!printed.includes("�"), "a code point was split");
+  assert.ok(huge.startsWith(printed.slice(0, -"…[truncated]".length)));
+  assert.ok(run.stderr.includes(`\nLog: ${logPathOf(run)}\n`), run.stderr.slice(-300));
 });
 
 test("A5: a review from an earlier run is never passed off as this run's output", () => {
@@ -529,9 +777,13 @@ for (const mode of ["skip", "empty"] as const) {
   test(`A5: codex exit 0 with a ${mode === "skip" ? "missing" : "empty"} -o file fails naming the path`, () => {
     const repo = makeRepo();
     writeFileSync(path.join(repo, "a.txt"), "v2\n");
-    const run = runReview(repo, [], { fake: { FAKE_CODEX_CLI_OUTPUT: mode } });
+    const run = runReview(repo, [], {
+      fake: { FAKE_CODEX_CLI_OUTPUT: mode, FAKE_CODEX_CLI_STDERR: `${PLANTED_SECRET}\n` },
+    });
     assert.notEqual(run.status, 0);
     assert.ok(run.stderr.includes(outputPathOf(run)), run.stderr);
+    assert.ok(run.stderr.includes(`${NO_ERROR_LINE}\nLog: ${logPathOf(run)}\n`), run.stderr);
+    assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
     assert.equal(run.stdout, "");
   });
 }
@@ -551,6 +803,22 @@ test("F1: every door that runs review tells the caller to read the `Review writt
   ]) {
     const text = readFileSync(path.join(REPO_ROOT, door), "utf8");
     assert.ok(text.includes(REVIEW_WRITTEN), `${door} must name the \`${REVIEW_WRITTEN}\` line`);
+  }
+});
+
+test("F1: every review and ask door quotes the no-error-line notice and names no tail size", () => {
+  // The notice is run-codex's, printed by both commands, so all four doors are
+  // pinned here. A door quoting a stale copy tells its consumer to watch for a
+  // line that never comes; a door naming the tail size drifts when it changes.
+  for (const door of [
+    "commands/review.md",
+    "codex-skills/review/SKILL.md",
+    "commands/ask.md",
+    "codex-skills/ask/SKILL.md",
+  ]) {
+    const prose = readFileSync(path.join(REPO_ROOT, door), "utf8").replace(/\s+/g, " ");
+    assert.ok(prose.includes(NO_ERROR_LINE), `${door} must quote \`${NO_ERROR_LINE}\``);
+    assert.doesNotMatch(prose, /\blast \d+ lines\b/i, `${door} must not name the tail size`);
   }
 });
 

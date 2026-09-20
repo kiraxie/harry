@@ -21,6 +21,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { ASK_PREAMBLE } from "../src/commands/ask.ts";
+import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -173,6 +174,13 @@ function makeTempDir(prefix: string): string {
   return d;
 }
 
+/**
+ * A `sh -c` script that sets umask 022, then execs its arguments. A mode test
+ * runs the CLI under it, so a file created without an owner-only mode comes out
+ * 0644 and the 0600 assertion fails, whatever the test runner's own umask is.
+ */
+const UMASK_022_EXEC = 'umask 022; exec "$0" "$@"';
+
 /** A bin dir whose `codex` records its cwd, then execs the fake CLI. */
 function makeBin(): string {
   const bin = makeTempDir("harry-ask-bin-");
@@ -194,24 +202,42 @@ interface Run {
   cwd: string;
 }
 
-/** Run `ask` in an isolated cwd + state dir. `bin: null` leaves no `codex` on PATH. */
+/**
+ * Run `ask` in an isolated cwd + state dir. `bin: null` leaves no `codex` on PATH;
+ * `systemPath` puts only the system dirs after `bin`, so no other `codex` is reachable.
+ * `permissiveUmask` runs the CLI under umask 022 (see {@link UMASK_022_EXEC}).
+ */
 function runAsk(
   args: string[],
-  opts: { cwd?: string; fake?: Record<string, string>; bin?: null; input?: string } = {},
+  opts: {
+    cwd?: string;
+    fake?: Record<string, string>;
+    bin?: string | null;
+    systemPath?: boolean;
+    input?: string;
+    permissiveUmask?: boolean;
+  } = {},
 ): Run {
   const record = makeTempDir("harry-ask-record-");
   const dataDir = makeTempDir("harry-ask-data-");
   const cwd = opts.cwd ?? makeTempDir("harry-ask-cwd-");
+  const bin = opts.bin === undefined ? makeBin() : opts.bin;
   const basePath =
-    opts.bin === null ? ["/usr/bin", "/bin"].join(path.delimiter) : (process.env.PATH ?? "");
-  const res = spawnSync(process.execPath, [CLI, "ask", ...args], {
+    bin === null || opts.systemPath
+      ? ["/usr/bin", "/bin"].join(path.delimiter)
+      : (process.env.PATH ?? "");
+  const argv = [CLI, "ask", ...args];
+  const [command, commandArgs] = opts.permissiveUmask
+    ? ["/bin/sh", ["-c", UMASK_022_EXEC, process.execPath, ...argv]]
+    : [process.execPath, argv];
+  const res = spawnSync(command, commandArgs, {
     cwd,
     encoding: "utf8",
     timeout: 15_000,
     input: opts.input ?? "",
     env: {
       ...process.env,
-      PATH: opts.bin === null ? basePath : `${makeBin()}${path.delimiter}${basePath}`,
+      PATH: bin === null ? basePath : `${bin}${path.delimiter}${basePath}`,
       CLAUDE_PLUGIN_DATA: dataDir,
       FAKE_CODEX_CLI_RECORD_DIR: record,
       ...opts.fake,
@@ -266,6 +292,9 @@ function assertFailedStdout(run: Run, reason: RegExp): void {
 
 /** One file per run: `ask-<YYYYMMDD-HHMMSS>[-N].md`. */
 const ASK_FILE_RE = /ask-\d{8}-\d{6}(-\d+)?\.md$/;
+
+/** A credential-shaped transcript line (codex echoing a `.env` it read). Fake value. */
+const PLANTED_SECRET = "API_KEY=fake-planted-secret";
 
 // ─── flag surface ───────────────────────────────────────────────────────────
 
@@ -424,6 +453,43 @@ test("ask prints the answer file verbatim on stdout and the log path on stderr",
   assert.equal(fs.readFileSync(logPathOf(run), "utf8"), noise);
 });
 
+/** A file's permission bits, in octal. */
+function modeOf(file: string): string {
+  return (fs.statSync(file).mode & 0o777).toString(8);
+}
+
+test("ask's run log is owner-only (0600)", { skip: process.platform === "win32" }, () => {
+  const ok = runAsk(["hello"], { permissiveUmask: true });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(modeOf(logPathOf(ok)), "600");
+  const failed = runAsk(["hello"], { fake: { FAKE_CODEX_CLI_EXIT: "1" }, permissiveUmask: true });
+  assert.notEqual(failed.status, 0);
+  assert.equal(modeOf(logPathOf(failed)), "600");
+});
+
+test("ask's answer file is owner-only (0600) after a successful run", {
+  skip: process.platform === "win32",
+}, () => {
+  const run = runAsk(["hello"], { permissiveUmask: true });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(modeOf(answerPathOf(run)), "600");
+});
+
+test("a failed ask's answer file, when codex wrote one, is owner-only (0600) too", {
+  skip: process.platform === "win32",
+}, () => {
+  const cases: Record<string, string>[] = [
+    { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_OUTPUT: "always" },
+    { FAKE_CODEX_CLI_OUTPUT: "empty" },
+  ];
+  for (const fake of cases) {
+    const run = runAsk(["hello"], { fake, permissiveUmask: true });
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.ok(fs.existsSync(answerPathOf(run)), `${JSON.stringify(fake)}: no answer file`);
+    assert.equal(modeOf(answerPathOf(run)), "600", JSON.stringify(fake));
+  }
+});
+
 test("ask leaves the failure marker off a successful answer", () => {
   // The marker is a discriminator, so it needs both poles: proving it appears on
   // failure is only half. If it also appeared on success, every door-following
@@ -446,15 +512,19 @@ test("ask leaves the failure marker off a successful answer", () => {
 test("ask surfaces codex's last ERROR: line as the reason on a non-zero exit", () => {
   const lines = Array.from({ length: 60 }, (_, i) => `transcript line ${i + 1}`);
   lines.push("ERROR: unexpected status 400 Bad Request: first");
-  lines.push("more transcript");
+  lines.push(PLANTED_SECRET);
   lines.push("ERROR: unexpected status 401 Unauthorized: token expired");
   const run = runAsk(["hello"], {
     fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: `${lines.join("\n")}\n` },
   });
   assertFailedStdout(run, /^ERROR: unexpected status 401 Unauthorized: token expired$/m);
-  assert.ok(run.stderr.includes(lines.slice(-40).join("\n")), "stderr carries the log tail");
-  assert.ok(!run.stderr.includes("transcript line 21\n"), "only the last 40 lines");
-  assert.ok(run.stderr.includes(`Log: ${logPathOf(run)}`), run.stderr);
+  // stderr carries the tail's error lines only, then the log path.
+  assert.ok(
+    run.stderr.includes(`${lines.at(-3)}\n${lines.at(-1)}\nLog: ${logPathOf(run)}\n`),
+    run.stderr,
+  );
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+  assert.ok(!run.stderr.includes("transcript line"), run.stderr);
 });
 
 test("ask ignores an ERROR: line that scrolled out of the log tail (command output, not codex's)", () => {
@@ -467,21 +537,88 @@ test("ask ignores an ERROR: line that scrolled out of the log tail (command outp
   });
   assertFailedStdout(run, /codex exec failed \(exit 2\)/);
   assert.ok(!run.stdout.includes("from grep output"), run.stdout);
+  assert.ok(!run.stderr.includes("from grep output"), run.stderr);
 });
 
 test("ask names the exit code when codex fails without an ERROR: line", () => {
   const run = runAsk(["hello"], {
-    fake: { FAKE_CODEX_CLI_EXIT: "3", FAKE_CODEX_CLI_STDERR: "something broke\n" },
+    fake: {
+      FAKE_CODEX_CLI_EXIT: "3",
+      FAKE_CODEX_CLI_STDERR: `${PLANTED_SECRET}\nsomething broke\n`,
+    },
   });
   assertFailedStdout(run, /codex exec failed \(exit 3\)/);
-  assert.ok(run.stderr.includes("something broke"), run.stderr);
+  assert.ok(run.stderr.includes(`${NO_ERROR_LINE}\nLog: ${logPathOf(run)}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+  assert.ok(!run.stderr.includes("something broke"), run.stderr);
+});
+
+test("ask never takes an indented error line (file content, not codex's) as its reason or prints it", () => {
+  // A JSON or YAML file codex read, echoed indented into its transcript.
+  const run = runAsk(["hello"], {
+    fake: {
+      FAKE_CODEX_CLI_EXIT: "4",
+      FAKE_CODEX_CLI_STDERR: `  error: "fake-planted-secret token"\n\tERROR: fake-planted-secret\n`,
+    },
+  });
+  assertFailedStdout(run, /codex exec failed \(exit 4\)/);
+  assert.ok(!run.stdout.includes("fake-planted-secret"), run.stdout);
+  assert.ok(run.stderr.includes(`${NO_ERROR_LINE}\nLog: ${logPathOf(run)}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+});
+
+test("ask's reason splits on a lone CR and carries no control characters", () => {
+  // A lone CR must not glue a transcript line onto the reason, and an ANSI
+  // sequence must not reach stdout.
+  const run = runAsk(["hello"], {
+    fake: {
+      FAKE_CODEX_CLI_EXIT: "1",
+      FAKE_CODEX_CLI_STDERR: `ERROR: \x1b[31mdenied\x1b[0m\r${PLANTED_SECRET}\n`,
+    },
+  });
+  assertFailedStdout(run, /^ERROR: \[31mdenied\[0m$/m);
+  assert.ok(!run.stdout.includes("fake-planted-secret"), run.stdout);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+  assert.doesNotMatch(run.stdout, /[^\P{Cc}\t\n]/u, JSON.stringify(run.stdout));
+});
+
+test("ask passes a pre-run `Error:` line to stderr", () => {
+  const cause = "Error: model 'nope' is not supported when using Codex with a ChatGPT account";
+  const run = runAsk(["hello"], {
+    fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: `${PLANTED_SECRET}\n${cause}\n` },
+  });
+  assertFailedStdout(run, /codex exec failed \(exit 1\)/);
+  assert.ok(run.stderr.includes(`${cause}\nLog: ${logPathOf(run)}\n`), run.stderr);
+  assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+});
+
+test("ask cuts an oversized multibyte ERROR: reason to 1000 bytes of valid UTF-8, on stdout and stderr", () => {
+  // 2-, 3- and 4-byte code points, ~5 KB: the cut lands mid-code-point unless it is careful.
+  const huge = `ERROR: ${"é€𝄞".repeat(560)}`;
+  const run = runAsk(["hello"], {
+    fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: `${huge}\n` },
+  });
+  assertFailedStdout(run, /^ERROR: /m);
+  const reason = run.stdout.slice(`${ASK_FAILED_MARKER}\n\n`.length).trimEnd();
+  const logLine = run.stderr.split("\n").find((l) => l.startsWith("ERROR: "));
+  assert.ok(logLine, run.stderr);
+  for (const line of [reason, logLine]) {
+    assert.ok(Buffer.byteLength(line) <= 1000, `${Buffer.byteLength(line)} bytes`);
+    assert.ok(line.endsWith("…[truncated]"), line.slice(-40));
+    assert.ok(!line.includes("�"), "a code point was split");
+    assert.ok(huge.startsWith(line.slice(0, -"…[truncated]".length)));
+  }
 });
 
 for (const mode of ["skip", "empty"] as const) {
   test(`ask fails when codex exits 0 with a ${mode === "skip" ? "missing" : "empty"} answer file`, () => {
-    const run = runAsk(["hello"], { fake: { FAKE_CODEX_CLI_OUTPUT: mode } });
+    const run = runAsk(["hello"], {
+      fake: { FAKE_CODEX_CLI_OUTPUT: mode, FAKE_CODEX_CLI_STDERR: `${PLANTED_SECRET}\n` },
+    });
     assertFailedStdout(run, new RegExp(`wrote no answer to ${answerPathOf(run)}`));
-    assert.ok(run.stderr.includes(`Log: ${logPathOf(run)}`), run.stderr);
+    assert.ok(run.stderr.includes(`${NO_ERROR_LINE}\nLog: ${logPathOf(run)}\n`), run.stderr);
+    assert.ok(!run.stderr.includes("fake-planted-secret"), run.stderr);
+    assert.ok(!run.stdout.includes("fake-planted-secret"), run.stdout);
   });
 }
 
@@ -492,6 +629,20 @@ test("ask with codex missing from PATH fails naming the Codex CLI and leaves no 
     .readdirSync(run.dataDir, { recursive: true })
     .filter((f) => String(f).endsWith(".log"));
   assert.deepEqual(leftovers, [], "a run that never started codex leaves no log behind");
+});
+
+test("ask with a codex that cannot be executed (EACCES) fails loudly and leaves no empty log", {
+  skip: process.platform === "win32",
+}, () => {
+  // The only `codex` on PATH is not executable, so the spawn itself fails.
+  const bin = makeTempDir("harry-ask-bin-");
+  fs.writeFileSync(path.join(bin, "codex"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+  const run = runAsk(["hello"], { bin, systemPath: true });
+  assertFailedStdout(run, /EACCES/);
+  const leftovers = fs
+    .readdirSync(run.dataDir, { recursive: true })
+    .filter((f) => String(f).endsWith(".log"));
+  assert.deepEqual(leftovers, [], "a spawn that never ran codex leaves no log behind");
 });
 
 test("every door that tells a consumer to trust ask's stdout quotes the failure signals", () => {

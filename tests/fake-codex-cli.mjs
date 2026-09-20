@@ -9,9 +9,11 @@
  *                              (exec runs only)
  *   FAKE_CODEX_CLI_EXIT        exit code (default 0)
  *   FAKE_CODEX_CLI_STDERR      text written to stderr before exiting
- *   FAKE_CODEX_CLI_OUTPUT      `write` (default) | `skip` | `empty` — what to do
- *                              with the `-o` path. A non-zero exit never writes
- *                              it, matching the real CLI.
+ *   FAKE_CODEX_CLI_OUTPUT      `write` (default) | `skip` | `empty` | `always` —
+ *                              what to do with the `-o` path. A non-zero exit
+ *                              never writes it, matching the real CLI, except
+ *                              under `always` (a run that wrote output, then
+ *                              failed).
  *   FAKE_CODEX_CLI_REVIEW      the markdown written to `-o` (review or answer)
  *   FAKE_CODEX_CLI_VERSION     what `--version` reports (default 0.152.0)
  *   FAKE_CODEX_CLI_LOGIN       `in` (default) | `out` — `login status` result
@@ -69,7 +71,7 @@ if (process.env.FAKE_CODEX_CLI_STDERR) process.stderr.write(process.env.FAKE_COD
 const oIndex = argv.indexOf("-o");
 const outPath = oIndex === -1 ? undefined : argv[oIndex + 1];
 const mode = process.env.FAKE_CODEX_CLI_OUTPUT ?? "write";
-if (exitCode === 0 && outPath && mode !== "skip") {
+if ((exitCode === 0 || mode === "always") && outPath && mode !== "skip") {
   writeFileSync(outPath, mode === "empty" ? "" : REVIEW);
 }
 process.exit(exitCode);

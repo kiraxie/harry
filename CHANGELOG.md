@@ -7,15 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-
-- **The `writing-plans` pipeline stage is gone.** The pipeline is now
-  `brainstorm → execute → finish` (grilling happens inside brainstorming), and
-  `skills/writing-plans/` is deleted. By the time a plan was written the
-  decisions were already settled, so it mostly transcribed `## Why / What`; its
-  two parts that earned their place — the parallel split and the after-the-fact
-  record — survive as `## Dispatch` and `## Progress`.
-
 ### Changed
 
 - **An active `.local/` item is driven by acceptance criteria instead of a
@@ -57,8 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-review never overwrites an earlier round; the CLI prints them to stdout
   and names the file on a `Review written to <path>` stderr line. codex's
   session transcript goes to a matching `.log`, not the terminal. Failure is
-  explicit — non-zero exit, the log's last 40 lines verbatim plus its path, no
-  fallback.
+  explicit — non-zero exit, the error lines from the end of codex's log plus
+  its path, no fallback.
 - `commands/review.md` no longer sets `disable-model-invocation`, so both the
   `SlashCommand`/`Skill` tools and `skills/executing`'s final review step can
   invoke it directly. Read-only is enforced by codex's `sandbox_mode="read-only"`
@@ -84,8 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   <low|medium|high|xhigh>] [--context <text|@file|@->]`. On success the answer
   prints verbatim to stdout and stderr ends with `Log: <path>`; on failure
   stdout's first line is `# Ask Failed` followed by a reason line, the exit
-  is non-zero, and — when codex ran — stderr carries the log's tail plus
-  `Log: <path>`.
+  is non-zero, and — when codex ran — stderr carries the error lines from the
+  end of codex's log plus `Log: <path>`.
   `--context` follows the same facts-never-verdicts rule as `review`'s.
   Every ask prompt opens with a fixed preamble framing the model as one
   independent voice: answer from the prompt and any Background, do not explore
@@ -106,8 +97,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   work to `gpt-5.6-luna` instead of `gpt-5.6-sol`, which a ChatGPT login
   rejects with a 400. Re-run `/sync` on the Codex build to pick it up.
 
+### Fixed
+
+- **A failed `review` or `ask` run no longer prints codex's session
+  transcript.** codex's log can hold the output of commands codex ran and the
+  contents of files it read (a `.env`, say), and stderr is usually read back
+  by a calling model — so a failure now prints only the error lines from the
+  end of codex's log (those starting `ERROR:`, `Error:` or `error:` at the
+  start of the line), or `No error line at the end of codex's log.` when there
+  is none. The full transcript stays on disk at the reported `Log: <path>` for
+  a human to read. `ask`'s `# Ask Failed` reason line is codex's last `ERROR:`
+  line when the log's end has one, otherwise the companion's own failure
+  message.
+- Every error line a failure prints — on stderr, or as `ask`'s reason line —
+  is capped at 1000 bytes, ending in `…[truncated]` when cut, so one runaway
+  line can't flood the caller either. Control characters (other than tab) are
+  stripped from it, so no terminal escape sequence reaches the caller, and a
+  lone carriage return ends a line, so a line redrawn in place can't carry a
+  transcript line onto an error line.
+- The run log is created owner-only (0600), and the `-o` output file (the
+  review or the answer) is narrowed to owner-only once codex has run, whether
+  the run succeeded or failed — both can otherwise be created world- or
+  group-readable by the process umask.
+- A spawn error (codex missing or not executable) now removes the reserved
+  log when it is empty, instead of leaving an empty file with nothing to name
+  it; a spawn error that did write to the log is kept and reported as before.
+- An `EPIPE` from codex exiting before it read its prompt (the CLI rejecting
+  its own arguments) is now reported as an ordinary exit failure with codex's
+  error line, instead of surfacing the bare `EPIPE`.
+
 ### Removed
 
+- **The `writing-plans` pipeline stage is gone.** The pipeline is now
+  `brainstorm → execute → finish` (grilling happens inside brainstorming), and
+  `skills/writing-plans/` is deleted. By the time a plan was written the
+  decisions were already settled, so it mostly transcribed `## Why / What`; its
+  two parts that earned their place — the parallel split and the after-the-fact
+  record — survive as `## Dispatch` and `## Progress`.
 - `--adversarial`, `--simplify`, `--full`, `--fix`, `--harry-fix`, `--scope`,
   `--wait`, `--background`, `--model`, and `--timeout` on `review` — the CLI
   now rejects each by name.

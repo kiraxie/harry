@@ -32,11 +32,18 @@ decides which one runs.
   only once you've confirmed the run succeeded (next bullet).
 - Failure signals: a non-zero exit, a `Fatal error: <message>` line on stderr
   (argument errors, before any run), or a `# Ask Failed` first line of stdout
-  (followed by a reason line naming the cause) — when codex ran, stderr also
-  carries the tail of codex's log and then `Log: <path>`; a missing CLI, a bad
+  (followed by a reason line naming the cause — codex's last `ERROR:` line
+  when the log's end has one (capped at 1000 bytes), otherwise the companion's
+  own failure message) — when codex ran, stderr also carries only the error
+  lines from the end of codex's log — lines starting `ERROR:`, `Error:` or
+  `error:`, each capped at 1000 bytes (or, when there is none, `No error line
+  at the end of codex's log.`) — and then `Log: <path>`; a missing CLI, a bad
   `--context`, or an empty prompt fails before codex starts, with no log. If
-  you see any of these, report the
-  failure and stop; never present that stdout body as the model's answer.
+  you see any of these, report the failure and stop; never present that stdout
+  body as the model's answer.
+  Do not open or dump the whole log to diagnose it — it holds codex's session
+  transcript, including files it read; point the user at the `Log: <path>`
+  path instead, or read a narrow slice only if the user asks.
   **Name the reason line, do not just say it failed:** the line under the
   marker carries the backend's own cause when there is one (an upstream
   model rejection, say), which is the difference between a fixable report

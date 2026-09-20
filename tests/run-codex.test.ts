@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { codexMissing, codexSpawn, resolveCodex } from "../src/lib/run-codex.ts";
+import { capLogLine, codexMissing, codexSpawn, resolveCodex } from "../src/lib/run-codex.ts";
 
 /** cmd.exe metacharacters that must never reach cmd unescaped (space separates args). */
 const CMD_META = new Set([...'()[]%!^"`<>&|;,*?']);
@@ -188,4 +188,28 @@ test("codexMissing: only ENOENT — a 9009 from a resolved shim is a real failur
   assert.equal(codexMissing({ ...enoent, status: null }), true);
   assert.equal(codexMissing({ status: 9009 }), false);
   assert.equal(codexMissing({ status: 1 }), false);
+});
+
+const TRUNCATED = "…[truncated]";
+
+test("capLogLine keeps a line of up to 1000 bytes and cuts a longer one to 1000 with a marker", () => {
+  assert.equal(capLogLine("ERROR: short"), "ERROR: short");
+  const exact = "x".repeat(1000);
+  assert.equal(capLogLine(exact), exact);
+  const cut = capLogLine("x".repeat(1001));
+  assert.equal(Buffer.byteLength(cut), 1000);
+  assert.equal(cut, `${"x".repeat(1000 - Buffer.byteLength(TRUNCATED))}${TRUNCATED}`);
+});
+
+test("capLogLine never splits a multibyte code point", () => {
+  // Pads 0..3 put a 4-byte code point across every possible cut offset.
+  for (let pad = 0; pad < 4; pad++) {
+    const line = `${"a".repeat(pad)}${"𝄞".repeat(400)}`;
+    const cut = capLogLine(line);
+    const bytes = Buffer.byteLength(cut);
+    assert.ok(bytes <= 1000 && bytes > 1000 - 4, `pad ${pad}: ${bytes} bytes`);
+    assert.ok(cut.endsWith(TRUNCATED));
+    assert.ok(line.startsWith(cut.slice(0, -TRUNCATED.length)), `pad ${pad}: prefix changed`);
+    assert.ok(!cut.includes("�"));
+  }
 });

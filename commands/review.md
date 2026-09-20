@@ -78,10 +78,16 @@ return that summary as-is. It is not a failure.
 
 ## Failure
 
-Failure is explicit: a non-zero exit prints the last 40 lines of codex's log
-(its closing `ERROR:` line carries the cause) and then `Log: <path>` — never
-present a failure as an empty review. Surface that stderr tail verbatim and name
-the cause; do not retry silently and do not fabricate a result.
+Failure is explicit: a non-zero exit, or a zero exit that writes no review,
+prints only the error lines from the end of codex's log (lines starting
+`ERROR:`, `Error:` or `error:`, each capped at 1000 bytes) — or, when there is
+none, the line `No error line at the end of codex's log.` — then `Log: <path>`.
+Never present a failure as an empty review. Surface those error lines verbatim
+and name the cause; do not retry silently and do not fabricate a result. Do not
+open or dump the whole log to diagnose it — it holds codex's session
+transcript, including the output of commands codex ran and any files it read;
+point the user at the `Log: <path>` path instead, or read a narrow slice only
+if the user asks.
 
 ## `--context` — facts, never verdicts
 

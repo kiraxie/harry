@@ -100,6 +100,7 @@ function spawnCodexSync(args, options) {
   return (0, import_node_child_process.spawnSync)(spec.command, spec.args, { ...options, shell: spec.shell, windowsHide: true });
 }
 var FAILURE_TAIL_LINES = 40;
+var NO_ERROR_LINE = "No error line at the end of codex's log.";
 function timestamp(now) {
   const p = (n) => String(n).padStart(2, "0");
   return `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
@@ -112,7 +113,7 @@ function reserveRunFiles(dir, prefix, now = /* @__PURE__ */ new Date()) {
     const logPath = `${stem}.log`;
     if ((0, import_node_fs2.existsSync)(outputPath)) continue;
     try {
-      (0, import_node_fs2.closeSync)((0, import_node_fs2.openSync)(logPath, "wx"));
+      (0, import_node_fs2.closeSync)((0, import_node_fs2.openSync)(logPath, "wx", 384));
     } catch (err) {
       if (err.code === "EEXIST") continue;
       throw err;
@@ -135,28 +136,54 @@ var CodexRunError = class extends Error {
   }
 };
 function logTail(logPath) {
-  const lines = (0, import_node_fs2.readFileSync)(logPath, "utf8").split("\n");
+  const lines = (0, import_node_fs2.readFileSync)(logPath, "utf8").split(/\r\n|\n|\r/);
   if (lines.at(-1) === "") lines.pop();
   return lines.slice(-FAILURE_TAIL_LINES);
 }
+var MAX_LINE_BYTES = 1e3;
+var TRUNCATED = "\u2026[truncated]";
+function capLogLine(line) {
+  if (Buffer.byteLength(line) <= MAX_LINE_BYTES) return line;
+  const budget = MAX_LINE_BYTES - Buffer.byteLength(TRUNCATED);
+  let kept = "";
+  let bytes = 0;
+  for (const ch of line) {
+    bytes += Buffer.byteLength(ch);
+    if (bytes > budget) break;
+    kept += ch;
+  }
+  return `${kept}${TRUNCATED}`;
+}
+var ERROR_LINE_RE = /^(?:ERROR|Error|error):/;
+var CONTROL_RE = /[^\P{Cc}\t]/gu;
+function tailErrorLines(logPath) {
+  return logTail(logPath).filter((l) => ERROR_LINE_RE.test(l)).map((l) => l.replace(CONTROL_RE, "").trimEnd());
+}
 function reportLogTail(logPath) {
-  const tail = logTail(logPath);
-  if (tail.length > 0) process.stderr.write(`${tail.join("\n")}
-`);
-  process.stderr.write(`Log: ${logPath}
+  const errors = tailErrorLines(logPath).map(capLogLine);
+  const lines = errors.length > 0 ? errors : [NO_ERROR_LINE];
+  process.stderr.write(`${lines.join("\n")}
+Log: ${logPath}
 `);
 }
+function reportSpawnErrorLog(logPath) {
+  const size = (0, import_node_fs2.statSync)(logPath, { throwIfNoEntry: false })?.size;
+  if (size === void 0) return;
+  if (size === 0) (0, import_node_fs2.rmSync)(logPath, { force: true });
+  else reportLogTail(logPath);
+}
 function lastErrorLine(logPath) {
-  let tail;
+  let errors;
   try {
-    tail = logTail(logPath);
+    errors = tailErrorLines(logPath);
   } catch {
     return void 0;
   }
-  return tail.map((l) => l.trim()).filter((l) => l.startsWith("ERROR:")).at(-1);
+  const last = errors.filter((l) => l.startsWith("ERROR:")).at(-1);
+  return last === void 0 ? void 0 : capLogLine(last);
 }
 function runCodexExec(opts) {
-  const logFd = (0, import_node_fs2.openSync)(opts.logPath, "w");
+  const logFd = (0, import_node_fs2.openSync)(opts.logPath, "w", 384);
   let res;
   try {
     res = spawnCodexSync(opts.args, {
@@ -171,7 +198,11 @@ function runCodexExec(opts) {
     (0, import_node_fs2.rmSync)(opts.logPath, { force: true });
     throw new CodexRunError(CODEX_CLI_MISSING, "missing");
   }
-  if (res.error) throw res.error;
+  narrowOutput(opts.outputPath);
+  if (res.error && (res.status === null || res.status === 0)) {
+    reportSpawnErrorLog(opts.logPath);
+    throw res.error;
+  }
   if (res.status !== 0) {
     reportLogTail(opts.logPath);
     throw new CodexRunError(
@@ -190,6 +221,13 @@ function runCodexExec(opts) {
     );
   }
   return output;
+}
+function narrowOutput(outputPath) {
+  try {
+    (0, import_node_fs2.chmodSync)(outputPath, 384);
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+  }
 }
 
 // src/lib/state.ts
