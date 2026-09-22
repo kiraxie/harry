@@ -5,9 +5,11 @@ summary, a PR body, anything written for the person rather than for another agen
 The PR body counts as the user's because people read it and because HARRY.md §5 has
 the user approve the draft before the PR is opened. Everything else is model-side and
 stays precision-first per the law instead: subagent briefs, review reports, commit
-messages, and code comments. This file's two levels below apply only to the user side;
-the model side's only borrowing from this file is the no-new-term rule HARRY.md states
-directly.
+messages, and code comments.
+
+This file's two levels below apply only to the user side. The model side borrows
+nothing from them; its one shared rule — no new term — is stated in HARRY.md §6
+directly, not here.
 
 ## Callers
 
@@ -42,16 +44,12 @@ same violation as an undefined term, just wearing plain words.
 - **Open with the outcome**, then only as much reasoning as the reader asks for.
 - **One layer at a time.** Give the short answer; expand a layer only when asked —
   do not pre-empt the next question by answering it unasked.
-- **One question per message** (HARRY.md §6's carve-out applies here too). What
-  makes the carve-out's batch one question rather than several: every item in it
-  was already put in front of the reader as one list before this message, so
-  answering adds no concept the reader has not already seen — the message asks for
-  a ruling, not for new ground to be read and weighed. A second decision that was
-  not already shown the same way, even if it arrives in the same message, still
-  costs a separate question — arrival together is not the test. A sidebar is
-  parked the same way: HARRY.md §6 sends a "by the way" to the next message's one
-  question, so it never competes with the decision this message is already asking
-  for.
+- **One question per message.** HARRY.md §6 states the carve-out and exactly what
+  makes a batch count as one question — see the law for the test itself. Why the
+  carve-out works: a ruling on a list the reader has already seen adds no concept,
+  so answering it spends no capacity the rule is protecting. A sidebar is parked
+  the same way §6 describes, so it never competes with the decision this message
+  is already asking for.
 - **At most one new concept per message.** This is the grounding rule applied to
   pacing: even without a single hard word, a second unestablished idea in the same
   message costs the reader the same capacity a hard word would. One carve-out: a
@@ -75,15 +73,13 @@ breath):
 > dispatch the role and pass neither; judgment-heavy implementation has no role —
 > dispatch it ad-hoc at the dispatch cap with explicit model+effort…
 
-After (user-side, same fact, one layer):
+After (user-side, first layer of the same fact):
 
-> Routine work goes to a fixed helper, picked by what kind of work it is: lookups to
-> one, mechanical edits to another, writing to another, security work to another.
-> Each already knows which model and effort level to use, so nothing else is set for
-> it. Work that needs real judgment has no fixed helper — that's the one case I pick
-> the model and effort by hand.
+> Routine work goes to a fixed helper, picked by what kind of work it is.
 
-Same fact, one new idea at a time, no term used before its job is stated.
+Same fact, one new idea per message, no term used before its job is stated — the
+rest of it (which kind maps to which helper, what happens with judgment-heavy work)
+is a question away, not delivered unasked.
 
 ### The deeper level — `/wait-what`
 
@@ -95,8 +91,11 @@ could not parse and asks for it again, plainer.
   conclusion, shorter sentences, one clause at a time, every term the first version
   used but did not establish now established before it is used.
 - **If the previous message was a question:** it has no conclusion to restate.
-  Ask the *same question* again, plainer, establishing whatever it leaned on — do
-  not answer it, and do not pick a side for the reader.
+  Ask the *same question* again, plainer, establishing whatever it leaned on. Do
+  not answer it for the reader. If the question carried a recommended answer
+  (`references/grilling.md` has every question carry one), keep that
+  recommendation and restate it plainer too; do not add one it did not have, and
+  do not drop or change it.
 
 Either way this is a single response, not a standing mode: it changes nothing about
 how later messages are written, and asking again just re-runs the same one-shot

@@ -34,6 +34,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI = path.join(REPO_ROOT, "src/companion.ts");
 const FAKE = path.join(REPO_ROOT, "tests/fake-codex-cli.mjs");
 const RUBRIC = readFileSync(path.join(REPO_ROOT, "references/review-rubric.md"), "utf8");
+const ARCH_RUBRIC = readFileSync(path.join(REPO_ROOT, "references/architecture-review.md"), "utf8");
 
 const cleanup: string[] = [];
 test.after(() => {
@@ -197,6 +198,25 @@ for (const flag of ["--base", "--context"]) {
     assert.ok(run.stderr.includes(`${flag} requires a value`), run.stderr);
     assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
   });
+}
+
+for (const flag of ["--base", "--context"]) {
+  for (const form of ["space", "equals"] as const) {
+    test(`F6: ${flag} with an empty value (${form} form) errors instead of reviewing another target`, () => {
+      const repo = makeRepo();
+      writeFileSync(path.join(repo, "a.txt"), "v2\n");
+      for (const value of ["", "   "]) {
+        const args = form === "space" ? [flag, value] : [`${flag}=${value}`];
+        const run = runReview(repo, args);
+        assert.notEqual(run.status, 0, `${JSON.stringify(args)}: ${run.stderr}`);
+        assert.ok(
+          run.stderr.includes(`${flag} requires a value; got an empty one`),
+          `${JSON.stringify(args)}: ${run.stderr}`,
+        );
+        assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+      }
+    });
+  }
 }
 
 // ─── A2: exact spawned argv ─────────────────────────────────────────────────
@@ -372,6 +392,93 @@ test("A3: a missing rubric fails loudly and never spawns codex", () => {
   assert.ok(
     !existsSync(path.join(run.record, "argv.json")),
     "no prompt may go out without the rubric",
+  );
+});
+
+test("A3: --architecture embeds architecture-review.md as the review standard, not the review rubric", () => {
+  const repo = makeRepo();
+  git(repo, ["checkout", "-q", "-b", "feature"]);
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  git(repo, ["commit", "-q", "-am", "change"]);
+  const run = runReview(repo, [
+    "--architecture",
+    "the",
+    "boundary",
+    "--base",
+    "main",
+    "--context",
+    "shape list: a.txt",
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  assert.match(prompt, /git diff main\.\.\.HEAD/);
+  const standardAt = prompt.indexOf("# Review standard\n");
+  assert.ok(standardAt > 0, "review standard section missing");
+  assert.ok(prompt.includes(ARCH_RUBRIC.trim()), "architecture-review.md must be embedded in full");
+  assert.ok(prompt.indexOf(ARCH_RUBRIC.trim()) > standardAt);
+  assert.ok(!prompt.includes(RUBRIC.trim()), "--architecture must not embed review-rubric.md");
+  // The lens reads one level up and the history on purpose; the per-diff rule that bans
+  // reporting anything outside the changes would forbid exactly that.
+  assert.ok(
+    !prompt.includes("must not be reported"),
+    "--architecture must not carry the per-diff ban on findings outside the changes",
+  );
+  assert.match(
+    prompt,
+    /shapes this change adds or alters/,
+    "--architecture scopes findings to shapes",
+  );
+  assert.ok(prompt.includes("shape list: a.txt"), "--context still reaches the Background section");
+  // --architecture is boolean: the positional right after it stays focus text.
+  assert.ok(prompt.includes("## Focus\n\nthe boundary"), prompt.slice(-200));
+  // Same read-only spawn as the per-diff review.
+  assert.deepEqual(recordedArgv(run), [
+    "exec",
+    "review",
+    "--ephemeral",
+    "-c",
+    'sandbox_mode="read-only"',
+    "-o",
+    outputPathOf(run),
+    "-",
+  ]);
+});
+
+test("A3: without --architecture the prompt embeds the review rubric and not architecture-review.md", () => {
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  const run = runReview(repo, []);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  assert.ok(prompt.includes(RUBRIC.trim()), "the rubric must be embedded in full");
+  assert.ok(
+    !prompt.includes(ARCH_RUBRIC.trim()),
+    "a plain review must not embed architecture-review.md",
+  );
+  assert.ok(
+    prompt.includes("must not be reported"),
+    "a plain review keeps its outside-the-diff ban",
+  );
+});
+
+test("A3: --architecture with a missing architecture-review.md fails loudly and never spawns codex", () => {
+  // A plugin copy whose references/ holds the review rubric but not the architecture one.
+  const root = tempDir("harry-rcli-plugin-");
+  cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
+  cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
+  mkdirSync(path.join(root, "references"));
+  cpSync(
+    path.join(REPO_ROOT, "references/review-rubric.md"),
+    path.join(root, "references/review-rubric.md"),
+  );
+  const repo = makeRepo();
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  const run = runReview(repo, ["--architecture"], { cli: path.join(root, "src/companion.ts") });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /architecture-review\.md/);
+  assert.ok(
+    !existsSync(path.join(run.record, "argv.json")),
+    "no architecture prompt may go out without its standard",
   );
 });
 
@@ -570,6 +677,25 @@ test("A5: codex missing from PATH fails naming the Codex CLI", () => {
   assert.deepEqual(leftovers, [], "a run that never started codex leaves no log behind");
 });
 
+test("A5: a reviewed repo's own `codex` or `git` is never run through an empty or relative PATH entry", {
+  skip: process.platform === "win32",
+}, () => {
+  // review runs codex and git with cwd = the repo under review; execvp would
+  // resolve an empty or relative PATH entry against it and run the repo's own.
+  const repo = makeRepo();
+  const markers = tempDir("harry-rcli-marker-");
+  for (const name of ["codex", "git"]) {
+    writeFileSync(path.join(repo, name), `#!/bin/sh\n: > "${path.join(markers, name)}"\nexit 0\n`);
+    chmodSync(path.join(repo, name), 0o755);
+  }
+  for (const PATH of [":/usr/bin:/bin", "/usr/bin:/bin:", "/usr/bin::/bin", ".:/usr/bin:/bin"]) {
+    const run = runReview(repo, [], { bin: null, fake: { PATH } });
+    assert.deepEqual(readdirSync(markers), [], `PATH=${JSON.stringify(PATH)} ran the repo's own`);
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /Codex CLI was not found on PATH/);
+  }
+});
+
 /** Every `.log` left under a run's state dir. */
 function logsIn(run: Run): string[] {
   return readdirSync(run.dataDir, { recursive: true })
@@ -578,10 +704,10 @@ function logsIn(run: Run): string[] {
 }
 
 /** A bin dir whose only file is a `codex` shell script with `body`. */
-function makeShimBin(body: string, mode = 0o755): string {
+function makeShimBin(body: string): string {
   const bin = tempDir("harry-rcli-bin-");
   writeFileSync(path.join(bin, "codex"), `#!/bin/sh\n${body}\n`);
-  chmodSync(path.join(bin, "codex"), mode);
+  chmodSync(path.join(bin, "codex"), 0o755);
   return bin;
 }
 
@@ -597,8 +723,13 @@ test("A5: a codex that cannot be executed (EACCES) fails loudly and leaves no em
 }, () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
-  // The only `codex` on PATH is not executable, so the spawn itself fails.
-  const bin = makeShimBin("exit 0", 0o644);
+  // The only `codex` on PATH is executable, so it resolves, but its `#!`
+  // interpreter is not: the spawn itself fails with EACCES. (A non-executable
+  // `codex` is never resolved at all — it reports as missing.)
+  const bin = makeShimBin("exit 0");
+  const interp = path.join(bin, "interp");
+  writeFileSync(interp, "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+  writeFileSync(path.join(bin, "codex"), `#!${interp}\nexit 0\n`);
   const run = runReview(repo, [], { bin, systemPath: true });
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /EACCES/);
@@ -800,9 +931,32 @@ test("F1: every door that runs review tells the caller to read the `Review writt
     "commands/review.md",
     "codex-skills/review/SKILL.md",
     "skills/executing/SKILL.md",
+    "skills/finishing/SKILL.md",
   ]) {
     const text = readFileSync(path.join(REPO_ROOT, door), "utf8");
     assert.ok(text.includes(REVIEW_WRITTEN), `${door} must name the \`${REVIEW_WRITTEN}\` line`);
+  }
+});
+
+test("both review doors document --architecture and the standard it embeds", () => {
+  for (const door of ["commands/review.md", "codex-skills/review/SKILL.md"]) {
+    const prose = readFileSync(path.join(REPO_ROOT, door), "utf8");
+    assert.ok(
+      prose.includes("[--architecture]"),
+      `${door} must list --architecture in its synopsis`,
+    );
+    assert.ok(
+      prose.includes(
+        "`references/architecture-review.md` in place of `references/review-rubric.md`",
+      ),
+      `${door} must say --architecture embeds architecture-review.md instead of the rubric`,
+    );
+    assert.ok(
+      prose
+        .replace(/\s+/g, " ")
+        .includes("scopes findings to the shapes the change adds or alters"),
+      `${door} must say --architecture also scopes findings to shapes, not only swaps the standard`,
+    );
   }
 });
 

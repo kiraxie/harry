@@ -217,13 +217,42 @@ test("AC-3: the reviewer is handed every input", () => {
   for (const [re, what] of inputs) assert.match(p, re, `the reviewer is no longer handed ${what}`);
 });
 
-// A Trivial unit never runs executing's setup, which is the only other place the
-// per-branch tmp directory is created; without the mkdir the diff write fails first.
+// Executing's setup creates no per-branch tmp directory, and for a Trivial unit no
+// executing step writes there either; without the mkdir the diff write fails first.
 test("AC-3: the command that writes the diff also creates its directory", () => {
+  const p = step2("Reviewer.");
   assert.match(
-    step2("Reviewer."),
+    p,
     /in one command that resolves <store>, creates that directory with mkdir -p .*?, and writes the file;/,
     "the diff is no longer written by one command that resolves <store> and creates its directory",
+  );
+  assert.match(
+    p,
+    /mkdir -p \(nothing earlier writes there for a Trivial unit\)/,
+    "the reason for the mkdir no longer says nothing earlier writes there for a Trivial unit",
+  );
+  // Trivial does run executing's setup; that setup just creates no directory.
+  assert.doesNotMatch(p, /never ran executing's setup/, "the step claims Trivial skips setup");
+});
+
+// With --architecture --base, codex computes the diff itself: a packaged diff file
+// on the Codex build would be written and never read.
+test("AC-3: the diff file is the CC reviewer's input only; the Codex build writes none", () => {
+  const p = step2("Reviewer.");
+  assert.match(
+    p,
+    /Package the diff to a file .*?\(the CC reviewer's input only — the Codex build below writes none\)/,
+    "the diff file is no longer marked as the CC reviewer's input only",
+  );
+  assert.match(
+    p,
+    /Codex build:.*?Instead of the diff file, in one command that resolves <store> and creates that directory with mkdir -p, write a context file there/,
+    "the Codex build no longer writes its context file in place of the diff file",
+  );
+  assert.doesNotMatch(
+    p,
+    /In the same command that packages the diff/,
+    "the Codex build still packages the diff",
   );
 });
 
@@ -244,11 +273,30 @@ test("AC-3: the architecture-review reference lists the same inputs the step han
     assert.match(l, re, `the architecture-review reference no longer lists ${what}`);
 });
 
-test("AC-3: on the Codex build the session applies the architecture-review reference and records it was not independent", () => {
+test("AC-3: on the Codex build the review runs out of session through companion review --architecture", () => {
+  const p = step2("Reviewer.");
+  assert.match(
+    p,
+    /Codex build: there is no subagent to dispatch, so the review runs in a separate read-only codex exec process instead, and is independent\./,
+    "the Codex build no longer runs the architecture review in a separate process",
+  );
+  assert.match(
+    p,
+    /run that build's review skill \(codex-skills\/review, which owns resolving the plugin root\) with --architecture --base <base> --context @<file> — on a later round --base <sha>, the head the most recent round recorded\./,
+    "the Codex build no longer names the companion invocation, or its later-round base",
+  );
+  assert.match(
+    p,
+    /context file .*? — the shape list, the item's ## Why \/ What and its AC, the git log -n 20 --stat -- <changed paths> output, and on a later round the rulings recorded so far\./,
+    "the Codex build's context file no longer carries the items the CC reviewer is handed",
+  );
+});
+
+test("AC-3: on the Codex build a failed companion run falls back to the not-independent in-session review", () => {
   assert.match(
     step2("Reviewer."),
-    /Codex build: there is no subagent to dispatch, so the session applies references\/architecture-review\.md itself and records one line in ## Progress that this review was not independent\./,
-    "the Codex build's not-independent line is gone or no longer recorded",
+    /If that run fails, the session applies references\/architecture-review\.md itself and records one line in ## Progress that this review was not independent\./,
+    "the Codex build's fallback, and its not-independent line, is gone",
   );
 });
 

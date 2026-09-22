@@ -22,29 +22,49 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 function markdownUnder(dir: string): string[] {
-  return readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf-8" })
+  const abs = path.join(repoRoot, dir);
+  assert.ok(
+    existsSync(abs),
+    `markdownUnder("${dir}"): scanned tree does not exist at ${abs} — a deleted-last-file ` +
+      "tree must fail this assertion, not throw a raw ENOENT out of readdirSync.",
+  );
+  return readdirSync(abs, { recursive: true, encoding: "utf-8" })
     .filter((rel) => rel.endsWith(".md"))
     .map((rel) => path.join(dir, rel));
 }
 
 /**
- * Files that instruct the model: the resident laws, the tier gates, both builds' skill trees
- * (`skills/` is shared, `codex-skills/` is the Codex build's own tree), the role agents, and every
- * command the model can reach.
+ * Own-file exemptions: files the scan skips even though they may name a blocked command,
+ * each with the blocked name(s) it documents and why that mention is not an instruction to
+ * the model. Hand-maintained and explicit — deliberately NOT derived from `blockedCommandNames()`
+ * — so a newly blocked command's own file is scanned like every other gate file until someone
+ * adds it here by name, with its own reasoning. A generic "skip every blocked command's own
+ * commands/<name>.md" rule would silently exempt that future file too; this list is the fix.
  *
- * Two deliberate exclusions, both blind spots on purpose. A blocked command's OWN file is skipped:
- * it only ever runs because a human typed it, so documenting its own flag there is not an
- * instruction to the model. The cost is real — a genuine defect added to that file would not be
- * caught here. Likewise `references/` beyond the tier gates describes the slash commands rather
- * than telling the model to run them (`audit/ORCHESTRATION.md`) — the ban is on instructions.
+ * Empty today: no command in this repo currently carries `disable-model-invocation` (the file
+ * banner's history is why the shape exists — `commands/review.md` used to, back when `/review`
+ * itself set the flag). A blocked name with no matching entry here gets no free pass; its file
+ * is scanned in full, own-file or not.
  */
-function gateFiles(blocked: string[]): string[] {
-  const ownFiles = new Set(blocked.map((name) => path.join("commands", `${name}.md`)));
+const GATE_SCAN_EXEMPTIONS: ReadonlyArray<{ path: string; names: string[]; reason: string }> = [];
+
+/**
+ * Files that instruct the model: the resident laws, the tier gates, `CLAUDE.md` (repo guidance
+ * the model reads every session), both builds' skill trees (`skills/` is shared, `codex-skills/`
+ * is the Codex build's own tree), the role agents, and every command the model can reach.
+ *
+ * One deliberate exclusion beyond `GATE_SCAN_EXEMPTIONS`: `references/` beyond the tier gates
+ * describes the slash commands rather than telling the model to run them
+ * (`audit/ORCHESTRATION.md`) — the ban is on instructions, not on mentioning a command exists.
+ */
+function gateFiles(): string[] {
+  const exempt = new Set(GATE_SCAN_EXEMPTIONS.map((e) => e.path));
   return [
     "HARRY.md",
+    "CLAUDE.md",
     "references/tier-gates.md",
     ...["skills", "codex-skills", "agents", "commands", ".claude/commands"].flatMap(markdownUnder),
-  ].filter((rel) => !ownFiles.has(rel));
+  ].filter((rel) => !exempt.has(rel));
 }
 
 /**
@@ -122,11 +142,31 @@ test("/review is model-invocable, so the executing skill can call it", () => {
   );
 });
 
+test("GATE_SCAN_EXEMPTIONS: every entry's path exists and every name it lists is actually blocked", () => {
+  // A stale entry is the same disease in reverse: an exemption whose command is no longer
+  // blocked (or whose file was renamed/removed) silently keeps a file out of the scan for no
+  // live reason. This guards the allowlist itself, not just the scan it feeds.
+  const blocked = blockedCommandNames();
+  for (const entry of GATE_SCAN_EXEMPTIONS) {
+    assert.ok(
+      existsSync(path.join(repoRoot, entry.path)),
+      `GATE_SCAN_EXEMPTIONS: "${entry.path}" does not exist — remove the stale entry`,
+    );
+    for (const name of entry.names) {
+      assert.ok(
+        blocked.includes(name),
+        `GATE_SCAN_EXEMPTIONS: "${entry.path}" exempts "/${name}", which is not currently ` +
+          "blocked — remove the stale entry",
+      );
+    }
+  }
+});
+
 test("no gate file instructs the model to invoke a command the model cannot invoke", () => {
   const blocked = blockedCommandNames();
   const offences: string[] = [];
 
-  for (const rel of gateFiles(blocked)) {
+  for (const rel of gateFiles()) {
     const abs = path.join(repoRoot, rel);
     if (!existsSync(abs)) continue;
     const lines = readFileSync(abs, "utf-8").split("\n");

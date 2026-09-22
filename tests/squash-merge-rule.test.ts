@@ -11,16 +11,22 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
+/** Flattened, with `*` and `_` emphasis dropped: the pin is on meaning, not formatting. */
+const plain = (text: string): string =>
+  text
+    .replace(/\s+/g, " ")
+    .replace(/\*+/g, "")
+    .replace(/(?<!\w)_+|_+(?!\w)/g, "");
 
 test("HARRY.md §5 makes integration a squash merge", () => {
-  const section = read("HARRY.md").split("## §5")[1]?.split("## §6")[0] ?? "";
+  const section = plain(read("HARRY.md").split("## §5")[1]?.split("## §6")[0] ?? "");
   // Through the definition, not just the term: `squash` is one of the project terms
   // that survives only while the sentence saying what it means survives with it, and
   // the term alone can stay while that sentence is deleted whole.
   assert.match(
     section,
-    /lands as a \*\*squash\*\*: one commit on the base/,
-    "§5 no longer says a unit lands as a squash — one commit on the base",
+    /lands as a squash: one commit on the base whose message summarises the unit, never the branch's commit-by-commit history/,
+    "§5 no longer says a unit lands as a squash — one commit on the base, summarising the unit",
   );
   assert.match(section, /never a merge commit/, "§5 no longer rules out merge commits");
 });
@@ -50,7 +56,7 @@ test("finishing proves the branch landed and the worktree is clean before forcin
     "the landing check compares only the first line, which passes modify/delete and binary conflicts",
   );
   assert.ok(
-    skill.includes("allowed only when step 1 passed AND step 2 found the worktree clean"),
+    skill.includes("allowed only when f.1 passed AND f.2 found the worktree clean"),
     "the discard flag lost its clean-worktree guard",
   );
   assert.ok(

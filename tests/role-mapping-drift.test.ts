@@ -286,7 +286,12 @@ for (const name of PAIRS) {
 // clear the non-vacuity guard (29 and 72 qualifying lines).
 const HOISTED: Record<string, string[]> = {
   debt: ["references/debt-audit.md", "references/doc-types.md"],
-  review: ["references/review-rubric.md", "references/doc-types.md", "references/debt-audit.md"],
+  review: [
+    "references/review-rubric.md",
+    "references/architecture-review.md",
+    "references/doc-types.md",
+    "references/debt-audit.md",
+  ],
   sync: ["references/sync-migration.md", "references/doc-types.md", "references/debt-audit.md"],
   audit: [
     "references/audit/ORCHESTRATION.md",
@@ -299,7 +304,7 @@ const HOISTED: Record<string, string[]> = {
   ],
   grill: ["references/grilling.md"],
   distill: ["references/distilling.md", "references/upstream-sync.md"],
-  "wait-what": ["references/plain-language.md"],
+  "wait-what": ["references/grilling.md", "references/plain-language.md"],
 };
 
 /**

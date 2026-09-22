@@ -5,6 +5,12 @@ description: Set up or resync harry for Codex CLI here — wire the resident law
 
 # Sync (Codex)
 
+**Plugin root.** Codex does not set `${CLAUDE_PLUGIN_ROOT}`, so resolve it before
+anything else: take the absolute path this `SKILL.md` was loaded from and cut the
+trailing `codex-skills/sync/SKILL.md` and the slash before it — what is left is the plugin root, the directory
+that holds `codex-skills/`, `dist/` and `references/`. Use that absolute path wherever
+`${CLAUDE_PLUGIN_ROOT}` appears below and in the files this skill points you to.
+
 ## Phase 1 — Resident laws
 
 Wire harry's resident laws (`HARRY.md`, which ships with the plugin) into Codex's

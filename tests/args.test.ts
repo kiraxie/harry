@@ -28,6 +28,7 @@ import {
   BOOLEAN_FLAGS,
   extractTask,
   flagEnum,
+  flagRequiredString,
   KNOWN_FLAGS,
   parseArgs,
 } from "../src/lib/args.ts";
@@ -428,4 +429,27 @@ test("extractTask returns empty string when --task carries no value", () => {
 
 test("extractTask treats whitespace-only positionals as absent", () => {
   assert.equal(extractTask(["  "], { task: "flag value" }), "flag value");
+});
+
+// ---------------------------------------------------------------------------
+// flagRequiredString
+// ---------------------------------------------------------------------------
+
+test("flagRequiredString returns a given value and undefined when absent", () => {
+  assert.equal(flagRequiredString({ base: "main" }, "base"), "main");
+  assert.equal(flagRequiredString({}, "base"), undefined);
+});
+
+test("flagRequiredString rejects a bare flag", () => {
+  assert.throws(() => flagRequiredString({ base: true }, "base"), /Flag --base requires a value\./);
+});
+
+test('flagRequiredString rejects an empty or whitespace-only value (`--base "$UNSET"`)', () => {
+  for (const value of ["", "   ", "\t\n"]) {
+    assert.throws(
+      () => flagRequiredString({ base: value }, "base"),
+      /Flag --base requires a value; got an empty one\./,
+      JSON.stringify(value),
+    );
+  }
 });

@@ -24,7 +24,7 @@ function printUsage(): void {
       "Usage:",
       "  companion setup [--json]",
       "  companion review [--base <ref>] [--reasoning <low|medium|high|xhigh>]",
-      "                   [--context <text|@file|@->] [focus...]",
+      "                   [--context <text|@file|@->] [--architecture] [focus...]",
       '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
       "",
       "Commands:",
@@ -62,6 +62,7 @@ async function main(): Promise<void> {
         base: flagRequiredString(flags, "base"),
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
         context: flagRequiredString(flags, "context"),
+        architecture: flags.architecture === true,
         focusText: args.join(" "),
       });
       break;

@@ -38,6 +38,9 @@ under `node --test` via native TypeScript stripping, with no ts-node/transpile s
 conscious trade (newer-than-LTS floor, narrower contributor base) bought for a zero-build test/run
 path; don't "fix" it by lowering the floor without restoring a transpile step for tests.
 
+Use pnpm 12 natively (corepack, or a pnpm 12 install) — a pre-12 global pnpm hands off to 12 and
+rewrites `pnpm-lock.yaml`'s package-manager document in the process, dirtying the lockfile.
+
 **Lint scope** (`biome.json` `files.includes`): `src/**/*.ts`, `tests/**/*.ts`, `scripts/**/*.mjs`,
 `build.mjs`, `*.json` — no excludes; `pnpm run lint` exits 0. `pnpm run typecheck` covers the whole
 TS source.
@@ -159,9 +162,13 @@ instead.
 
 Alongside the Claude Code plugin, harry ships a parallel `.codex-plugin/plugin.json`
 + `.agents/plugins/marketplace.json` for Codex CLI, which has its own Skills/Hooks
-system (`SKILL.md` format is shared with Claude Code; `${CLAUDE_PLUGIN_ROOT}` /
-`${CLAUDE_PLUGIN_DATA}` are aliased by Codex, so `dist/companion.cjs` needs no
-Codex-specific code path). `skills/` (the three pipeline skills) is auto-discovered
+system (`SKILL.md` format is shared with Claude Code). Codex does **not** set
+`${CLAUDE_PLUGIN_ROOT}` / `${CLAUDE_PLUGIN_DATA}` in the shell a skill's commands run
+in (verified on codex-cli 0.155.1), so every `codex-skills/*/SKILL.md` that uses the
+root variable opens with a **Plugin root** rule — derive it from the skill's own path —
+pinned by `tests/codex-plugin-root.test.ts`; `dist/companion.cjs` falls back to a
+tmpdir state root when `CLAUDE_PLUGIN_DATA` is unset, so it needs no Codex-specific
+code path. `skills/` (the three pipeline skills) is auto-discovered
 by Codex's default component discovery and `dist/companion.cjs` is shared as-is
 between both builds; `plugin.json`'s `skills` field only needs to name the
 supplemental `./codex-skills` path (it's a single string, not an array — Codex's

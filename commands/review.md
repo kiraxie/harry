@@ -1,6 +1,6 @@
 ---
 description: Run a read-only code review through codex exec review — reviews the working tree, a branch against its default, or a diff against --base.
-argument-hint: '[--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [focus...]'
+argument-hint: '[--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--architecture] [focus...]'
 allowed-tools: Read, Bash(git status:*), Bash(git diff:*), Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review:*)
 ---
 
@@ -32,6 +32,17 @@ full stop. Nothing here edits the working tree, stages, or commits.
   uncommitted changes.
 - No `--base`, clean working tree → reviews the current branch against the
   repository's default branch.
+
+## `--architecture`
+
+`--architecture` changes two things. It swaps the embedded standard: the prompt
+carries `references/architecture-review.md` in place of `references/review-rubric.md`.
+And it scopes findings to the shapes the change adds or alters, rather than to
+the diff's lines. Everything else stays the same — target resolution, the
+read-only spawn, the output and failure handling. It is how the finishing
+skill's architecture review (step 2) runs out of session on the Codex build; the
+shape list, the item's `## Why / What` and acceptance criteria, the recent
+history and any prior rulings go in through `--context @<file>`.
 
 ## Execution mode
 

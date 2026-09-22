@@ -540,6 +540,18 @@ export function resolveModel(opts, env) {
   return model.trim();
 }
 
+// The credential file `claude` keeps in a config dir: the file seeded into, checked
+// in, and scrubbed from each condition dir.
+const CREDENTIALS_FILE = ".credentials.json";
+
+// Where the seeded-credential fallback copies from: the operator's real config dir
+// (env.CLAUDE_CONFIG_DIR or ~/.claude). Null when EVALS_ANTHROPIC_API_KEY is set,
+// since the scratch-token path seeds nothing. Only a path — never opens the file.
+function credentialSeedPath(env) {
+  if (env.EVALS_ANTHROPIC_API_KEY) return null;
+  return join(env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), CREDENTIALS_FILE);
+}
+
 // Create an isolated CLAUDE_CONFIG_DIR for a condition. candidate gets a
 // CLAUDE.md inlining the laws; baseline gets an empty dir (no CLAUDE.md).
 //
@@ -555,8 +567,11 @@ export function resolveModel(opts, env) {
 //      chmod 0600 — and nothing else, because memory isolation (no leaked global
 //      CLAUDE.md) is the whole point. runEvals scrubs this copy post-run.
 //
-// Precedence: EVALS_ANTHROPIC_API_KEY > seeded credentials. Absent both (keychain
-// auth) → proceed without either, don't fail.
+// Precedence: EVALS_ANTHROPIC_API_KEY > seeded credentials. Absent both, this function
+// itself still proceeds without either (it stays a tolerant low-level helper) — but
+// `runEvals` calls `checkCredentialSeed` below BEFORE reaching this function in the
+// ordinary `run` flow, and that refuses up front rather than let the seeded path start
+// a doomed run. See `checkCredentialSeed` for why "proceed silently" stopped being safe.
 export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = process.env) {
   const dir = mkdtempSync(join(root, `harry-evals-${condition}-`));
   if (condition === "candidate") {
@@ -564,22 +579,72 @@ export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = 
   }
   // API-key mode authenticates via the child env (invokeClaude), so there is no
   // credential file to seed — the containment win is that nothing is on disk.
-  if (env.EVALS_ANTHROPIC_API_KEY) return dir;
-  const realConfigDir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
-  const credSrc = join(realConfigDir, ".credentials.json");
+  const credSrc = credentialSeedPath(env);
+  if (credSrc === null) return dir;
   if (existsSync(credSrc)) {
-    const credDst = join(dir, ".credentials.json");
+    const credDst = join(dir, CREDENTIALS_FILE);
     copyFileSync(credSrc, credDst);
     chmodSync(credDst, 0o600);
   }
   return dir;
 }
 
+// Pre-flight, called from `runEvals` before any condition dir is created: if this run
+// would rely on the seeded-credential fallback (no EVALS_ANTHROPIC_API_KEY), refuse UP
+// FRONT when that seed cannot possibly work, instead of letting every trial in the run
+// fail one by one, deep into a batch, with "OAuth session expired".
+//
+// On macOS the live login lives in the Keychain; `~/.claude/.credentials.json` is only a
+// point-in-time snapshot the CLI happened to write, and it can go stale or missing
+// silently — its OAuth access token (`claudeAiOauth.expiresAt`) expires on its own
+// schedule, independent of whether the operator keeps using `claude` interactively (the
+// Keychain-backed session refreshes without necessarily rewriting this file back out). A
+// stale or absent snapshot is therefore NOT evidence the operator is logged out — only
+// that THIS COPY is unusable — so the fix is always the same pointer: set
+// EVALS_ANTHROPIC_API_KEY, not `claude login`.
+//
+// Reads only the file's STRUCTURE: whether it exists, whether it parses, and one nested
+// numeric field (`claudeAiOauth.expiresAt`). No error message carries file content — not
+// a token value, and not the parser's own message, which quotes the text around a parse
+// failure — so nothing credential-shaped ever reaches an error message or a log line.
+export function checkCredentialSeed(env = process.env) {
+  const credSrc = credentialSeedPath(env);
+  if (credSrc === null) return; // scratch-token path needs no seed at all.
+  const pointer = "set EVALS_ANTHROPIC_API_KEY to a console API key instead of relying on it";
+  if (!existsSync(credSrc)) {
+    throw new Error(
+      `no credential seed at ${credSrc} and EVALS_ANTHROPIC_API_KEY is unset — every trial ` +
+        `in this run would fail mid-way with "Not logged in"; ${pointer}.`,
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(credSrc, "utf8"));
+  } catch {
+    // Deliberately drops JSON.parse's own message: V8 quotes the file text around the
+    // failure point, and in a credentials file that text can sit inside a token.
+    throw new Error(`credential seed at ${credSrc} is not valid JSON; ${pointer}.`);
+  }
+  // A missing expiry field (a test fixture, or some future credential shape we don't
+  // recognize) is not a staleness signal either way — proceed rather than refuse on a
+  // structure we can't judge. Only a NUMERIC, PAST `expiresAt` is a positive signal.
+  const expiresAt = parsed?.claudeAiOauth?.expiresAt;
+  if (typeof expiresAt === "number" && expiresAt <= Date.now()) {
+    throw new Error(
+      `credential seed at ${credSrc} is stale: its OAuth access token expired ` +
+        `${new Date(expiresAt).toISOString()}. On macOS the live login is in the Keychain, and ` +
+        `this file is only a snapshot of it that can go stale on its own schedule even while ` +
+        `\`claude\` keeps working interactively — a copy this old is not guaranteed to refresh, ` +
+        `and this runner has not verified that one will; ${pointer}.`,
+    );
+  }
+}
+
 // Delete a seeded `.credentials.json` from a config dir, if present. The config
 // dir itself may stay (post-hoc inspection value) — but never with a live
 // credential inside it. Idempotent and missing-safe (force).
 function scrubCredential(configDir) {
-  rmSync(join(configDir, ".credentials.json"), { force: true });
+  rmSync(join(configDir, CREDENTIALS_FILE), { force: true });
 }
 
 // Extract the assistant text from `claude -p --output-format json` output. A
@@ -955,6 +1020,11 @@ export function runEvals(opts, env = process.env) {
   // if EVALS_SANDBOX=1 is set with a runnable agentic case but we can't sandbox,
   // this throws (never a silent unsandboxed run). Null → run unwrapped as before.
   const sandbox = sandboxContext(env, runnable);
+
+  // Same "before any dir/session starts" timing as the sandbox refusal above: if the
+  // seeded-credential fallback is what this run would use, and that seed is absent or
+  // stale, refuse now with one clear message rather than mid-batch, trial by trial.
+  checkCredentialSeed(env);
 
   const lawsText = condition === "candidate" ? readFileSync(lawsPath(), "utf8") : "";
   // Provenance stamped onto every result line. Without it a results file cannot be

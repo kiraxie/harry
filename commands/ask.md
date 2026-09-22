@@ -40,22 +40,23 @@ fails before any run: empty stdout, a `Fatal error: <message>` line on stderr,
 non-zero exit.
 
 Failure is explicit: stdout's first line is `# Ask Failed`, followed by a
-reason line naming the cause — codex's last `ERROR:` line when the log's end
-has one (capped at 1000 bytes), otherwise the companion's own failure message;
-the exit code is non-zero. When codex ran, stderr carries only the error lines
-from the end of codex's log — lines starting `ERROR:`, `Error:` or `error:`,
-each capped at 1000 bytes (or, when there is none, `No error line at the end of
+reason line naming the cause — codex's last `ERROR:` line when codex exited
+non-zero and the log's end has one (capped at 1000 bytes); otherwise, including
+an exit-0 run that wrote no answer, the companion's own failure message. The
+exit code is non-zero. When codex ran, stderr carries only the error lines from
+the end of codex's log — lines starting `ERROR:`, `Error:` or `error:`, each
+capped at 1000 bytes (or, when there is none, `No error line at the end of
 codex's log.`) — and then `Log: <path>` (a missing CLI, an unreadable or empty
 `--context`, or an empty prompt fails before codex starts, with no log).
-Surface the reason line and those error
-lines — never present a failed run's stdout as the model's answer, and do not
-retry silently. Do not open or dump the whole log to diagnose it — it holds
-codex's session transcript, including files it read; point the user at the
-`Log: <path>` path instead, or read a narrow slice only if the user asks.
+Surface the reason line and those error lines — never present a failed run's
+stdout as the model's answer, and do not retry silently. Do not open or dump
+the whole log to diagnose it — it holds codex's session transcript, including
+files it read; point the user at the `Log: <path>` path instead, or read a
+narrow slice only if the user asks.
 
 ## `--context` — facts, never verdicts
 
 `--context <text|@file|@->` carries **facts** the model doesn't already
 have — same rule as `/harry:review`: it never carries verdicts, never tells
-the model what *not* to say. An unreadable `@file`, or an `@-` or `@file` with nothing in it, fails the run before codex
-starts.
+the model what *not* to say. An unreadable `@file`, or an `@-` or `@file`
+with nothing in it, fails the run before codex starts.

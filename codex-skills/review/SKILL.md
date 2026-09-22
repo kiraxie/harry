@@ -5,6 +5,12 @@ description: Run a read-only code review through harry's companion runtime (code
 
 # Review
 
+**Plugin root.** Codex does not set `${CLAUDE_PLUGIN_ROOT}`, so resolve it before
+anything else: take the absolute path this `SKILL.md` was loaded from and cut the
+trailing `codex-skills/review/SKILL.md` and the slash before it — what is left is the plugin root, the directory
+that holds `codex-skills/`, `dist/` and `references/`. Use that absolute path wherever
+`${CLAUDE_PLUGIN_ROOT}` appears below and in the files this skill points you to.
+
 Run a code review through the harry runtime.
 
 ## What this does
@@ -31,12 +37,23 @@ the working tree, stages, or commits.
 - No `--base`, clean working tree → reviews the current branch against the
   repository's default branch.
 
+## `--architecture`
+
+`--architecture` changes two things. It swaps the embedded standard: the prompt
+carries `references/architecture-review.md` in place of `references/review-rubric.md`.
+And it scopes findings to the shapes the change adds or alters, rather than to
+the diff's lines. Everything else stays the same — target resolution, the
+read-only spawn, the output and failure handling. It is how the finishing
+skill's architecture review (step 2) runs out of session on this build; the
+shape list, the item's `## Why / What` and acceptance criteria, the recent
+history and any prior rulings go in through `--context @<file>`.
+
 ## Run it
 
 Codex has no background-task tool — just run it and wait:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [focus...]
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--architecture] [focus...]
 ```
 
 A run can take several minutes — a five-file branch has taken ~5.5 minutes, a

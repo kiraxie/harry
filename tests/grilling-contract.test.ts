@@ -224,7 +224,10 @@ test("AC-5: only the user may defer a question", () => {
  * `HARRY.md` and `agents/` are in the scan because they instruct a model too — the
  * resident laws are the likeliest place a cadence rule gets re-added, and a role
  * agent's card is read as an instruction by whatever runs as that role. Both are
- * clean today; the scan is here so they stay that way.
+ * clean today; the scan is here so they stay that way — though only the two
+ * unambiguous patterns (`NUMBERED_ROUNDS_RE`, `FOUR_PER_ROUND_RE`) run against this
+ * whole corpus; the context-dependent picker/batch patterns below are scoped to the
+ * grill family only (see `PICKER_RE`'s comment).
  */
 const CADENCE_DIRS = ["references", "skills", "commands", "codex-skills", "agents"];
 const CADENCE_TOP_LEVEL = ["CLAUDE.md", "README.md", "upstream.json", "HARRY.md"];
@@ -355,8 +358,10 @@ test("AC-4: CLAUDE.md's grill bullet describes the shipped cadence", () => {
 // AC-7 — tier sets the interview's DEPTH, never its cadence
 //
 // Compressed depth is defined in two files, and these three phrases are the contract
-// between them: each file carries all three, verbatim. This is a shared-phrase pin, not
-// a semantic one — rewording one copy fails here on purpose, because the two
+// between them: each file carries the pinned prefix of each phrase, verbatim (the two
+// copies' wording diverges past that prefix — e.g. one omits "actually" — which the
+// regexes below tolerate on purpose). This is a shared-phrase pin, not a semantic one —
+// rewording one copy fails here on purpose, because the two
 // definitions silently diverging is HARRY.md §2's drift test answering "bug" (the model
 // would get two different interviews for one tier). Reword both copies together.
 

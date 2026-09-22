@@ -124,8 +124,7 @@ if already complete). Topic: kebab-case, derived from the filename/content.
 Present the full candidate list as a table (source → proposed kind → target
 path).
 
-**Step C — Ask two decisions, in sequence — these are separate decisions, not one
-batched question:**
+**Step C — Ask what's needed to migrate, one question at a time:**
 
 - Q_A — Which candidates to migrate? (multiselect; offer "all" and "skip".)
 - **If nothing was selected** (empty, or "skip"): stop here — nothing was chosen to

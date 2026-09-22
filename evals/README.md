@@ -50,8 +50,7 @@ child, in precedence order:
    from your real config dir (`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod
    `0600`. Nothing else is copied — **no `CLAUDE.md`, no settings, no memory** — so
    the isolation that keeps the baseline honest is preserved; only the login token
-   rides along. If that file doesn't exist (keychain auth) the runner proceeds
-   without it.
+   rides along.
 
 **Post-run scrub:** in the seeded-credential path, the runner **deletes** every
 copied `.credentials.json` in a `finally` block — on success, on error, and on a
@@ -59,6 +58,40 @@ thrown exception mid-run. The config dirs themselves stay under the temp root fo
 post-hoc inspection, but **never with a live credential inside**: the token's
 on-disk exposure is bounded to the session lifetime. (The scratch-token path never
 writes one in the first place, so there is nothing to scrub.)
+
+### Pre-flight: a stale or absent seed refuses up front
+
+Every `run` checks the seeded-credential path **before** any config dir is created
+or session starts (skipped entirely when `EVALS_ANTHROPIC_API_KEY` is set — the
+scratch-token path needs no seed at all):
+
+- **Missing `.credentials.json`** — refused immediately. On macOS the live login
+  often lives in the OS Keychain, and `.credentials.json` is only a point-in-time
+  snapshot the CLI happened to write; its absence is not proof that login is fine.
+- **A present file whose `claudeAiOauth.expiresAt` is already in the past** —
+  refused as **stale**. This is the common real-world case on macOS: the
+  Keychain-backed session keeps refreshing without necessarily rewriting this file
+  back out, so the on-disk snapshot's access token can sit expired for days while
+  `claude` itself keeps working interactively. This runner has confirmed the check
+  *fires* on a genuinely stale file (an access token expired days ago, refresh
+  token still weeks out) — it has **not** verified whether a copy of that exact
+  file would actually fail once handed to a real session, or auto-refresh from the
+  still-live `refreshToken`. Treat the refusal as the safe assumption, not a
+  proven failure mode. On a **Linux, file-backed** login (no Keychain — this file
+  *is* the store, and the CLI normally keeps it current), this same check can be a
+  false positive if the operator hasn't run `claude` in a while: the access token
+  ages out on schedule even though the file would refresh fine on next use. Either
+  way, `EVALS_ANTHROPIC_API_KEY` sidesteps the judgment call entirely.
+- **A present file with no recognizable `claudeAiOauth.expiresAt` field** —
+  proceeds. The check can only judge staleness it can see; an unfamiliar or partial
+  credential shape is not treated as a positive staleness signal.
+
+Either refusal's message names the file path and points at
+`EVALS_ANTHROPIC_API_KEY` — the fix is always the scratch key, never `claude
+login`, since a fresh interactive login does not guarantee this on-disk file gets
+rewritten. The check reads only the file's **structure** (existence, and one
+nested numeric field) — never a token value — so nothing credential-shaped ever
+reaches a log line or an error message.
 
 The child also runs with its **cwd set to a fresh empty dir**, not the repo root.
 `claude` reads *project* memory by walking up from the working directory, so

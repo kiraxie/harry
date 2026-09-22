@@ -29,7 +29,11 @@ const flat = (text: string): string => text.replace(/\s+/g, " ");
  * bolding a word inside one does not change what it says — pinning the `**` makes an
  * editor who unbolds one word fail a contract test for nothing.
  */
-const plain = (text: string): string => flat(text).replace(/\*+/g, "");
+const plain = (text: string): string =>
+  flat(text)
+    .replace(/\*+/g, "")
+    // `_` emphasis too, but only at a word's edge — `sandbox_mode` keeps its underscore.
+    .replace(/(?<!\w)_+|_+(?!\w)/g, "");
 
 const PLAIN_LANGUAGE = "references/plain-language.md";
 const DOORS = [
@@ -100,10 +104,10 @@ test("AC-1: the one-question rule keeps its already-shown-as-one-list carve-out"
   );
   assert.match(
     bullet,
-    // The negation itself, not the phrase it is attached to: a looser alternative like
-    // /arriv\w+ at once/ matches "decisions arriving at once are fine" too, which is the
-    // rule inverted — exactly what this assertion claims to catch.
-    /separate decisions arriving at once do not/i,
+    // The negation itself, closed by its full stop: a looser alternative like
+    // /arriv\w+ at once/ matches "decisions arriving at once are fine" too, and without
+    // the stop "… do not need splitting." passes — both the rule inverted.
+    /separate decisions arriving at once do not\./i,
     "the carve-out no longer excludes separate decisions that merely arrive together",
   );
 });
@@ -391,13 +395,13 @@ test("AC-5: the terms cut entirely are absent from every shipped file", () => {
   const files = corpus();
   assert.ok(files.includes("HARRY.md"), "the resident laws dropped out of the jargon scan");
   const offenders: string[] = [];
-  for (const rel of files)
-    read(rel)
-      .split("\n")
-      .forEach((line, i) => {
-        for (const [term, re] of Object.entries(GONE))
-          if (re.test(line)) offenders.push(`${rel}:${i + 1} (${term})`);
-      });
+  // Whole file, flattened — not line by line: a hard wrap inside `law\nwiring` would
+  // otherwise split the term across two lines that each pass.
+  for (const rel of files) {
+    const text = flat(read(rel));
+    for (const [term, re] of Object.entries(GONE))
+      if (re.test(text)) offenders.push(`${rel} (${term})`);
+  }
   assert.deepEqual(
     offenders,
     [],

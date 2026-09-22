@@ -2,12 +2,14 @@
  * review command — a thin wrapper over the Codex CLI's `codex exec review`.
  *
  * Resolves what to review (branch vs working tree), builds a prompt naming that
- * target plus harry's review rubric, and runs
+ * target plus harry's review rubric (or, with `--architecture`, the
+ * architecture-review reference), and runs
  * `codex exec review --ephemeral -c sandbox_mode="read-only" -o <file> -` at the
  * repo root with the prompt on stdin. The review file is printed verbatim.
  *
- * Spawning, the `.log` beside the review file, and the loud no-fallback failure
- * handling live in `src/lib/run-codex.ts`, shared with `ask`.
+ * Spawning and the loud no-fallback failure handling live in
+ * `src/lib/run-codex.ts`; the review file and the `.log` beside it are reserved
+ * by `src/lib/run-files.ts`. Both are shared with `ask`.
  */
 
 import { existsSync, statSync } from "node:fs";
@@ -20,8 +22,9 @@ import {
   getRepoRoot,
   resolveReviewTarget,
 } from "../lib/git.ts";
-import { buildReviewPrompt, loadReviewRubric } from "../lib/review-prompts.ts";
-import { type ReasoningEffort, reserveRunFiles, runCodexExec } from "../lib/run-codex.ts";
+import { buildReviewPrompt } from "../lib/review-prompts.ts";
+import { type ReasoningEffort, runCodexExec } from "../lib/run-codex.ts";
+import { reserveRunFiles } from "../lib/run-files.ts";
 import { ensureDir, resolveStateDir } from "../lib/state.ts";
 
 export interface ReviewOptions {
@@ -29,6 +32,11 @@ export interface ReviewOptions {
   reasoning?: ReasoningEffort;
   /** Background for the reviewer: literal text, or `@file` / `@-` — see `resolveExtraContext`. */
   context?: string;
+  /**
+   * Embed `references/architecture-review.md` instead of the per-diff rubric —
+   * finishing's architecture review, run out of session on the Codex build.
+   */
+  architecture?: boolean;
   focusText?: string;
 }
 
@@ -72,7 +80,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
 
   const prompt = buildReviewPrompt({
     target,
-    rubric: loadReviewRubric(),
+    standard: options.architecture ? "architecture" : "review",
     // Strict: a reviewer silently missing its facts would review a different question.
     context: resolveExtraContext(cwd, options.context),
     focusText: options.focusText,
@@ -93,7 +101,7 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
   args.push("-");
 
   process.stderr.write(`Reviewing ${target.label} with codex exec review…\n`);
-  const review = runCodexExec({
+  const review = await runCodexExec({
     args,
     cwd: repoRoot,
     input: prompt,

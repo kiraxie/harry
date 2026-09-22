@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -110,6 +110,58 @@ test("ensureGitRepository: a non-repo directory is rejected", () => {
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** Run `body` with `process.env.PATH` set to `PATH`, restoring it afterwards. */
+function withPath<T>(PATH: string, body: () => T): T {
+  const prev = process.env.PATH;
+  process.env.PATH = PATH;
+  try {
+    return body();
+  } finally {
+    process.env.PATH = prev;
+  }
+}
+
+test("ensureGitRepository never runs a repo's own `git` through an empty or relative PATH entry", {
+  skip: process.platform === "win32" && "POSIX PATH search",
+}, () => {
+  // execvp resolves an empty or relative PATH entry against the cwd, and review
+  // runs git with cwd = the repository under review.
+  const dir = realpathSync(tmpDir());
+  const markers = realpathSync(tmpDir());
+  try {
+    run(dir, "init", "-q");
+    writeFileSync(
+      path.join(dir, "git"),
+      `#!/bin/sh\n: > "${path.join(markers, "ran")}"\necho /pwned\n`,
+      { mode: 0o755 },
+    );
+    for (const PATH of [":/usr/bin:/bin", "/usr/bin:/bin:", "/usr/bin::/bin", ".:/usr/bin:/bin"]) {
+      const root = withPath(PATH, () => ensureGitRepository(dir));
+      assert.deepEqual(readdirSync(markers), [], `PATH=${JSON.stringify(PATH)} ran the repo's git`);
+      assert.equal(root, dir);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(markers, { recursive: true, force: true });
+  }
+});
+
+test("ensureGitRepository with no git on PATH still reports git as not installed", {
+  skip: process.platform === "win32" && "POSIX PATH search",
+}, () => {
+  const dir = realpathSync(tmpDir());
+  const empty = realpathSync(tmpDir());
+  try {
+    assert.throws(
+      () => withPath(`:.:${empty}`, () => ensureGitRepository(dir)),
+      /git is not installed/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(empty, { recursive: true, force: true });
   }
 });
 

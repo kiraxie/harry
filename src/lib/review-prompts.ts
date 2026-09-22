@@ -23,9 +23,22 @@ export function pluginRoot(): string {
   return dirname(dirname(realpathSync(process.argv[1])));
 }
 
-/** Read `references/review-rubric.md`; a missing rubric is an install defect, never skipped. */
-export function loadReviewRubric(root: string = pluginRoot()): string {
-  const rubricPath = join(root, "references", "review-rubric.md");
+/**
+ * Which review a prompt asks for: the per-diff code review, or finishing's
+ * architecture review. One input decides both the embedded standard and how
+ * the target section scopes findings, so the two can never disagree.
+ */
+export type ReviewStandard = "review" | "architecture";
+
+/** Each standard's reference file under `references/`. */
+const RUBRIC_FILES: Record<ReviewStandard, string> = {
+  review: "review-rubric.md",
+  architecture: "architecture-review.md",
+};
+
+/** Read a review standard from `references/`; a missing one is an install defect, never skipped. */
+function loadReviewRubric(standard: ReviewStandard): string {
+  const rubricPath = join(pluginRoot(), "references", RUBRIC_FILES[standard]);
   let text: string;
   try {
     text = readFileSync(rubricPath, "utf8");
@@ -41,7 +54,11 @@ export function loadReviewRubric(root: string = pluginRoot()): string {
 const OUTSIDE_THE_DIFF =
   "Code outside those changes is context, not a review target: read it to understand the change, but problems that live only outside the changes must not be reported.";
 
-function targetSection(target: ReviewTarget): string {
+const OUTSIDE_THE_SHAPES =
+  "Code outside those changes is context for judging the shapes this change adds or alters: read it, one level up and through the recent history, as the review standard below asks. Report findings about those shapes only, not unrelated problems elsewhere.";
+
+function targetSection(target: ReviewTarget, standard: ReviewStandard): string {
+  const outside = standard === "architecture" ? OUTSIDE_THE_SHAPES : OUTSIDE_THE_DIFF;
   if (target.mode === "branch") {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
     return [
@@ -49,7 +66,7 @@ function targetSection(target: ReviewTarget): string {
       "",
       `Review the changes this branch makes against \`${target.baseRef}\`. Run \`git diff ${target.baseRef}...HEAD\` to see them — that diff is the review target.`,
       "",
-      OUTSIDE_THE_DIFF,
+      outside,
     ].join("\n");
   }
   return [
@@ -61,20 +78,25 @@ function targetSection(target: ReviewTarget): string {
     "- `git diff HEAD` — staged and unstaged changes to tracked files",
     "- read each untracked file in full — it has no diff",
     "",
-    OUTSIDE_THE_DIFF,
+    outside,
   ].join("\n");
 }
 
 export interface ReviewPromptInput {
   target: ReviewTarget;
-  rubric: string;
+  /** The review asked for; `architecture` scopes findings to shapes, not the diff. */
+  standard: ReviewStandard;
   /** Resolved `--context` text, if any. */
   context?: string;
   focusText?: string;
 }
 
+/** Throws when the standard's reference file is missing or empty. */
 export function buildReviewPrompt(input: ReviewPromptInput): string {
-  const sections = [targetSection(input.target), `# Review standard\n\n${input.rubric.trim()}`];
+  const sections = [
+    targetSection(input.target, input.standard),
+    `# Review standard\n\n${loadReviewRubric(input.standard)}`,
+  ];
   const context = input.context?.trim();
   if (context) {
     sections.push(`## Background (settled facts from the working session)\n\n${context}`);

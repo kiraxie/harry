@@ -27,7 +27,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var import_node_process = __toESM(require("node:process"), 1);
 
 // src/commands/ask.ts
-var import_node_path4 = require("node:path");
+var import_node_path5 = require("node:path");
 
 // src/lib/context.ts
 var import_node_fs = require("node:fs");
@@ -50,24 +50,56 @@ function resolveExtraContext(cwd, context) {
 
 // src/lib/run-codex.ts
 var import_node_child_process = require("node:child_process");
+var import_node_fs4 = require("node:fs");
+
+// src/lib/path-search.ts
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
-var REASONING_EFFORTS = ["low", "medium", "high", "xhigh"];
-var CODEX_CLI_MISSING = "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry.";
-var CMD_META_RE = /([()\][%!^"`<>&|;, *?])/g;
-function quoteWindowsArg(arg) {
-  const crt = `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
-  return crt.replace(CMD_META_RE, "^$1").replace(CMD_META_RE, "^$1");
+function isExecutableFile(path) {
+  try {
+    if (!(0, import_node_fs2.statSync)(path).isFile()) return false;
+    (0, import_node_fs2.accessSync)(path, import_node_fs2.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function resolveOnPath(name, env, exists = isExecutableFile) {
+  for (const dir of (env.PATH ?? "").split(":")) {
+    if (!import_node_path2.posix.isAbsolute(dir)) continue;
+    const candidate = import_node_path2.posix.join(dir, name);
+    if (exists(candidate)) return candidate;
+  }
+  return null;
+}
+function notFoundError(syscall, name) {
+  return Object.assign(new Error(`${syscall} ENOENT`), { code: "ENOENT", syscall, path: name });
+}
+function spawnTarget(name, platform = process.platform, env = process.env) {
+  return platform === "win32" ? name : resolveOnPath(name, env);
 }
 function winEnv(env, name) {
   const key = Object.keys(env).find((k) => k.toUpperCase() === name);
   return key === void 0 ? void 0 : env[key];
 }
-function resolveCodex(env, platform, exists) {
-  if (platform !== "win32") return "codex";
+var WIN_SPAWN_MODE = {
+  ".com": "direct",
+  ".exe": "direct",
+  ".bat": "cmd",
+  ".cmd": "cmd"
+};
+function winSpawnMode(file) {
+  const ext = /^\.[^.\\/]+$/.test(file) ? file : import_node_path2.win32.extname(file);
+  return WIN_SPAWN_MODE[ext.toLowerCase()] ?? null;
+}
+function resolveCodex(env, platform, exists = platform === "win32" ? import_node_fs2.existsSync : isExecutableFile) {
+  if (platform !== "win32") return resolveOnPath("codex", env, exists);
   const split = (v) => v.split(";").map((s) => s.trim().replace(/^"(.*)"$/, "$1")).filter((s) => s !== "");
-  const exts = split(winEnv(env, "PATHEXT") || ".COM;.EXE;.BAT;.CMD");
+  const exts = split(winEnv(env, "PATHEXT") || ".COM;.EXE;.BAT;.CMD").filter(
+    (ext) => winSpawnMode(ext) !== null
+  );
   for (const dir of split(winEnv(env, "PATH") ?? "")) {
+    if (!import_node_path2.win32.isAbsolute(dir)) continue;
     for (const ext of exts) {
       const candidate = import_node_path2.win32.join(dir, `codex${ext}`);
       if (exists(candidate)) return candidate;
@@ -75,10 +107,85 @@ function resolveCodex(env, platform, exists) {
   }
   return null;
 }
-function codexSpawn(args, platform = process.platform, env = process.env, exists = import_node_fs2.existsSync) {
+
+// src/lib/run-files.ts
+var import_node_fs3 = require("node:fs");
+var import_node_path3 = require("node:path");
+var STAMP = "YYYYMMDD-hhmmss";
+var OUTPUT_EXT = ".md";
+var LOG_EXT = ".log";
+function runFileStem(prefix, now, n) {
+  const p = (v, width = 2) => String(v).padStart(width, "0");
+  const fields = {
+    YYYY: p(now.getFullYear(), 4),
+    MM: p(now.getMonth() + 1),
+    DD: p(now.getDate()),
+    hh: p(now.getHours()),
+    mm: p(now.getMinutes()),
+    ss: p(now.getSeconds())
+  };
+  const stamp = STAMP.replace(/YYYY|MM|DD|hh|mm|ss/g, (f) => fields[f]);
+  return `${prefix}-${stamp}${n === 1 ? "" : `-${n}`}`;
+}
+function runFilePattern(prefix) {
+  const literal = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stamp = STAMP.replace(/[A-Za-z]/g, "\\d");
+  const ext = [OUTPUT_EXT, LOG_EXT].map(literal).join("|");
+  return new RegExp(`^${literal(prefix)}-${stamp}(?:-\\d+)?(?:${ext})$`);
+}
+function reserveRunFiles(dir, prefix, now = /* @__PURE__ */ new Date()) {
+  for (let n = 1; ; n++) {
+    const stem = (0, import_node_path3.join)(dir, runFileStem(prefix, now, n));
+    const outputPath = `${stem}${OUTPUT_EXT}`;
+    const logPath = `${stem}${LOG_EXT}`;
+    if ((0, import_node_fs3.existsSync)(outputPath)) continue;
+    try {
+      (0, import_node_fs3.closeSync)((0, import_node_fs3.openSync)(logPath, "wx", 384));
+    } catch (err) {
+      if (err.code === "EEXIST") continue;
+      throw err;
+    }
+    return { outputPath, logPath };
+  }
+}
+function pruneRunFiles(dir, prefix, maxAgeMs, now = Date.now()) {
+  const runFile = runFilePattern(prefix);
+  let names;
+  try {
+    names = (0, import_node_fs3.readdirSync)(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!runFile.test(name)) continue;
+    const path = (0, import_node_path3.join)(dir, name);
+    try {
+      const st = (0, import_node_fs3.lstatSync)(path);
+      if (st.isFile() && now - st.mtimeMs > maxAgeMs) (0, import_node_fs3.rmSync)(path);
+    } catch {
+    }
+  }
+}
+function narrowOutput(outputPath) {
+  try {
+    (0, import_node_fs3.chmodSync)(outputPath, 384);
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+  }
+}
+
+// src/lib/run-codex.ts
+var REASONING_EFFORTS = ["low", "medium", "high", "xhigh"];
+var CODEX_CLI_MISSING = "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry.";
+var CMD_META_RE = /([()\][%!^"`<>&|;, *?])/g;
+function quoteWindowsArg(arg) {
+  const crt = `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
+  return crt.replace(CMD_META_RE, "^$1").replace(CMD_META_RE, "^$1");
+}
+function codexSpawn(args, platform = process.platform, env = process.env, exists) {
   const command = resolveCodex(env, platform, exists);
   if (command === null) return null;
-  if (platform !== "win32" || !/\.(cmd|bat)$/i.test(command)) {
+  if (platform !== "win32" || winSpawnMode(command) !== "cmd") {
     return { command, args: [...args], shell: false };
   }
   const line = [command.replace(CMD_META_RE, "^$1"), ...args.map(quoteWindowsArg)].join(" ");
@@ -87,40 +194,67 @@ function codexSpawn(args, platform = process.platform, env = process.env, exists
 function codexMissing(res) {
   return res.error?.code === "ENOENT";
 }
+function codexNotFound(syscall) {
+  return notFoundError(syscall, "codex");
+}
 function spawnCodexSync(args, options) {
   const spec = codexSpawn(args, process.platform, options.env ?? process.env);
   if (spec === null) {
-    const error = Object.assign(new Error("spawnSync codex ENOENT"), {
-      code: "ENOENT",
-      syscall: "spawnSync codex",
-      path: "codex"
-    });
+    const error = codexNotFound("spawnSync codex");
     return { pid: 0, output: [], stdout: "", stderr: "", status: null, signal: null, error };
   }
   return (0, import_node_child_process.spawnSync)(spec.command, spec.args, { ...options, shell: spec.shell, windowsHide: true });
 }
+function forwardedSignals(platform) {
+  return platform === "win32" ? ["SIGTERM", "SIGINT"] : ["SIGTERM", "SIGINT", "SIGHUP"];
+}
+function spawnCodex(args, options) {
+  const spec = codexSpawn(args, process.platform, options.env ?? process.env);
+  if (spec === null) {
+    return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
+  }
+  return new Promise((resolve3) => {
+    const child = (0, import_node_child_process.spawn)(spec.command, spec.args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["pipe", "ignore", options.logFd],
+      shell: spec.shell,
+      windowsHide: true
+    });
+    const signals = forwardedSignals(process.platform);
+    const forward = (signal) => {
+      try {
+        child.kill(signal);
+      } catch {
+      }
+      stopForwarding();
+      process.kill(process.pid, signal);
+    };
+    const stopForwarding = () => {
+      for (const s of signals) process.off(s, forward);
+    };
+    for (const s of signals) process.on(s, forward);
+    let spawnError;
+    let stdinError;
+    child.on("error", (err) => {
+      spawnError ??= err;
+    });
+    child.stdin?.on("error", (err) => {
+      stdinError ??= err;
+    });
+    child.stdin?.end(options.input);
+    child.on("close", (code, signal) => {
+      stopForwarding();
+      resolve3({
+        status: spawnError ? null : code,
+        signal,
+        error: spawnError ?? stdinError
+      });
+    });
+  });
+}
 var FAILURE_TAIL_LINES = 40;
 var NO_ERROR_LINE = "No error line at the end of codex's log.";
-function timestamp(now) {
-  const p = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
-}
-function reserveRunFiles(dir, prefix, now = /* @__PURE__ */ new Date()) {
-  const base = `${prefix}-${timestamp(now)}`;
-  for (let n = 1; ; n++) {
-    const stem = (0, import_node_path2.join)(dir, n === 1 ? base : `${base}-${n}`);
-    const outputPath = `${stem}.md`;
-    const logPath = `${stem}.log`;
-    if ((0, import_node_fs2.existsSync)(outputPath)) continue;
-    try {
-      (0, import_node_fs2.closeSync)((0, import_node_fs2.openSync)(logPath, "wx", 384));
-    } catch (err) {
-      if (err.code === "EEXIST") continue;
-      throw err;
-    }
-    return { outputPath, logPath };
-  }
-}
 var CodexRunError = class extends Error {
   kind;
   /** The run's log; absent for `missing`, whose empty log is deleted. */
@@ -136,7 +270,7 @@ var CodexRunError = class extends Error {
   }
 };
 function logTail(logPath) {
-  const lines = (0, import_node_fs2.readFileSync)(logPath, "utf8").split(/\r\n|\n|\r/);
+  const lines = (0, import_node_fs4.readFileSync)(logPath, "utf8").split(/\r\n|\n|\r/);
   if (lines.at(-1) === "") lines.pop();
   return lines.slice(-FAILURE_TAIL_LINES);
 }
@@ -167,9 +301,9 @@ Log: ${logPath}
 `);
 }
 function reportSpawnErrorLog(logPath) {
-  const size = (0, import_node_fs2.statSync)(logPath, { throwIfNoEntry: false })?.size;
+  const size = (0, import_node_fs4.statSync)(logPath, { throwIfNoEntry: false })?.size;
   if (size === void 0) return;
-  if (size === 0) (0, import_node_fs2.rmSync)(logPath, { force: true });
+  if (size === 0) (0, import_node_fs4.rmSync)(logPath, { force: true });
   else reportLogTail(logPath);
 }
 function lastErrorLine(logPath) {
@@ -182,91 +316,97 @@ function lastErrorLine(logPath) {
   const last = errors.filter((l) => l.startsWith("ERROR:")).at(-1);
   return last === void 0 ? void 0 : capLogLine(last);
 }
-function runCodexExec(opts) {
-  const logFd = (0, import_node_fs2.openSync)(opts.logPath, "w", 384);
+async function runCodexExec(opts) {
+  const logFd = (0, import_node_fs4.openSync)(opts.logPath, "w", 384);
   let res;
   try {
-    res = spawnCodexSync(opts.args, {
-      cwd: opts.cwd,
-      input: opts.input,
-      stdio: ["pipe", "ignore", logFd]
-    });
+    res = await spawnCodex(opts.args, { cwd: opts.cwd, input: opts.input, logFd });
   } finally {
-    (0, import_node_fs2.closeSync)(logFd);
+    (0, import_node_fs4.closeSync)(logFd);
   }
   if (codexMissing(res)) {
-    (0, import_node_fs2.rmSync)(opts.logPath, { force: true });
+    (0, import_node_fs4.rmSync)(opts.logPath, { force: true });
     throw new CodexRunError(CODEX_CLI_MISSING, "missing");
   }
-  narrowOutput(opts.outputPath);
   if (res.error && (res.status === null || res.status === 0)) {
     reportSpawnErrorLog(opts.logPath);
+    reportNarrowFailure(opts.outputPath);
     throw res.error;
   }
   if (res.status !== 0) {
     reportLogTail(opts.logPath);
+    reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
       `${opts.label} failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
       "exit",
       { logPath: opts.logPath, exitStatus: res.status }
     );
   }
-  const output = (0, import_node_fs2.existsSync)(opts.outputPath) ? (0, import_node_fs2.readFileSync)(opts.outputPath, "utf8") : "";
+  const output = (0, import_node_fs4.existsSync)(opts.outputPath) ? (0, import_node_fs4.readFileSync)(opts.outputPath, "utf8") : "";
   if (!output.trim()) {
     reportLogTail(opts.logPath);
+    reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
       `${opts.label} exited 0 but wrote no ${opts.outputNoun} to ${opts.outputPath}.`,
       "empty",
       { logPath: opts.logPath }
     );
   }
+  narrowOutput(opts.outputPath);
   return output;
 }
-function narrowOutput(outputPath) {
+function reportNarrowFailure(outputPath) {
   try {
-    (0, import_node_fs2.chmodSync)(outputPath, 384);
+    narrowOutput(outputPath);
   } catch (err) {
-    if (err.code !== "ENOENT") throw err;
+    process.stderr.write(
+      `Could not narrow ${outputPath} to owner-only (0600): ${err.message}
+`
+    );
   }
 }
 
 // src/lib/state.ts
 var import_node_child_process2 = require("node:child_process");
 var import_node_crypto = require("node:crypto");
-var import_node_fs3 = require("node:fs");
+var import_node_fs5 = require("node:fs");
 var import_node_os = require("node:os");
-var import_node_path3 = require("node:path");
+var import_node_path4 = require("node:path");
 var PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
-var FALLBACK_STATE_ROOT = (0, import_node_path3.join)((0, import_node_os.tmpdir)(), "harry");
+var FALLBACK_STATE_ROOT = (0, import_node_path4.join)((0, import_node_os.tmpdir)(), "harry");
 function repoRootOf(cwd) {
+  const git2 = spawnTarget("git");
+  if (git2 === null) return (0, import_node_path4.resolve)(cwd);
   try {
-    const root = (0, import_node_child_process2.execFileSync)("git", ["rev-parse", "--show-toplevel"], {
+    const root = (0, import_node_child_process2.execFileSync)(git2, ["rev-parse", "--show-toplevel"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
-    return root || (0, import_node_path3.resolve)(cwd);
+    return root || (0, import_node_path4.resolve)(cwd);
   } catch {
-    return (0, import_node_path3.resolve)(cwd);
+    return (0, import_node_path4.resolve)(cwd);
   }
 }
 function resolveStateDir(cwd) {
   const workspaceRoot = repoRootOf(cwd);
-  const slug = (0, import_node_path3.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
+  const slug = (0, import_node_path4.basename)(workspaceRoot).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
   const hash = (0, import_node_crypto.createHash)("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
   const dirName = `${slug}-${hash}`;
   const pluginDataDir = process.env[PLUGIN_DATA_ENV];
   if (pluginDataDir) {
-    return (0, import_node_path3.join)(pluginDataDir, "state", dirName);
+    return (0, import_node_path4.join)(pluginDataDir, "state", dirName);
   }
-  return (0, import_node_path3.join)(FALLBACK_STATE_ROOT, dirName);
+  return (0, import_node_path4.join)(FALLBACK_STATE_ROOT, dirName);
 }
 function ensureDir(dir) {
-  (0, import_node_fs3.mkdirSync)(dir, { recursive: true, mode: 448 });
+  (0, import_node_fs5.mkdirSync)(dir, { recursive: true, mode: 448 });
 }
 
 // src/commands/ask.ts
 var ASK_FAILED_MARKER = "# Ask Failed";
+var ASK_PREFIX = "ask";
+var ASK_RETENTION_MS = 7 * 24 * 60 * 60 * 1e3;
 var ASK_PREAMBLE = [
   "You are one independent voice being consulted on a question.",
   "Answer from this prompt and any Background given below.",
@@ -297,9 +437,10 @@ async function ask(cwd, options) {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");
   const context = resolveExtraContext(cwd, options.context);
-  const dir = (0, import_node_path4.join)(resolveStateDir(cwd), "asks");
+  const dir = (0, import_node_path5.join)(resolveStateDir(cwd), "asks");
   ensureDir(dir);
-  const { outputPath, logPath } = reserveRunFiles(dir, "ask");
+  pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
+  const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
   const args = [
     "exec",
     "--ephemeral",
@@ -311,7 +452,7 @@ async function ask(cwd, options) {
   ];
   if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
   args.push("-");
-  const answer = runCodexExec({
+  const answer = await runCodexExec({
     args,
     cwd,
     input: buildAskPrompt(prompt, context),
@@ -340,18 +481,22 @@ ${reason}
 }
 
 // src/commands/review.ts
-var import_node_fs5 = require("node:fs");
-var import_node_path7 = require("node:path");
+var import_node_fs7 = require("node:fs");
+var import_node_path8 = require("node:path");
 
 // src/lib/git.ts
 var import_node_child_process3 = require("node:child_process");
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 function failureReason2(result) {
   if (result.stderr.trim()) return result.stderr.trim();
   return result.status === null ? "killed by a signal or failed to spawn" : `exit ${result.status}`;
 }
 function git(cwd, args) {
-  const result = (0, import_node_child_process3.spawnSync)("git", args, {
+  const command = spawnTarget("git");
+  if (command === null) {
+    return { status: null, stdout: "", stderr: "", error: notFoundError("spawnSync git", "git") };
+  }
+  const result = (0, import_node_child_process3.spawnSync)(command, args, {
     cwd,
     encoding: "utf8",
     windowsHide: true
@@ -387,7 +532,7 @@ function getMainCheckoutRoot(cwd) {
     "--path-format=absolute",
     "--git-common-dir"
   ]).stdout.trim();
-  return (0, import_node_path5.dirname)(commonDir);
+  return (0, import_node_path6.dirname)(commonDir);
 }
 function getBranchOrShortSha(cwd) {
   const branch = gitChecked(cwd, ["branch", "--show-current"]).stdout.trim();
@@ -435,16 +580,20 @@ function resolveReviewTarget(cwd, options = {}) {
 }
 
 // src/lib/review-prompts.ts
-var import_node_fs4 = require("node:fs");
-var import_node_path6 = require("node:path");
+var import_node_fs6 = require("node:fs");
+var import_node_path7 = require("node:path");
 function pluginRoot() {
-  return (0, import_node_path6.dirname)((0, import_node_path6.dirname)((0, import_node_fs4.realpathSync)(process.argv[1])));
+  return (0, import_node_path7.dirname)((0, import_node_path7.dirname)((0, import_node_fs6.realpathSync)(process.argv[1])));
 }
-function loadReviewRubric(root = pluginRoot()) {
-  const rubricPath = (0, import_node_path6.join)(root, "references", "review-rubric.md");
+var RUBRIC_FILES = {
+  review: "review-rubric.md",
+  architecture: "architecture-review.md"
+};
+function loadReviewRubric(standard) {
+  const rubricPath = (0, import_node_path7.join)(pluginRoot(), "references", RUBRIC_FILES[standard]);
   let text;
   try {
-    text = (0, import_node_fs4.readFileSync)(rubricPath, "utf8");
+    text = (0, import_node_fs6.readFileSync)(rubricPath, "utf8");
   } catch (err) {
     throw new Error(
       `Review rubric not found at ${rubricPath} (${err.message}). Reinstall the harry plugin.`
@@ -454,7 +603,9 @@ function loadReviewRubric(root = pluginRoot()) {
   return text.trim();
 }
 var OUTSIDE_THE_DIFF = "Code outside those changes is context, not a review target: read it to understand the change, but problems that live only outside the changes must not be reported.";
-function targetSection(target) {
+var OUTSIDE_THE_SHAPES = "Code outside those changes is context for judging the shapes this change adds or alters: read it, one level up and through the recent history, as the review standard below asks. Report findings about those shapes only, not unrelated problems elsewhere.";
+function targetSection(target, standard) {
+  const outside = standard === "architecture" ? OUTSIDE_THE_SHAPES : OUTSIDE_THE_DIFF;
   if (target.mode === "branch") {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
     return [
@@ -462,7 +613,7 @@ function targetSection(target) {
       "",
       `Review the changes this branch makes against \`${target.baseRef}\`. Run \`git diff ${target.baseRef}...HEAD\` to see them \u2014 that diff is the review target.`,
       "",
-      OUTSIDE_THE_DIFF
+      outside
     ].join("\n");
   }
   return [
@@ -474,13 +625,16 @@ function targetSection(target) {
     "- `git diff HEAD` \u2014 staged and unstaged changes to tracked files",
     "- read each untracked file in full \u2014 it has no diff",
     "",
-    OUTSIDE_THE_DIFF
+    outside
   ].join("\n");
 }
 function buildReviewPrompt(input) {
-  const sections = [targetSection(input.target), `# Review standard
+  const sections = [
+    targetSection(input.target, input.standard),
+    `# Review standard
 
-${input.rubric.trim()}`];
+${loadReviewRubric(input.standard)}`
+  ];
   const context = input.context?.trim();
   if (context) {
     sections.push(`## Background (settled facts from the working session)
@@ -499,8 +653,8 @@ ${focus}`);
 var REVIEW_WRITTEN = "Review written to";
 function resolveOutputDir(repoRoot) {
   const branch = getBranchOrShortSha(repoRoot);
-  const local = (0, import_node_path7.join)(getMainCheckoutRoot(repoRoot), ".local");
-  const dir = (0, import_node_fs5.existsSync)(local) && (0, import_node_fs5.statSync)(local).isDirectory() ? (0, import_node_path7.join)(local, "tmp", branch) : (0, import_node_path7.join)(resolveStateDir(repoRoot), "reviews", branch);
+  const local = (0, import_node_path8.join)(getMainCheckoutRoot(repoRoot), ".local");
+  const dir = (0, import_node_fs7.existsSync)(local) && (0, import_node_fs7.statSync)(local).isDirectory() ? (0, import_node_path8.join)(local, "tmp", branch) : (0, import_node_path8.join)(resolveStateDir(repoRoot), "reviews", branch);
   ensureDir(dir);
   return dir;
 }
@@ -520,7 +674,7 @@ No changes to review under ${target.label}.
   }
   const prompt = buildReviewPrompt({
     target,
-    rubric: loadReviewRubric(),
+    standard: options.architecture ? "architecture" : "review",
     // Strict: a reviewer silently missing its facts would review a different question.
     context: resolveExtraContext(cwd, options.context),
     focusText: options.focusText
@@ -539,7 +693,7 @@ No changes to review under ${target.label}.
   args.push("-");
   process.stderr.write(`Reviewing ${target.label} with codex exec review\u2026
 `);
-  const review = runCodexExec({
+  const review = await runCodexExec({
     args,
     cwd: repoRoot,
     input: prompt,
@@ -645,10 +799,10 @@ async function runSetup(options = {}) {
 }
 
 // src/lib/args.ts
-var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "json"]);
+var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "json", "architecture"]);
 var KNOWN_FLAGS = {
   setup: /* @__PURE__ */ new Set(["json"]),
-  review: /* @__PURE__ */ new Set(["base", "reasoning", "context"]),
+  review: /* @__PURE__ */ new Set(["base", "reasoning", "context", "architecture"]),
   ask: /* @__PURE__ */ new Set(["task", "reasoning", "context"])
 };
 function assertKnownFlags(command, flags) {
@@ -727,6 +881,7 @@ function flagRequiredString(flags, key) {
   const v = flags[key];
   if (v === void 0) return void 0;
   if (typeof v !== "string") throw new Error(`Flag --${key} requires a value.`);
+  if (v.trim() === "") throw new Error(`Flag --${key} requires a value; got an empty one.`);
   return v;
 }
 
@@ -737,7 +892,7 @@ function printUsage() {
       "Usage:",
       "  companion setup [--json]",
       "  companion review [--base <ref>] [--reasoning <low|medium|high|xhigh>]",
-      "                   [--context <text|@file|@->] [focus...]",
+      "                   [--context <text|@file|@->] [--architecture] [focus...]",
       '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
       "",
       "Commands:",
@@ -766,6 +921,7 @@ async function main() {
         base: flagRequiredString(flags, "base"),
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
         context: flagRequiredString(flags, "context"),
+        architecture: flags.architecture === true,
         focusText: args.join(" ")
       });
       break;

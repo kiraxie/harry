@@ -2,14 +2,18 @@
 
 The rubric a **CC reviewer subagent (dispatched at the §5 cap)** applies for per-task and whole-branch
 reviews (`skills/executing/SKILL.md`, subagent mode steps 3 and 6), and for Standard's
-single review (session mode step 4). This is also the rubric `/harry:review`
-embeds verbatim into its `codex exec review` prompt for step 6's Codex lane, so
-the two lanes judge by the same standard even though they run in isolated
-sessions. Hand the reviewer the acceptance criteria it judges — the task's brief
-for a per-task review, the item's `### Acceptance criteria` verbatim for a
-whole-branch pass — plus the report, the diff (as a file), and the item's
-Constraints verbatim when it has them. It reviews **read-only** — no
-working-tree, index, or HEAD mutation.
+single review (session mode step 4). This is also the rubric `dist/companion.cjs review`
+embeds verbatim into its `codex exec review` prompt (`src/lib/review-prompts.ts`), so
+the CC and Codex lanes judge by the same standard even though they run in isolated
+sessions. On the Codex build there is no CC reviewer subagent at all, so this
+embedded prompt is what binds that build's single review lane, at every review
+step `skills/executing/SKILL.md` calls, not only step 6's Codex lane. Hand the
+reviewer the acceptance criteria it judges — the task's brief for a per-task
+review, the item's `### Acceptance criteria` verbatim for a whole-branch pass
+or for session mode's single review — plus the diff (as a file) and the
+item's Constraints verbatim when it has them; a per-task review (subagent mode
+step 3) also hands the task's report — session mode has none to hand. It
+reviews **read-only** — no working-tree, index, or HEAD mutation.
 
 ## Four dimensions
 
@@ -92,7 +96,7 @@ never Critical. Acknowledge what was done well before listing issues.
 [each: file:line · what's wrong · why it matters · how to fix]
 
 ### Assessment
-Spec (one line per AC): AC-1 pass / fail / partial · evidence read
+Spec (one line per AC): AC-1 pass / fail / partial / superseded by AC-<m> · evidence read
                         AC-2 …
 Quality: Approved / Changes requested
 Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning

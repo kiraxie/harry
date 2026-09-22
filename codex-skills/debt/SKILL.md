@@ -5,6 +5,12 @@ description: Re-judge deferred decisions and open backlog items (DEBT markers, i
 
 # Debt
 
+**Plugin root.** Codex does not set `${CLAUDE_PLUGIN_ROOT}`, so resolve it before
+anything else: take the absolute path this `SKILL.md` was loaded from and cut the
+trailing `codex-skills/debt/SKILL.md` and the slash before it — what is left is the plugin root, the directory
+that holds `codex-skills/`, `dist/` and `references/`. Use that absolute path wherever
+`${CLAUDE_PLUGIN_ROOT}` appears below and in the files this skill points you to.
+
 The user may scope the scan to specific path(s); default is the whole repo.
 
 ## The procedure lives in a shared file

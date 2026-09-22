@@ -5,6 +5,12 @@ description: Ask a single frontier model one read-only prompt via harry's compan
 
 # Ask
 
+**Plugin root.** Codex does not set `${CLAUDE_PLUGIN_ROOT}`, so resolve it before
+anything else: take the absolute path this `SKILL.md` was loaded from and cut the
+trailing `codex-skills/ask/SKILL.md` and the slash before it — what is left is the plugin root, the directory
+that holds `codex-skills/`, `dist/` and `references/`. Use that absolute path wherever
+`${CLAUDE_PLUGIN_ROOT}` appears below and in the files this skill points you to.
+
 Ask one frontier model a single prompt through Codex and return its answer.
 Read-only — the model may read files and run read-only commands under Codex's
 own read-only sandbox, but it cannot write (the command itself writes only its
@@ -33,8 +39,9 @@ decides which one runs.
 - Failure signals: a non-zero exit, a `Fatal error: <message>` line on stderr
   (argument errors, before any run), or a `# Ask Failed` first line of stdout
   (followed by a reason line naming the cause — codex's last `ERROR:` line
-  when the log's end has one (capped at 1000 bytes), otherwise the companion's
-  own failure message) — when codex ran, stderr also carries only the error
+  when codex exited non-zero and the log's end has one (capped at 1000 bytes);
+  otherwise, including an exit-0 run that wrote no answer, the companion's own
+  failure message) — when codex ran, stderr also carries only the error
   lines from the end of codex's log — lines starting `ERROR:`, `Error:` or
   `error:`, each capped at 1000 bytes (or, when there is none, `No error line
   at the end of codex's log.`) — and then `Log: <path>`; a missing CLI, a bad

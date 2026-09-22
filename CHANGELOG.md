@@ -19,18 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read-only `opus` subagent reviews them, handed the shape list, the item's
   design and acceptance criteria, the branch diff, the last 20 commits
   touching the changed paths, and the whole repo to read. On the Codex build
-  the session applies the review itself and records that it was not
-  independent. The findings go to the user as one list, never to an automatic
+  it runs out of session through `review --architecture` (below), falling back
+  to an in-session review recorded as not independent only when that run
+  fails. The findings go to the user as one list, never to an automatic
   fixer, and each is ruled: **fix now** (a new AC naming the one it
   supersedes, if any, approved, then back to executing — the re-run re-checks
   only the shapes the fix changed), **backlog** (a new item quoting the
   finding), or **leave as is** (the user's reason recorded, never raised
-  again). There is no round cap. What the
-  reviewer judges lives in the new `references/architecture-review.md`: five
+  again). There is no round cap. What the reviewer judges lives in the new
+  `references/architecture-review.md`: five
   categories (API and interfaces, DB schema, boundaries, abstraction timing,
   system level), a pass one level up and a pass over recent history for drift,
   the unseen side of a boundary named rather than guessed, and line-level
   quality and tests left to the review rubric.
+
+- **`review --architecture`** embeds `references/architecture-review.md` in
+  place of `references/review-rubric.md` and scopes findings to the shapes the
+  change adds or alters, on the same read-only `codex exec review` run. The
+  Codex build's finishing step 2 uses it, handing the shape list, the item's
+  design and acceptance criteria, recent history and prior rulings through
+  `--context @<file>`, so that build's architecture review is independent too.
 
 ### Changed
 
@@ -102,7 +110,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Review's spec verdict is per AC** — pass/fail/partial with evidence per
   criterion, so subagent reports, review verdicts and progress notes all cite
   the same IDs. A finding that conflicts with an AC goes to the human beside
-  the AC text rather than being settled by an edit.
+  the AC text rather than being settled by an edit. An AC appended later may name one it
+  supersedes; the superseded AC keeps its text and is judged by its successor
+  (`superseded by AC-<m>` in the rubric's Assessment line, and in executing's
+  pre-flight).
 - **`brainstorming`** produces the AC at convergence and presents them in the
   User Review Gate together with the design and the residue manifest — one
   approval covers all three. It then runs a premise check at exit (base up to
@@ -177,8 +188,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   work to `gpt-5.6-luna` instead of `gpt-5.6-sol`, which a ChatGPT login
   rejects with a 400. Re-run `/sync` on the Codex build to pick it up.
 
+- **Finishing's cleanup and PR path, tightened.** The three rescue choices for
+  a worktree that refuses removal are separate sub-bullets; a rescue branch is
+  cut from `origin/<base>` after a fetch (a local base can be stale there) and
+  is named in the completion report and the quick-reference table; moving
+  files into the main checkout checks for name collisions first; ignored files
+  are listed to the user before removal, since `-uall` does not show them;
+  step f.3 names `f.1`/`f.2` instead of an ambiguous "step 2"; and Option 2's
+  In-flight annotation uses the main checkout's `.local/` from inside the
+  worktree. A commit answering PR feedback re-runs step 2's shape gate before
+  it is pushed, so a shape changed during PR iteration is reviewed too.
+- **Executing and the review rubric name their modes.** The round-4 cap names
+  subagent mode; step 6 hands the rubric itself, as step 3 does; steps 3 and 6
+  point at the Codex-build reviewer carve-out; the tmp dir's `mkdir -p` runs in
+  the steps that write there, not at every tier. The rubric's handoff list
+  covers session mode as well as subagent mode, and it states that on the Codex
+  build the rubric `review` embeds is what binds the single review lane.
+  `references/tier-gates.md`'s red-line gate names the Codex lane only where
+  the build has one.
+- **A unit that builds against another unit's unwritten interface is not
+  parallel with it.** `## Dispatch` gains no interfaces column; such a unit is
+  dispatched after the one it depends on lands.
+- **`/wait-what` keeps a question's recommended answer.** Re-asking a question
+  plainer restates the recommendation it carried (grilling has every question
+  carry one) rather than dropping it; it still never answers for the reader.
+- **Grilling's loop, defined.** A pass is one interview → design → re-interview
+  trip; termination condition 3 also fails when an answer moved the destination
+  after the most recent design pass; and the two scope tags are applied when a
+  line is deferred, so a folded-in expansion is not read back as a follow-up.
+- `references/plain-language.md` cites HARRY.md §6's carve-out instead of
+  restating it, splits its preamble, and its worked example now demonstrates one
+  layer per message. `references/sync-migration.md`'s step heading no longer
+  promises two questions when one is asked. `references/distilling.md` checks
+  `historical_sources` before adding a re-ported upstream, and
+  `references/upstream-sync.md` matches `upstream.json` on re-comparing a
+  retired upstream (on demand only).
+- **The eval runner refuses a stale or absent credential seed up front**, with
+  a pointer to `EVALS_ANTHROPIC_API_KEY`, instead of failing every run midway;
+  `evals/README.md` documents it.
+- **CI reads the pnpm version from `packageManager`** instead of a second copy
+  in the workflow, and a `windows-latest` job runs `tests/run-codex.test.ts`
+  — the Windows codex resolution and spawn-planning tests, against a fake
+  filesystem — on a real Windows host. The rest of the suite, and a real
+  `codex` install, do not run on Windows yet.
+
 ### Fixed
 
+- **A reviewed repository could run its own `./codex` or `./git`.** On
+  macOS/Linux the companion spawned both by bare name, and an empty or
+  relative `PATH` entry (`:/usr/bin`, `/usr/bin:`, `a::b`, `.`) makes the OS
+  search the current directory — the repository under review. Both are now
+  resolved to an absolute path from absolute `PATH` entries only; an unset
+  `PATH` counts as not found.
 - **A failed `review` or `ask` run no longer prints codex's session
   transcript.** codex's log can hold the output of commands codex ran and the
   contents of files it read (a `.env`, say), and stderr is usually read back
@@ -187,8 +248,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   start of the line), or `No error line at the end of codex's log.` when there
   is none. The full transcript stays on disk at the reported `Log: <path>` for
   a human to read. `ask`'s `# Ask Failed` reason line is codex's last `ERROR:`
-  line when the log's end has one, otherwise the companion's own failure
-  message.
+  line when codex exits non-zero and the log's end has one; otherwise (including
+  an exit-0 run that wrote no answer) it is the companion's own failure message.
 - Every error line a failure prints — on stderr, or as `ask`'s reason line —
   is capped at 1000 bytes, ending in `…[truncated]` when cut, so one runaway
   line can't flood the caller either. Control characters (other than tab) are
@@ -205,6 +266,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `EPIPE` from codex exiting before it read its prompt (the CLI rejecting
   its own arguments) is now reported as an ordinary exit failure with codex's
   error line, instead of surfacing the bare `EPIPE`.
+
+- **The Codex build's skill commands ran `/dist/companion.cjs`.** Codex does
+  not set `${CLAUDE_PLUGIN_ROOT}` in a skill's shell, so every command in
+  `codex-skills/` resolved against `/`. Each skill now derives the plugin root
+  from its own path first; `ask` and `review` were run end to end in a live
+  Codex session.
+- `review --base ""` / `--context ""` (for example an unset variable) is
+  rejected instead of silently reviewing a different target or dropping the
+  context; `ask --context ""` is rejected the same way.
+- Killing the companion (SIGTERM, SIGINT or SIGHUP — a tool timeout, say) now
+  stops the `codex` run it started instead of leaving it running.
+- A failed run whose output file cannot be narrowed to owner-only reports
+  codex's own failure and `Log:` line first, then the narrowing error, instead
+  of replacing the cause.
+- On Windows, only `.com`/`.exe` (and the existing `.cmd`/`.bat` shim path)
+  PATHEXT hits are spawned; a `codex.js`/`.vbs`/`.ps1` earlier in PATH is
+  skipped.
+- `ask`'s run files older than 7 days are pruned on each run, so the state
+  directory no longer grows without bound.
 
 ### Removed
 

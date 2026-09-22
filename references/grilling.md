@@ -52,13 +52,17 @@ When an answer moves the boundary, classify it **on the spot** using HARRY.md §
 related test — shared root cause / shared systemic gap / the main change is incomplete
 without it:
 
-- **Inside the destination** (deferred-in-scope) → it is the complete version of the
-  same problem. Propose folding it in; still confirm before you expand.
-- **Outside the destination** (destination-outside) → capture it as one line for a
-  backlog item. It does not occupy this session.
+- **Inside the destination** → it is the complete version of the same problem.
+  Propose folding it in; on confirmation it joins the session outright and carries
+  no tag — it was never deferred. Declined, it is deferred and tagged
+  deferred-in-scope.
+- **Outside the destination** → it does not occupy this session; capture it as one
+  deferred line, tagged destination-outside.
 
-Scope accounting is the **agent's** job. The user answers freely and must never need to
-self-censor for fear of silent expansion.
+Either tag is applied at the moment a line is deferred, not at the moment it is
+raised — the tags name what got set aside, not what got proposed. Scope accounting
+is the **agent's** job. The user answers freely and must never need to self-censor
+for fear of silent expansion.
 
 ## Cadence: one question per round
 
@@ -121,13 +125,15 @@ own step (see Callers), not this ledger writing itself out.
 
 ## The loop and its close
 
-The session is a loop: **interview → design → re-interview.** A design pass surfaces
-gaps the interview missed — an underspecified interface, a case the design forces a
-choice on — and each gap sends the session back into the interview before the design
-continues. This is not a fallback path; it is how the loop is expected to run. A
-non-code session, or one settled before any design pass runs, still owes all three
-conditions below — condition 3 is trivially satisfied when no pass has run to move the
-destination in the first place.
+The session is a loop: **interview → design → re-interview.** One **pass** is one
+trip around that loop — one interview, one design attempt, one re-interview on what
+the design surfaced. A design pass surfaces gaps the interview missed — an
+underspecified interface, a case the design forces a choice on — and each gap sends
+the session back into the interview before the design continues. This is not a
+fallback path; it is how the loop is expected to run. A non-code session, or one
+settled before any design pass runs, still owes all three conditions below —
+condition 3 is trivially satisfied when no pass has run to move the destination in
+the first place.
 
 **All three termination conditions must hold before the loop exits:**
 
@@ -135,9 +141,12 @@ destination in the first place.
    answered, or by being moved to Deferred.
 2. **Every silent assumption has a disposition** — every entry on the assumptions list
    carries one of the three dispositions below, not merely a written-down statement.
-3. **The destination did not move during the most recent pass** — a pass that moved it
-   sends the session back into the interview on the new destination before the loop
-   may exit; a session that has run no pass satisfies this trivially.
+3. **The destination did not move during the most recent pass, nor after it** — a pass
+   that moved it sends the session back into the interview on the new destination
+   before the loop may exit; an answer that moved it after the most recent design pass
+   ran leaves that design measured against the old destination, so one more pass runs
+   on the new one before the loop may exit. A session that has run no pass satisfies
+   this trivially.
 
 ### Assumption gate
 

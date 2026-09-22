@@ -105,7 +105,9 @@ The boundary is one question: **does a derived file exist in harry?** A pin plus
 nothing to track.
 
 - **Ports exist** (made before this session — e.g. backfilling an untracked
-  influence): add the repo to
+  influence): first check `upstream.json` `historical_sources` — a retired upstream
+  being re-ported moves back to `sources` rather than getting a second, duplicate
+  entry there. Otherwise add the repo to
   `upstream.json` `sources` (repo URL, version, full SHA, date) plus one `derived[]`
   entry per derived area, with `from` paths literal per step 4 and a `note` naming
   harry's deviations — the note is what protects the NEXT survey (step 3). Add the

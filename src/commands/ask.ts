@@ -19,9 +19,9 @@ import {
   CodexRunError,
   lastErrorLine,
   type ReasoningEffort,
-  reserveRunFiles,
   runCodexExec,
 } from "../lib/run-codex.ts";
+import { pruneRunFiles, reserveRunFiles } from "../lib/run-files.ts";
 import { ensureDir, resolveStateDir } from "../lib/state.ts";
 
 export interface AskOptions {
@@ -32,6 +32,12 @@ export interface AskOptions {
 }
 
 const ASK_FAILED_MARKER = "# Ask Failed";
+
+/** The run-file prefix under `asks/`: `ask-<YYYYMMDD-HHMMSS>[-N].md` and `.log`. */
+const ASK_PREFIX = "ask";
+
+/** How long an ask's answer and log are kept before a later ask prunes them. */
+const ASK_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Opens every ask prompt. `codex exec` is an agentic coding harness running in
@@ -70,13 +76,12 @@ async function ask(cwd: string, options: AskOptions): Promise<void> {
   // Strict: a model silently missing its facts would answer a different question.
   const context = resolveExtraContext(cwd, options.context);
 
-  // DEBT: asks/ grows without bound — every run leaves an answer .md and a
-  // transcript .log (up to ~1 MB) and nothing prunes them. Ceiling: file count /
-  // total size of one workspace's asks/. Upgrade path: prune oldest-first by age
-  // or count on write, once a workspace's asks/ gets large enough to notice.
+  // Every run leaves an answer .md and a transcript .log (up to ~1 MB); runs
+  // older than a week are pruned first so asks/ does not grow without bound.
   const dir = join(resolveStateDir(cwd), "asks");
   ensureDir(dir);
-  const { outputPath, logPath } = reserveRunFiles(dir, "ask");
+  pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
+  const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
 
   const args = [
     "exec",
@@ -90,7 +95,7 @@ async function ask(cwd: string, options: AskOptions): Promise<void> {
   if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
   args.push("-");
 
-  const answer = runCodexExec({
+  const answer = await runCodexExec({
     args,
     cwd,
     input: buildAskPrompt(prompt, context),

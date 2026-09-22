@@ -116,6 +116,7 @@ export function prepareConditionDir(
   root?: string,
   env?: Record<string, string | undefined>,
 ): string;
+export function checkCredentialSeed(env?: Record<string, string | undefined>): void;
 export function materializeFixture(
   name: string,
   root?: string,

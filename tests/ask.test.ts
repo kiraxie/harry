@@ -22,6 +22,7 @@ import test from "node:test";
 
 import { ASK_PREAMBLE } from "../src/commands/ask.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
+import { pruneRunFiles, reserveRunFiles } from "../src/lib/run-files.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -216,10 +217,12 @@ function runAsk(
     systemPath?: boolean;
     input?: string;
     permissiveUmask?: boolean;
+    /** Reuse a plugin data dir, so runs from one cwd share one `asks/`. */
+    dataDir?: string;
   } = {},
 ): Run {
   const record = makeTempDir("harry-ask-record-");
-  const dataDir = makeTempDir("harry-ask-data-");
+  const dataDir = opts.dataDir ?? makeTempDir("harry-ask-data-");
   const cwd = opts.cwd ?? makeTempDir("harry-ask-cwd-");
   const bin = opts.bin === undefined ? makeBin() : opts.bin;
   const basePath =
@@ -317,6 +320,25 @@ test("ask --context with no value errors naming the flag", () => {
     run.stderr,
   );
   assert.ok(!spawned(run));
+});
+
+test("ask --context with an empty value errors naming the flag instead of dropping it", () => {
+  for (const args of [
+    ["hello", "--context", ""],
+    ["hello", "--context", "  "],
+    ["hello", "--context="],
+  ]) {
+    const run = runAsk(args);
+    assert.notEqual(run.status, 0, JSON.stringify(args));
+    assert.ok(
+      run.stderr.includes(
+        `${FATAL_ERROR_PREFIX} Flag --context requires a value; got an empty one`,
+      ),
+      `${JSON.stringify(args)}: ${run.stderr}`,
+    );
+    assert.equal(run.stdout, "", "an argument error prints nothing on stdout");
+    assert.ok(!spawned(run), JSON.stringify(args));
+  }
 });
 
 test("ask with an empty prompt fails and never spawns codex", () => {
@@ -418,6 +440,93 @@ test("ask with --context @- and nothing on stdin fails naming stdin and never sp
   const run = runAsk(["q", "--context", "@-"], { input: "" });
   assertFailedStdout(run, /--context .*stdin/);
   assert.ok(!spawned(run), "codex must not be spawned");
+});
+
+// ─── pruning asks/ ──────────────────────────────────────────────────────────
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Set a path's atime and mtime to `ageMs` before now. */
+function age(p: string, ageMs: number): void {
+  const t = new Date(Date.now() - ageMs);
+  fs.utimesSync(p, t, t);
+}
+
+test("ask prunes its own run files older than 7 days before writing, and nothing else", () => {
+  const first = runAsk(["first"]);
+  assert.equal(first.status, 0, first.stderr);
+  const asks = path.dirname(logPathOf(first));
+  assert.equal(path.basename(asks), "asks");
+  age(answerPathOf(first), 8 * DAY_MS);
+  age(logPathOf(first), 8 * DAY_MS);
+
+  // Named by reserveRunFiles itself, so a change to the run-file name that
+  // pruning does not follow fails here rather than silently pruning nothing.
+  // Each call claims a stem; its placeholder log is removed so only the files
+  // written below exist.
+  const names = (prefix: string, day: number): { md: string; log: string } => {
+    const r = reserveRunFiles(asks, prefix, new Date(2020, 0, day));
+    fs.rmSync(r.logPath);
+    return { md: path.basename(r.outputPath), log: path.basename(r.logPath) };
+  };
+  const jan1 = names("ask", 1);
+  const stale = [jan1.md, jan1.log];
+  const justStale = names("ask", 2).md;
+  const fresh = names("ask", 3).log;
+  const dirEntry = names("ask", 4).md;
+  // Not harry's run files, or not old enough: all survive.
+  const foreign = ["notes.md", "ask-notes.md", names("codex-review", 1).md, "ask-20200101.md"];
+  for (const f of [...stale, justStale, ...foreign, fresh]) {
+    fs.writeFileSync(path.join(asks, f), "x\n");
+  }
+  // A -N suffixed stem: reserved while the first stem is taken.
+  const suffixed = path.basename(reserveRunFiles(asks, "ask", new Date(2020, 0, 1)).outputPath);
+  assert.match(suffixed, /-2\.md$/);
+  fs.writeFileSync(path.join(asks, suffixed), "x\n");
+  stale.push(suffixed, suffixed.replace(/\.md$/, ".log"));
+  fs.mkdirSync(path.join(asks, dirEntry));
+  for (const f of [...stale, ...foreign, dirEntry]) age(path.join(asks, f), 30 * DAY_MS);
+  age(path.join(asks, justStale), 7 * DAY_MS + 60_000);
+  age(path.join(asks, fresh), 7 * DAY_MS - 60_000);
+
+  const second = runAsk(["second"], { cwd: first.cwd, dataDir: first.dataDir });
+  assert.equal(second.status, 0, second.stderr);
+  const left = new Set(fs.readdirSync(asks));
+  for (const f of stale) assert.ok(!left.has(f), `${f} is older than 7 days and must be pruned`);
+  assert.ok(!left.has(justStale), `${justStale} is older than 7 days and must be pruned`);
+  // The second run may reuse the first run's stem (same second, once it is pruned),
+  // so the first run's files are gone when their names are absent or hold a fresh file.
+  for (const f of [answerPathOf(first), logPathOf(first)]) {
+    const mtime = fs.statSync(f, { throwIfNoEntry: false })?.mtimeMs;
+    assert.ok(
+      mtime === undefined || Date.now() - mtime < DAY_MS,
+      `${f} is older than 7 days and must be pruned`,
+    );
+  }
+  for (const f of [...foreign, fresh, dirEntry]) assert.ok(left.has(f), `${f} must survive`);
+  assert.ok(left.has(path.basename(answerPathOf(second))), "this run's answer must survive");
+  assert.ok(left.has(path.basename(logPathOf(second))), "this run's log must survive");
+});
+
+test("pruneRunFiles never throws: a missing dir or an entry it cannot remove is skipped", {
+  skip: process.platform === "win32",
+}, () => {
+  const missing = path.join(makeTempDir("harry-ask-prune-"), "nope");
+  assert.doesNotThrow(() => pruneRunFiles(missing, "ask", 7 * DAY_MS));
+
+  const dir = makeTempDir("harry-ask-prune-");
+  const reserved = reserveRunFiles(dir, "ask", new Date(2020, 0, 1));
+  fs.rmSync(reserved.logPath);
+  const old = reserved.outputPath;
+  fs.writeFileSync(old, "x\n");
+  age(old, 30 * DAY_MS);
+  fs.chmodSync(dir, 0o500); // entries can be listed and stat'ed, not removed
+  try {
+    assert.doesNotThrow(() => pruneRunFiles(dir, "ask", 7 * DAY_MS));
+  } finally {
+    fs.chmodSync(dir, 0o700);
+  }
+  assert.ok(fs.existsSync(old), "the unremovable entry is left in place");
 });
 
 // ─── where the answer lands ─────────────────────────────────────────────────
@@ -634,9 +743,13 @@ test("ask with codex missing from PATH fails naming the Codex CLI and leaves no 
 test("ask with a codex that cannot be executed (EACCES) fails loudly and leaves no empty log", {
   skip: process.platform === "win32",
 }, () => {
-  // The only `codex` on PATH is not executable, so the spawn itself fails.
+  // The only `codex` on PATH is executable, so it resolves, but its `#!`
+  // interpreter is not: the spawn itself fails with EACCES. (A non-executable
+  // `codex` is never resolved at all — it reports as missing.)
   const bin = makeTempDir("harry-ask-bin-");
-  fs.writeFileSync(path.join(bin, "codex"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+  const interp = path.join(bin, "interp");
+  fs.writeFileSync(interp, "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+  fs.writeFileSync(path.join(bin, "codex"), `#!${interp}\nexit 0\n`, { mode: 0o755 });
   const run = runAsk(["hello"], { bin, systemPath: true });
   assertFailedStdout(run, /EACCES/);
   const leftovers = fs

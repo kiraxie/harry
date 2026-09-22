@@ -11,6 +11,8 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
+import { spawnTarget } from "./path-search.ts";
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
@@ -25,8 +27,12 @@ const FALLBACK_STATE_ROOT = join(tmpdir(), "harry");
  * invoked at the repo root pointed at the SAME state dir.
  */
 function repoRootOf(cwd: string): string {
+  // Resolved first, never spawned by bare name: cwd may be an untrusted repo
+  // (see path-search.ts). No git on PATH takes the same fallback as a failed run.
+  const git = spawnTarget("git");
+  if (git === null) return resolve(cwd);
   try {
-    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+    const root = execFileSync(git, ["rev-parse", "--show-toplevel"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"],

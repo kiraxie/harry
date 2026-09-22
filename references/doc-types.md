@@ -53,6 +53,10 @@ unit:
 
 `Lands` is `first` or `last`; a cross-unit contract test lands last.
 
+There is no interfaces column on purpose: a unit that must build against a
+signature or contract another unit has not written yet is not parallel with it.
+Dispatch it after that unit lands, and read the interface from the landed code.
+
 `## Progress` is append-only and cites AC IDs and commit ranges. Approved AC
 text is never edited to record progress — progress goes here instead.
 

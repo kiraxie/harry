@@ -1,29 +1,25 @@
 /**
- * The one place the companion spawns the Codex CLI (`spawnCodexSync`, also used by
- * `setup`), and the one-shot run
- * (`codex exec …`, `codex exec review …`).
+ * The one place the companion spawns the Codex CLI: spawn planning
+ * (`codexSpawn` — the resolved path, or a cmd.exe line for npm's `.cmd` shim),
+ * `spawnCodexSync` for `setup`'s quick queries, `spawnCodex` for the one-shot
+ * run (`codex exec …`, `codex exec review …`) with signal forwarding, and
+ * `runCodexExec`'s failure handling. Finding `codex` on PATH lives in
+ * `path-search.ts`; the run files it writes into live in `run-files.ts`.
  *
- * Every run gets its own output file plus a `.log` beside it. codex writes its
- * whole session transcript to stderr (prompt echo, every command's output) —
- * hundreds of KB on a real run — so stderr goes to the log, never to the
- * caller; a failure prints only the error lines of the log's tail, where codex
- * puts its `ERROR:` line, and names the log.
+ * codex writes its whole session transcript to stderr (prompt echo, every
+ * command's output) — hundreds of KB on a real run — so stderr goes to the run's
+ * log, never to the caller; a failure prints only the error lines of the log's
+ * tail, where codex puts its `ERROR:` line, and names the log.
  *
  * No fallback anywhere: a missing CLI, a non-zero exit, or an absent/empty
  * output file each throw.
  */
 
-import { type SpawnSyncOptions, type SpawnSyncReturns, spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  closeSync,
-  existsSync,
-  openSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from "node:fs";
-import { join, win32 } from "node:path";
+import { type SpawnSyncOptions, type SpawnSyncReturns, spawn, spawnSync } from "node:child_process";
+import { closeSync, existsSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
+
+import { notFoundError, resolveCodex, winSpawnMode } from "./path-search.ts";
+import { narrowOutput } from "./run-files.ts";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
@@ -53,42 +49,10 @@ function quoteWindowsArg(arg: string): string {
   return crt.replace(CMD_META_RE, "^$1").replace(CMD_META_RE, "^$1");
 }
 
-/** A Windows env lookup: variable names are case-insensitive there (`Path`, `PATH`). */
-function winEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
-  const key = Object.keys(env).find((k) => k.toUpperCase() === name);
-  return key === undefined ? undefined : env[key];
-}
-
 /**
- * What to spawn for `codex`. Off Windows: `codex`, left to the OS's PATH search.
- * On Windows: the first `<PATH entry>\codex<PATHEXT ext>` that exists, in PATH
- * order then PATHEXT order (default `.COM;.EXE;.BAT;.CMD`), or null when there is
- * none. The current directory is not searched.
- */
-export function resolveCodex(
-  env: NodeJS.ProcessEnv,
-  platform: NodeJS.Platform,
-  exists: (path: string) => boolean,
-): string | null {
-  if (platform !== "win32") return "codex";
-  const split = (v: string): string[] =>
-    v
-      .split(";")
-      .map((s) => s.trim().replace(/^"(.*)"$/, "$1"))
-      .filter((s) => s !== "");
-  const exts = split(winEnv(env, "PATHEXT") || ".COM;.EXE;.BAT;.CMD");
-  for (const dir of split(winEnv(env, "PATH") ?? "")) {
-    for (const ext of exts) {
-      const candidate = win32.join(dir, `codex${ext}`);
-      if (exists(candidate)) return candidate;
-    }
-  }
-  return null;
-}
-
-/**
- * How to spawn `codex` with `args` on `platform`, or null when Windows has no
- * `codex` on PATH. Off Windows: the binary directly. On Windows the resolved
+ * How to spawn `codex` with `args` on `platform`, or null when {@link resolveCodex}
+ * finds no `codex` on PATH. Off Windows: the resolved absolute path directly,
+ * never the bare name (execvp would search the cwd). On Windows the resolved
  * file decides: a native executable (`codex.exe`) is spawned directly with its
  * argv untouched; a `.cmd`/`.bat` shim (npm's `codex.cmd`), which Node cannot
  * spawn without a shell, becomes one cmd.exe command line — the shim path
@@ -108,11 +72,11 @@ export function codexSpawn(
   args: readonly string[],
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
-  exists: (path: string) => boolean = existsSync,
+  exists?: (path: string) => boolean,
 ): CodexSpawn | null {
   const command = resolveCodex(env, platform, exists);
   if (command === null) return null;
-  if (platform !== "win32" || !/\.(cmd|bat)$/i.test(command)) {
+  if (platform !== "win32" || winSpawnMode(command) !== "cmd") {
     return { command, args: [...args], shell: false };
   }
   const line = [command.replace(CMD_META_RE, "^$1"), ...args.map(quoteWindowsArg)].join(" ");
@@ -121,7 +85,8 @@ export function codexSpawn(
 
 /**
  * Whether a spawn result means codex is not installed: ENOENT, which
- * {@link spawnCodexSync} also reports when Windows resolves no `codex`. A cmd.exe
+ * {@link spawnCodex} and {@link spawnCodexSync} also report when {@link resolveCodex}
+ * finds no `codex`. A cmd.exe
  * exit 9009 is deliberately not one — the shim was resolved first, so 9009 means
  * something the shim runs (e.g. `node`) is missing, and the log names it.
  */
@@ -129,21 +94,115 @@ export function codexMissing(res: { error?: Error; status: number | null }): boo
   return (res.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 }
 
-/** `spawnSync` for codex, through {@link codexSpawn} — the one place either command spawns it. */
+/** The ENOENT a spawn reports when {@link resolveCodex} finds no `codex` (see {@link codexMissing}). */
+function codexNotFound(syscall: string): Error {
+  return notFoundError(syscall, "codex");
+}
+
+/**
+ * `spawnSync` for codex, through {@link codexSpawn}: `setup`'s short queries.
+ * A long run goes through {@link spawnCodex}, which a signal can interrupt.
+ */
 export function spawnCodexSync(
   args: readonly string[],
   options: Omit<SpawnSyncOptions, "shell">,
 ): SpawnSyncReturns<string | Buffer> {
   const spec = codexSpawn(args, process.platform, options.env ?? process.env);
   if (spec === null) {
-    const error = Object.assign(new Error("spawnSync codex ENOENT"), {
-      code: "ENOENT",
-      syscall: "spawnSync codex",
-      path: "codex",
-    });
+    const error = codexNotFound("spawnSync codex");
     return { pid: 0, output: [], stdout: "", stderr: "", status: null, signal: null, error };
   }
   return spawnSync(spec.command, spec.args, { ...options, shell: spec.shell, windowsHide: true });
+}
+
+/** How a {@link spawnCodex} run ended, in `spawnSync`'s terms. */
+export interface CodexResult {
+  /** The exit code; null when codex never started or was killed by a signal. */
+  status: number | null;
+  signal: NodeJS.Signals | null;
+  /** A spawn error (codex never started), else a stdin write error such as EPIPE. */
+  error?: Error;
+}
+
+/**
+ * The termination signals a companion passes on to its running codex on
+ * `platform`. SIGHUP only off Windows: there `ChildProcess.kill` can throw
+ * (ENOSYS) for a signal other than SIGTERM, SIGINT, SIGKILL and SIGQUIT — per
+ * Node's docs and libuv, not verified on a Windows host.
+ */
+export function forwardedSignals(platform: NodeJS.Platform): NodeJS.Signals[] {
+  return platform === "win32" ? ["SIGTERM", "SIGINT"] : ["SIGTERM", "SIGINT", "SIGHUP"];
+}
+
+/**
+ * Run codex through {@link codexSpawn} with `input` on stdin, stdout ignored and
+ * stderr to `logFd`, and resolve once it has exited. Asynchronous, unlike
+ * `spawnSync`, so the companion can act on a signal while codex runs: a
+ * SIGTERM, SIGINT or SIGHUP (a Bash tool timeout; SIGHUP off Windows only, see
+ * {@link forwardedSignals}) is sent on to codex, and then re-raised on the
+ * companion, which dies by it as it would unhandled — even when the send fails.
+ *
+ * DEBT: the signal reaches codex's own pid only. The real codex CLI (an npm
+ * node launcher) forwards it to its native binary itself, but anything codex
+ * leaves running outside that chain survives, and on Windows killing the
+ * cmd.exe that runs a `codex.cmd` shim does not reach the node behind it.
+ * Upgrade path: spawn codex as its own process group and signal the group
+ * (POSIX), or a job object (Windows) — at the cost of taking codex out of the
+ * terminal's foreground group, so Ctrl-C would reach it only through us.
+ */
+export function spawnCodex(
+  args: readonly string[],
+  options: { cwd: string; input: string; logFd: number; env?: NodeJS.ProcessEnv },
+): Promise<CodexResult> {
+  const spec = codexSpawn(args, process.platform, options.env ?? process.env);
+  if (spec === null) {
+    return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
+  }
+  return new Promise((resolve) => {
+    const child = spawn(spec.command, spec.args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["pipe", "ignore", options.logFd],
+      shell: spec.shell,
+      windowsHide: true,
+    });
+    const signals = forwardedSignals(process.platform);
+    const forward = (signal: NodeJS.Signals): void => {
+      try {
+        child.kill(signal);
+      } catch {
+        // Undeliverable here: codex is left running, but the companion must still
+        // die by the signal rather than by an uncaught exception in this handler.
+      }
+      stopForwarding();
+      // No listener is left, so the default action applies: the companion dies by it.
+      process.kill(process.pid, signal);
+    };
+    const stopForwarding = (): void => {
+      for (const s of signals) process.off(s, forward);
+    };
+    for (const s of signals) process.on(s, forward);
+
+    let spawnError: Error | undefined;
+    let stdinError: Error | undefined;
+    child.on("error", (err) => {
+      spawnError ??= err;
+    });
+    // A codex exiting before it reads its prompt makes this write fail (EPIPE).
+    child.stdin?.on("error", (err) => {
+      stdinError ??= err;
+    });
+    child.stdin?.end(options.input);
+    // `close` follows a spawn error too, and comes after stdin's own error.
+    child.on("close", (code, signal) => {
+      stopForwarding();
+      resolve({
+        status: spawnError ? null : code,
+        signal,
+        error: spawnError ?? stdinError,
+      });
+    });
+  });
 }
 
 /** How much of codex's log a failure prints — enough to carry its closing `ERROR:` line. */
@@ -154,43 +213,6 @@ const FAILURE_TAIL_LINES = 40;
  * The doors quote it verbatim, so it names no tail size that could drift.
  */
 export const NO_ERROR_LINE = "No error line at the end of codex's log.";
-
-function timestamp(now: Date): string {
-  const p = (n: number): string => String(n).padStart(2, "0");
-  return (
-    `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-` +
-    `${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`
-  );
-}
-
-/**
- * One output file per run: `<prefix>-<YYYYMMDD-HHMMSS>[-N].md` plus the
- * matching `.log`, so a re-run never clobbers an earlier one and a failed run
- * can never print an older output. A stem is taken when either file exists; the
- * log is created exclusively (`wx`, mode 0600) to claim the stem against a
- * concurrent run.
- */
-export function reserveRunFiles(
-  dir: string,
-  prefix: string,
-  now: Date = new Date(),
-): { outputPath: string; logPath: string } {
-  const base = `${prefix}-${timestamp(now)}`;
-  for (let n = 1; ; n++) {
-    const stem = join(dir, n === 1 ? base : `${base}-${n}`);
-    const outputPath = `${stem}.md`;
-    const logPath = `${stem}.log`;
-    if (existsSync(outputPath)) continue;
-    try {
-      // Owner-only: the log is codex's transcript, which echoes files the model read.
-      closeSync(openSync(logPath, "wx", 0o600));
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "EEXIST") continue;
-      throw err;
-    }
-    return { outputPath, logPath };
-  }
-}
 
 /** Why a codex run failed. `missing`: never started (its log is removed). */
 export type CodexFailureKind = "missing" | "exit" | "empty";
@@ -330,17 +352,13 @@ export interface CodexExecInput {
  * stderr when the {@link CodexRunError} is thrown. Any other spawn error is
  * rethrown as is, after the same report when codex wrote to its log.
  */
-export function runCodexExec(opts: CodexExecInput): string {
+export async function runCodexExec(opts: CodexExecInput): Promise<string> {
   // stdout is ignored: codex echoes its final message there, and the output is
   // read from the -o file instead.
   const logFd = openSync(opts.logPath, "w", 0o600);
-  let res: SpawnSyncReturns<string | Buffer>;
+  let res: CodexResult;
   try {
-    res = spawnCodexSync(opts.args, {
-      cwd: opts.cwd,
-      input: opts.input,
-      stdio: ["pipe", "ignore", logFd],
-    });
+    res = await spawnCodex(opts.args, { cwd: opts.cwd, input: opts.input, logFd });
   } finally {
     closeSync(logFd);
   }
@@ -349,16 +367,17 @@ export function runCodexExec(opts: CodexExecInput): string {
     rmSync(opts.logPath, { force: true });
     throw new CodexRunError(CODEX_CLI_MISSING, "missing");
   }
-  narrowOutput(opts.outputPath);
   // A codex that ran and exited non-zero failed on its own terms: an EPIPE from
   // it exiting before reading its prompt (clap rejecting argv) is only a symptom,
   // so that case takes the exit path below, where its error line is reported.
   if (res.error && (res.status === null || res.status === 0)) {
     reportSpawnErrorLog(opts.logPath);
+    reportNarrowFailure(opts.outputPath);
     throw res.error;
   }
   if (res.status !== 0) {
     reportLogTail(opts.logPath);
+    reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
       `${opts.label} failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
       "exit",
@@ -369,24 +388,29 @@ export function runCodexExec(opts: CodexExecInput): string {
   const output = existsSync(opts.outputPath) ? readFileSync(opts.outputPath, "utf8") : "";
   if (!output.trim()) {
     reportLogTail(opts.logPath);
+    reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
       `${opts.label} exited 0 but wrote no ${opts.outputNoun} to ${opts.outputPath}.`,
       "empty",
       { logPath: opts.logPath },
     );
   }
+  // Loud: a run whose output may stay readable by others does not succeed.
+  narrowOutput(opts.outputPath);
   return output;
 }
 
 /**
- * Narrow the `-o` file to owner-only (0600) once codex has run, whether the run
- * succeeded or not: codex creates it with its own umask, and it can quote files
- * the model read. No file (codex never wrote one) is not an error.
+ * {@link narrowOutput} for a failed run, after its codex failure is reported: a
+ * narrow error is printed in addition, since the file may be readable by others,
+ * and never replaces the codex failure the caller throws next.
  */
-function narrowOutput(outputPath: string): void {
+function reportNarrowFailure(outputPath: string): void {
   try {
-    chmodSync(outputPath, 0o600);
+    narrowOutput(outputPath);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    process.stderr.write(
+      `Could not narrow ${outputPath} to owner-only (0600): ${(err as Error).message}\n`,
+    );
   }
 }

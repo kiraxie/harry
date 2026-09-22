@@ -13,7 +13,7 @@ export interface ParsedArgs {
 // Flags that never take a value. Without this set, a positional like
 // `--json extra` would bind "extra" to --json (string, not boolean) and
 // silently disable strict `=== true` checks downstream.
-export const BOOLEAN_FLAGS = new Set<string>(["help", "json"]);
+export const BOOLEAN_FLAGS = new Set<string>(["help", "json", "architecture"]);
 
 // Allowed flag keys per command. An unrecognized `--flag` errors loudly instead
 // of being silently swallowed — a typo, or a flag `review` no longer takes
@@ -21,7 +21,7 @@ export const BOOLEAN_FLAGS = new Set<string>(["help", "json"]);
 // review. `help` is accepted everywhere and handled before dispatch.
 export const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
   setup: new Set(["json"]),
-  review: new Set(["base", "reasoning", "context"]),
+  review: new Set(["base", "reasoning", "context", "architecture"]),
   ask: new Set(["task", "reasoning", "context"]),
 };
 
@@ -121,8 +121,9 @@ export function extractTask(args: string[], flags: Record<string, string | boole
 /**
  * A `--key <value>` string flag that must carry its value when present:
  * undefined when absent, and an error naming the flag when it was given bare
- * (`--base --reasoning high` parses `base` as `true`), rather than silently
- * reading as absent.
+ * (`--base --reasoning high` parses `base` as `true`) or with an empty or
+ * whitespace-only value (`--base "$UNSET"`, `--base=`), rather than silently
+ * reading as absent — an absent `--base` reviews a different target.
  */
 export function flagRequiredString(
   flags: Record<string, string | boolean>,
@@ -131,5 +132,6 @@ export function flagRequiredString(
   const v = flags[key];
   if (v === undefined) return undefined;
   if (typeof v !== "string") throw new Error(`Flag --${key} requires a value.`);
+  if (v.trim() === "") throw new Error(`Flag --${key} requires a value; got an empty one.`);
   return v;
 }

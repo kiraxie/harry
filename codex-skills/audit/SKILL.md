@@ -5,6 +5,12 @@ description: Whole-codebase structure & architecture-fitness audit — a six-rou
 
 # Audit
 
+**Plugin root.** Codex does not set `${CLAUDE_PLUGIN_ROOT}`, so resolve it before
+anything else: take the absolute path this `SKILL.md` was loaded from and cut the
+trailing `codex-skills/audit/SKILL.md` and the slash before it — what is left is the plugin root, the directory
+that holds `codex-skills/`, `dist/` and `references/`. Use that absolute path wherever
+`${CLAUDE_PLUGIN_ROOT}` appears below and in the files this skill points you to.
+
 Trigger this skill when the user asks to audit a codebase's design / architecture /
 maintainability, review structure across many files, find technical debt or
 duplicated-but-drifted logic that should be shared, check whether the code matches
