@@ -567,7 +567,7 @@ var package_default = {
   engines: {
     node: ">=26.0.0"
   },
-  packageManager: "pnpm@10.33.0",
+  packageManager: "pnpm@12.5.1",
   scripts: {
     build: "node build.mjs",
     test: "node --test",
@@ -581,9 +581,9 @@ var package_default = {
   },
   dependencies: {},
   devDependencies: {
-    "@biomejs/biome": "^2.5.1",
-    "@types/node": "^26.0.1",
-    esbuild: "^0.28.1",
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^26.6.2",
+    esbuild: "^0.28.2",
     typescript: "^7.0.2"
   }
 };
