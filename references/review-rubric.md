@@ -15,7 +15,10 @@ working-tree, index, or HEAD mutation.
 
 1. **Spec compliance** (primary). Does the diff satisfy the acceptance criteria
    it was given — no more, no less? Judge **per AC**: pass / fail / partial, each
-   with the evidence you read. Flag unmet criteria AND unrequested extras
+   with the evidence you read. An AC that a later AC supersedes is judged by
+   its successor, not on its own (`references/doc-types.md`): its line reads
+   `superseded by AC-<m>`, never `fail`, and only the successor's verdict
+   counts. Flag unmet criteria AND unrequested extras
    ("Extra: added `--json`, not in any AC"). Any AC not `pass` means the task is
    not done, however clean the code. This is the dimension frontier reviewers
    under-weight and the one worth keeping.

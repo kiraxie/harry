@@ -5,15 +5,34 @@ description: "Use when implementation is complete and you need to integrate or w
 
 # Finishing a Development Branch
 
-Wind down completed work cleanly: verify it's green, ask how to integrate, then carry the chosen path all the way through. This is a procedure governed by the Harry laws (HARRY.md); when they conflict, the laws win.
+Wind down completed work cleanly: verify it's green, review any changed shape, ask how to integrate, then carry the chosen path all the way through. This is a procedure governed by the Harry laws (HARRY.md); when they conflict, the laws win.
 
 ## 1. Verify tests first — never finish on red
 
 Run the project's suite before anything else. Read the output (exit code, failure count) — an unread "pass" is not evidence (HARRY.md §6).
 
-If anything fails: STOP. Report the failures and do not proceed to the menu. There is no merge, no PR, no archive on red.
+If anything fails: STOP. Report the failures and do not proceed to step 2 or the menu. There is no merge, no PR, no archive on red.
 
-## 2. Ask: merge or PR? — ALWAYS ask
+## 2. Architecture review — before anything merges or is pushed
+
+A **shape** is the outward form other code depends on: an API, a DB schema, a public interface, or a module or service boundary. This step reviews the change's shapes the way a lead reads a PR — whether each one fits — a level the per-diff review during executing (`references/review-rubric.md`) does not judge at. Every path out of the menu below — merge, PR (before `gh pr create`), keep — passes through it; only Discard skips it, since nothing integrates. It runs before the menu because a **fix now** ruling sends the work back to executing.
+
+**Paths.** This step runs inside the worktree, but every `.local/…` path in it means the **main checkout's** store (HARRY.md §5), written `<store>/.local/…` below: resolve `<store>` as the executing skill's Paths rule does (`skills/executing/SKILL.md`, "Before either mode" step 2), inside the same command that writes, and hand the reviewer the already-resolved absolute path.
+
+**Shape gate.** First list the shapes this change added or altered. Every round records the head it reviews — `architecture review at <sha7>` (`git rev-parse --short HEAD`) — in `## Progress`. On a later round — a **fix now** ruling is already recorded — list only the shapes changed since the head the most recent round recorded: `<sha>..HEAD`, which covers every commit since, whoever made it (the executing fix, its reviews' fix rounds, a final-review fix wave). Empty list → write one line, `no shape changed, architecture review skipped`, to the item's `## Progress`, and go to step 3. Non-empty → the review runs, whatever the work is called — a bug fix that alters a shape is reviewed like a feature.
+
+**Reviewer.** Package the diff to a file under `<store>/.local/tmp/<branch>/` — the branch diff (`git diff <base>...HEAD`), or on a later round only the shape gate's `<sha>..HEAD`, never the whole branch again — in one command that resolves `<store>`, creates that directory with `mkdir -p` (a Trivial unit never ran executing's setup, so nothing else has), and writes the file; then dispatch **ONE** CC reviewer subagent (explicit `model: opus` — the §5 dispatch cap; never inherit the session model), read-only, one lane — no Codex lane. Hand it: the shape list; the item's `## Why / What` and its `### Acceptance criteria`, as known facts (including any neighbouring services the design names); the diff file, by its absolute path; `references/architecture-review.md`; the last 20 commits touching the changed paths (`git log -n 20 --stat -- <changed paths>` from the branch tip, so history from before the branch counts); and read access to the whole repo. On a later round, also hand it every ruling recorded so far — each **leave as is** with the user's reason, and each **backlog** — so a ruled finding is not raised again unless the fix changed its shape. **Codex build:** there is no subagent to dispatch, so the session applies `references/architecture-review.md` itself and records one line in `## Progress` that this review was not independent.
+
+**Rulings.** Findings never go to an automatic fixer. Put them to the user as **one** list — one line per finding, in plain words (`references/plain-language.md`): where, why, the suggested change, the recommended ruling — and ask for a ruling on each; a list already shown counts as one question (HARRY.md §6). Each finding is ruled one of three ways:
+- **fix now** → draft a new AC, appended to the item's `### Acceptance criteria` and naming the AC it supersedes, if any (a finding may add a requirement no AC covered) — approved AC text is never edited → the user approves it → back to the **executing** skill at the item's tier → finishing again from step 1, where this step re-checks only the shapes the fix changed.
+- **backlog** → a new `<store>/.local/items/<slug>.md` with `status: backlog` and a `## Notes` section quoting the finding, plus one `<store>/.local/INDEX.md` line (as in Option 1's step c below); the merge proceeds.
+- **leave as is** → the ruling and the user's reason go to `## Progress`; handed to the reviewer on any later round, so the finding is not raised again.
+
+No findings → record `architecture review: no findings` in `## Progress`, say so to the user in one line, and go to step 3. There is no round cap: every round waits on the user's rulings, so the user decides when it stops. Every ruling, every skip line and every clean run is recorded in `## Progress`.
+
+**No item (Trivial).** There is no `## Progress`: the round's head line, the skip line, the not-independent line, the no-findings line and every ruling are written in the reply instead. The reviewer gets the task as the user stated it in place of `## Why / What` and its AC. A **fix now** ruling means fix it in place, re-run step 1, and re-check the shapes that changed — no AC is drafted. **backlog** still opens a new item.
+
+## 3. Ask: merge or PR? — ALWAYS ask
 
 Never auto-decide (HARRY.md §5). Present exactly these options and wait:
 
@@ -29,9 +48,9 @@ Implementation complete and tests green. How should I integrate this?
 
 Discard is **not offered** — it exists only as a response to the user's explicit request (see Discard below). Proactively offering to delete work nudges toward destruction; the user can always ask.
 
-**Pre-decided integration path.** If the user already chose the path (e.g. "commit & merge", "just open the PR"), skip the menu — do NOT re-ask. But a pre-decided path is NOT a shortcut past finishing: still run step 1's verify gate first, then the FULL tail of the chosen option (for merge, every step a–h below). A bare merge (`git merge --squash` + commit) that stops there skips the wind-down and is a §6 violation.
+**Pre-decided integration path.** If the user already chose the path (e.g. "commit & merge", "just open the PR"), skip the menu — do NOT re-ask. But a pre-decided path is NOT a shortcut past finishing: still run step 1's verify gate and step 2's architecture review first, then the FULL tail of the chosen option (for merge, every step a–h below). A bare merge (`git merge --squash` + commit) that stops there skips the wind-down and is a §6 violation.
 
-## 3. Execute the choice
+## 4. Execute the choice
 
 ### Option 1 — Merge (do all of this, in order; don't stop at the merge)
 
@@ -66,7 +85,7 @@ h. **Completion evidence.** CI triggers on push, not on a local merge — so the
 - Merge it as a squash (HARRY.md §5): `gh pr merge --squash --subject "<PR title>" --body "<why and what>"` — pass both, or GitHub's default squash message may list every branch commit. Never a merge commit or rebase merge.
 - Keep the worktree alive — the user needs it to iterate on feedback.
 - **A PR-integrated unit is NOT finished at `gh pr create`.** Annotate the unit's `.local/INDEX.md` `## In flight` line with the PR number while it's open (e.g. `… · PR #12 open`) so the list stays truthful.
-- **On merge** — whether in this session or a later one, and whether you merged it or a human clicked merge on GitHub — finishing resumes: run Option 1's full tail a–h, EXCEPT the merge itself (already done). First `git checkout <base> && git pull`, so step a and the landing check see the merge. If someone merged it on GitHub with a merge commit or rebase, accept it as it is — never rewrite published history to force a squash — and record the merge commit's SHA (or the rebased tip) in step b; the landing check covers every method. Step a there is a local re-verify of the merged base; evidence step h uses the CI run the push/PR already triggered. If you notice a merged PR whose item is still `status: active`, that's the trigger to run the tail now.
+- **On merge** — whether in this session or a later one, and whether you merged it or a human clicked merge on GitHub — finishing resumes: run Option 1's full tail a–h, EXCEPT the merge itself (already done; step 2's architecture review already ran before `gh pr create`). First `git checkout <base> && git pull`, so step a and the landing check see the merge. If someone merged it on GitHub with a merge commit or rebase, accept it as it is — never rewrite published history to force a squash — and record the merge commit's SHA (or the rebased tip) in step b; the landing check covers every method. Step a there is a local re-verify of the merged base; evidence step h uses the CI run the push/PR already triggered. If you notice a merged PR whose item is still `status: active`, that's the trigger to run the tail now.
 
 ### Option 3 — Keep
 
@@ -84,11 +103,11 @@ Either way, remove the unit's `.local/INDEX.md` `## In flight` line, and update 
 
 ## Quick reference
 
-| Option | Tests gate | Merge | Push/PR | Branch | Worktree |
-|--------|:--:|:--:|:--:|--------|----------|
-| 1. Merge | green required ×2 (branch, then merged result) | squash | — | force-deleted after merged result is green AND the landing check passes | removed first, only when clean (native tooling, provenance) |
-| 2. PR | green required | — | yes (draft approved first) | kept | **kept** (needed for iteration)¹ |
-| 3. Keep | green required | — | — | kept | kept |
-| Discard (explicit request only) | n/a | — | — | force-deleted (typed `discard`) | removed |
+| Option | Tests gate | Architecture review | Merge | Push/PR | Branch | Worktree |
+|--------|:--:|:--:|:--:|:--:|--------|----------|
+| 1. Merge | green required ×2 (branch, then merged result) | before the merge, when a shape changed | squash | — | force-deleted after merged result is green AND the landing check passes | removed first, only when clean (native tooling, provenance) |
+| 2. PR | green required | before `gh pr create`, when a shape changed | — | yes (draft approved first) | kept | **kept** (needed for iteration)¹ |
+| 3. Keep | green required | when a shape changed | — | — | kept | kept |
+| Discard (explicit request only) | n/a | n/a | — | — | force-deleted (typed `discard`) | removed |
 
 ¹ Not finished at `gh pr create` — on merge (this session or later), run Option 1's tail a–h minus the merge itself.

@@ -41,7 +41,9 @@ one (`## Notes` stays as history once `## Why / What` is written).
 **outcome** ("invalid input returns 400"), never a step ("add `validate()`"),
 and carries its own verification — a command, a test, or a named manual check.
 They are approved with the design; execution cites their IDs and never rewrites
-them (a wrong or impossible AC stops and asks).
+them (a wrong or impossible AC stops and asks). An AC appended later may name
+an AC it supersedes (finishing's **fix now** ruling drafts one that way); the
+superseded AC keeps its text and is judged by its successor, not on its own.
 
 `## Dispatch` exists only when 2+ units are dispatched in parallel — one row per
 unit:

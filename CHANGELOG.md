@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Finishing reviews the change's shape before anything merges or is
+  pushed.** A new step 2 in `skills/finishing/SKILL.md`, between verifying
+  tests and the merge-or-PR question, runs on every path out of the menu —
+  merge, PR, keep — and a pre-decided path does not skip it. It first lists
+  the shapes the change added or altered: an API, a DB schema, a public
+  interface, or a module or service boundary. None → one declared line, `no
+  shape changed, architecture review skipped`. Otherwise one independent,
+  read-only `opus` subagent reviews them, handed the shape list, the item's
+  design and acceptance criteria, the branch diff, the last 20 commits
+  touching the changed paths, and the whole repo to read. On the Codex build
+  the session applies the review itself and records that it was not
+  independent. The findings go to the user as one list, never to an automatic
+  fixer, and each is ruled: **fix now** (a new AC naming the one it
+  supersedes, if any, approved, then back to executing — the re-run re-checks
+  only the shapes the fix changed), **backlog** (a new item quoting the
+  finding), or **leave as is** (the user's reason recorded, never raised
+  again). There is no round cap. What the
+  reviewer judges lives in the new `references/architecture-review.md`: five
+  categories (API and interfaces, DB schema, boundaries, abstraction timing,
+  system level), a pass one level up and a pass over recent history for drift,
+  the unseen side of a boundary named rather than guessed, and line-level
+  quality and tests left to the review rubric.
+
 ### Changed
 
 - **How a message to the user is paced is now a law, not a habit.**
