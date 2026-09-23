@@ -42,21 +42,35 @@ credentials:
    Console; spend is billed to that API account, and the key can be revoked on
    its own at any time. The runner hands it to the child as `ANTHROPIC_API_KEY`.
 2. **Subscription token** — `EVALS_CLAUDE_CODE_OAUTH_TOKEN`. Run
-   `claude setup-token` to mint a long-lived token for your Claude subscription;
-   runs draw on the subscription's quota instead of API billing. The runner
-   hands it to the child as `CLAUDE_CODE_OAUTH_TOKEN`.
+   `claude setup-token` to mint a token for your Claude subscription. It needs a
+   paid Claude plan and is valid for one year; runs draw on the subscription's
+   quota instead of API billing. The runner hands it to the child as
+   `CLAUDE_CODE_OAUTH_TOKEN`.
 
-Both set, or neither set (an empty value counts as unset), and `run` refuses
-before any config dir is created or session starts. The message names both
-variables and `claude setup-token`, and never includes a value.
+Both set, or neither set, and `run` refuses before any config dir is created or
+session starts; an empty or whitespace-only value counts as unset. A value
+containing a carriage return (a file saved with CRLF line endings) is refused up
+front too, never silently trimmed. Each message names the variables involved, and
+never includes a value.
 
-The runner honors **only** the `EVALS_`-prefixed variables. A bare
-`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` already in your shell is
-**stripped** from the child's environment and never used, so an unrelated
-credential can never be billed by accident. The `EVALS_` variables themselves
-are not forwarded either: the child gets exactly one credential, under its
-unprefixed name. Nothing is written to disk — no credential file lands in a
-condition dir for a session to read.
+**Every child gets an allowlisted environment, not a copy of yours.** The runner
+builds each spawned process's env key by key: `PATH` (the running node's
+directory first, then only the absolute entries of yours), `HOME`, `TMPDIR` (the
+runner's own), `LANG` and `LC_*`, `USER`, `LOGNAME`, `SHELL` and `TERM`. The
+`claude` child adds its config dir, a pinned git identity with no global or system
+git config, and its **one** credential under the unprefixed name. Nothing else
+from your shell reaches it. That includes a bare `ANTHROPIC_API_KEY` or
+`CLAUDE_CODE_OAUTH_TOKEN`, the `EVALS_` variables themselves, `NODE_OPTIONS`,
+`SSH_AUTH_SOCK`, `GITHUB_TOKEN`, `AWS_*`, and every other `ANTHROPIC_*` or
+`CLAUDE_CODE_*` variable. This is what makes "exactly one credential" true:
+Claude Code ranks `CLAUDE_CODE_USE_BEDROCK`/`VERTEX`/`FOUNDRY`, then
+`ANTHROPIC_AUTH_TOKEN`, then `ANTHROPIC_API_KEY` above `CLAUDE_CODE_OAUTH_TOKEN`,
+so any of them reaching the child would silently replace the credential the run
+chose. Behind a corporate proxy or TLS-inspecting CA, set `EVALS_FORWARD_PROXY=1`
+to also forward `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (and their lowercase
+forms), `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE` and `SSL_CERT_DIR`. The set is
+fixed; there is no way to name other variables. Nothing is written to disk
+either: no credential file lands in a condition dir for a session to read.
 
 **Hand the value over without printing it.** Keep it in a file only you can
 read, and pass it with `$(cat …)`, so it never appears on a command line,
@@ -201,8 +215,17 @@ containment layers address this:
 - **Credential exposure** is bounded (see
   [Authentication](#authentication-two-paths)): the session gets exactly one
   revocable credential, `EVALS_ANTHROPIC_API_KEY` or
-  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`, through its env only — **no credential is
-  written to disk at all**.
+  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`, through an allowlisted env that carries
+  nothing else from your shell — and **no credential is written to disk at
+  all**.
+- **The runner's own work after the session** never runs what the session left
+  behind with the runner's rights. Model-written tests (`test_command_passes`)
+  get the credential-free allowlisted env and, when sandboxed, the session's
+  own jail profile. Before the runner runs git in the fixture, it puts back the
+  `.git/config` it wrote at materialization, so a planted `core.fsmonitor`,
+  filter or include never runs. It refuses the trial, rather than judging it,
+  if `.git` is no longer a plain directory, the session added `.git/commondir`
+  or `.git/config.worktree`, or `.git/config` is no longer a regular file.
 - **Filesystem exposure** is bounded by the opt-in [OS sandbox](#os-sandbox-opt-in-evals_sandbox)
   below: `EVALS_SANDBOX=1` jails the session out of the operator's wider `$HOME`.
 
@@ -234,23 +257,27 @@ minimal set of exceptions:
 
 So the session keeps working in the fixture, but reads of ssh keys, other
 credentials, and documents elsewhere under `$HOME`, and writes anywhere outside the
-fixture/tmp, are denied by the kernel. Under the jail the session's git identity is
-pinned via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`) so
-it can still commit without the jail having to re-open `~/.gitconfig`.
+fixture/tmp, are denied by the kernel. The fixture's own test command
+(`test_command_passes`) runs under the same profile, since it executes tests the
+session wrote. The session's git identity is pinned via env (`Eval Fixture
+<eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) so it
+can still commit without the jail having to re-open `~/.gitconfig`.
 
 **What it does NOT contain:**
 
 - **Network** — deliberately left open; the session must reach the model API. This
   is fs-containment, **not** a no-exfiltration boundary.
-- **The whole inherited environment** — the child inherits the operator's entire
-  shell env, not just its one credential: any `GITHUB_TOKEN`, `AWS_*`, or other secret
-  present is visible to the session, and no OS sandbox can hide an env var from its
-  own child processes. Combined with open network, a hostile session could
-  exfiltrate any of them. The honest ceiling: run this only on **trusted prompts**,
-  with a **revocable credential** (`EVALS_ANTHROPIC_API_KEY` or
-  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`), from a shell that isn't carrying secrets you'd
-  mind exposing. See the DEBT note in
-  `scripts/run-evals.mjs`.
+- **The session's own credential** — the child's env is allowlisted, so nothing
+  else from your shell reaches it. But it must hold its one credential to reach
+  the API, and no OS sandbox can hide an env var from the session's own
+  processes. Combined with open network, a hostile session could exfiltrate that
+  credential. The honest ceiling: run this only on **trusted prompts**, with a
+  **revocable credential** (`EVALS_ANTHROPIC_API_KEY` or
+  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`).
+- **Background processes** — a session can detach a process that outlives
+  `claude` (`Bash(node:*)` allows it), and nothing kills it, so it can still
+  change the fixture while the runner restores `.git/config` and judges the
+  checks. See the DEBT note in `scripts/run-evals.mjs`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
   dependency.
