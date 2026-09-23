@@ -27,6 +27,10 @@ function writeExecutable(filePath, source) {
 //   script    — a .mjs the shim runs in its cwd, simulating a session's tool use
 //   fail      — exit nonzero with the reply on stderr (spawn/crash path)
 //   isError   — exit 0 with an is_error:true JSON result ("Not logged in" shape)
+//   stderr    — text written to stderr on an otherwise normal run
+//   callsInConfigDir — log calls into $CLAUDE_CONFIG_DIR instead of binDir: under
+//               the write-allowlist jail the shim may write only its trial's dirs,
+//               so jailed tests read the log back with readCalls(line.configDir)
 export function installFakeClaude(
   binDir,
   reply = "A neutral reply with no tier or debt marker.",
@@ -81,9 +85,11 @@ const call = {
   // Names only, never values: enough to pin the allowlist on the real spawn.
   envKeys: Object.keys(process.env).sort(),
 };
-const calls = fs.existsSync(CALLS_PATH) ? JSON.parse(fs.readFileSync(CALLS_PATH, "utf8")) : [];
+const callsPath =
+  SETTINGS.callsInConfigDir && configDir ? path.join(configDir, "fake-claude-calls.json") : CALLS_PATH;
+const calls = fs.existsSync(callsPath) ? JSON.parse(fs.readFileSync(callsPath, "utf8")) : [];
 calls.push(call);
-fs.writeFileSync(CALLS_PATH, JSON.stringify(calls, null, 2));
+fs.writeFileSync(callsPath, JSON.stringify(calls, null, 2));
 
 // Multi-trial seam: the calls file IS the per-call counter, so callNumber is
 // this invocation's 1-based index (invocations are synchronous/sequential).
@@ -102,6 +108,7 @@ if (SETTINGS.script) {
   execFileSync(process.execPath, [SETTINGS.script], { cwd: process.cwd(), stdio: "inherit" });
 }
 
+if (SETTINGS.stderr) process.stderr.write(SETTINGS.stderr);
 if (SETTINGS.fail) {
   process.stderr.write(REPLY + "\\n");
   process.exit(1);

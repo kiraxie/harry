@@ -6,7 +6,7 @@
 // and the model-pinning refusal.
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -21,7 +21,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { CheckInput, RepoState } from "../scripts/run-evals.mjs";
 import {
   buildAgenticSandboxProfile,
@@ -55,6 +55,9 @@ const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 function tmpDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
 }
+
+// The running node's dir: first on every child's PATH (see buildBaseEnv).
+const NODE_DIR = path.dirname(process.execPath);
 
 // The runner refuses a run with both EVALS_ auth vars set, so a test that spread the
 // operator's own env would go red whenever the shell running the suite exports one
@@ -318,10 +321,10 @@ test("runEvals: baseline gives an empty config dir; candidate's inlines the laws
 
     // The runner's own view of the two isolated config dirs.
     assert.ok(
-      !existsSync(path.join(baseline.configDir, "CLAUDE.md")),
+      !existsSync(path.join(baseline.lines[0].configDir, "CLAUDE.md")),
       "baseline config dir has no CLAUDE.md → no laws leak",
     );
-    const candidateMd = path.join(candidate.configDir, "CLAUDE.md");
+    const candidateMd = path.join(candidate.lines[0].configDir, "CLAUDE.md");
     assert.ok(existsSync(candidateMd), "candidate config dir has a CLAUDE.md");
     assert.ok(
       readFileSync(candidateMd, "utf8").includes("Resident Engineering Laws"),
@@ -331,8 +334,8 @@ test("runEvals: baseline gives an empty config dir; candidate's inlines the laws
     // The shim's independent record of what env it actually received.
     const calls = readCalls(binDir);
     assert.equal(calls.length, 2, "two invocations recorded");
-    const seenBaseline = calls.find((c) => c.configDir === baseline.configDir);
-    const seenCandidate = calls.find((c) => c.configDir === candidate.configDir);
+    const seenBaseline = calls.find((c) => c.configDir === baseline.lines[0].configDir);
+    const seenCandidate = calls.find((c) => c.configDir === candidate.lines[0].configDir);
     assert.equal(seenBaseline?.lawsPresent, false, "shim saw no laws under baseline");
     assert.equal(seenCandidate?.lawsPresent, true, "shim saw laws under candidate");
     assert.equal(seenCandidate?.allowedTools, "", "tools disabled via --allowedTools ''");
@@ -345,7 +348,11 @@ test("runEvals: baseline gives an empty config dir; candidate's inlines the laws
       assert.equal(c.cwdHasClaudeMd, false, "child cwd has no CLAUDE.md");
       assert.notEqual(c.cwd, c.configDir, "cwd is separate from the config dir");
     }
-    assert.notEqual(seenCandidate?.cwd, candidate.configDir, "candidate cwd is not its laws dir");
+    assert.notEqual(
+      seenCandidate?.cwd,
+      candidate.lines[0].configDir,
+      "candidate cwd is not its laws dir",
+    );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
   }
@@ -1084,6 +1091,227 @@ test("judgeFixture: refuses a fixture path that no longer leads to the materiali
   });
 });
 
+test("runEvals: every trial gets its own config, work and temp dirs, never another trial's", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: root,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation", "agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        trials: 2,
+        agentic: true,
+      },
+      env,
+    );
+    assert.equal(lines.length, 4);
+    for (const key of ["trialDir", "configDir", "workDir"]) {
+      const values = lines.map((l: Record<string, unknown>) => l[key]);
+      assert.equal(new Set(values).size, 4, `${key}: one per trial`);
+    }
+    for (const l of lines as Record<string, string>[]) {
+      assert.equal(path.dirname(l.trialDir), root, "each trial dir sits in the root");
+      assert.equal(path.dirname(l.configDir), l.trialDir, "config dir inside its own trial");
+      assert.equal(path.dirname(l.workDir), l.trialDir, "work dir inside its own trial");
+      if (l.fixtureDir) {
+        assert.equal(path.dirname(path.dirname(l.fixtureDir)), l.trialDir, "fixture inside it too");
+      }
+    }
+    assert.ok(
+      lines.every((l: Record<string, string>) =>
+        readFileSync(path.join(l.configDir, "CLAUDE.md"), "utf8").includes("Resident"),
+      ),
+      "each trial's own config dir carries its own copy of the laws",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test(
+  "runEvals: git and claude are resolved before the first session and never looked up again",
+  shadowedBy("git"),
+  () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const plant = tmpDir("harry-evals-plant-");
+    const root = tmpDir("harry-evals-root-");
+    try {
+      // Trial 1's session drops a `git` and a `claude` into a directory that sits on
+      // PATH ahead of the real ones — what a session could do to a user-writable dir
+      // such as /opt/homebrew/bin. Each leaves a marker if the runner ever ran it.
+      const marker = path.join(plant, "planted-ran");
+      const script = path.join(binDir, "plant.mjs");
+      const planted = `#!/bin/sh\ntouch '${marker}'\nexit 1\n`;
+      writeFileSync(
+        script,
+        [
+          'import { writeFileSync } from "node:fs";',
+          'for (const name of ["git", "claude"])',
+          `  writeFileSync(${JSON.stringify(plant)} + "/" + name, ${JSON.stringify(planted)}, { mode: 0o755 });`,
+        ].join("\n"),
+      );
+      installFakeClaude(binDir, undefined, { script });
+      const env = {
+        ...authFreeEnv(),
+        PATH: `${plant}:${binDir}:${process.env.PATH}`,
+        EVALS_CLAUDE_BIN: "claude",
+        EVALS_FIXTURE_ROOT: root,
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      };
+      const { lines } = runEvals(
+        {
+          condition: "candidate",
+          model: "m",
+          cases: ["agentic-isolate-branch", "destructive-confirmation"],
+          out: path.join(binDir, "o.jsonl"),
+          trials: 2,
+          agentic: true,
+        },
+        env,
+      );
+      assert.ok(!existsSync(marker), "neither planted binary ever ran");
+      assert.equal(readCalls(binDir).length, 4, "every session ran the claude resolved up front");
+      assert.deepEqual(
+        lines.map((l: Record<string, unknown>) => l.error),
+        [undefined, undefined, undefined, undefined],
+      );
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(plant, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test("run CLI: control characters in a child's stderr never reach the operator's terminal", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
+  try {
+    installFakeClaude(binDir, undefined, { stderr: "\u001b]0;pwned\u0007\u001b[2Jcleared\n" });
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(pluginRoot, "scripts", "run-evals.mjs"),
+        "run",
+        "--condition",
+        "candidate",
+        "--model",
+        "m",
+        "--cases",
+        "destructive-confirmation",
+        "--out",
+        path.join(binDir, "o.jsonl"),
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...authFreeEnv(),
+          EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+          EVALS_FIXTURE_ROOT: root,
+          EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+        },
+      },
+    );
+    assert.equal(result.status, 0, "the run itself succeeded");
+    assert.ok(!result.stderr.includes("\u001b"), "no escape sequence on the CLI's stderr");
+    assert.ok(!result.stdout.includes("\u001b"), "none on its stdout either");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test(
+  "collectRepoState: git's stderr is piped, never passed through to the terminal",
+  shadowedBy("git"),
+  () => {
+    const { dir, initialBranch, initialCommit } = buildSimulatedRepo();
+    const fake = tmpDir("harry-evals-fakebin-");
+    try {
+      const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+      installEnvLogger(fake, "git", realGit, "\u001b[2Jgit-noise\n");
+      const runner = pathToFileURL(path.join(pluginRoot, "scripts", "run-evals.mjs")).href;
+      const call = `collectRepoState(${JSON.stringify(dir)}, ${JSON.stringify(initialBranch)}, ${JSON.stringify(initialCommit)}, { PATH: ${JSON.stringify(`${fake}:${NODE_DIR}:/usr/bin:/bin`)} });`;
+      const result = spawnSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          `import { collectRepoState } from ${JSON.stringify(runner)};\n${call}`,
+        ],
+        { encoding: "utf8" },
+      );
+      assert.equal(result.status, 0, "collectRepoState itself succeeded");
+      assert.ok(!result.stderr.includes("\u001b"), "git's escape sequence stayed in the pipe");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(fake, { recursive: true, force: true });
+    }
+  },
+);
+
+test("buildBaseEnv: filtering twice keeps the proxy opt-in (idempotent)", () => {
+  const once = buildBaseEnv({ ...syntheticOperatorEnv(), EVALS_FORWARD_PROXY: "1" });
+  assert.equal(once.HTTPS_PROXY, "http://proxy.invalid:3128");
+  assert.deepEqual(buildBaseEnv(once), once);
+});
+
+test("runEvals --agentic: a hung model-written test is cut off by the post-session timeout", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
+  try {
+    // The session writes a test that hangs for 8s (then exits, so nothing lingers).
+    const hung =
+      'import test from "node:test";\ntest("hang", () => new Promise((r) => setTimeout(r, 8000)));\n';
+    const script = path.join(binDir, "hang.mjs");
+    writeFileSync(
+      script,
+      `import { writeFileSync } from "node:fs";\nwriteFileSync("hang.test.mjs", ${JSON.stringify(hung)});\n`,
+    );
+    installFakeClaude(binDir, undefined, { script });
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: root,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const started = Date.now();
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+        postSessionTimeoutMs: 1500,
+      },
+      env,
+    );
+    assert.ok(Date.now() - started < 7000, "the run did not wait for the hung test");
+    const outcomes = lines[0].checkOutcomes as {
+      check: { type: string };
+      ok: boolean;
+      detail: string;
+    }[];
+    const run = outcomes.find((o) => o.check.type === "test_command_passes");
+    assert.equal(run?.ok, false);
+    assert.match(run?.detail ?? "", /timed out/);
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("runEvals --agentic: a fixture swapped for a symlink to another repo is refused, the repo untouched", () => {
   const binDir = tmpDir("harry-evals-bin-");
   const fxRoot = tmpDir("harry-evals-fxroot-");
@@ -1593,8 +1821,12 @@ test("runEvals: no credential file ever lands in a condition dir, even with one 
       "no credential file was present during any session",
     );
     // The whole listing, not one filename: nothing but the laws is ever written.
-    assert.deepEqual(readdirSync(baseline.configDir), [], "baseline dir stays empty");
-    assert.deepEqual(readdirSync(candidate.configDir), ["CLAUDE.md"], "candidate holds only laws");
+    assert.deepEqual(readdirSync(baseline.lines[0].configDir), [], "baseline dir stays empty");
+    assert.deepEqual(
+      readdirSync(candidate.lines[0].configDir),
+      ["CLAUDE.md"],
+      "candidate holds only laws",
+    );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
     rmSync(opCfg, { recursive: true, force: true });
@@ -1603,11 +1835,13 @@ test("runEvals: no credential file ever lands in a condition dir, even with one 
 
 test("runEvals: both EVALS_ auth vars set → refuses before any session, naming both, echoing neither", () => {
   const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
   try {
     installFakeClaude(binDir);
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: root,
       EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
       EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
     };
@@ -1618,19 +1852,23 @@ test("runEvals: both EVALS_ auth vars set → refuses before any session, naming
     assert.deepEqual(leakedFragments(message, FAKE_EVALS_API_KEY), [], "no API key content");
     assert.deepEqual(leakedFragments(message, FAKE_EVALS_OAUTH), [], "no token content");
     assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+    assert.deepEqual(readdirSync(root), [], "no trial dir (config dir included) was created");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
 test("runEvals: neither EVALS_ auth var set → refuses before any session, even with bare ones inherited", () => {
   const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
   const opCfg = fakeOperatorConfig(true); // the old seed source must not rescue the run
   try {
     installFakeClaude(binDir);
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: root,
       CLAUDE_CONFIG_DIR: opCfg,
       CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
       ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
@@ -1642,15 +1880,16 @@ test("runEvals: neither EVALS_ auth var set → refuses before any session, even
     assert.deepEqual(leakedFragments(message, FAKE_INHERITED_OAUTH), [], "no token content");
     assert.deepEqual(leakedFragments(message, FAKE_INHERITED_API_KEY), [], "no key content");
     assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+    assert.deepEqual(readdirSync(root), [], "no trial dir (config dir included) was created");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
     rmSync(opCfg, { recursive: true, force: true });
   }
 });
 
 // A hostile-by-construction operator env: every value fake, and every var but the
 // allowlisted ones must be dropped before any child sees it.
-const NODE_DIR = path.dirname(process.execPath);
 function syntheticOperatorEnv(): Record<string, string> {
   return {
     PATH: `${NODE_DIR}:/usr/bin:/bin`,
@@ -1730,8 +1969,10 @@ test("buildBaseEnv: the allowlist only; proxy/CA vars only on EVALS_FORWARD_PROX
       HTTPS_PROXY: "http://proxy.invalid:3128",
       NODE_EXTRA_CA_CERTS: "/nonexistent/ca.pem",
       no_proxy: "localhost",
+      // The flag rides along so a second filter (a jailed child's own) keeps these.
+      EVALS_FORWARD_PROXY: "1",
     },
-    "the fixed proxy/CA set only; the opt-in flag itself and everything else stay out",
+    "the fixed proxy/CA set and the flag only; everything else stays out",
   );
   assert.equal(buildBaseEnv({}).PATH, NODE_DIR, "no operator PATH: the running node's dir alone");
 });
@@ -1825,6 +2066,7 @@ function installEnvLogger(
   dir: string,
   name: string,
   realBin: string | null,
+  stderrText = "",
 ): { log: string; readKeys: () => string[][] } {
   const log = path.join(dir, `${name}-env.jsonl`);
   writeFileSync(
@@ -1834,6 +2076,7 @@ function installEnvLogger(
       'const { appendFileSync } = require("node:fs");',
       'const { execFileSync } = require("node:child_process");',
       `appendFileSync(${JSON.stringify(log)}, JSON.stringify(Object.keys(process.env).sort()) + "\\n");`,
+      `process.stderr.write(${JSON.stringify(stderrText)});`,
       realBin === null
         ? "process.exit(1);"
         : [
@@ -1890,7 +2133,7 @@ test(
 );
 
 test(
-  "buildAgenticSandboxProfile: its `which <claude>` spawn gets exactly the base allowlist",
+  "buildAgenticSandboxProfile: resolves a bare claude in-process, never by spawning `which`",
   shadowedBy("which"),
   () => {
     const fake = tmpDir("harry-evals-fakebin-");
@@ -1901,7 +2144,7 @@ test(
         bin: "claude",
         env: { ...syntheticOperatorEnv(), PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin` },
       });
-      assert.deepEqual(readKeys(), [BASE_KEYS]);
+      assert.deepEqual(readKeys(), [], "`which` was never spawned");
     } finally {
       rmSync(fake, { recursive: true, force: true });
     }
@@ -1909,18 +2152,19 @@ test(
 );
 
 test(
-  "runEvals: the `which sandbox-exec` spawn gets exactly the base allowlist",
+  "runEvals: sandbox-exec is resolved in-process, never by spawning `which`",
   shadowedBy("which"),
   () => {
     const binDir = tmpDir("harry-evals-bin-");
     const fake = tmpDir("harry-evals-fakebin-");
     try {
       installFakeClaude(binDir);
-      // A `which` that finds nothing: the run then refuses before any session starts.
+      // A `which` logger first on a PATH that holds no sandbox-exec: the run must
+      // refuse (not found on macOS, unsupported elsewhere) without spawning it.
       const { readKeys } = installEnvLogger(fake, "which", null);
       const env = {
         ...syntheticOperatorEnv(),
-        PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin`,
+        PATH: `${fake}:${NODE_DIR}`,
         EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
         EVALS_SANDBOX: "1",
         EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
@@ -1939,7 +2183,7 @@ test(
           ),
         /refusing to run an agentic session unsandboxed/,
       );
-      assert.deepEqual(readKeys(), [BASE_KEYS]);
+      assert.deepEqual(readKeys(), [], "`which` was never spawned");
       assert.equal(readCalls(binDir).length, 0, "no session was launched");
     } finally {
       rmSync(binDir, { recursive: true, force: true });
@@ -2151,38 +2395,50 @@ const AGENTIC_TOOLS =
   "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*)," +
   "Bash(git branch:*),Bash(git checkout:*),Bash(git switch:*),Bash(node:*)";
 
-test("buildSeatbeltProfile: allows all, then jails $HOME, then re-allows the exceptions", () => {
+test("buildSeatbeltProfile: denies every write, denies reads under $HOME, then allows the trial's own dirs", () => {
   const profile = buildSeatbeltProfile({
     home: "/Users/op",
-    allowWrite: ["/var/folders/tmp", "/var/folders/tmp/cfg", "/var/folders/tmp/cfg"],
+    allowWrite: [
+      "/var/folders/t/trial/config",
+      "/var/folders/t/trial/fx",
+      "/var/folders/t/trial/fx",
+    ],
     allowRead: ["/Users/op/.local/share/claude", "/opt/homebrew/bin"],
   });
   assert.match(profile, /^\(version 1\)/, "a v1 seatbelt profile");
-  assert.match(profile, /\(allow default\)/, "allow-everything baseline");
-  assert.match(
-    profile,
-    /\(deny file-read\* file-write\* \(subpath "\/Users\/op"\)\)/,
-    "the operator's $HOME is denied for both read and write",
+  // SBPL is last-match-wins: the broad denies come first, the narrow allows after.
+  const order = [
+    "(allow default)",
+    "(deny file-write*)",
+    '(deny file-read* (subpath "/Users/op"))',
+    "(allow file-read* file-write*",
+    "(allow file-read*\n",
+  ].map((needle) => profile.indexOf(needle));
+  assert.ok(
+    order.every((idx) => idx >= 0),
+    `every rule present: ${order}`,
   );
-  // Ordering matters (SBPL is last-match-wins): the broad $HOME deny must precede
-  // the narrow allow exceptions, so the allows override the deny for their subpaths.
-  const denyIdx = profile.indexOf('(deny file-read* file-write* (subpath "/Users/op")');
-  const allowWriteIdx = profile.indexOf("(allow file-read* file-write*");
-  const allowReadIdx = profile.lastIndexOf("(allow file-read*");
-  assert.ok(denyIdx >= 0 && allowWriteIdx > denyIdx, "read+write allows come AFTER the $HOME deny");
-  assert.ok(allowReadIdx > denyIdx, "read-only allows come AFTER the $HOME deny");
-  // The exception paths are present as subpath allows (dedup collapses the repeat).
-  assert.match(profile, /\(subpath "\/var\/folders\/tmp"\)/, "temp root re-allowed for write");
-  assert.match(profile, /\(subpath "\/var\/folders\/tmp\/cfg"\)/, "config dir re-allowed");
-  assert.equal(
-    (profile.match(/\(subpath "\/var\/folders\/tmp\/cfg"\)/g) ?? []).length,
-    1,
-    "duplicate exception paths are collapsed",
+  assert.deepEqual(
+    [...order].sort((a, b) => a - b),
+    order,
+    "in last-match-wins order",
   );
+  // The ONLY paths that may be written: the trial's own dirs (deduped) and /dev/null.
+  const writable = profile
+    .split("\n(")
+    .filter((rule) => /^allow file-(read\* file-)?write\*/.test(rule))
+    .flatMap((rule) =>
+      Array.from(rule.matchAll(/\((?:subpath|literal) "([^"]+)"\)/g), (m) => m[1]),
+    );
+  assert.deepEqual(writable.sort(), [
+    "/dev/null",
+    "/var/folders/t/trial/config",
+    "/var/folders/t/trial/fx",
+  ]);
   assert.match(
     profile,
     /\(subpath "\/Users\/op\/.local\/share\/claude"\)/,
-    "the claude runtime tree under $HOME is re-allowed for read",
+    "runtime tree readable",
   );
 });
 
@@ -2224,6 +2480,31 @@ test(
       };
       assert.equal(catUnder(canary), false, "a canary directly under the jailed $HOME is denied");
       assert.equal(catUnder(okFile), true, "the exception subdir allow overrides the $HOME deny");
+      // Writes: denied everywhere but the allowed dirs, OUTSIDE $HOME too (a
+      // user-writable PATH dir such as /opt/homebrew/bin is outside $HOME).
+      const outside = realpathSync(tmpDir("harry-sb-outside-"));
+      try {
+        const touchUnder = (file: string): boolean => {
+          try {
+            execFileSync("sandbox-exec", ["-p", profile, "touch", file], { stdio: "ignore" });
+            return true;
+          } catch {
+            return false;
+          }
+        };
+        assert.equal(
+          touchUnder(path.join(outside, "planted")),
+          false,
+          "write outside $HOME denied",
+        );
+        assert.equal(
+          touchUnder(path.join(exception, "made")),
+          true,
+          "write to an allowed dir works",
+        );
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
     } finally {
       rmSync(jail, { recursive: true, force: true });
     }
@@ -2262,7 +2543,7 @@ test("buildAgenticSandboxProfile: a symlinked $HOME is canonicalized (I-1: jails
       bin: process.execPath,
     });
     assert.ok(
-      profile.includes(`(deny file-read* file-write* (subpath "${real}"))`),
+      profile.includes(`(deny file-read* (subpath "${real}"))`),
       "the deny root is the canonical (realpath) home, not the symlink",
     );
     assert.ok(
@@ -2395,7 +2676,8 @@ test(
     const binDir = tmpDir("harry-evals-bin-");
     const fxRoot = tmpDir("harry-evals-fxroot-");
     try {
-      installFakeClaude(binDir);
+      // Jailed, the shim may write only its trial's dirs: it logs into its config dir.
+      installFakeClaude(binDir, undefined, { callsInConfigDir: true });
       // Real sandbox-exec, fake shim (no API spend, no real claude session). Proves
       // the wrapper resolves so the shim still runs under the jail AND that the
       // original args pass through the sandbox-exec wrapper untouched.
@@ -2418,7 +2700,7 @@ test(
         env,
       );
       assert.equal(lines.length, 1, "one agentic line written under the sandbox");
-      const calls = readCalls(binDir);
+      const calls = readCalls(lines[0].configDir);
       assert.equal(calls.length, 1, "the fake shim executed inside the seatbelt jail");
       assert.equal(
         calls[0].allowedTools,
@@ -2507,7 +2789,7 @@ test(
     const binDir = tmpDir("harry-evals-bin-");
     const fxRoot = tmpDir("harry-evals-fxroot-");
     try {
-      installFakeClaude(binDir);
+      installFakeClaude(binDir, undefined, { callsInConfigDir: true });
       const { wrapper, log } = installLoggingSandboxExec(binDir);
       const lines = runJailedTrial(binDir, fxRoot, { EVALS_SANDBOX_EXEC: wrapper });
       const spawns = readFileSync(log, "utf8")
@@ -2520,6 +2802,25 @@ test(
       assert.equal(post[1], session[1], "the post-session child runs under the session's profile");
       assert.equal(post[2], process.execPath);
       assert.deepEqual(post.slice(-1), ["__post-session"]);
+      // AC-15: the one profile lets the jail write ONLY this trial's config dir,
+      // fixture and temp dir (plus /dev/null) — no shared temp root, no fixture
+      // parent, nothing a later unjailed step reads.
+      const line = lines[0] as Record<string, string>;
+      const writable = session[1]
+        .split("\n(")
+        .filter((rule) => /^allow file-(read\* file-)?write\*/.test(rule))
+        .flatMap((rule) =>
+          Array.from(rule.matchAll(/\((?:subpath|literal) "([^"]+)"\)/g), (m) => m[1]),
+        );
+      assert.deepEqual(
+        writable.sort(),
+        [
+          "/dev/null",
+          realpathSync(line.configDir),
+          realpathSync(line.fixtureDir),
+          realpathSync(path.join(line.trialDir, "tmp")),
+        ].sort(),
+      );
       assert.equal(lines[0].error, undefined, String(lines[0].error));
       const outcomes = lines[0].checkOutcomes as { check: { type: string }; ok: boolean }[];
       assert.deepEqual(
@@ -2556,7 +2857,7 @@ test(
           )});`,
         ].join("\n"),
       );
-      installFakeClaude(binDir, undefined, { script });
+      installFakeClaude(binDir, undefined, { script, callsInConfigDir: true });
       const outcome = (lines: Record<string, unknown>[]) =>
         (lines[0].checkOutcomes as { check: { type: string }; ok: boolean }[]).find(
           (o) => o.check.type === "test_command_passes",
@@ -2577,10 +2878,16 @@ test(
     const fxRoot = tmpDir("harry-evals-fxroot-");
     const victim = makeVictimRepo();
     try {
-      installFakeClaude(binDir, undefined, { script: swapFixtureScript(binDir, victim.dir) });
+      installFakeClaude(binDir, undefined, {
+        script: swapFixtureScript(binDir, victim.dir),
+        callsInConfigDir: true,
+      });
       const lines = runJailedTrial(binDir, fxRoot);
       assert.equal(readFileSync(path.join(victim.dir, ".git", "config"), "utf8"), victim.config);
-      assert.match(String(lines[0].error ?? ""), /fixture .* (replaced|not the directory)/);
+      // The jail no longer lets the session write its fixture's parent, so the rename
+      // itself is denied; either way the trial errors and nothing is judged.
+      assert.ok(lines[0].error, "the trial errored");
+      assert.equal(lines[0].checkOutcomes, undefined, "nothing was judged");
     } finally {
       rmSync(binDir, { recursive: true, force: true });
       rmSync(fxRoot, { recursive: true, force: true });
@@ -2597,13 +2904,15 @@ test(
     const fxRoot = tmpDir("harry-evals-fxroot-");
     try {
       const home = JSON.stringify(os.homedir());
-      const log = path.join(binDir, "jail-status.log");
+      // Jailed code may write only its trial's dirs, so every marker goes to the
+      // trial's own TMPDIR (inherited by the session, its writer, and git's gpg).
+      const logName = "jail-status.log";
       // gpg.program: records whether it could list the real home when git ran it.
       const gpg = path.join(binDir, "gpg.sh");
       writeFileSync(
         gpg,
-        `#!/bin/sh\nif ls ${home} >/dev/null 2>&1; then echo gpg-free >> '${log}'; ` +
-          `else echo gpg-jailed >> '${log}'; fi\ncat >/dev/null\nexit 1\n`,
+        `#!/bin/sh\nLOG="$TMPDIR/${logName}"\nif ls ${home} >/dev/null 2>&1; then echo gpg-free >> "$LOG"; ` +
+          'else echo gpg-jailed >> "$LOG"; fi\ncat >/dev/null\nexit 1\n',
         { mode: 0o755 },
       );
       // The background writer: detached (setsid) so a process-group kill would miss it.
@@ -2614,7 +2923,7 @@ test(
         writer,
         [
           'const fs = require("node:fs");',
-          `const log = ${JSON.stringify(log)};`,
+          `const log = require("node:path").join(process.env.TMPDIR, ${JSON.stringify(logName)});`,
           `try { fs.readdirSync(${home}); fs.appendFileSync(log, "bg-free\\n"); }`,
           '  catch { fs.appendFileSync(log, "bg-jailed\\n"); }',
           'fs.appendFileSync(log, "bg-started\\n");',
@@ -2648,14 +2957,15 @@ test(
           // End the session only once the writer is running, so it is already
           // re-planting when the runner's post-session git calls start.
           'import { existsSync, readFileSync } from "node:fs";',
-          `const log = ${JSON.stringify(log)};`,
+          `const log = process.env.TMPDIR + "/" + ${JSON.stringify(logName)};`,
           "const until = Date.now() + 5000;",
           'while (Date.now() < until && !(existsSync(log) && readFileSync(log, "utf8").includes("bg-started")))',
           "  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);",
         ].join("\n"),
       );
-      installFakeClaude(binDir, undefined, { script: session });
-      runJailedTrial(binDir, fxRoot);
+      installFakeClaude(binDir, undefined, { script: session, callsInConfigDir: true });
+      const [line] = runJailedTrial(binDir, fxRoot);
+      const log = path.join(String(line.trialDir), "tmp", logName);
       const deadline = Date.now() + 10_000;
       while (Date.now() < deadline && !readFileSafe(log).includes("bg-done")) sleepMs(50);
       const status = readFileSafe(log).trim().split("\n");

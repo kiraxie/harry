@@ -25,15 +25,18 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  accessSync,
   appendFileSync,
   cpSync,
   existsSync,
+  constants as fsConstants,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -69,6 +72,11 @@ const PATTERN_CHECK_TYPES = new Set([
 const SUPPORTED_MODES = new Set(["text", "agentic"]);
 const CONDITIONS = new Set(["baseline", "candidate"]);
 const DEFAULT_TEST_COMMAND = "node --test";
+// How long the post-session step may take (runEvals opts.postSessionTimeoutMs
+// overrides it). It bounds a hung model-written test, and, sandboxed, the whole
+// jailed child — which gets a grace period on top so its own test timeout fires first.
+const DEFAULT_POST_SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+const POST_SESSION_GRACE_MS = 15 * 1000;
 
 function casesPath() {
   return join(pluginRoot, "evals", "cases.jsonl");
@@ -112,9 +120,12 @@ const PROXY_ENV_KEYS = [
 // still resolves, then keeps only the operator's ABSOLUTE entries: an empty or
 // relative entry resolves against the child's cwd, which is often a fixture repo
 // the session wrote, where a planted `./git` or `./node` would then run as the
-// runner. TMPDIR is the runner's own tmpdir(), because the jail's write exceptions
-// are computed from it and a child writing elsewhere would fall outside them.
-export function buildBaseEnv(env) {
+// runner. TMPDIR is the trial's own temp dir when one is given (the jail lets a
+// trial write only its own dirs, so a child must not look for scratch space
+// anywhere else), otherwise the runner's tmpdir(). The EVALS_FORWARD_PROXY opt-in
+// is carried along with the vars it forwards, so filtering an already-filtered env
+// (a jailed child building its own children's env) keeps them.
+export function buildBaseEnv(env, tmpDir = tmpdir()) {
   const out = {};
   const entries = [dirname(process.execPath), ...(env.PATH ?? "").split(delimiter)];
   out.PATH = [...new Set(entries.filter((p) => isAbsolute(p)))].join(delimiter);
@@ -124,8 +135,9 @@ export function buildBaseEnv(env) {
   for (const key of Object.keys(env)) {
     if (key.startsWith("LC_")) out[key] = env[key];
   }
-  out.TMPDIR = tmpdir();
+  out.TMPDIR = tmpDir;
   if (env.EVALS_FORWARD_PROXY === "1") {
+    out.EVALS_FORWARD_PROXY = "1";
     for (const key of PROXY_ENV_KEYS) {
       if (env[key] !== undefined) out[key] = env[key];
     }
@@ -140,9 +152,9 @@ export function buildBaseEnv(env) {
 // outside the repo (the operator's hooks, fsmonitor, aliases, signing), and the jail
 // never has to re-open ~/.gitconfig. The repo's own config is another matter: see
 // restoreFixtureGitConfig and judgeFixture.
-export function buildGitEnv(env) {
+export function buildGitEnv(env, tmpDir = tmpdir()) {
   return {
-    ...buildBaseEnv(env),
+    ...buildBaseEnv(env, tmpDir),
     GIT_AUTHOR_NAME: "Eval Fixture",
     GIT_AUTHOR_EMAIL: "eval@localhost",
     GIT_COMMITTER_NAME: "Eval Fixture",
@@ -152,7 +164,33 @@ export function buildGitEnv(env) {
   };
 }
 
-function git(args, cwd, env = process.env) {
+// Look a command up on the allowlisted PATH in-process — no `which` child — and
+// return its absolute path, or null. A name containing a slash is made absolute
+// as given. runEvals resolves every binary it spawns this way BEFORE the first
+// session, and never looks one up again: a PATH dir can be writable by the
+// operator's user (Homebrew's bin is), and a session must not be able to put a
+// `git` or `claude` there for the runner to pick up later.
+export function findOnPath(name, env = process.env) {
+  if (name.includes("/")) return resolve(name);
+  for (const dir of buildBaseEnv(env).PATH.split(delimiter)) {
+    const candidate = join(dir, name);
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      if (statSync(candidate).isFile()) return candidate;
+    } catch {
+      /* not here: keep looking */
+    }
+  }
+  return null;
+}
+
+function requireOnPath(name, env, what = name) {
+  const found = findOnPath(name, env);
+  if (!found) throw new Error(`cannot find ${what} on PATH; refusing to start the run`);
+  return found;
+}
+
+function git(args, cwd, env = process.env, gitBin = requireOnPath("git", env)) {
   // A second layer for three known command hooks: gpg signing (would prompt/fail
   // headless), hooks (an empty hooksPath disables them) and fsmonitor (a command git
   // runs on index refresh) are switched off per call. It is not a complete list — a
@@ -168,12 +206,25 @@ function git(args, cwd, env = process.env) {
     "core.fsmonitor=false",
     ...args,
   ];
-  return execFileSync("git", hardened, {
-    cwd,
-    env: buildGitEnv(env),
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
-  }).trim();
+  try {
+    // stderr is piped, never inherited: whatever git (or a program a repo config
+    // names) prints reaches the operator only through untrustedText, below.
+    return execFileSync(gitBin, hardened, {
+      cwd,
+      env: buildGitEnv(env),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 32 * 1024 * 1024,
+    }).trim();
+  } catch (err) {
+    const firstLine =
+      String(err?.stderr ?? "")
+        .split("\n")
+        .find((l) => l.trim()) ?? "";
+    throw new Error(
+      untrustedText(`git ${args[0] ?? ""} failed (exit ${err?.status ?? "?"}): ${firstLine}`, 400),
+    );
+  }
 }
 
 // ---- parsing & validation (pure) -------------------------------------------
@@ -342,12 +393,13 @@ const POST_SESSION = "__post-session";
 // still change the fixture while this step judges it, so a verdict can describe a
 // repo the session did not leave. Killing a process group would miss a setsid'd one.
 // Ceiling: fine while the gate runs trusted prompts, whose sessions have no reason to
-// race their own judge. Upgrade path: narrow the session profile's writes to a
-// per-trial dir (its own TMPDIR instead of the whole temp root), and judge under a
-// separate profile that can read the fixture but write only a fresh judge dir outside
-// the session's writable set; copy the fixture there first and judge the copy.
+// race their own judge. Upgrade path: the session's writes are already confined to
+// its own trial's dirs; judge under a separate profile that can read the fixture but
+// write only a fresh judge dir outside the session's writable set, copy the fixture
+// there first, and judge the copy.
 export function judgeFixture(payload, env = process.env) {
-  const { fixtureDir, fixtureId, gitConfig, initialBranch, initialCommit, checks } = payload;
+  const { fixtureDir, fixtureId, gitConfig, initialBranch, initialCommit, checks, gitBin } =
+    payload;
   const now = lstatOrNull(fixtureDir, { bigint: true });
   if (
     !now?.isDirectory() ||
@@ -360,7 +412,8 @@ export function judgeFixture(payload, env = process.env) {
     );
   }
   restoreFixtureGitConfig(fixtureDir, Buffer.from(gitConfig, "base64"));
-  const state = collectRepoState(fixtureDir, initialBranch, initialCommit, env);
+  const state = collectRepoState(fixtureDir, initialBranch, initialCommit, env, gitBin);
+  state.testTimeoutMs = payload.timeoutMs;
   return evaluateArtifactChecks(checks, state).results.map((r) => ({
     ok: r.ok,
     detail: r.detail,
@@ -427,14 +480,25 @@ function runPostSession(payload, jail, env) {
   ]);
   let stdout;
   try {
+    // All three streams piped: the child's stderr (and anything its git or tests
+    // print there) never reaches the operator's terminal except through
+    // untrustedText on the failure path.
     stdout = execFileSync(wrapped.bin, wrapped.args, {
-      cwd: tmpdir(),
-      env: buildBaseEnv(env),
+      cwd: jail.tmpDir,
+      env: buildBaseEnv(env, jail.tmpDir),
       input: JSON.stringify(payload),
       encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024,
+      timeout: payload.timeoutMs + POST_SESSION_GRACE_MS,
+      killSignal: "SIGKILL",
     });
   } catch (err) {
+    if (err?.code === "ETIMEDOUT") {
+      throw new Error(
+        `the jailed post-session step timed out after ${payload.timeoutMs + POST_SESSION_GRACE_MS}ms`,
+      );
+    }
     const firstLine =
       String(err?.stderr ?? "")
         .split("\n")
@@ -465,7 +529,12 @@ function cmdPostSession() {
 // one pinned initial commit. Returns the working dir plus the initial branch and
 // commit SHA (the baseline the artifact checks diff against). NEVER runs inside
 // the repo — the copy lands under `root` (default the OS temp dir).
-export function materializeFixture(name, root = tmpdir(), env = process.env) {
+export function materializeFixture(
+  name,
+  root = tmpdir(),
+  env = process.env,
+  gitBin = requireOnPath("git", env),
+) {
   const src = join(fixturesPath(), name);
   if (!existsSync(src)) {
     throw new Error(`unknown fixture "${name}" (looked in ${fixturesPath()})`);
@@ -474,21 +543,21 @@ export function materializeFixture(name, root = tmpdir(), env = process.env) {
   cpSync(src, dir, { recursive: true });
   // `-b main` isn't portable to older git; set the default branch via config so
   // the initial branch name is deterministic. We still read it back below.
-  git(["-c", "init.defaultBranch=main", "init"], dir, env);
+  git(["-c", "init.defaultBranch=main", "init"], dir, env, gitBin);
   // Pin the identity in the repo's LOCAL config too, so any committer in this repo
   // has one even if its env does not (a machine with no git identity, such as a CI
   // runner, fatals on auto-detect).
-  git(["config", "user.name", "Eval Fixture"], dir, env);
-  git(["config", "user.email", "eval@localhost"], dir, env);
+  git(["config", "user.name", "Eval Fixture"], dir, env, gitBin);
+  git(["config", "user.email", "eval@localhost"], dir, env, gitBin);
   // The config as the runner wrote it, before any session touches the repo:
   // restoreFixtureGitConfig puts exactly these bytes back before the runner's own
   // post-session git calls. Read back rather than hand-written, because `git init`
   // records filesystem facts (core.ignorecase on macOS) a constant would get wrong.
   const gitConfig = readFileSync(join(dir, ".git", "config"));
-  git(["add", "-A"], dir, env);
-  git(["commit", "-m", "chore: seed eval fixture"], dir, env);
-  const initialBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], dir, env);
-  const initialCommit = git(["rev-parse", "HEAD"], dir, env);
+  git(["add", "-A"], dir, env, gitBin);
+  git(["commit", "-m", "chore: seed eval fixture"], dir, env, gitBin);
+  const initialBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], dir, env, gitBin);
+  const initialCommit = git(["rev-parse", "HEAD"], dir, env, gitBin);
   // The fixture dir's identity. judgeFixture refuses a fixture whose path no longer
   // leads to this very directory: a session can rename its fixture away and leave a
   // symlink to some other repo in its place. Strings, since a 64-bit inode can exceed
@@ -540,13 +609,24 @@ export function restoreFixtureGitConfig(fixtureDir, gitConfig) {
 // Snapshot the post-session repo state the artifact checks judge: the branches,
 // the messages of commits that are NEW since the seed, and the tracked+untracked
 // file list (minus .git). Reads only — deterministic given the repo on disk.
-export function collectRepoState(fixtureDir, initialBranch, initialCommit, env = process.env) {
-  const branches = git(["for-each-ref", "--format=%(refname:short)", "refs/heads"], fixtureDir, env)
+export function collectRepoState(
+  fixtureDir,
+  initialBranch,
+  initialCommit,
+  env = process.env,
+  gitBin = requireOnPath("git", env),
+) {
+  const branches = git(
+    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    fixtureDir,
+    env,
+    gitBin,
+  )
     .split("\n")
     .map((b) => b.trim())
     .filter(Boolean);
   // All commit messages across every branch, minus the seed commit's.
-  const commitLog = git(["log", "--all", "--format=%H%x1f%s"], fixtureDir, env);
+  const commitLog = git(["log", "--all", "--format=%H%x1f%s"], fixtureDir, env, gitBin);
   const newCommitMessages = commitLog
     .split("\n")
     .map((l) => l.trim())
@@ -554,10 +634,13 @@ export function collectRepoState(fixtureDir, initialBranch, initialCommit, env =
     .map((l) => l.split("\x1f"))
     .filter(([sha]) => sha !== initialCommit)
     .map(([, subject]) => subject ?? "");
-  const tracked = git(["ls-files"], fixtureDir, env).split("\n");
-  const untracked = git(["ls-files", "--others", "--exclude-standard"], fixtureDir, env).split(
-    "\n",
-  );
+  const tracked = git(["ls-files"], fixtureDir, env, gitBin).split("\n");
+  const untracked = git(
+    ["ls-files", "--others", "--exclude-standard"],
+    fixtureDir,
+    env,
+    gitBin,
+  ).split("\n");
   const files = [...new Set([...tracked, ...untracked])].map((f) => f.trim()).filter(Boolean);
   // Commits added ON the initial branch since the seed. A lawful session works
   // off a fresh branch, so this stays 0 even after it commits elsewhere. If the
@@ -568,6 +651,7 @@ export function collectRepoState(fixtureDir, initialBranch, initialCommit, env =
       ["rev-list", "--count", `${initialCommit}..${initialBranch}`],
       fixtureDir,
       env,
+      gitBin,
     );
     newCommitsOnInitial = Number(count) || 0;
   }
@@ -584,7 +668,7 @@ export function collectRepoState(fixtureDir, initialBranch, initialCommit, env =
   };
 }
 
-// Read a repo file's contents, or "" if missing/unreadable (fixtures are text).
+// Read a repo file's contents, or null if missing/unreadable (fixtures are text).
 function readFileSafe(fixtureDir, relPath) {
   try {
     return readFileSync(join(fixtureDir, relPath), "utf8");
@@ -649,16 +733,24 @@ export function evaluateArtifactCheck(check, state) {
     case "test_command_passes": {
       const command = (check.command ?? DEFAULT_TEST_COMMAND).trim();
       const [cmd, ...args] = command.split(/\s+/);
-      // Model-written code: the credential-free base env, never the runner's own.
+      const timeoutMs = state.testTimeoutMs ?? DEFAULT_POST_SESSION_TIMEOUT_MS;
+      // Model-written code: the credential-free base env, never the runner's own;
+      // `node` is the running node by absolute path, not a PATH lookup; output is
+      // discarded; and a hung test is killed at the timeout.
       try {
-        execFileSync(cmd, args, {
+        execFileSync(cmd === "node" ? process.execPath : cmd, args, {
           cwd: state.fixtureDir,
           env: buildBaseEnv(state.env ?? process.env),
           stdio: "ignore",
           maxBuffer: 32 * 1024 * 1024,
+          timeout: timeoutMs,
+          killSignal: "SIGKILL",
         });
         return { check, ok: true, detail: `${command} exited 0` };
       } catch (err) {
+        if (err?.code === "ETIMEDOUT" || err?.signal === "SIGKILL") {
+          return { check, ok: false, detail: `${command} timed out after ${timeoutMs}ms` };
+        }
         return { check, ok: false, detail: `${command} failed: ${err.status ?? err.message}` };
       }
     }
@@ -855,21 +947,36 @@ export function resolveAuth(env) {
   return { kind: apiKey ? "api-key" : "oauth-token" };
 }
 
-// Create an isolated CLAUDE_CONFIG_DIR for a condition. candidate gets a
-// CLAUDE.md inlining the laws; baseline gets an empty dir (no CLAUDE.md).
+// Create one trial's private dirs under a fresh mkdtemp root in `root`:
+//   config/  — its CLAUDE_CONFIG_DIR: candidate gets a CLAUDE.md inlining the laws,
+//              baseline an empty dir (no CLAUDE.md);
+//   work/    — the text child's cwd, empty, so no project CLAUDE.md is found above it;
+//   fixture/ — the parent a fixture is materialized under (agentic);
+//   tmp/     — the TMPDIR every child of this trial gets.
+// Nothing is shared between trials, so a jailed session — which may write only its
+// own trial's config, fixture and tmp dirs — can never reach a dir a later trial or
+// an unjailed text case reads.
 //
-// Nothing else is ever written here — no credential file, no settings, no
-// memory. The child authenticates from its env (buildChildEnv), so no credential
-// lands on disk for a session to read. The runner used to copy the operator's
-// `.credentials.json` in as a fallback; that path is gone, because on macOS the
-// file is a Keychain snapshot that goes stale on its own schedule, and copying
-// real credentials into temp dirs was a liability in itself.
-export function prepareConditionDir(condition, lawsText, root = tmpdir()) {
-  const dir = mkdtempSync(join(root, `harry-evals-${condition}-`));
+// No credential file, settings or memory is ever written here. The child
+// authenticates from its env (buildChildEnv), so no credential lands on disk for a
+// session to read. The runner used to copy the operator's `.credentials.json` in as
+// a fallback; that path is gone, because on macOS the file is a Keychain snapshot
+// that goes stale on its own schedule, and copying real credentials into temp dirs
+// was a liability in itself.
+export function prepareTrialDirs(condition, lawsText, root = tmpdir()) {
+  const trialDir = mkdtempSync(join(root, `harry-evals-trial-${condition}-`));
+  const dirs = {
+    trialDir,
+    configDir: join(trialDir, "config"),
+    workDir: join(trialDir, "work"),
+    fixtureParent: join(trialDir, "fixture"),
+    tmpDir: join(trialDir, "tmp"),
+  };
+  for (const key of ["configDir", "workDir", "fixtureParent", "tmpDir"]) mkdirSync(dirs[key]);
   if (condition === "candidate") {
-    writeFileSync(join(dir, "CLAUDE.md"), lawsText);
+    writeFileSync(join(dirs.configDir, "CLAUDE.md"), lawsText);
   }
-  return dir;
+  return dirs;
 }
 
 // The env for every `claude` child — text, agentic, and sandboxed agentic alike, since
@@ -891,10 +998,10 @@ export function prepareConditionDir(condition, lawsText, root = tmpdir()) {
 // (ANTHROPIC_BASE_URL set by the runner, never forwarded from the operator), and deny
 // the jail all network except that forwarder. Not yet verified that Claude Code
 // accepts a forwarded endpoint for an OAuth token.
-export function buildChildEnv(env, configDir) {
+export function buildChildEnv(env, configDir, tmpDir = tmpdir()) {
   const auth = resolveAuth(env);
   const childEnv = {
-    ...buildGitEnv(env),
+    ...buildGitEnv(env, tmpDir),
     CLAUDE_CONFIG_DIR: configDir,
     // The allowlist drops the operator's own privacy flags, so the runner sets them:
     // no telemetry, no nonessential traffic, no self-update mid-run.
@@ -918,7 +1025,7 @@ function extractResponse(stdout) {
   const parsed = JSON.parse(stdout);
   if (parsed.is_error === true) {
     const detail = typeof parsed.result === "string" ? parsed.result : JSON.stringify(parsed);
-    throw new Error(`claude returned an error result: ${detail}`);
+    throw new Error(`claude returned an error result: ${untrustedText(detail)}`);
   }
   if (typeof parsed.result === "string") return parsed.result;
   return JSON.stringify(parsed);
@@ -928,13 +1035,16 @@ function extractResponse(stdout) {
 // (nonzero exit or spawn error), surface a structured {is_error} stdout if the
 // child still printed one, otherwise attach stdout/stderr tails so a failing
 // line carries a real diagnostic instead of a bare "Command failed".
-function invokeClaude(bin, args, cwd, configDir, env) {
-  const childEnv = buildChildEnv(env, configDir);
+function invokeClaude(bin, args, cwd, configDir, env, tmpDir = tmpdir()) {
+  const childEnv = buildChildEnv(env, configDir, tmpDir);
   try {
+    // All three streams piped: claude's stderr never reaches the operator's
+    // terminal directly; a failure surfaces it only through untrustedText.
     const stdout = execFileSync(bin, args, {
       cwd,
       env: childEnv,
       encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024,
     });
     return extractResponse(stdout);
@@ -945,8 +1055,8 @@ function invokeClaude(bin, args, cwd, configDir, env) {
       // (this rethrows the readable is_error message when present).
       return extractResponse(stdout);
     }
-    const tail = (s) => (s ? String(s).trim().slice(-800) : "");
-    const parts = [err?.message ?? "claude invocation failed"];
+    const tail = (s) => (s ? untrustedText(String(s).trim().slice(-800), 800) : "");
+    const parts = [untrustedText(err?.message ?? "claude invocation failed", 800)];
     const out = tail(err?.stdout);
     const errOut = tail(err?.stderr);
     if (out) parts.push(`stdout: ${out}`);
@@ -968,9 +1078,9 @@ function invokeClaude(bin, args, cwd, configDir, env) {
 // repo's own CLAUDE.md (which enumerates the laws) into BOTH conditions —
 // silently making the baseline "lawful" and collapsing the measured delta. This
 // is the sibling isolation to CLAUDE_CONFIG_DIR (global memory).
-function runTextCase(bin, model, prompt, configDir, workDir, env) {
+function runTextCase(bin, model, prompt, configDir, workDir, env, tmpDir) {
   const args = ["-p", prompt, "--model", model, "--output-format", "json", "--allowedTools", ""];
-  return invokeClaude(bin, args, workDir, configDir, env);
+  return invokeClaude(bin, args, workDir, configDir, env, tmpDir);
 }
 
 // The Bash commands an agentic session is allowed to run, comma-joined into one
@@ -990,7 +1100,8 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
 // allowlist alone does NOT contain a misbehaving session: `Bash(node:*)` is
 // arbitrary code execution, including network. Exec containment is the opt-in
 // EVALS_SANDBOX=1 seatbelt jail (see buildSeatbeltProfile / sandboxContext),
-// which denies the session reads/writes across the operator's wider $HOME.
+// which denies the session every write outside its own trial's dirs and every
+// read under the operator's $HOME.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -1010,7 +1121,7 @@ const AGENTIC_ALLOWED_TOOLS = [
 // can branch, commit, and run the test suite. Both flags verified present in
 // `claude --help`; not empty like the text kill-switch — here tools are enabled,
 // narrowed to the commands the checks need (a surface reduction, not a sandbox).
-function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, jail = null) {
+function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, tmpDir, jail = null) {
   const args = [
     "-p",
     prompt,
@@ -1024,31 +1135,31 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, jail = n
     AGENTIC_ALLOWED_TOOLS,
   ];
   if (!jail) {
-    return invokeClaude(bin, args, fixtureDir, configDir, env);
+    return invokeClaude(bin, args, fixtureDir, configDir, env, tmpDir);
   }
   // Opt-in EVALS_SANDBOX: the child runs inside the trial's seatbelt jail (built in
-  // runEvals by trialJail), which denies fs access across the operator's wider $HOME.
+  // runEvals by trialJail): writes only to its own trial's dirs, no reads under $HOME.
   const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, bin, args);
-  return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, env);
+  return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, env, tmpDir);
 }
 
 // One trial's jail, shared by the session and by the post-session child that judges
-// it (see sandboxContext for the refusal path). The jail root and the writable
-// exceptions are canonicalized (realpath) — the throwaway config dir, the
-// materialized fixture repo, and the OS temp roots they live under (normally outside
-// $HOME; re-allowed defensively for a $HOME-based TMPDIR). The runtime read trees
-// are resolved inside buildAgenticSandboxProfile. This script itself is readable
-// (never writable) so the post-session child can load it from under $HOME.
-function trialJail(sandbox, { configDir, fixtureDir, fixtureRoot, bin, env }) {
+// it (see sandboxContext for the refusal path). The only writable paths are this
+// trial's own config dir, fixture and temp dir (canonicalized with realpath) — not
+// the fixture's parent, not the shared temp root, nothing another trial or an
+// unjailed step reads. The runtime read trees are resolved inside
+// buildAgenticSandboxProfile; this script itself is readable (never writable) so the
+// post-session child can load it from under $HOME.
+function trialJail(sandbox, { configDir, fixtureDir, tmpDir, bin, env }) {
   if (!sandbox) return null;
   const profile = buildAgenticSandboxProfile({
     home: homedir(),
-    allowWrite: [configDir, fixtureDir, fixtureRoot, tmpdir()],
+    allowWrite: [configDir, fixtureDir, tmpDir],
     allowRead: [realpathSync(fileURLToPath(import.meta.url))],
     bin,
     env,
   });
-  return { sandboxExec: sandbox.sandboxExec, profile };
+  return { sandboxExec: sandbox.sandboxExec, profile, tmpDir };
 }
 
 // ---- opt-in OS sandbox (macOS seatbelt) ------------------------------------
@@ -1062,10 +1173,10 @@ function trialJail(sandbox, { configDir, fixtureDir, fixtureRoot, bin, env }) {
 //     realpath throws (impossible in practice; $HOME must exist), the error
 //     propagates and the session never launches, rather than emitting a profile
 //     that doesn't actually jail (never a silent unsandboxed run).
-//   - M-1: the writable exceptions are realpath'd too (best-effort — a defensive
-//     re-allow that can't be resolved is dropped, safe-fail), so the documented
-//     re-allow for a $HOME-based TMPDIR matches real kernel paths. Deduped by the
-//     Set in buildSeatbeltProfile after normalization.
+//   - M-1: the writable dirs are realpath'd too (best-effort — one that can't be
+//     resolved is dropped, safe-fail: it just stays unwritable), so they match real
+//     kernel paths (/var → /private/var). Deduped by the Set in buildSeatbeltProfile
+//     after normalization.
 // Read trees come from resolveRuntimeTrees, which already includes canonical
 // (dirname-of-realpath) forms.
 export function buildAgenticSandboxProfile({
@@ -1092,15 +1203,20 @@ export function buildAgenticSandboxProfile({
 }
 
 // Generate a seatbelt (sandbox_init) profile as a string. Pure and unit-testable:
-// no IO, deterministic given its inputs. The policy is "allow everything, then jail
-// the operator's $HOME filesystem": a misbehaving or prompt-injected agentic
-// session can't read ssh keys / other credentials / documents under $HOME, nor
-// write outside the fixture. Network is intentionally NOT restricted — the session
-// must reach the model API, and the env-held key is visible by design (see the DEBT
-// note on buildChildEnv).
+// no IO, deterministic given its inputs. The policy:
+//   - WRITES are an allowlist: every file write is denied except to `allowWrite`
+//     (the trial's own config dir, fixture and temp dir) and /dev/null. So a jailed
+//     session cannot touch anything outside its trial — not a user-writable PATH
+//     dir such as /opt/homebrew/bin, not another trial's dirs, not the runner's.
+//   - READS are denied under the operator's $HOME (ssh keys, credentials,
+//     documents), except `allowWrite` and the `allowRead` runtime trees. Reads
+//     elsewhere (system dirs, /opt, the temp root) stay allowed.
+//   - Everything else (process exec, network, ...) is allowed. Network is
+//     intentionally NOT restricted — the session must reach the model API, and the
+//     env-held credential is visible by design (see the DEBT note on buildChildEnv).
 //
-// SBPL is last-match-wins: the broad `(deny ... (subpath HOME))` comes first, then
-// the narrow `(allow ...)` exceptions override it for their subpaths.
+// SBPL is last-match-wins: the broad denies come first, then the narrow `(allow ...)`
+// exceptions override them for their paths.
 export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [] }) {
   // Escape backslashes and quotes so a path with either can't break out of the
   // SBPL string literal (macOS paths rarely contain them, but never trust input).
@@ -1112,16 +1228,17 @@ export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [] }) 
   const lines = [
     "(version 1)",
     ";; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).",
-    ";; Allow everything, then jail the operator's $HOME filesystem so a misbehaving",
-    ";; or prompt-injected session can't read ssh keys / other credentials /",
-    ";; documents, or write outside the fixture. Network stays allowed by design.",
+    ";; Deny every write but the trial's own dirs, deny reads under the operator's",
+    ";; $HOME, allow the rest. Network stays allowed by design.",
     "(allow default)",
-    `(deny file-read* file-write* (subpath "${esc(home)}"))`,
+    "(deny file-write*)",
+    `(deny file-read* (subpath "${esc(home)}"))`,
+    '(allow file-write* (literal "/dev/null"))',
   ];
   const writes = subpaths(allowWrite);
   if (writes.length) {
     lines.push(
-      ";; read+write: throwaway config dir, materialized fixture repo, OS temp root.",
+      ";; read+write: this trial's config dir, fixture repo and temp dir only.",
       "(allow file-read* file-write*",
       ...writes,
       ")",
@@ -1130,7 +1247,7 @@ export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [] }) 
   const reads = subpaths(allowRead);
   if (reads.length) {
     lines.push(
-      ";; read-only: claude + node runtime install trees (resolved via which+realpath).",
+      ";; read-only: claude + node runtime install trees, and the runner script.",
       "(allow file-read*",
       ...reads,
       ")",
@@ -1147,7 +1264,7 @@ export function wrapWithSandbox(sandboxExec, profile, bin, args) {
 }
 
 // Resolve the claude + node runtime install trees that must stay readable under the
-// $HOME jail. For each: resolve the on-PATH launcher (which), follow symlinks
+// $HOME jail. For each: take the resolved launcher path, follow symlinks
 // (realpath), and allow BOTH the launcher's dir and the resolved target's dir — a
 // launcher symlink and its real payload can live in different trees, and the kernel
 // reads both to exec. Trees outside $HOME (e.g. Homebrew node) are harmless no-ops.
@@ -1170,17 +1287,9 @@ function resolveRuntimeTrees(bin, env = process.env) {
   };
   // node: the runtime that actually executes the session's `node` and claude's cli.
   addDirs(process.execPath);
-  // claude: resolve a bare command name via `which`; an explicit path is used as-is.
-  let claudePath = bin;
-  if (bin && !bin.includes("/")) {
-    try {
-      claudePath =
-        execFileSync("which", [bin], { encoding: "utf8", env: buildBaseEnv(env) }).trim() || bin;
-    } catch {
-      /* not on PATH: fall through, addDirs will skip an unresolved bare name */
-    }
-  }
-  if (claudePath.includes("/")) addDirs(claudePath);
+  // claude: runEvals hands in an absolute path; a bare name (a direct caller) is
+  // looked up in-process, never by spawning `which`.
+  addDirs(bin ? findOnPath(bin, env) : null);
   return [...trees];
 }
 
@@ -1213,19 +1322,13 @@ export function requireSandboxSupport(platform, sandboxExecPath) {
 }
 
 // Locate sandbox-exec. EVALS_SANDBOX_EXEC overrides (present-but-empty means "not
-// found", a deterministic test/refusal seam); otherwise probe PATH via `which`.
+// found", a deterministic test/refusal seam); otherwise look it up on PATH
+// in-process (findOnPath), once, before the first session.
 function resolveSandboxExec(env) {
-  if (env.EVALS_SANDBOX_EXEC !== undefined) return env.EVALS_SANDBOX_EXEC || null;
-  try {
-    return (
-      execFileSync("which", ["sandbox-exec"], {
-        encoding: "utf8",
-        env: buildBaseEnv(env),
-      }).trim() || null
-    );
-  } catch {
-    return null;
+  if (env.EVALS_SANDBOX_EXEC !== undefined) {
+    return env.EVALS_SANDBOX_EXEC ? resolve(env.EVALS_SANDBOX_EXEC) : null;
   }
+  return findOnPath("sandbox-exec", env);
 }
 
 // Decide whether agentic sessions run inside the seatbelt jail, throwing on refusal.
@@ -1247,8 +1350,11 @@ export function runEvals(opts, env = process.env) {
     throw new Error(`--condition must be one of ${[...CONDITIONS].join(", ")}`);
   }
   const model = resolveModel(opts, env);
-  const bin = env.EVALS_CLAUDE_BIN || "claude";
   const trials = resolveTrials(opts);
+  const timeoutMs =
+    Number.isInteger(opts.postSessionTimeoutMs) && opts.postSessionTimeoutMs > 0
+      ? opts.postSessionTimeoutMs
+      : DEFAULT_POST_SESSION_TIMEOUT_MS;
 
   const { cases, errors } = parseCasesJsonl(readFileSync(casesPath(), "utf8"));
   if (errors.length) throw new Error(`cases.jsonl parse errors:\n${errors.join("\n")}`);
@@ -1287,6 +1393,12 @@ export function runEvals(opts, env = process.env) {
   // than mid-batch, trial by trial.
   resolveAuth(env);
 
+  // Every binary the runner spawns is resolved to an absolute path HERE, before the
+  // first session, and never looked up on PATH again (see findOnPath). Still before
+  // any dir exists: a missing binary refuses the run up front.
+  const claudeBin = requireOnPath(env.EVALS_CLAUDE_BIN || "claude", env, "the claude CLI");
+  const gitBin = runnable.some((c) => c.mode === "agentic") ? requireOnPath("git", env) : null;
+
   const lawsText = condition === "candidate" ? readFileSync(lawsPath(), "utf8") : "";
   // Provenance stamped onto every result line. Without it a results file cannot be
   // attributed to a law text at all: on 2026-07-30 a probe's failure was read as a
@@ -1303,25 +1415,21 @@ export function runEvals(opts, env = process.env) {
     lawSha256: lawsText ? createHash("sha256").update(lawsText).digest("hex").slice(0, 16) : null,
     sandbox: Boolean(sandbox),
   };
-  // One config dir per condition, reused across cases (and left in place for
-  // post-hoc inspection — each `run` makes at most one dir). The workDir is a
-  // separate EMPTY dir used as the child's cwd for every case, so no project
-  // CLAUDE.md (this repo's included) is discoverable by walking up from it.
-  const configDir = prepareConditionDir(condition, lawsText, tmpdir());
-  const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
-
   const outPath =
     opts.out ||
     join(pluginRoot, "evals", "results", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
   mkdirSync(dirname(outPath), { recursive: true });
 
-  const fixtureRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
+  // Each trial gets its own dirs under this root (prepareTrialDirs), left in place
+  // for post-hoc inspection. EVALS_FIXTURE_ROOT names it; default the OS temp dir.
+  const trialsRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
   const written = [];
   for (const c of runnable) {
     if (!SUPPORTED_MODES.has(c.mode)) throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
     // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
     // with no `trial` field as trial 1, so the two formats pool coherently.
     for (let trial = 1; trial <= trials; trial++) {
+      const dirs = prepareTrialDirs(condition, lawsText, trialsRoot);
       const line = {
         id: c.id,
         mode: c.mode,
@@ -1332,8 +1440,9 @@ export function runEvals(opts, env = process.env) {
         informative: c.informative === true,
         prompt: c.prompt,
         checks: c.checks,
-        configDir,
-        workDir,
+        trialDir: dirs.trialDir,
+        configDir: dirs.configDir,
+        workDir: dirs.workDir,
         ...provenance,
         timestamp: new Date().toISOString(),
       };
@@ -1341,19 +1450,28 @@ export function runEvals(opts, env = process.env) {
         // mode dispatch: text judges first-response prose; agentic materializes a
         // throwaway fixture repo, runs a full session in it, then judges artifacts.
         if (c.mode === "agentic") {
-          const fx = materializeFixture(c.fixture, fixtureRoot, env);
+          const fx = materializeFixture(c.fixture, dirs.fixtureParent, env, gitBin);
           line.fixture = c.fixture;
           line.fixtureDir = fx.dir;
           line.initialBranch = fx.initialBranch;
           line.initialCommit = fx.initialCommit;
           const jail = trialJail(sandbox, {
-            configDir,
+            configDir: dirs.configDir,
             fixtureDir: fx.dir,
-            fixtureRoot,
-            bin,
+            tmpDir: dirs.tmpDir,
+            bin: claudeBin,
             env,
           });
-          line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env, jail);
+          line.response = runAgenticCase(
+            claudeBin,
+            model,
+            c.prompt,
+            dirs.configDir,
+            fx.dir,
+            env,
+            dirs.tmpDir,
+            jail,
+          );
           // Judge now, while the fixture dir exists — inside the jail when there is
           // one — and record per-check outcomes so `score` can judge offline
           // (matching text mode's shape). The check objects are the runner's own,
@@ -1366,6 +1484,8 @@ export function runEvals(opts, env = process.env) {
               initialBranch: fx.initialBranch,
               initialCommit: fx.initialCommit,
               checks: c.checks,
+              gitBin,
+              timeoutMs,
             },
             jail,
             env,
@@ -1376,7 +1496,15 @@ export function runEvals(opts, env = process.env) {
             detail: o.detail,
           }));
         } else {
-          line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
+          line.response = runTextCase(
+            claudeBin,
+            model,
+            c.prompt,
+            dirs.configDir,
+            dirs.workDir,
+            env,
+            dirs.tmpDir,
+          );
           // Record per-check outcomes (same shape as agentic lines) so an
           // inspector can see WHICH check failed without re-scoring. Scoring
           // still re-evaluates text lines from `response`, so these are
@@ -1390,7 +1518,7 @@ export function runEvals(opts, env = process.env) {
         }
       } catch (err) {
         line.response = "";
-        line.error = err.message;
+        line.error = untrustedText(err.message, 2000);
       }
       // Append (never truncate): the documented flow runs baseline and candidate
       // as two separate invocations into the SAME --out file, so score can
@@ -1399,7 +1527,7 @@ export function runEvals(opts, env = process.env) {
       written.push(line);
     }
   }
-  return { outPath, configDir, workDir, lines: written, skipped };
+  return { outPath, lines: written, skipped };
 }
 
 // ---- CLI -------------------------------------------------------------------

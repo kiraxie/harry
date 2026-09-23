@@ -22,6 +22,8 @@ export interface FakeClaudeSettings {
   script?: string;
   fail?: boolean;
   isError?: boolean;
+  stderr?: string;
+  callsInConfigDir?: boolean;
 }
 
 export function installFakeClaude(
