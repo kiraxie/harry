@@ -41,19 +41,25 @@ test("executing and tier-gates state the same trigger", () => {
   assert.doesNotMatch(gates, /session \(inline\), in an isolated worktree/);
 });
 
-test("parallel worktrees are removed by executing, once the task is marked complete", () => {
+test("parallel worktrees are removed by executing, in step 5's integration", () => {
   // Whoever cut the worktree removes it while it still knows exactly which one it is.
   // Left for finishing, ownership had to be inferred or recorded across sessions,
   // archiving and PRs, and every version of that could delete a worktree that was not
   // the unit's.
   const executing = read("skills/executing/SKILL.md");
-  assert.match(executing, /Then remove that task's worktree and delete its branch right away/);
-  assert.match(executing, /A parallel worktree never outlives the task that made it/);
-  // Removal after step 5, not on the implementer's first DONE: the per-task review
-  // (step 3) and every fix round (step 4) still run in that worktree, and rounds 1-3
-  // resume the implementer whose working directory it is.
-  assert.match(executing, /Merge each back into the unit branch once step 5 marks it complete/);
-  assert.match(executing, /works in that task's worktree, which is still there/);
+  assert.match(executing, /A task's worktree never outlives the task that made it/);
+  // Removal only at integration, not on the implementer's first DONE: the per-task
+  // review (step 3) and every fix round (step 4) still run in that worktree, and
+  // rounds 1-3 resume the implementer whose working directory it is.
+  assert.match(
+    executing,
+    /reaches the unit branch only through step 5's integration, never before/,
+  );
+  assert.match(executing, /its fixer — resumed or fresh — works in it, which is still there/);
+  assert.match(
+    executing,
+    /Remove the task's worktree and delete its branch — the fast-forward just proved it landed/,
+  );
   const finishing = read("skills/finishing/SKILL.md");
   assert.match(finishing, /\*\*in place\*\* runs only f\.1, f\.4 and f\.5/);
   assert.doesNotMatch(finishing, /Parallel worktrees\*\* \(the layout's\)/);
@@ -89,4 +95,53 @@ test("Discard has the user name any leftover parallel worktrees, and lists them 
   const confirm = discard.indexOf("typed `discard`");
   assert.ok(listed >= 0, "Discard no longer lists a named worktree's unmerged commits");
   assert.ok(listed < confirm, "the named worktrees' losses must be listed before the confirmation");
+});
+
+test("a parallel task integrates in its own worktree before it is marked complete", () => {
+  // Merging back after "complete" left the unit branch red during the fix, reopened
+  // tasks that resume skipped (they still carried a complete line), and dragged other
+  // tasks' code into the fix scope. Integrating first avoids all of it.
+  const executing = read("skills/executing/SKILL.md");
+  const step5 =
+    executing.split("5. **Integrate, then mark complete.**")[1]?.split("After all tasks:")[0] ?? "";
+  assert.match(step5, /Merge the unit branch into the task's branch in its worktree/);
+  assert.match(step5, /Red → the task is not complete: hand the failure to step 4 as a finding/);
+  assert.match(step5, /integration only ever moves the unit branch to a tree whose suite passed/);
+  assert.match(
+    step5,
+    /a task that ran on the unit branch itself — only when no other task is in flight/,
+  );
+  assert.match(executing, /finishes before any parallel task is dispatched/);
+  assert.match(step5, /merge --ff-only <its branch>/);
+  // A sequential task writing in the unit branch's checkout would share it with the
+  // fast-forward; while parallel work is in flight every task gets a worktree.
+  assert.match(
+    executing,
+    /While any parallel task is in flight, every task runs in its own worktree — a sequential one too/,
+  );
+  assert.match(step5, /refused for any other reason \(a dirty unit checkout\) → stop and ask/);
+  const ff = step5.indexOf("merge --ff-only");
+  const remove = step5.indexOf("Remove the task's worktree");
+  assert.ok(ff >= 0 && ff < remove, "the fast-forward must land before the worktree goes");
+  const integrate = step5.indexOf("Merge the unit branch into");
+  const markComplete = step5.indexOf(": complete (commits");
+  assert.ok(
+    integrate >= 0 && integrate < markComplete,
+    "integration must precede the complete line",
+  );
+  // The fix loop's limits for an integration failure.
+  assert.match(executing, /a fix that needs another unit's files is BLOCKED/);
+  assert.match(
+    executing,
+    /a red suite still open at the cap — or arriving after the loop already reached it — is BLOCKED to the user, never adjudicated/,
+  );
+  assert.match(executing, /after a step-5 integration, its merge commit → HEAD/);
+});
+
+test("integration conflict resolutions are recorded and reviewed by name at step 6", () => {
+  // They are made after the task's per-task review, so no per-task review saw them.
+  const executing = read("skills/executing/SKILL.md");
+  assert.match(executing, /integration: conflicts resolved in <merge7>/);
+  assert.match(executing, /every integration conflict resolution recorded in `## Progress`/);
+  assert.match(executing, /the merge commits where integration resolved conflicts/);
 });

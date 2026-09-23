@@ -235,11 +235,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   branch rather than the default branch; a single session working sequentially
   takes a fresh branch in place at any tier. `executing` and
   `references/tier-gates.md` say the same. A parallel task keeps its worktree
-  through its review and fix rounds; `executing` merges it back once the task
-  is marked complete and removes the worktree and branch there, so `finishing`
-  only ever handles the unit's own checkout: a linked worktree or, for a
-  branch in place, none. Discard checks the main checkout is still on the unit's branch
-  before touching it, and has the user name any parallel worktree left
+  through its review and fix rounds, then integrates there before it is
+  marked complete: the unit branch is merged into it and the suite runs in
+  the worktree; a red suite goes back into the task's fix loop (inside its
+  write set, and to the user rather than adjudicated at the cap), and only a
+  green tree fast-forwards the unit branch, after which `executing` removes
+  the worktree and branch. Conflict resolutions made at integration are
+  recorded and reviewed by name at the final review. While any parallel task
+  is in flight, every task gets its own worktree, so nothing writes in the
+  unit branch's checkout when it fast-forwards. So `finishing` only
+  ever handles the unit's own checkout: a linked worktree or, for a branch in
+  place, none.
+  Discard checks the main checkout is still on the unit's branch before
+  touching it, and has the user name any parallel worktree left
   mid-execution rather than guessing.
 
 ### Fixed
