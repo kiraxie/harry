@@ -7,7 +7,7 @@
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 
-import { notFoundError, spawnTarget } from "./path-search.ts";
+import { notFoundError, resolveOnPath } from "./path-search.ts";
 
 interface CommandResult {
   /** `null` when git never ran (spawn failure) or was killed by a signal —
@@ -30,15 +30,11 @@ function failureReason(result: CommandResult): string {
 function git(cwd: string, args: string[]): CommandResult {
   // Resolved first, never spawned by bare name: cwd is the repo under review
   // (see path-search.ts). Not found keeps the ENOENT a failed spawn reports.
-  const command = spawnTarget("git");
+  const command = resolveOnPath("git", process.env);
   if (command === null) {
     return { status: null, stdout: "", stderr: "", error: notFoundError("spawnSync git", "git") };
   }
-  const result = spawnSync(command, args, {
-    cwd,
-    encoding: "utf8",
-    windowsHide: true,
-  });
+  const result = spawnSync(command, args, { cwd, encoding: "utf8" });
   return {
     status: result.status,
     stdout: result.stdout ?? "",

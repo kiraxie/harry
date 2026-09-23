@@ -227,10 +227,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a pointer to `EVALS_ANTHROPIC_API_KEY`, instead of failing every run midway;
   `evals/README.md` documents it.
 - **CI reads the pnpm version from `packageManager`** instead of a second copy
-  in the workflow, and a `windows-latest` job runs `tests/run-codex.test.ts`
-  — the Windows codex resolution and spawn-planning tests, against a fake
-  filesystem — on a real Windows host. The rest of the suite, and a real
-  `codex` install, do not run on Windows yet.
+  in the workflow.
+
+- **Worktree isolation follows concurrent writers, not tier** (`HARRY.md`
+  §5). Two or more writers at once — parallel subagents, several efforts in
+  flight, the user editing alongside — each get a worktree, cut from the unit's
+  branch rather than the default branch; a single session working sequentially
+  takes a fresh branch in place at any tier. `executing` and
+  `references/tier-gates.md` say the same. A parallel task keeps its worktree
+  through its review and fix rounds; `executing` merges it back once the task
+  is marked complete and removes the worktree and branch there, so `finishing`
+  only ever handles the unit's own checkout: a linked worktree or, for a
+  branch in place, none. Discard checks the main checkout is still on the unit's branch
+  before touching it, and has the user name any parallel worktree left
+  mid-execution rather than guessing.
 
 ### Fixed
 
@@ -280,14 +290,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed run whose output file cannot be narrowed to owner-only reports
   codex's own failure and `Log:` line first, then the narrowing error, instead
   of replacing the cause.
-- On Windows, only `.com`/`.exe` (and the existing `.cmd`/`.bat` shim path)
-  PATHEXT hits are spawned; a `codex.js`/`.vbs`/`.ps1` earlier in PATH is
-  skipped.
 - `ask`'s run files older than 7 days are pruned on each run, so the state
   directory no longer grows without bound.
 
 ### Removed
 
+- **Windows support.** The companion supports macOS and Linux only: its
+  Windows `codex` resolution and `.cmd` shim spawning, and the Windows CI job,
+  are gone. On Windows it now exits with a clear "not supported" error instead
+  of running.
 - **The `writing-plans` pipeline stage is gone.** The pipeline is now
   `brainstorm → execute → finish` (grilling happens inside brainstorming), and
   `skills/writing-plans/` is deleted. By the time a plan was written the

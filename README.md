@@ -118,7 +118,7 @@ These auto-trigger (no slash command); they are the pipeline:
 
 - **brainstorming** — turn an idea into an approved item `## Why / What` (SCQA) via the grilling interview (`references/grilling.md`), closing on a residue manifest and the numbered acceptance criteria approved with it (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
 - **executing** — build against the acceptance criteria, recording progress per AC ID; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
-- **finishing** — verify green, run an architecture review when the change altered an API, DB schema, public interface or module/service boundary, ask merge-vs-PR, then verify the merged result before any cleanup, archive the item, clean up the worktree, and end on the confirmed base (CI as evidence when pushed; the merged-result suite when the merge stays local).
+- **finishing** — verify green, run an architecture review when the change altered an API, DB schema, public interface or module/service boundary, ask merge-vs-PR, then verify the merged result before any cleanup, archive the item, clean up the branch and any worktrees, and end on the confirmed base (CI as evidence when pushed; the merged-result suite when the merge stays local).
 
 ## Layout
 

@@ -56,34 +56,3 @@ jobs:
             echo "::error::dist/companion.cjs is out of date with src/. Run 'pnpm run build' and commit the rebuilt bundle."
             exit 1
           fi
-
-  windows:
-    name: CI (Windows)
-    runs-on: windows-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6.1.0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # DEBT: only tests/run-codex.test.ts runs here, the file that exercises the
-      # Windows codex resolution and spawn planning; its POSIX-only cases skip on win32.
-      # The rest of the suite fakes `codex` as an extensionless `#!/bin/sh` script that
-      # the win32 resolver (.com/.exe/.bat/.cmd only) never finds, so it cannot pass here.
-      # Upgrade path: give those fakes win32 `codex.cmd` shims, the way tests/fake-claude.mjs
-      # is driven, then run the full `pnpm test` (which also needs `core.autocrlf false`
-      # before checkout and `fetch-depth: 0` for tests/release-state.test.ts).
-      - name: Test (Windows codex resolution and spawn)
-        run: node --test tests/run-codex.test.ts

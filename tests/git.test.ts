@@ -124,9 +124,7 @@ function withPath<T>(PATH: string, body: () => T): T {
   }
 }
 
-test("ensureGitRepository never runs a repo's own `git` through an empty or relative PATH entry", {
-  skip: process.platform === "win32" && "POSIX PATH search",
-}, () => {
+test("ensureGitRepository never runs a repo's own `git` through an empty or relative PATH entry", () => {
   // execvp resolves an empty or relative PATH entry against the cwd, and review
   // runs git with cwd = the repository under review.
   const dir = realpathSync(tmpDir());
@@ -149,9 +147,7 @@ test("ensureGitRepository never runs a repo's own `git` through an empty or rela
   }
 });
 
-test("ensureGitRepository with no git on PATH still reports git as not installed", {
-  skip: process.platform === "win32" && "POSIX PATH search",
-}, () => {
+test("ensureGitRepository with no git on PATH still reports git as not installed", () => {
   const dir = realpathSync(tmpDir());
   const empty = realpathSync(tmpDir());
   try {

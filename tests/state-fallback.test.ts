@@ -36,9 +36,7 @@ function withPath<T>(PATH: string, body: () => T): T {
   }
 }
 
-test("resolveStateDir never runs a cwd's own `git` through an empty or relative PATH entry", {
-  skip: process.platform === "win32" && "POSIX PATH search",
-}, () => {
+test("resolveStateDir never runs a cwd's own `git` through an empty or relative PATH entry", () => {
   // execvp resolves an empty or relative PATH entry against the cwd; ask and
   // review resolve their state dir from a cwd that may be an untrusted repo.
   const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "harry-state-trap-")));
@@ -56,9 +54,7 @@ test("resolveStateDir never runs a cwd's own `git` through an empty or relative 
   }
 });
 
-test("resolveStateDir with no git on PATH still keys on the cwd itself", {
-  skip: process.platform === "win32" && "POSIX PATH search",
-}, () => {
+test("resolveStateDir with no git on PATH still keys on the cwd itself", () => {
   const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "harry-state-nogit-")));
   execFileSync("git", ["init", "-q"], { cwd: repo });
   const sub = path.join(repo, "sub");

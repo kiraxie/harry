@@ -1734,7 +1734,7 @@ test("requireSandboxSupport: refuses non-macOS and a missing sandbox-exec; passe
     "non-darwin is a hard refusal (never silently unsandboxed)",
   );
   assert.throws(
-    () => requireSandboxSupport("win32", "/x"),
+    () => requireSandboxSupport("freebsd", "/x"),
     /refusing to run an agentic session unsandboxed/,
     "any non-darwin platform is refused",
   );

@@ -508,9 +508,7 @@ test("ask prunes its own run files older than 7 days before writing, and nothing
   assert.ok(left.has(path.basename(logPathOf(second))), "this run's log must survive");
 });
 
-test("pruneRunFiles never throws: a missing dir or an entry it cannot remove is skipped", {
-  skip: process.platform === "win32",
-}, () => {
+test("pruneRunFiles never throws: a missing dir or an entry it cannot remove is skipped", () => {
   const missing = path.join(makeTempDir("harry-ask-prune-"), "nope");
   assert.doesNotThrow(() => pruneRunFiles(missing, "ask", 7 * DAY_MS));
 
@@ -567,7 +565,7 @@ function modeOf(file: string): string {
   return (fs.statSync(file).mode & 0o777).toString(8);
 }
 
-test("ask's run log is owner-only (0600)", { skip: process.platform === "win32" }, () => {
+test("ask's run log is owner-only (0600)", () => {
   const ok = runAsk(["hello"], { permissiveUmask: true });
   assert.equal(ok.status, 0, ok.stderr);
   assert.equal(modeOf(logPathOf(ok)), "600");
@@ -576,17 +574,13 @@ test("ask's run log is owner-only (0600)", { skip: process.platform === "win32" 
   assert.equal(modeOf(logPathOf(failed)), "600");
 });
 
-test("ask's answer file is owner-only (0600) after a successful run", {
-  skip: process.platform === "win32",
-}, () => {
+test("ask's answer file is owner-only (0600) after a successful run", () => {
   const run = runAsk(["hello"], { permissiveUmask: true });
   assert.equal(run.status, 0, run.stderr);
   assert.equal(modeOf(answerPathOf(run)), "600");
 });
 
-test("a failed ask's answer file, when codex wrote one, is owner-only (0600) too", {
-  skip: process.platform === "win32",
-}, () => {
+test("a failed ask's answer file, when codex wrote one, is owner-only (0600) too", () => {
   const cases: Record<string, string>[] = [
     { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_OUTPUT: "always" },
     { FAKE_CODEX_CLI_OUTPUT: "empty" },
@@ -740,9 +734,7 @@ test("ask with codex missing from PATH fails naming the Codex CLI and leaves no 
   assert.deepEqual(leftovers, [], "a run that never started codex leaves no log behind");
 });
 
-test("ask with a codex that cannot be executed (EACCES) fails loudly and leaves no empty log", {
-  skip: process.platform === "win32",
-}, () => {
+test("ask with a codex that cannot be executed (EACCES) fails loudly and leaves no empty log", () => {
   // The only `codex` on PATH is executable, so it resolves, but its `#!`
   // interpreter is not: the spawn itself fails with EACCES. (A non-executable
   // `codex` is never resolved at all — it reports as missing.)

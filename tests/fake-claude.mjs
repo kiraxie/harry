@@ -107,11 +107,6 @@ process.stdout.write(
 );
 `;
   writeExecutable(scriptPath, source);
-  if (process.platform === "win32") {
-    fs.writeFileSync(path.join(binDir, "claude.cmd"), `@echo off\r\nnode "%~dp0claude" %*\r\n`, {
-      encoding: "utf8",
-    });
-  }
   return { scriptPath, callsPath };
 }
 

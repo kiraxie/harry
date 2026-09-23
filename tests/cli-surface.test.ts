@@ -5,7 +5,8 @@
  *  - no `result` command and no `--background` (backgrounding is the harness's
  *    `run_in_background`, not a CLI flag);
  *  - no `status` command (the rate-limit snapshot it rendered came from the
- *    in-process Codex runtime, which is gone).
+ *    in-process Codex runtime, which is gone);
+ *  - no Windows: on win32 the CLI refuses to run at all.
  */
 
 import assert from "node:assert/strict";
@@ -21,9 +22,12 @@ function makeTempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-/** Run the CLI in an isolated cwd + state dir. */
-function runCli(args: string[]): { status: number | null; stdout: string; stderr: string } {
-  const res = spawnSync(process.execPath, [CLI, ...args], {
+/** Run the CLI in an isolated cwd + state dir, with `nodeArgs` ahead of the script. */
+function runCli(
+  args: string[],
+  nodeArgs: string[] = [],
+): { status: number | null; stdout: string; stderr: string } {
+  const res = spawnSync(process.execPath, [...nodeArgs, CLI, ...args], {
     cwd: makeTempDir("harry-cli-cwd-"),
     encoding: "utf8",
     env: { ...process.env, CLAUDE_PLUGIN_DATA: makeTempDir("harry-cli-data-") },
@@ -35,6 +39,16 @@ test("the node CLI rejects --background (backgrounding is the harness's job, not
   const res = runCli(["review", "--background"]);
   assert.notEqual(res.status, 0, "expected --background to be rejected");
   assert.match(res.stderr, /Unknown flag --background/);
+});
+
+test("on Windows the CLI refuses to run, before even printing usage", () => {
+  // A preload reports win32 as the platform. `--help` exits 0 with usage
+  // anywhere else, so only the guard can make this run fail.
+  const preload = `data:text/javascript,Object.defineProperty(process, "platform", { value: "win32" });`;
+  const res = runCli(["--help"], ["--import", preload]);
+  assert.equal(res.status, 1, res.stderr);
+  assert.match(res.stderr, /supports macOS and Linux only; Windows is not supported/);
+  assert.doesNotMatch(res.stdout, /Usage:/);
 });
 
 for (const command of ["result", "status"]) {

@@ -561,7 +561,7 @@ function modeOf(file: string): number {
   return statSync(file).mode & 0o777;
 }
 
-test("F8: the run log is owner-only (0600)", { skip: process.platform === "win32" }, () => {
+test("F8: the run log is owner-only (0600)", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   const ok = runReview(repo, [], { permissiveUmask: true });
@@ -575,9 +575,7 @@ test("F8: the run log is owner-only (0600)", { skip: process.platform === "win32
   assert.equal(modeOf(logPathOf(failed)).toString(8), "600");
 });
 
-test("F8: the review file is owner-only (0600) after a successful run", {
-  skip: process.platform === "win32",
-}, () => {
+test("F8: the review file is owner-only (0600) after a successful run", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   const run = runReview(repo, [], { permissiveUmask: true });
@@ -585,9 +583,7 @@ test("F8: the review file is owner-only (0600) after a successful run", {
   assert.equal(modeOf(outputPathOf(run)).toString(8), "600");
 });
 
-test("F8: a failed run's review file, when codex wrote one, is owner-only (0600) too", {
-  skip: process.platform === "win32",
-}, () => {
+test("F8: a failed run's review file, when codex wrote one, is owner-only (0600) too", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   const cases: Record<string, string>[] = [
@@ -602,9 +598,7 @@ test("F8: a failed run's review file, when codex wrote one, is owner-only (0600)
   }
 });
 
-test("F8: a spawn error's review file, when codex wrote one, is owner-only (0600) too", {
-  skip: process.platform === "win32",
-}, () => {
+test("F8: a spawn error's review file, when codex wrote one, is owner-only (0600) too", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   // Writes its -o file, then exits 0 without reading its prompt: EPIPE.
@@ -677,9 +671,7 @@ test("A5: codex missing from PATH fails naming the Codex CLI", () => {
   assert.deepEqual(leftovers, [], "a run that never started codex leaves no log behind");
 });
 
-test("A5: a reviewed repo's own `codex` or `git` is never run through an empty or relative PATH entry", {
-  skip: process.platform === "win32",
-}, () => {
+test("A5: a reviewed repo's own `codex` or `git` is never run through an empty or relative PATH entry", () => {
   // review runs codex and git with cwd = the repo under review; execvp would
   // resolve an empty or relative PATH entry against it and run the repo's own.
   const repo = makeRepo();
@@ -718,9 +710,7 @@ function hugeContextFile(): string {
   return file;
 }
 
-test("A5: a codex that cannot be executed (EACCES) fails loudly and leaves no empty log", {
-  skip: process.platform === "win32",
-}, () => {
+test("A5: a codex that cannot be executed (EACCES) fails loudly and leaves no empty log", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   // The only `codex` on PATH is executable, so it resolves, but its `#!`
@@ -737,9 +727,7 @@ test("A5: a codex that cannot be executed (EACCES) fails loudly and leaves no em
   assert.deepEqual(logsIn(run), [], "a spawn that never ran codex leaves no log behind");
 });
 
-test("A5: a spawn error after codex wrote to its log keeps the log and names it", {
-  skip: process.platform === "win32",
-}, () => {
+test("A5: a spawn error after codex wrote to its log keeps the log and names it", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   // Exits 0 without reading its prompt: writing the rest of stdin fails with EPIPE.
@@ -755,9 +743,7 @@ test("A5: a spawn error after codex wrote to its log keeps the log and names it"
   assert.equal(readFileSync(log, "utf8"), `${PLANTED_SECRET}\n`);
 });
 
-test("A5: a codex that exits non-zero without reading its prompt still reports its error line", {
-  skip: process.platform === "win32",
-}, () => {
+test("A5: a codex that exits non-zero without reading its prompt still reports its error line", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");
   // clap rejects argv before codex reads stdin: the exit, not the EPIPE, is the failure.

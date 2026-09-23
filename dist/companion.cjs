@@ -64,48 +64,16 @@ function isExecutableFile(path) {
     return false;
   }
 }
-function resolveOnPath(name, env, exists = isExecutableFile) {
+function resolveOnPath(name, env) {
   for (const dir of (env.PATH ?? "").split(":")) {
     if (!import_node_path2.posix.isAbsolute(dir)) continue;
     const candidate = import_node_path2.posix.join(dir, name);
-    if (exists(candidate)) return candidate;
+    if (isExecutableFile(candidate)) return candidate;
   }
   return null;
 }
 function notFoundError(syscall, name) {
   return Object.assign(new Error(`${syscall} ENOENT`), { code: "ENOENT", syscall, path: name });
-}
-function spawnTarget(name, platform = process.platform, env = process.env) {
-  return platform === "win32" ? name : resolveOnPath(name, env);
-}
-function winEnv(env, name) {
-  const key = Object.keys(env).find((k) => k.toUpperCase() === name);
-  return key === void 0 ? void 0 : env[key];
-}
-var WIN_SPAWN_MODE = {
-  ".com": "direct",
-  ".exe": "direct",
-  ".bat": "cmd",
-  ".cmd": "cmd"
-};
-function winSpawnMode(file) {
-  const ext = /^\.[^.\\/]+$/.test(file) ? file : import_node_path2.win32.extname(file);
-  return WIN_SPAWN_MODE[ext.toLowerCase()] ?? null;
-}
-function resolveCodex(env, platform, exists = platform === "win32" ? import_node_fs2.existsSync : isExecutableFile) {
-  if (platform !== "win32") return resolveOnPath("codex", env, exists);
-  const split = (v) => v.split(";").map((s) => s.trim().replace(/^"(.*)"$/, "$1")).filter((s) => s !== "");
-  const exts = split(winEnv(env, "PATHEXT") || ".COM;.EXE;.BAT;.CMD").filter(
-    (ext) => winSpawnMode(ext) !== null
-  );
-  for (const dir of split(winEnv(env, "PATH") ?? "")) {
-    if (!import_node_path2.win32.isAbsolute(dir)) continue;
-    for (const ext of exts) {
-      const candidate = import_node_path2.win32.join(dir, `codex${ext}`);
-      if (exists(candidate)) return candidate;
-    }
-  }
-  return null;
 }
 
 // src/lib/run-files.ts
@@ -177,20 +145,6 @@ function narrowOutput(outputPath) {
 // src/lib/run-codex.ts
 var REASONING_EFFORTS = ["low", "medium", "high", "xhigh"];
 var CODEX_CLI_MISSING = "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry.";
-var CMD_META_RE = /([()\][%!^"`<>&|;, *?])/g;
-function quoteWindowsArg(arg) {
-  const crt = `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
-  return crt.replace(CMD_META_RE, "^$1").replace(CMD_META_RE, "^$1");
-}
-function codexSpawn(args, platform = process.platform, env = process.env, exists) {
-  const command = resolveCodex(env, platform, exists);
-  if (command === null) return null;
-  if (platform !== "win32" || winSpawnMode(command) !== "cmd") {
-    return { command, args: [...args], shell: false };
-  }
-  const line = [command.replace(CMD_META_RE, "^$1"), ...args.map(quoteWindowsArg)].join(" ");
-  return { command: line, args: [], shell: true };
-}
 function codexMissing(res) {
   return res.error?.code === "ENOENT";
 }
@@ -198,30 +152,25 @@ function codexNotFound(syscall) {
   return notFoundError(syscall, "codex");
 }
 function spawnCodexSync(args, options) {
-  const spec = codexSpawn(args, process.platform, options.env ?? process.env);
-  if (spec === null) {
+  const command = resolveOnPath("codex", options.env ?? process.env);
+  if (command === null) {
     const error = codexNotFound("spawnSync codex");
     return { pid: 0, output: [], stdout: "", stderr: "", status: null, signal: null, error };
   }
-  return (0, import_node_child_process.spawnSync)(spec.command, spec.args, { ...options, shell: spec.shell, windowsHide: true });
+  return (0, import_node_child_process.spawnSync)(command, args, options);
 }
-function forwardedSignals(platform) {
-  return platform === "win32" ? ["SIGTERM", "SIGINT"] : ["SIGTERM", "SIGINT", "SIGHUP"];
-}
+var FORWARDED_SIGNALS = ["SIGTERM", "SIGINT", "SIGHUP"];
 function spawnCodex(args, options) {
-  const spec = codexSpawn(args, process.platform, options.env ?? process.env);
-  if (spec === null) {
+  const command = resolveOnPath("codex", options.env ?? process.env);
+  if (command === null) {
     return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
   }
   return new Promise((resolve3) => {
-    const child = (0, import_node_child_process.spawn)(spec.command, spec.args, {
+    const child = (0, import_node_child_process.spawn)(command, args, {
       cwd: options.cwd,
       env: options.env,
-      stdio: ["pipe", "ignore", options.logFd],
-      shell: spec.shell,
-      windowsHide: true
+      stdio: ["pipe", "ignore", options.logFd]
     });
-    const signals = forwardedSignals(process.platform);
     const forward = (signal) => {
       try {
         child.kill(signal);
@@ -231,9 +180,9 @@ function spawnCodex(args, options) {
       process.kill(process.pid, signal);
     };
     const stopForwarding = () => {
-      for (const s of signals) process.off(s, forward);
+      for (const s of FORWARDED_SIGNALS) process.off(s, forward);
     };
-    for (const s of signals) process.on(s, forward);
+    for (const s of FORWARDED_SIGNALS) process.on(s, forward);
     let spawnError;
     let stdinError;
     child.on("error", (err) => {
@@ -375,7 +324,7 @@ var import_node_path4 = require("node:path");
 var PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
 var FALLBACK_STATE_ROOT = (0, import_node_path4.join)((0, import_node_os.tmpdir)(), "harry");
 function repoRootOf(cwd) {
-  const git2 = spawnTarget("git");
+  const git2 = resolveOnPath("git", process.env);
   if (git2 === null) return (0, import_node_path4.resolve)(cwd);
   try {
     const root = (0, import_node_child_process2.execFileSync)(git2, ["rev-parse", "--show-toplevel"], {
@@ -492,15 +441,11 @@ function failureReason2(result) {
   return result.status === null ? "killed by a signal or failed to spawn" : `exit ${result.status}`;
 }
 function git(cwd, args) {
-  const command = spawnTarget("git");
+  const command = resolveOnPath("git", process.env);
   if (command === null) {
     return { status: null, stdout: "", stderr: "", error: notFoundError("spawnSync git", "git") };
   }
-  const result = (0, import_node_child_process3.spawnSync)(command, args, {
-    cwd,
-    encoding: "utf8",
-    windowsHide: true
-  });
+  const result = (0, import_node_child_process3.spawnSync)(command, args, { cwd, encoding: "utf8" });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -886,6 +831,10 @@ function flagRequiredString(flags, key) {
 }
 
 // src/companion.ts
+if (import_node_process.default.platform === "win32") {
+  console.error("harry's companion supports macOS and Linux only; Windows is not supported.");
+  import_node_process.default.exit(1);
+}
 function printUsage() {
   console.log(
     [

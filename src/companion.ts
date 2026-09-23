@@ -18,6 +18,13 @@ import {
 } from "./lib/args.ts";
 import { REASONING_EFFORTS } from "./lib/run-codex.ts";
 
+// Every binary is resolved on a POSIX PATH and spawned without a shell; on
+// Windows that fails in confusing ways, so refuse up front instead.
+if (process.platform === "win32") {
+  console.error("harry's companion supports macOS and Linux only; Windows is not supported.");
+  process.exit(1);
+}
+
 function printUsage(): void {
   console.log(
     [

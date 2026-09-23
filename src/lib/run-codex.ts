@@ -1,9 +1,9 @@
 /**
- * The one place the companion spawns the Codex CLI: spawn planning
- * (`codexSpawn` — the resolved path, or a cmd.exe line for npm's `.cmd` shim),
- * `spawnCodexSync` for `setup`'s quick queries, `spawnCodex` for the one-shot
- * run (`codex exec …`, `codex exec review …`) with signal forwarding, and
- * `runCodexExec`'s failure handling. Finding `codex` on PATH lives in
+ * The one place the companion spawns the Codex CLI: `spawnCodexSync` for
+ * `setup`'s quick queries, `spawnCodex` for the one-shot run (`codex exec …`,
+ * `codex exec review …`) with signal forwarding, and `runCodexExec`'s failure
+ * handling. Both spawn the absolute path `resolveOnPath` finds, never the bare
+ * name (execvp would search the cwd); finding `codex` on PATH lives in
  * `path-search.ts`; the run files it writes into live in `run-files.ts`.
  *
  * codex writes its whole session transcript to stderr (prompt echo, every
@@ -18,7 +18,7 @@
 import { type SpawnSyncOptions, type SpawnSyncReturns, spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
 
-import { notFoundError, resolveCodex, winSpawnMode } from "./path-search.ts";
+import { notFoundError, resolveOnPath } from "./path-search.ts";
 import { narrowOutput } from "./run-files.ts";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
@@ -28,91 +28,34 @@ export const REASONING_EFFORTS: readonly ReasoningEffort[] = ["low", "medium", "
 export const CODEX_CLI_MISSING =
   "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry.";
 
-export interface CodexSpawn {
-  command: string;
-  args: string[];
-  shell: boolean;
-}
-
-/** cmd.exe metacharacters; each is caret-escaped so cmd never enters a quoted state. */
-const CMD_META_RE = /([()\][%!^"`<>&|;, *?])/g;
-
-/**
- * Quote one argument for a cmd.exe command line that runs npm's `codex.cmd`
- * shim (the cross-spawn algorithm, after https://qntm.org/cmd): escape it for
- * the C runtime's argv split, wrap it in quotes, then caret-escape every cmd
- * metacharacter twice — once for cmd's parse of the `/c` line, once for the
- * shim's `%*` re-expansion.
- */
-function quoteWindowsArg(arg: string): string {
-  const crt = `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
-  return crt.replace(CMD_META_RE, "^$1").replace(CMD_META_RE, "^$1");
-}
-
-/**
- * How to spawn `codex` with `args` on `platform`, or null when {@link resolveCodex}
- * finds no `codex` on PATH. Off Windows: the resolved absolute path directly,
- * never the bare name (execvp would search the cwd). On Windows the resolved
- * file decides: a native executable (`codex.exe`) is spawned directly with its
- * argv untouched; a `.cmd`/`.bat` shim (npm's `codex.cmd`), which Node cannot
- * spawn without a shell, becomes one cmd.exe command line — the shim path
- * caret-escaped once, each argument quoted by {@link quoteWindowsArg} (Node adds
- * no quoting of its own under `shell: true`). Callers keep the prompt on stdin,
- * never on this line.
- *
- * DEBT: both Windows paths are verified only against a fake filesystem and a
- * simulated cmd.exe/CRT round trip (tests/run-codex.test.ts), never on a real
- * Windows install. Known cmd.exe limits on the shim path, not handled: a UNC
- * `cwd` makes cmd fall back to `C:\Windows`, and registry-enabled delayed
- * expansion turns a `!` in a path into a variable reference. Upgrade path: a
- * Windows CI job running the companion against a real `npm i -g @openai/codex`
- * and a native `codex.exe`.
- */
-export function codexSpawn(
-  args: readonly string[],
-  platform: NodeJS.Platform = process.platform,
-  env: NodeJS.ProcessEnv = process.env,
-  exists?: (path: string) => boolean,
-): CodexSpawn | null {
-  const command = resolveCodex(env, platform, exists);
-  if (command === null) return null;
-  if (platform !== "win32" || winSpawnMode(command) !== "cmd") {
-    return { command, args: [...args], shell: false };
-  }
-  const line = [command.replace(CMD_META_RE, "^$1"), ...args.map(quoteWindowsArg)].join(" ");
-  return { command: line, args: [], shell: true };
-}
-
 /**
  * Whether a spawn result means codex is not installed: ENOENT, which
- * {@link spawnCodex} and {@link spawnCodexSync} also report when {@link resolveCodex}
- * finds no `codex`. A cmd.exe
- * exit 9009 is deliberately not one — the shim was resolved first, so 9009 means
- * something the shim runs (e.g. `node`) is missing, and the log names it.
+ * {@link spawnCodex} and {@link spawnCodexSync} also report when PATH holds no
+ * `codex`. A non-zero exit is never one: codex ran and failed on its own terms.
  */
 export function codexMissing(res: { error?: Error; status: number | null }): boolean {
   return (res.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 }
 
-/** The ENOENT a spawn reports when {@link resolveCodex} finds no `codex` (see {@link codexMissing}). */
+/** The ENOENT a spawn reports when PATH holds no `codex` (see {@link codexMissing}). */
 function codexNotFound(syscall: string): Error {
   return notFoundError(syscall, "codex");
 }
 
 /**
- * `spawnSync` for codex, through {@link codexSpawn}: `setup`'s short queries.
- * A long run goes through {@link spawnCodex}, which a signal can interrupt.
+ * `spawnSync` for codex: `setup`'s short queries. A long run goes through
+ * {@link spawnCodex}, which a signal can interrupt.
  */
 export function spawnCodexSync(
   args: readonly string[],
-  options: Omit<SpawnSyncOptions, "shell">,
+  options: SpawnSyncOptions,
 ): SpawnSyncReturns<string | Buffer> {
-  const spec = codexSpawn(args, process.platform, options.env ?? process.env);
-  if (spec === null) {
+  const command = resolveOnPath("codex", options.env ?? process.env);
+  if (command === null) {
     const error = codexNotFound("spawnSync codex");
     return { pid: 0, output: [], stdout: "", stderr: "", status: null, signal: null, error };
   }
-  return spawnSync(spec.command, spec.args, { ...options, shell: spec.shell, windowsHide: true });
+  return spawnSync(command, args, options);
 }
 
 /** How a {@link spawnCodex} run ended, in `spawnSync`'s terms. */
@@ -124,49 +67,36 @@ export interface CodexResult {
   error?: Error;
 }
 
-/**
- * The termination signals a companion passes on to its running codex on
- * `platform`. SIGHUP only off Windows: there `ChildProcess.kill` can throw
- * (ENOSYS) for a signal other than SIGTERM, SIGINT, SIGKILL and SIGQUIT — per
- * Node's docs and libuv, not verified on a Windows host.
- */
-export function forwardedSignals(platform: NodeJS.Platform): NodeJS.Signals[] {
-  return platform === "win32" ? ["SIGTERM", "SIGINT"] : ["SIGTERM", "SIGINT", "SIGHUP"];
-}
+/** The termination signals a companion passes on to its running codex. */
+const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ["SIGTERM", "SIGINT", "SIGHUP"];
 
 /**
- * Run codex through {@link codexSpawn} with `input` on stdin, stdout ignored and
- * stderr to `logFd`, and resolve once it has exited. Asynchronous, unlike
- * `spawnSync`, so the companion can act on a signal while codex runs: a
- * SIGTERM, SIGINT or SIGHUP (a Bash tool timeout; SIGHUP off Windows only, see
- * {@link forwardedSignals}) is sent on to codex, and then re-raised on the
+ * Run codex with `input` on stdin, stdout ignored and stderr to `logFd`, and
+ * resolve once it has exited. Asynchronous, unlike `spawnSync`, so the
+ * companion can act on a signal while codex runs: a SIGTERM, SIGINT or SIGHUP
+ * (e.g. a Bash tool timeout) is sent on to codex, and then re-raised on the
  * companion, which dies by it as it would unhandled — even when the send fails.
  *
  * DEBT: the signal reaches codex's own pid only. The real codex CLI (an npm
  * node launcher) forwards it to its native binary itself, but anything codex
- * leaves running outside that chain survives, and on Windows killing the
- * cmd.exe that runs a `codex.cmd` shim does not reach the node behind it.
- * Upgrade path: spawn codex as its own process group and signal the group
- * (POSIX), or a job object (Windows) — at the cost of taking codex out of the
- * terminal's foreground group, so Ctrl-C would reach it only through us.
+ * leaves running outside that chain survives. Upgrade path: spawn codex as its
+ * own process group and signal the group — at the cost of taking codex out of
+ * the terminal's foreground group, so Ctrl-C would reach it only through us.
  */
 export function spawnCodex(
   args: readonly string[],
   options: { cwd: string; input: string; logFd: number; env?: NodeJS.ProcessEnv },
 ): Promise<CodexResult> {
-  const spec = codexSpawn(args, process.platform, options.env ?? process.env);
-  if (spec === null) {
+  const command = resolveOnPath("codex", options.env ?? process.env);
+  if (command === null) {
     return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
   }
   return new Promise((resolve) => {
-    const child = spawn(spec.command, spec.args, {
+    const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
       stdio: ["pipe", "ignore", options.logFd],
-      shell: spec.shell,
-      windowsHide: true,
     });
-    const signals = forwardedSignals(process.platform);
     const forward = (signal: NodeJS.Signals): void => {
       try {
         child.kill(signal);
@@ -179,9 +109,9 @@ export function spawnCodex(
       process.kill(process.pid, signal);
     };
     const stopForwarding = (): void => {
-      for (const s of signals) process.off(s, forward);
+      for (const s of FORWARDED_SIGNALS) process.off(s, forward);
     };
-    for (const s of signals) process.on(s, forward);
+    for (const s of FORWARDED_SIGNALS) process.on(s, forward);
 
     let spawnError: Error | undefined;
     let stdinError: Error | undefined;
