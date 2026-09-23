@@ -69,7 +69,10 @@ so any of them reaching the child would silently replace the credential the run
 chose. Behind a corporate proxy or TLS-inspecting CA, set `EVALS_FORWARD_PROXY=1`
 to also forward `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (and their lowercase
 forms), `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE` and `SSL_CERT_DIR`. The set is
-fixed; there is no way to name other variables. Nothing is written to disk
+fixed; there is no way to name other variables. Because your own privacy flags
+no longer reach the child, the runner sets three itself, always:
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `DISABLE_TELEMETRY=1` and
+`DISABLE_AUTOUPDATER=1`. Nothing is written to disk
 either: no credential file lands in a condition dir for a session to read.
 
 **Hand the value over without printing it.** Keep it in a file only you can
@@ -218,14 +221,23 @@ containment layers address this:
   `EVALS_CLAUDE_CODE_OAUTH_TOKEN`, through an allowlisted env that carries
   nothing else from your shell — and **no credential is written to disk at
   all**.
-- **The runner's own work after the session** never runs what the session left
-  behind with the runner's rights. Model-written tests (`test_command_passes`)
-  get the credential-free allowlisted env and, when sandboxed, the session's
-  own jail profile. Before the runner runs git in the fixture, it puts back the
-  `.git/config` it wrote at materialization, so a planted `core.fsmonitor`,
-  filter or include never runs. It refuses the trial, rather than judging it,
-  if `.git` is no longer a plain directory, the session added `.git/commondir`
-  or `.git/config.worktree`, or `.git/config` is no longer a regular file.
+- **The post-session step** is everything the runner does on paths the session
+  controlled: it checks the fixture is still the directory it created, puts
+  back the `.git/config` it wrote at materialization, collects the repo state,
+  and evaluates every check, model-written tests (`test_command_passes`)
+  included. It refuses the trial, rather than judging it, if the fixture path
+  now leads somewhere else (a session can rename its fixture away and leave a
+  symlink to another repo), `.git` is no longer a plain directory, the session
+  added `.git/commondir` or `.git/config.worktree`, or `.git/config` is no longer
+  a regular file. **Sandboxed**, this whole step runs as one child under the
+  session's own jail profile, with the credential-free allowlisted env, and the
+  runner treats what it prints as untrusted: it accepts only one `{ ok, detail }`
+  per check, strips control characters and caps the text. Whatever the session
+  planted, whether a swapped fixture, a config re-planted after the restore, a
+  `gpg.program` or a test, runs inside that jail if it runs at all. **Unsandboxed**
+  the step runs in the runner itself, and none of this is a security boundary:
+  the session already ran as you, with your filesystem. The checks there only
+  guard against accidents.
 - **Filesystem exposure** is bounded by the opt-in [OS sandbox](#os-sandbox-opt-in-evals_sandbox)
   below: `EVALS_SANDBOX=1` jails the session out of the operator's wider `$HOME`.
 
@@ -257,11 +269,13 @@ minimal set of exceptions:
 
 So the session keeps working in the fixture, but reads of ssh keys, other
 credentials, and documents elsewhere under `$HOME`, and writes anywhere outside the
-fixture/tmp, are denied by the kernel. The fixture's own test command
-(`test_command_passes`) runs under the same profile, since it executes tests the
-session wrote. The session's git identity is pinned via env (`Eval Fixture
-<eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) so it
-can still commit without the jail having to re-open `~/.gitconfig`.
+fixture/tmp, are denied by the kernel. The post-session step (above) runs as one
+child under the same profile, so the runner's own restore, git calls and the
+model-written tests stay inside the jail too; the profile additionally lets that
+child read `scripts/run-evals.mjs` itself. The session's git identity is pinned
+via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`,
+`GIT_CONFIG_NOSYSTEM=1`) so it can still commit without the jail having to
+re-open `~/.gitconfig`.
 
 **What it does NOT contain:**
 
@@ -274,10 +288,12 @@ can still commit without the jail having to re-open `~/.gitconfig`.
   credential. The honest ceiling: run this only on **trusted prompts**, with a
   **revocable credential** (`EVALS_ANTHROPIC_API_KEY` or
   `EVALS_CLAUDE_CODE_OAUTH_TOKEN`).
-- **Background processes** — a session can detach a process that outlives
-  `claude` (`Bash(node:*)` allows it), and nothing kills it, so it can still
-  change the fixture while the runner restores `.git/config` and judges the
-  checks. See the DEBT note in `scripts/run-evals.mjs`.
+- **What a background process does to the verdict** — a session can detach a
+  process that outlives `claude` (`Bash(node:*)` allows it, `setsid` included).
+  The profile is inherited by every descendant, so it stays jailed (a test pins
+  this), but nothing stops it, and it can still change the fixture while the
+  post-session step judges it. That is a threat to the *verdict's* integrity, not
+  an escape. See the DEBT note in `scripts/run-evals.mjs`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
   dependency.
