@@ -114,6 +114,7 @@ looking like three genuine non-compliances.
 
 ```sh
 # Run each case three times; the majority verdict rides out one-off noise.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --trials 3 --out evals/results/run.jsonl
 ```
@@ -327,12 +328,14 @@ rather than a silent skip, so you never spend on one by accident.
 
 ```sh
 # Text cases only (agentic ones are skipped with a notice):
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
 # Release gate: include agentic cases AND repeat each 3× so the majority verdict
 # rides out one-off noise (real, heavier spend — this is the gate you run before
 # shipping a HARRY.md change):
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
 ```
@@ -426,14 +429,18 @@ exact phrases.
 # Free: schema-check the cases file.
 node scripts/run-evals.mjs validate
 
-# Real API spend: run BOTH conditions into the SAME --out file (run appends, so
-# score can contrast baseline against candidate in one table).
+# Real spend: run BOTH conditions into the SAME --out file (run appends, so
+# score can contrast baseline against candidate in one table). Every `run` needs
+# exactly one credential (see Authentication); these read the token from its file.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition baseline  --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
 # A subset by id, or set the model via env:
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 EVALS_MODEL=claude-sonnet-4-5 node scripts/run-evals.mjs run \
   --condition candidate --cases tier-small-feature,debt-shortcut --out evals/results/run.jsonl
 
