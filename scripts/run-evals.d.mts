@@ -124,7 +124,13 @@ export function materializeFixture(
   name: string,
   root?: string,
   env?: Record<string, string | undefined>,
-): { dir: string; initialBranch: string; initialCommit: string; gitConfig: Buffer };
+): {
+  dir: string;
+  initialBranch: string;
+  initialCommit: string;
+  gitConfig: Buffer;
+  id: { dev: string; ino: string };
+};
 export function restoreFixtureGitConfig(fixtureDir: string, gitConfig: Buffer | string): void;
 export function collectRepoState(
   fixtureDir: string,
@@ -132,21 +138,28 @@ export function collectRepoState(
   initialCommit: string,
   env?: Record<string, string | undefined>,
 ): RepoState;
-// A trial's seatbelt jail: the sandbox-exec path and the profile the session ran under.
-export interface Jail {
-  sandboxExec: string;
-  profile: string;
-}
-export function evaluateArtifactCheck(
-  check: CheckInput,
-  state: RepoState,
-  jail?: Jail | null,
-): ArtifactCheckOutcome;
+export function evaluateArtifactCheck(check: CheckInput, state: RepoState): ArtifactCheckOutcome;
 export function evaluateArtifactChecks(
   checks: CheckInput[] | undefined,
   state: RepoState,
-  jail?: Jail | null,
 ): { pass: boolean; results: ArtifactCheckOutcome[] };
+// What the post-session step needs to judge one trial's fixture.
+export interface PostSessionPayload {
+  fixtureDir: string;
+  fixtureId: { dev: string; ino: string };
+  gitConfig: string; // base64
+  initialBranch: string;
+  initialCommit: string;
+  checks: CheckInput[];
+}
+export function judgeFixture(
+  payload: PostSessionPayload,
+  env?: Record<string, string | undefined>,
+): { ok: boolean; detail: string }[];
+export function parsePostSessionOutput(
+  stdout: string,
+  count: number,
+): { ok: boolean; detail: string }[];
 export function runEvals(
   opts: RunOpts,
   env?: Record<string, string | undefined>,
@@ -165,6 +178,7 @@ export function buildSeatbeltProfile(opts: {
 export function buildAgenticSandboxProfile(opts: {
   home: string;
   allowWrite?: string[];
+  allowRead?: string[];
   bin: string;
   env?: Record<string, string | undefined>;
 }): string;

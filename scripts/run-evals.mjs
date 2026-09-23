@@ -136,9 +136,10 @@ export function buildBaseEnv(env) {
 // The base env plus a pinned git identity and no global or system git config, for
 // every git the runner runs and for the claude child (whose session commits). The
 // identity keeps fixture commits attributable and off the operator's real one; with
-// GIT_CONFIG_GLOBAL=/dev/null and GIT_CONFIG_NOSYSTEM=1 no config outside the repo
-// (hooks, fsmonitor, aliases, signing) can run or change anything, and the jail
-// never has to re-open ~/.gitconfig.
+// GIT_CONFIG_GLOBAL=/dev/null and GIT_CONFIG_NOSYSTEM=1 git reads no config from
+// outside the repo (the operator's hooks, fsmonitor, aliases, signing), and the jail
+// never has to re-open ~/.gitconfig. The repo's own config is another matter: see
+// restoreFixtureGitConfig and judgeFixture.
 export function buildGitEnv(env) {
   return {
     ...buildBaseEnv(env),
@@ -152,11 +153,12 @@ export function buildGitEnv(env) {
 }
 
 function git(args, cwd, env = process.env) {
-  // Belt to buildGitEnv's braces: gpg signing (would prompt/fail headless), hooks
-  // (an empty hooksPath disables them) and fsmonitor (a command git runs on index
-  // refresh) are switched off per call, so even a repo-local config that slipped
-  // past restoreFixtureGitConfig cannot run anything. Prepended so per-call args
-  // still win.
+  // A second layer for three known command hooks: gpg signing (would prompt/fail
+  // headless), hooks (an empty hooksPath disables them) and fsmonitor (a command git
+  // runs on index refresh) are switched off per call. It is not a complete list — a
+  // repo-local log.showSignature + gpg.program still runs through `git log` — which
+  // is why, sandboxed, every git call on a session's fixture runs inside the jail
+  // (judgeFixture). Prepended so per-call args still win.
   const hardened = [
     "-c",
     "commit.gpgsign=false",
@@ -315,6 +317,138 @@ export function evaluateChecks(checks, responseText) {
   return { pass: results.every((r) => r.ok), results };
 }
 
+// ---- the post-session step ---------------------------------------------------
+
+// The hidden subcommand the jailed post-session child runs (see runPostSession).
+const POST_SESSION = "__post-session";
+
+// Everything the runner does after an agentic session on paths the session
+// controlled: check the fixture is still the directory materializeFixture made,
+// put its .git/config back, collect the repo state, and evaluate every check
+// (file reads and the model-written test command included). Returns one
+// { ok, detail } per check, in order.
+//
+// In a sandboxed run this executes ONLY inside the jailed child, under the
+// session's own profile, so nothing the session planted — a swapped fixture, a
+// config the session re-plants after the restore, a gpg.program, a test — ever
+// runs or writes with the runner's rights. Seatbelt profiles are inherited by
+// every descendant, a setsid'd one included, so the session's background
+// processes stay in the same jail. Unsandboxed it runs in-process: there is no fs
+// boundary then (the session ran as the operator), and the identity check is
+// only a guard against honest mistakes.
+export function judgeFixture(payload, env = process.env) {
+  const { fixtureDir, fixtureId, gitConfig, initialBranch, initialCommit, checks } = payload;
+  const now = lstatOrNull(fixtureDir, { bigint: true });
+  if (
+    !now?.isDirectory() ||
+    String(now.dev) !== fixtureId.dev ||
+    String(now.ino) !== fixtureId.ino
+  ) {
+    throw new Error(
+      `refusing to judge fixture ${fixtureDir}: it was replaced after materialization ` +
+        "(the path no longer leads to the directory the runner created)",
+    );
+  }
+  restoreFixtureGitConfig(fixtureDir, Buffer.from(gitConfig, "base64"));
+  const state = collectRepoState(fixtureDir, initialBranch, initialCommit, env);
+  return evaluateArtifactChecks(checks, state).results.map((r) => ({
+    ok: r.ok,
+    detail: r.detail,
+  }));
+}
+
+// Text from the jailed child is untrusted: control characters (C0, DEL, C1)
+// become spaces, so no terminal escape or line break reaches a results file or a
+// terminal, and it is capped.
+function untrustedText(value, max = 1000) {
+  const clean = Array.from(String(value), (c) => {
+    const code = c.codePointAt(0) ?? 0;
+    return code < 0x20 || (code >= 0x7f && code <= 0x9f) ? " " : c;
+  }).join("");
+  return clean.length > max ? `${clean.slice(0, max)}…[truncated]` : clean;
+}
+
+// Validate the jailed child's stdout by shape, as untrusted input: exactly
+// { outcomes: [{ ok: boolean, detail: string }] } with one outcome per check, or
+// { error: string }. Anything else is refused without being echoed back.
+export function parsePostSessionOutput(stdout, count) {
+  let parsed;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    throw new Error(
+      `the jailed post-session step printed malformed output (${stdout.length} bytes)`,
+    );
+  }
+  if (parsed !== null && typeof parsed === "object" && typeof parsed.error === "string") {
+    throw new Error(`jailed post-session step: ${untrustedText(parsed.error)}`);
+  }
+  const outcomes = parsed?.outcomes;
+  if (
+    !Array.isArray(outcomes) ||
+    outcomes.length !== count ||
+    !outcomes.every(
+      (o) =>
+        o !== null &&
+        typeof o === "object" &&
+        typeof o.ok === "boolean" &&
+        typeof o.detail === "string",
+    )
+  ) {
+    throw new Error(
+      `the jailed post-session step printed output of the wrong shape (${stdout.length} bytes)`,
+    );
+  }
+  return outcomes.map((o) => ({ ok: o.ok, detail: untrustedText(o.detail) }));
+}
+
+// Run judgeFixture for one trial: in-process when unsandboxed, otherwise as ONE
+// child under the trial's jail. The payload goes in on stdin (no file a session
+// could rewrite first); the child gets the credential-free base env and a cwd
+// outside the fixture; --preserve-symlinks-main stops node's entry lookup from
+// lstat-ing the jailed $HOME ancestors of this script.
+function runPostSession(payload, jail, env) {
+  if (!jail) return judgeFixture(payload, env);
+  const script = realpathSync(fileURLToPath(import.meta.url));
+  const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, process.execPath, [
+    "--preserve-symlinks-main",
+    script,
+    POST_SESSION,
+  ]);
+  let stdout;
+  try {
+    stdout = execFileSync(wrapped.bin, wrapped.args, {
+      cwd: tmpdir(),
+      env: buildBaseEnv(env),
+      input: JSON.stringify(payload),
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (err) {
+    const firstLine =
+      String(err?.stderr ?? "")
+        .split("\n")
+        .find((l) => l.trim()) ?? "";
+    throw new Error(
+      `the jailed post-session step failed (exit ${err?.status ?? "?"}): ${untrustedText(firstLine, 300)}`,
+    );
+  }
+  return parsePostSessionOutput(stdout, payload.checks.length);
+}
+
+// The jailed child's side: read the payload from stdin, judge, print one JSON line.
+// A refusal is reported as { error } so the parent can surface it on the result line.
+function cmdPostSession() {
+  let out;
+  try {
+    out = { outcomes: judgeFixture(JSON.parse(readFileSync(0, "utf8"))) };
+  } catch (err) {
+    out = { error: String(err?.message ?? err) };
+  }
+  process.stdout.write(`${JSON.stringify(out)}\n`);
+  return 0;
+}
+
 // ---- agentic: fixture materialization + repo state (side-effecting) --------
 
 // Copy a committed fixture into a fresh temp dir, `git init` it there, and make
@@ -345,13 +479,19 @@ export function materializeFixture(name, root = tmpdir(), env = process.env) {
   git(["commit", "-m", "chore: seed eval fixture"], dir, env);
   const initialBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], dir, env);
   const initialCommit = git(["rev-parse", "HEAD"], dir, env);
-  return { dir, initialBranch, initialCommit, gitConfig };
+  // The fixture dir's identity. judgeFixture refuses a fixture whose path no longer
+  // leads to this very directory: a session can rename its fixture away and leave a
+  // symlink to some other repo in its place. Strings, since a 64-bit inode can exceed
+  // what a JSON number holds exactly.
+  const st = lstatSync(dir, { bigint: true });
+  const id = { dev: String(st.dev), ino: String(st.ino) };
+  return { dir, initialBranch, initialCommit, gitConfig, id };
 }
 
 // lstat that reports a missing path as null instead of throwing.
-function lstatOrNull(p) {
+function lstatOrNull(p, opts) {
   try {
-    return lstatSync(p);
+    return lstatSync(p, opts);
   } catch (err) {
     if (err?.code === "ENOENT") return null;
     throw err;
@@ -361,8 +501,10 @@ function lstatOrNull(p) {
 // Before the runner runs git in a fixture a session has had its hands on, put the
 // repo's config back to what materializeFixture wrote, or refuse. The session could
 // edit .git/config freely (acceptEdits), and git would then run whatever it named —
-// core.fsmonitor, a filter, an include — as the runner: outside the jail, with the
-// runner's rights. Refuses, rather than repairs, anything that would make git read
+// core.fsmonitor, a gpg.program, a filter, an include. This restore alone does not
+// stop a background process re-planting it afterwards; in a sandboxed run it only
+// ever executes inside the jailed post-session step (judgeFixture), so whatever
+// runs, runs jailed. Refuses, rather than repairs, anything that would make git read
 // config from somewhere else: a .git that is not a plain directory (a symlink, or a
 // `gitdir:` file pointing elsewhere), an added commondir or config.worktree, and a
 // .git/config that is not a regular file. A symlinked config is refused, never
@@ -427,7 +569,8 @@ export function collectRepoState(fixtureDir, initialBranch, initialCommit, env =
     newCommitMessages,
     newCommitsOnInitial,
     files,
-    env,
+    // The allowlisted env only: the state never carries the runner's credentials.
+    env: buildBaseEnv(env),
   };
 }
 
@@ -444,10 +587,10 @@ function readFileSafe(fixtureDir, relPath) {
 // given the state (test_command_passes shells out to the fixture's test runner,
 // which reads the same on-disk state). Returns { check, ok, detail }.
 //
-// `jail` ({ sandboxExec, profile }) is the session's own seatbelt jail when the run
-// is sandboxed: test_command_passes executes tests the session WROTE, so it runs
-// under the same profile the session did, never outside it.
-export function evaluateArtifactCheck(check, state, jail = null) {
+// Every check reads paths the session controlled, and test_command_passes runs
+// tests the session WROTE, so in a sandboxed run this only ever executes inside
+// the jailed post-session child (see judgeFixture / runPostSession).
+export function evaluateArtifactCheck(check, state) {
   switch (check.type) {
     case "git_created_branch": {
       const created = state.branches.filter((b) => b !== state.initialBranch);
@@ -497,11 +640,8 @@ export function evaluateArtifactCheck(check, state, jail = null) {
       const command = (check.command ?? DEFAULT_TEST_COMMAND).trim();
       const [cmd, ...args] = command.split(/\s+/);
       // Model-written code: the credential-free base env, never the runner's own.
-      const run = jail
-        ? wrapWithSandbox(jail.sandboxExec, jail.profile, cmd, args)
-        : { bin: cmd, args };
       try {
-        execFileSync(run.bin, run.args, {
+        execFileSync(cmd, args, {
           cwd: state.fixtureDir,
           env: buildBaseEnv(state.env ?? process.env),
           stdio: "ignore",
@@ -518,8 +658,8 @@ export function evaluateArtifactCheck(check, state, jail = null) {
 }
 
 // Evaluate a whole agentic case's checks against a repo state.
-export function evaluateArtifactChecks(checks, state, jail = null) {
-  const results = (checks ?? []).map((check) => evaluateArtifactCheck(check, state, jail));
+export function evaluateArtifactChecks(checks, state) {
+  const results = (checks ?? []).map((check) => evaluateArtifactCheck(check, state));
   return { pass: results.every((r) => r.ok), results };
 }
 
@@ -731,7 +871,15 @@ export function prepareConditionDir(condition, lawsText, root = tmpdir()) {
 // chosen credential.
 export function buildChildEnv(env, configDir) {
   const auth = resolveAuth(env);
-  const childEnv = { ...buildGitEnv(env), CLAUDE_CONFIG_DIR: configDir };
+  const childEnv = {
+    ...buildGitEnv(env),
+    CLAUDE_CONFIG_DIR: configDir,
+    // The allowlist drops the operator's own privacy flags, so the runner sets them:
+    // no telemetry, no nonessential traffic, no self-update mid-run.
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+    DISABLE_TELEMETRY: "1",
+    DISABLE_AUTOUPDATER: "1",
+  };
   if (auth.kind === "api-key") {
     childEnv.ANTHROPIC_API_KEY = env.EVALS_ANTHROPIC_API_KEY;
   } else {
@@ -834,11 +982,16 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
 // credential. (2) EVALS_SANDBOX relies on `sandbox-exec`, which Apple has deprecated
 // but still ships and honors; it is opt-in and macOS-only (a hard refusal, never a
 // silent unsandboxed run, elsewhere), so we accept the deprecated tool for this local
-// use rather than take on a container/VM dependency. (3) A session can leave a
-// background process behind (`Bash(node:*)` can detach one); nothing kills it when
-// `claude` exits, so it can still change the fixture while the runner restores
-// .git/config and judges the checks. Upgrade path: start each session in its own
-// process group and kill the group before any post-session work.
+// use rather than take on a container/VM dependency. (3) Judging integrity: a session
+// can detach a background process (`Bash(node:*)` allows it, setsid included). The
+// seatbelt profile is inherited by every descendant, so it stays jailed and the
+// jailed post-session step (judgeFixture) is where anything it plants runs — but
+// nothing stops it, and it can still change the fixture while that step judges it,
+// so a verdict can describe a repo the session did not leave. Killing a process group
+// would miss a setsid'd one. Upgrade path: narrow the session profile's writes to a
+// per-trial dir (its own TMPDIR instead of the whole temp root), and judge under a
+// separate profile that can read the fixture but write only a fresh judge dir outside
+// the session's writable set; copy the fixture there first and judge the copy.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -880,17 +1033,19 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, jail = n
   return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, env);
 }
 
-// One trial's jail, shared by the session and by the test command that judges it
-// (see sandboxContext for the refusal path). The jail root and the writable
+// One trial's jail, shared by the session and by the post-session child that judges
+// it (see sandboxContext for the refusal path). The jail root and the writable
 // exceptions are canonicalized (realpath) — the throwaway config dir, the
 // materialized fixture repo, and the OS temp roots they live under (normally outside
 // $HOME; re-allowed defensively for a $HOME-based TMPDIR). The runtime read trees
-// are resolved inside buildAgenticSandboxProfile.
+// are resolved inside buildAgenticSandboxProfile. This script itself is readable
+// (never writable) so the post-session child can load it from under $HOME.
 function trialJail(sandbox, { configDir, fixtureDir, fixtureRoot, bin, env }) {
   if (!sandbox) return null;
   const profile = buildAgenticSandboxProfile({
     home: homedir(),
     allowWrite: [configDir, fixtureDir, fixtureRoot, tmpdir()],
+    allowRead: [realpathSync(fileURLToPath(import.meta.url))],
     bin,
     env,
   });
@@ -914,7 +1069,13 @@ function trialJail(sandbox, { configDir, fixtureDir, fixtureRoot, bin, env }) {
 //     Set in buildSeatbeltProfile after normalization.
 // Read trees come from resolveRuntimeTrees, which already includes canonical
 // (dirname-of-realpath) forms.
-export function buildAgenticSandboxProfile({ home, allowWrite = [], bin, env = process.env }) {
+export function buildAgenticSandboxProfile({
+  home,
+  allowWrite = [],
+  allowRead = [],
+  bin,
+  env = process.env,
+}) {
   const home_ = realpathSync(home); // HARD: refuse (throw) rather than un-jail silently.
   const canonicalizeSafe = (p) => {
     try {
@@ -927,7 +1088,7 @@ export function buildAgenticSandboxProfile({ home, allowWrite = [], bin, env = p
   return buildSeatbeltProfile({
     home: home_,
     allowWrite: writes,
-    allowRead: resolveRuntimeTrees(bin, env),
+    allowRead: [...resolveRuntimeTrees(bin, env), ...allowRead],
   });
 }
 
@@ -1185,17 +1346,26 @@ export function runEvals(opts, env = process.env) {
             env,
           });
           line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env, jail);
-          // The session may have rewritten .git/config; put the runner's back (or
-          // refuse) before the runner itself runs git there.
-          restoreFixtureGitConfig(fx.dir, fx.gitConfig);
-          // Evaluate now, while the fixture dir exists, and record per-check
-          // outcomes so `score` can judge offline (matching text mode's shape).
-          const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);
-          const { results } = evaluateArtifactChecks(c.checks, state, jail);
-          line.checkOutcomes = results.map((r) => ({
-            check: r.check,
-            ok: r.ok,
-            detail: r.detail,
+          // Judge now, while the fixture dir exists — inside the jail when there is
+          // one — and record per-check outcomes so `score` can judge offline
+          // (matching text mode's shape). The check objects are the runner's own,
+          // never echoed back from the child.
+          const outcomes = runPostSession(
+            {
+              fixtureDir: fx.dir,
+              fixtureId: fx.id,
+              gitConfig: fx.gitConfig.toString("base64"),
+              initialBranch: fx.initialBranch,
+              initialCommit: fx.initialCommit,
+              checks: c.checks,
+            },
+            jail,
+            env,
+          );
+          line.checkOutcomes = outcomes.map((o, i) => ({
+            check: c.checks[i],
+            ok: o.ok,
+            detail: o.detail,
           }));
         } else {
           line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
@@ -1359,6 +1529,7 @@ export function main(argv, env = process.env) {
     if (sub === "validate") return cmdValidate();
     if (sub === "run") return cmdRun(opts, env);
     if (sub === "score") return cmdScore(opts);
+    if (sub === POST_SESSION) return cmdPostSession();
     console.error("usage: run-evals.mjs <validate|run|score> [options]");
     return 2;
   } catch (err) {
