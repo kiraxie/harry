@@ -26,15 +26,12 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
-  chmodSync,
-  copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -540,111 +537,81 @@ export function resolveModel(opts, env) {
   return model.trim();
 }
 
-// The credential file `claude` keeps in a config dir: the file seeded into, checked
-// in, and scrubbed from each condition dir.
-const CREDENTIALS_FILE = ".credentials.json";
+// How to hand a credential to the runner without it ever being echoed: read it from a
+// file only the operator can read. Part of every auth refusal.
+const AUTH_HINT =
+  "set exactly one of EVALS_ANTHROPIC_API_KEY (a console API key) or " +
+  "EVALS_CLAUDE_CODE_OAUTH_TOKEN (a subscription token from `claude setup-token`), " +
+  "read from a file only you can read so it is never printed, e.g. " +
+  'EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)"';
 
-// Where the seeded-credential fallback copies from: the operator's real config dir
-// (env.CLAUDE_CONFIG_DIR or ~/.claude). Null when EVALS_ANTHROPIC_API_KEY is set,
-// since the scratch-token path seeds nothing. Only a path — never opens the file.
-function credentialSeedPath(env) {
-  if (env.EVALS_ANTHROPIC_API_KEY) return null;
-  return join(env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), CREDENTIALS_FILE);
+// An empty string is unset: `EVALS_X="$(cat missing-file)"` must not count as a choice.
+function isSet(value) {
+  return typeof value === "string" && value !== "";
+}
+
+// Resolve the run's ONE auth path, or throw. A fresh config dir is logged out, so the
+// child authenticates only from the env: either a console API key
+// (EVALS_ANTHROPIC_API_KEY → the child's ANTHROPIC_API_KEY) or a subscription token
+// from `claude setup-token` (EVALS_CLAUDE_CODE_OAUTH_TOKEN → CLAUDE_CODE_OAUTH_TOKEN).
+// Both set is ambiguous and neither set cannot authenticate; both refuse. Bare
+// ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN in the operator's shell never count —
+// the EVALS_ prefix is the opt-in, so an unrelated credential is never billed by
+// accident. No message carries a value: it reads only whether each var is set.
+export function resolveAuth(env) {
+  const apiKey = isSet(env.EVALS_ANTHROPIC_API_KEY);
+  const oauthToken = isSet(env.EVALS_CLAUDE_CODE_OAUTH_TOKEN);
+  if (apiKey && oauthToken) {
+    throw new Error(
+      `both EVALS_ANTHROPIC_API_KEY and EVALS_CLAUDE_CODE_OAUTH_TOKEN are set, so the auth ` +
+        `path is ambiguous; ${AUTH_HINT}.`,
+    );
+  }
+  if (!apiKey && !oauthToken) {
+    throw new Error(
+      `no eval credential: a fresh config dir is logged out, so every trial would fail ` +
+        `with "Not logged in"; ${AUTH_HINT}.`,
+    );
+  }
+  return { kind: apiKey ? "api-key" : "oauth-token" };
 }
 
 // Create an isolated CLAUDE_CONFIG_DIR for a condition. candidate gets a
 // CLAUDE.md inlining the laws; baseline gets an empty dir (no CLAUDE.md).
 //
-// A fresh config dir also strips login credentials, so `claude -p` returns
-// {"is_error":true,"result":"Not logged in · ..."}. Two auth paths:
-//
-//   1. SCRATCH TOKEN (preferred, containment): if `EVALS_ANTHROPIC_API_KEY` is
-//      set we seed NO credential file at all — invokeClaude passes the key to the
-//      child as `ANTHROPIC_API_KEY`. A console API key is independently
-//      revocable, and nothing lands on disk to leak into a session's fs.
-//   2. SEEDED CREDENTIAL (fallback): otherwise we copy ONLY `.credentials.json`
-//      from the operator's real config dir (env.CLAUDE_CONFIG_DIR or ~/.claude),
-//      chmod 0600 — and nothing else, because memory isolation (no leaked global
-//      CLAUDE.md) is the whole point. runEvals scrubs this copy post-run.
-//
-// Precedence: EVALS_ANTHROPIC_API_KEY > seeded credentials. Absent both, this function
-// itself still proceeds without either (it stays a tolerant low-level helper) — but
-// `runEvals` calls `checkCredentialSeed` below BEFORE reaching this function in the
-// ordinary `run` flow, and that refuses up front rather than let the seeded path start
-// a doomed run. See `checkCredentialSeed` for why "proceed silently" stopped being safe.
-export function prepareConditionDir(condition, lawsText, root = tmpdir(), env = process.env) {
+// Nothing else is ever written here — no credential file, no settings, no
+// memory. The child authenticates from its env (buildChildEnv), so no credential
+// lands on disk for a session to read. The runner used to copy the operator's
+// `.credentials.json` in as a fallback; that path is gone, because on macOS the
+// file is a Keychain snapshot that goes stale on its own schedule, and copying
+// real credentials into temp dirs was a liability in itself.
+export function prepareConditionDir(condition, lawsText, root = tmpdir()) {
   const dir = mkdtempSync(join(root, `harry-evals-${condition}-`));
   if (condition === "candidate") {
     writeFileSync(join(dir, "CLAUDE.md"), lawsText);
   }
-  // API-key mode authenticates via the child env (invokeClaude), so there is no
-  // credential file to seed — the containment win is that nothing is on disk.
-  const credSrc = credentialSeedPath(env);
-  if (credSrc === null) return dir;
-  if (existsSync(credSrc)) {
-    const credDst = join(dir, CREDENTIALS_FILE);
-    copyFileSync(credSrc, credDst);
-    chmodSync(credDst, 0o600);
-  }
   return dir;
 }
 
-// Pre-flight, called from `runEvals` before any condition dir is created: if this run
-// would rely on the seeded-credential fallback (no EVALS_ANTHROPIC_API_KEY), refuse UP
-// FRONT when that seed cannot possibly work, instead of letting every trial in the run
-// fail one by one, deep into a batch, with "OAuth session expired".
-//
-// On macOS the live login lives in the Keychain; `~/.claude/.credentials.json` is only a
-// point-in-time snapshot the CLI happened to write, and it can go stale or missing
-// silently — its OAuth access token (`claudeAiOauth.expiresAt`) expires on its own
-// schedule, independent of whether the operator keeps using `claude` interactively (the
-// Keychain-backed session refreshes without necessarily rewriting this file back out). A
-// stale or absent snapshot is therefore NOT evidence the operator is logged out — only
-// that THIS COPY is unusable — so the fix is always the same pointer: set
-// EVALS_ANTHROPIC_API_KEY, not `claude login`.
-//
-// Reads only the file's STRUCTURE: whether it exists, whether it parses, and one nested
-// numeric field (`claudeAiOauth.expiresAt`). No error message carries file content — not
-// a token value, and not the parser's own message, which quotes the text around a parse
-// failure — so nothing credential-shaped ever reaches an error message or a log line.
-export function checkCredentialSeed(env = process.env) {
-  const credSrc = credentialSeedPath(env);
-  if (credSrc === null) return; // scratch-token path needs no seed at all.
-  const pointer = "set EVALS_ANTHROPIC_API_KEY to a console API key instead of relying on it";
-  if (!existsSync(credSrc)) {
-    throw new Error(
-      `no credential seed at ${credSrc} and EVALS_ANTHROPIC_API_KEY is unset — every trial ` +
-        `in this run would fail mid-way with "Not logged in"; ${pointer}.`,
-    );
+// The env for every `claude` child — text, agentic, and sandboxed agentic alike, since
+// all three launch through invokeClaude. Inherited ANTHROPIC_API_KEY and
+// CLAUDE_CODE_OAUTH_TOKEN are always dropped first, then exactly one is set from its
+// EVALS_ source (resolveAuth picks which). The EVALS_ sources themselves are dropped
+// too: the child needs only the unprefixed var, and every extra copy of a credential
+// in a session's env is one more thing it can read.
+export function buildChildEnv(env, configDir) {
+  const auth = resolveAuth(env);
+  const childEnv = { ...env, CLAUDE_CONFIG_DIR: configDir };
+  delete childEnv.ANTHROPIC_API_KEY;
+  delete childEnv.CLAUDE_CODE_OAUTH_TOKEN;
+  delete childEnv.EVALS_ANTHROPIC_API_KEY;
+  delete childEnv.EVALS_CLAUDE_CODE_OAUTH_TOKEN;
+  if (auth.kind === "api-key") {
+    childEnv.ANTHROPIC_API_KEY = env.EVALS_ANTHROPIC_API_KEY;
+  } else {
+    childEnv.CLAUDE_CODE_OAUTH_TOKEN = env.EVALS_CLAUDE_CODE_OAUTH_TOKEN;
   }
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync(credSrc, "utf8"));
-  } catch {
-    // Deliberately drops JSON.parse's own message: V8 quotes the file text around the
-    // failure point, and in a credentials file that text can sit inside a token.
-    throw new Error(`credential seed at ${credSrc} is not valid JSON; ${pointer}.`);
-  }
-  // A missing expiry field (a test fixture, or some future credential shape we don't
-  // recognize) is not a staleness signal either way — proceed rather than refuse on a
-  // structure we can't judge. Only a NUMERIC, PAST `expiresAt` is a positive signal.
-  const expiresAt = parsed?.claudeAiOauth?.expiresAt;
-  if (typeof expiresAt === "number" && expiresAt <= Date.now()) {
-    throw new Error(
-      `credential seed at ${credSrc} is stale: its OAuth access token expired ` +
-        `${new Date(expiresAt).toISOString()}. On macOS the live login is in the Keychain, and ` +
-        `this file is only a snapshot of it that can go stale on its own schedule even while ` +
-        `\`claude\` keeps working interactively — a copy this old is not guaranteed to refresh, ` +
-        `and this runner has not verified that one will; ${pointer}.`,
-    );
-  }
-}
-
-// Delete a seeded `.credentials.json` from a config dir, if present. The config
-// dir itself may stay (post-hoc inspection value) — but never with a live
-// credential inside it. Idempotent and missing-safe (force).
-function scrubCredential(configDir) {
-  rmSync(join(configDir, CREDENTIALS_FILE), { force: true });
+  return childEnv;
 }
 
 // Extract the assistant text from `claude -p --output-format json` output. A
@@ -666,19 +633,7 @@ function extractResponse(stdout) {
 // child still printed one, otherwise attach stdout/stderr tails so a failing
 // line carries a real diagnostic instead of a bare "Command failed".
 function invokeClaude(bin, args, cwd, configDir, env) {
-  const childEnv = { ...env, CLAUDE_CONFIG_DIR: configDir };
-  // Auth is deterministic and opt-in. EVALS_ANTHROPIC_API_KEY (the scratch-token
-  // path) is the ONLY thing that activates API-key auth for the child. We
-  // deliberately do NOT honor a bare `ANTHROPIC_API_KEY` inherited from the
-  // operator's shell — requiring the EVALS_ prefix means an unrelated key sitting
-  // in the environment can never be billed by accident. So: set it from the
-  // EVALS_ var when present, otherwise STRIP any inherited one so seeded-
-  // credential auth is what's actually used.
-  if (env.EVALS_ANTHROPIC_API_KEY) {
-    childEnv.ANTHROPIC_API_KEY = env.EVALS_ANTHROPIC_API_KEY;
-  } else {
-    delete childEnv.ANTHROPIC_API_KEY;
-  }
+  const childEnv = buildChildEnv(env, configDir);
   try {
     const stdout = execFileSync(bin, args, {
       cwd,
@@ -743,15 +698,15 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
 //
 // DEBT: two residuals remain by accepted design, both scoped to a maintainer-run,
 // local release gate on trusted prompts. (1) The child inherits the operator's WHOLE
-// environment (the API credential — the revocable scratch key EVALS_ANTHROPIC_API_KEY,
-// preferred, nothing on disk, or the fallback seeded credential scrubbed post-run —
-// but also any GITHUB_TOKEN / AWS_* / other secret sitting in the shell). No OS
+// environment (its one credential — a revocable console key or `claude setup-token`
+// token, env-only, nothing on disk — but also any GITHUB_TOKEN / AWS_* / other secret
+// sitting in the shell). No OS
 // sandbox can hide an env var from the session's own processes, and network stays
 // OPEN under the jail (the session must reach the API), so a hostile session could
 // exfiltrate any of them. The seatbelt jail contains the FILESYSTEM ($HOME reads /
 // out-of-fixture writes), not the env or the network — this is fs-containment, not a
 // no-exfiltration boundary. The mitigation is scope: trusted prompts + a revocable
-// scratch key + a shell that doesn't carry secrets you'd mind. (2) EVALS_SANDBOX
+// credential + a shell that doesn't carry secrets you'd mind. (2) EVALS_SANDBOX
 // relies on `sandbox-exec`, which Apple has deprecated but still ships and honors;
 // it is opt-in and macOS-only (a hard refusal, never a silent unsandboxed run,
 // elsewhere), so we accept the deprecated tool for this local use rather than take
@@ -1021,10 +976,10 @@ export function runEvals(opts, env = process.env) {
   // this throws (never a silent unsandboxed run). Null → run unwrapped as before.
   const sandbox = sandboxContext(env, runnable);
 
-  // Same "before any dir/session starts" timing as the sandbox refusal above: if the
-  // seeded-credential fallback is what this run would use, and that seed is absent or
-  // stale, refuse now with one clear message rather than mid-batch, trial by trial.
-  checkCredentialSeed(env);
+  // Same "before any dir/session starts" timing as the sandbox refusal above: with
+  // both or neither EVALS_ auth var set, refuse now with one clear message rather
+  // than mid-batch, trial by trial.
+  resolveAuth(env);
 
   const lawsText = condition === "candidate" ? readFileSync(lawsPath(), "utf8") : "";
   // Provenance stamped onto every result line. Without it a results file cannot be
@@ -1046,94 +1001,80 @@ export function runEvals(opts, env = process.env) {
   // post-hoc inspection — each `run` makes at most one dir). The workDir is a
   // separate EMPTY dir used as the child's cwd for every case, so no project
   // CLAUDE.md (this repo's included) is discoverable by walking up from it.
-  const configDir = prepareConditionDir(condition, lawsText, tmpdir(), env);
-  // Everything after the config dir exists runs inside try/finally so the seeded
-  // credential is scrubbed no matter how we leave — normal return, a per-trial
-  // error (those are caught and recorded), or a thrown exception mid-run. The
-  // credential's on-disk exposure is thus bounded to the session lifetime.
-  try {
-    const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
+  const configDir = prepareConditionDir(condition, lawsText, tmpdir());
+  const workDir = mkdtempSync(join(tmpdir(), "harry-evals-cwd-"));
 
-    const outPath =
-      opts.out ||
-      join(
-        pluginRoot,
-        "evals",
-        "results",
-        `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`,
-      );
-    mkdirSync(dirname(outPath), { recursive: true });
+  const outPath =
+    opts.out ||
+    join(pluginRoot, "evals", "results", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
+  mkdirSync(dirname(outPath), { recursive: true });
 
-    const fixtureRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
-    const written = [];
-    for (const c of runnable) {
-      if (!SUPPORTED_MODES.has(c.mode))
-        throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
-      // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
-      // with no `trial` field as trial 1, so the two formats pool coherently.
-      for (let trial = 1; trial <= trials; trial++) {
-        const line = {
-          id: c.id,
-          mode: c.mode,
-          condition,
-          trial,
-          model,
-          law: c.law,
-          informative: c.informative === true,
-          prompt: c.prompt,
-          checks: c.checks,
-          configDir,
-          workDir,
-          ...provenance,
-          timestamp: new Date().toISOString(),
-        };
-        try {
-          // mode dispatch: text judges first-response prose; agentic materializes a
-          // throwaway fixture repo, runs a full session in it, then judges artifacts.
-          if (c.mode === "agentic") {
-            const fx = materializeFixture(c.fixture, fixtureRoot, env);
-            line.fixture = c.fixture;
-            line.fixtureDir = fx.dir;
-            line.initialBranch = fx.initialBranch;
-            line.initialCommit = fx.initialCommit;
-            line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env, sandbox);
-            // Evaluate now, while the fixture dir exists, and record per-check
-            // outcomes so `score` can judge offline (matching text mode's shape).
-            const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);
-            const { results } = evaluateArtifactChecks(c.checks, state);
-            line.checkOutcomes = results.map((r) => ({
-              check: r.check,
-              ok: r.ok,
-              detail: r.detail,
-            }));
-          } else {
-            line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
-            // Record per-check outcomes (same shape as agentic lines) so an
-            // inspector can see WHICH check failed without re-scoring. Scoring
-            // still re-evaluates text lines from `response`, so these are
-            // informational and never the source of truth.
-            const { results } = evaluateChecks(c.checks, line.response);
-            line.checkOutcomes = results.map((r) => ({
-              check: r.check,
-              ok: r.ok,
-              detail: r.matched ? "pattern matched" : "pattern did not match",
-            }));
-          }
-        } catch (err) {
-          line.response = "";
-          line.error = err.message;
+  const fixtureRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
+  const written = [];
+  for (const c of runnable) {
+    if (!SUPPORTED_MODES.has(c.mode)) throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
+    // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
+    // with no `trial` field as trial 1, so the two formats pool coherently.
+    for (let trial = 1; trial <= trials; trial++) {
+      const line = {
+        id: c.id,
+        mode: c.mode,
+        condition,
+        trial,
+        model,
+        law: c.law,
+        informative: c.informative === true,
+        prompt: c.prompt,
+        checks: c.checks,
+        configDir,
+        workDir,
+        ...provenance,
+        timestamp: new Date().toISOString(),
+      };
+      try {
+        // mode dispatch: text judges first-response prose; agentic materializes a
+        // throwaway fixture repo, runs a full session in it, then judges artifacts.
+        if (c.mode === "agentic") {
+          const fx = materializeFixture(c.fixture, fixtureRoot, env);
+          line.fixture = c.fixture;
+          line.fixtureDir = fx.dir;
+          line.initialBranch = fx.initialBranch;
+          line.initialCommit = fx.initialCommit;
+          line.response = runAgenticCase(bin, model, c.prompt, configDir, fx.dir, env, sandbox);
+          // Evaluate now, while the fixture dir exists, and record per-check
+          // outcomes so `score` can judge offline (matching text mode's shape).
+          const state = collectRepoState(fx.dir, fx.initialBranch, fx.initialCommit, env);
+          const { results } = evaluateArtifactChecks(c.checks, state);
+          line.checkOutcomes = results.map((r) => ({
+            check: r.check,
+            ok: r.ok,
+            detail: r.detail,
+          }));
+        } else {
+          line.response = runTextCase(bin, model, c.prompt, configDir, workDir, env);
+          // Record per-check outcomes (same shape as agentic lines) so an
+          // inspector can see WHICH check failed without re-scoring. Scoring
+          // still re-evaluates text lines from `response`, so these are
+          // informational and never the source of truth.
+          const { results } = evaluateChecks(c.checks, line.response);
+          line.checkOutcomes = results.map((r) => ({
+            check: r.check,
+            ok: r.ok,
+            detail: r.matched ? "pattern matched" : "pattern did not match",
+          }));
         }
-        // Append (never truncate): the documented flow runs baseline and candidate
-        // as two separate invocations into the SAME --out file, so score can
-        // contrast both conditions. Truncating would keep only the last run.
-        appendFileSync(outPath, `${JSON.stringify(line)}\n`);
-        written.push(line);
+      } catch (err) {
+        line.response = "";
+        line.error = err.message;
       }
+      // Append (never truncate): the documented flow runs baseline and candidate
+      // as two separate invocations into the SAME --out file, so score can
+      // contrast both conditions. Truncating would keep only the last run.
+      appendFileSync(outPath, `${JSON.stringify(line)}\n`);
+      written.push(line);
     }
-    return { outPath, configDir, workDir, lines: written, skipped };
-  } finally {
-    scrubCredential(configDir);
   }
+  return { outPath, configDir, workDir, lines: written, skipped };
 }
 
 // ---- CLI -------------------------------------------------------------------

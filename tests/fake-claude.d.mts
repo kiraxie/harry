@@ -10,6 +10,9 @@ export interface FakeClaudeCall {
   lawsPresent: boolean;
   hasCredentials: boolean;
   apiKey: string | null;
+  oauthToken: string | null;
+  evalsApiKeyForwarded: boolean;
+  evalsOauthForwarded: boolean;
 }
 
 export function installFakeClaude(

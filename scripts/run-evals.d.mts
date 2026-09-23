@@ -110,13 +110,14 @@ export function resolveModel(
   opts: { model?: string },
   env: Record<string, string | undefined>,
 ): string;
-export function prepareConditionDir(
-  condition: string,
-  lawsText: string,
-  root?: string,
-  env?: Record<string, string | undefined>,
-): string;
-export function checkCredentialSeed(env?: Record<string, string | undefined>): void;
+export function resolveAuth(env: Record<string, string | undefined>): {
+  kind: "api-key" | "oauth-token";
+};
+export function buildChildEnv(
+  env: Record<string, string | undefined>,
+  configDir: string,
+): Record<string, string | undefined>;
+export function prepareConditionDir(condition: string, lawsText: string, root?: string): string;
 export function materializeFixture(
   name: string,
   root?: string,

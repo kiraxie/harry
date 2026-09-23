@@ -40,10 +40,11 @@ const claudeMd = configDir ? path.join(configDir, "CLAUDE.md") : null;
 const hasClaudeMd = Boolean(claudeMd && fs.existsSync(claudeMd));
 const lawsPresent =
   hasClaudeMd && fs.readFileSync(claudeMd, "utf8").includes("Resident Engineering Laws");
-// Whether a seeded credential is present in the config dir AT SESSION TIME — the
-// scrub test asserts this is true during the run and gone after. Also record the
-// ANTHROPIC_API_KEY the child received (the scratch-token path), so a test can
-// prove API-key mode reaches the child and seeds no file.
+// Whether a credential file is present in the config dir AT SESSION TIME — the
+// runner must never put one there, so tests assert this stays false. Also record
+// the two auth vars the child received (ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN;
+// tests only ever hand in obvious fakes), and whether either EVALS_-prefixed source
+// var leaked through — presence only, never its value.
 const hasCredentials = Boolean(configDir && fs.existsSync(path.join(configDir, ".credentials.json")));
 
 const call = {
@@ -58,6 +59,9 @@ const call = {
   lawsPresent,
   hasCredentials,
   apiKey: process.env.ANTHROPIC_API_KEY ?? null,
+  oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN ?? null,
+  evalsApiKeyForwarded: "EVALS_ANTHROPIC_API_KEY" in process.env,
+  evalsOauthForwarded: "EVALS_CLAUDE_CODE_OAUTH_TOKEN" in process.env,
 };
 const calls = fs.existsSync(CALLS_PATH) ? JSON.parse(fs.readFileSync(CALLS_PATH, "utf8")) : [];
 calls.push(call);

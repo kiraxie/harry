@@ -11,6 +11,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -24,8 +25,8 @@ import { fileURLToPath } from "node:url";
 import type { CheckInput } from "../scripts/run-evals.mjs";
 import {
   buildAgenticSandboxProfile,
+  buildChildEnv,
   buildSeatbeltProfile,
-  checkCredentialSeed,
   collectRepoState,
   evaluateArtifactChecks,
   evaluateChecks,
@@ -33,6 +34,7 @@ import {
   materializeFixture,
   parseCasesJsonl,
   requireSandboxSupport,
+  resolveAuth,
   resolveModel,
   resolveTrials,
   runEvals,
@@ -46,6 +48,17 @@ const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 
 function tmpDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+// The runner refuses a run with both EVALS_ auth vars set, so a test that spread the
+// operator's own env would go red whenever the shell running the suite exports one
+// (an AC-5-style live run does). Every runEvals test starts from this instead and
+// sets exactly the auth var it means to exercise.
+function authFreeEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { ...process.env };
+  delete env.EVALS_ANTHROPIC_API_KEY;
+  delete env.EVALS_CLAUDE_CODE_OAUTH_TOKEN;
+  return env;
 }
 
 // ---- validate --------------------------------------------------------------
@@ -273,7 +286,7 @@ test("runEvals: baseline gives an empty config dir; candidate's inlines the laws
   try {
     installFakeClaude(binDir);
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
@@ -337,7 +350,7 @@ test("runEvals: appends both conditions into ONE --out file so score contrasts t
   try {
     installFakeClaude(binDir, "Confirm first: deleting production rows is irreversible.");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
@@ -367,7 +380,7 @@ test("runEvals: writes one result line per case with the response and embedded c
   try {
     installFakeClaude(binDir, "This is a Major tier task; let me plan the approach first.");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
@@ -393,7 +406,7 @@ test("resolveModel / runEvals: refuse to run without a pinned model", () => {
   const binDir = tmpDir("harry-evals-bin-");
   try {
     installFakeClaude(binDir);
-    const env = { ...process.env, EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
+    const env = { ...authFreeEnv(), EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
     delete (env as Record<string, string>).EVALS_MODEL;
     assert.throws(
       () => runEvals({ condition: "baseline", cases: ["destructive-confirmation"] }, env),
@@ -447,7 +460,7 @@ test("run CLI: a bad --trials exits 1 cleanly (no throw, no session launched)", 
   const binDir = tmpDir("harry-evals-bin-");
   try {
     installFakeClaude(binDir);
-    const env = { ...process.env, EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
+    const env = { ...authFreeEnv(), EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
     assert.equal(
       main(["run", "--condition", "candidate", "--model", "m", "--trials", "0"], env),
       1,
@@ -466,7 +479,7 @@ test("runEvals --trials 3: N sessions per case, trials recorded 1..N; one failed
     // scripted (via the shim's per-call counter) to reply with no marker → 1 fail.
     installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       FAKE_CLAUDE_FAIL_ON_NTH: "2",
       FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
@@ -502,7 +515,7 @@ test("runEvals --trials 3: two failed trials → FAIL (1/3), candidate gates red
   try {
     installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       FAKE_CLAUDE_FAIL_ON_NTH: "2,3",
       FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
@@ -529,7 +542,7 @@ test("runEvals --trials 2: a 1/2 split FAILS (strict majority, a tie is not a ma
   try {
     installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       FAKE_CLAUDE_FAIL_ON_NTH: "2",
       FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
@@ -900,7 +913,7 @@ test("runEvals: agentic cases are skipped (with a notice) on a text-only run", (
   try {
     installFakeClaude(binDir);
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
@@ -921,7 +934,7 @@ test("runEvals: explicitly selecting an agentic case without --agentic is refuse
   const binDir = tmpDir("harry-evals-bin-");
   try {
     installFakeClaude(binDir);
-    const env = { ...process.env, EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
+    const env = { ...authFreeEnv(), EVALS_CLAUDE_BIN: path.join(binDir, "claude") };
     assert.throws(
       () =>
         runEvals(
@@ -971,7 +984,7 @@ test("runEvals --agentic: a shim-scripted session materializes, edits, commits; 
     const gitConfigGlobal = path.join(binDir, "gitconfig-empty");
     writeFileSync(gitConfigGlobal, "[user]\n\tuseConfigOnly = true\n");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       FAKE_CLAUDE_SCRIPT: sessionScript,
       EVALS_FIXTURE_ROOT: fxRoot,
@@ -1034,7 +1047,7 @@ test("runEvals --agentic --trials 2: each trial materializes a FRESH fixture rep
     // the agentic run sets cwd to the trial's materialized fixture dir.
     installFakeClaude(binDir);
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_FIXTURE_ROOT: fxRoot,
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
@@ -1090,10 +1103,11 @@ test("the shipped agentic cases validate and reference existing fixtures", () =>
   }
 });
 
-// ---- auth: credential seeding + error surfacing ----------------------------
+// ---- auth: exactly one explicit path, no credential on disk -----------------
 
-// A fake operator config dir carrying only a .credentials.json, used as the
-// resolved source (env.CLAUDE_CONFIG_DIR) so tests don't touch the real ~/.claude.
+// A fake operator config dir carrying only a .credentials.json, pointed at by
+// env.CLAUDE_CONFIG_DIR: the file the removed seeded-credential path used to copy.
+// The runner must never read it or copy it now.
 function fakeOperatorConfig(withCreds: boolean): string {
   const dir = tmpDir("harry-evals-opcfg-");
   if (withCreds) {
@@ -1102,212 +1116,264 @@ function fakeOperatorConfig(withCreds: boolean): string {
   return dir;
 }
 
-test("runEvals: seeds a credential FOR the session, then scrubs it; CLAUDE.md isolation holds", () => {
+// Obvious fakes, shaped like the real thing so a leak test means something. None is
+// a real credential.
+const FAKE_EVALS_OAUTH = "sk-ant-oat01-fake-Qz9XvW7pLmK3jHfYtR";
+const FAKE_EVALS_API_KEY = "sk-ant-api03-fake-Hj3KtY8wQeN5mB2cVx";
+const FAKE_INHERITED_OAUTH = "sk-ant-oat01-fake-inherited-Lp4Rs6Tu";
+const FAKE_INHERITED_API_KEY = "sk-ant-api03-fake-inherited-Wd7Ef9Gh";
+
+// Every 6-char window of `secret` that appears in `text`; [] means no leak, whole
+// or partial.
+function leakedFragments(text: string, secret: string): string[] {
+  const leaked: string[] = [];
+  for (let i = 0; i + 6 <= secret.length; i++) {
+    const fragment = secret.slice(i, i + 6);
+    if (text.includes(fragment)) leaked.push(fragment);
+  }
+  return leaked;
+}
+
+function runOne(env: Record<string, string | undefined>, binDir: string, condition = "candidate") {
+  return runEvals(
+    {
+      condition,
+      model: "m",
+      cases: ["destructive-confirmation"],
+      out: path.join(binDir, `${condition}.jsonl`),
+    },
+    env,
+  );
+}
+
+// Throws, and returns the message, so a test can inspect exactly what the operator sees.
+function refusalOf(fn: () => unknown): string {
+  try {
+    fn();
+  } catch (err) {
+    return (err as Error).message;
+  }
+  assert.fail("expected a refusal, got none");
+}
+
+test("resolveAuth: each single EVALS_ var selects its own path", () => {
+  assert.deepEqual(resolveAuth({ EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY }), {
+    kind: "api-key",
+  });
+  assert.deepEqual(resolveAuth({ EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH }), {
+    kind: "oauth-token",
+  });
+});
+
+test("resolveAuth: an empty string counts as unset", () => {
+  assert.deepEqual(
+    resolveAuth({ EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY, EVALS_CLAUDE_CODE_OAUTH_TOKEN: "" }),
+    { kind: "api-key" },
+  );
+  assert.deepEqual(
+    resolveAuth({ EVALS_ANTHROPIC_API_KEY: "", EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH }),
+    { kind: "oauth-token" },
+  );
+  const both = refusalOf(() =>
+    resolveAuth({ EVALS_ANTHROPIC_API_KEY: "", EVALS_CLAUDE_CODE_OAUTH_TOKEN: "" }),
+  );
+  assert.match(both, /EVALS_ANTHROPIC_API_KEY/, "two empties are neither set");
+});
+
+test("resolveAuth: neither set → refuses; bare inherited vars do not count", () => {
+  const message = refusalOf(() =>
+    resolveAuth({
+      ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
+      CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
+    }),
+  );
+  assert.match(message, /EVALS_ANTHROPIC_API_KEY/);
+  assert.match(message, /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
+  assert.match(message, /claude setup-token/);
+  assert.match(message, /\$\(cat /, "says how to hand a value over without printing it");
+  assert.deepEqual(leakedFragments(message, FAKE_INHERITED_API_KEY), []);
+  assert.deepEqual(leakedFragments(message, FAKE_INHERITED_OAUTH), []);
+});
+
+test("resolveAuth: both set → refuses as ambiguous, echoing no value", () => {
+  const message = refusalOf(() =>
+    resolveAuth({
+      EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+      EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
+    }),
+  );
+  assert.match(message, /EVALS_ANTHROPIC_API_KEY/);
+  assert.match(message, /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
+  assert.match(message, /claude setup-token/);
+  assert.match(message, /\$\(cat /, "says how to hand a value over without printing it");
+  assert.deepEqual(leakedFragments(message, FAKE_EVALS_API_KEY), []);
+  assert.deepEqual(leakedFragments(message, FAKE_EVALS_OAUTH), []);
+});
+
+test("buildChildEnv: strips inherited auth and the EVALS_ sources, sets exactly one", () => {
+  const inherited = {
+    PATH: "/usr/bin",
+    ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
+    CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
+  };
+  const oauth = buildChildEnv(
+    { ...inherited, EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH },
+    "/cfg",
+  );
+  assert.deepEqual(oauth, {
+    PATH: "/usr/bin",
+    CLAUDE_CONFIG_DIR: "/cfg",
+    CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
+  });
+  const key = buildChildEnv({ ...inherited, EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY }, "/cfg");
+  assert.deepEqual(key, {
+    PATH: "/usr/bin",
+    CLAUDE_CONFIG_DIR: "/cfg",
+    ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+  });
+  // An empty EVALS_ var is unset, and still never forwarded.
+  const withEmpty = buildChildEnv(
+    { EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY, EVALS_CLAUDE_CODE_OAUTH_TOKEN: "" },
+    "/cfg",
+  );
+  assert.ok(!("EVALS_CLAUDE_CODE_OAUTH_TOKEN" in withEmpty), "empty EVALS_ var not forwarded");
+  // Called outside runEvals it still refuses rather than launch an unauthenticated child.
+  assert.throws(() => buildChildEnv(inherited, "/cfg"), /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
+});
+
+test("runEvals: EVALS_CLAUDE_CODE_OAUTH_TOKEN reaches the child as CLAUDE_CODE_OAUTH_TOKEN, alone", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const opCfg = fakeOperatorConfig(true); // a .credentials.json the runner must ignore
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      CLAUDE_CONFIG_DIR: opCfg,
+      EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
+      // Inherited from the operator's shell: both must be stripped, never used.
+      CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
+      ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
+    };
+    runOne(env, binDir);
+    const [call] = readCalls(binDir);
+    assert.equal(call.oauthToken, FAKE_EVALS_OAUTH, "the EVALS_ token is the child's token");
+    assert.equal(call.apiKey, null, "the inherited ANTHROPIC_API_KEY was stripped");
+    assert.equal(call.evalsOauthForwarded, false, "EVALS_CLAUDE_CODE_OAUTH_TOKEN not forwarded");
+    assert.equal(call.evalsApiKeyForwarded, false, "EVALS_ANTHROPIC_API_KEY not forwarded");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: EVALS_ANTHROPIC_API_KEY reaches the child as ANTHROPIC_API_KEY, alone", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+      CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
+      ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
+    };
+    runOne(env, binDir);
+    const [call] = readCalls(binDir);
+    assert.equal(call.apiKey, FAKE_EVALS_API_KEY, "the EVALS_ key is the child's key");
+    assert.equal(call.oauthToken, null, "the inherited CLAUDE_CODE_OAUTH_TOKEN was stripped");
+    assert.equal(call.evalsApiKeyForwarded, false, "EVALS_ANTHROPIC_API_KEY not forwarded");
+    assert.equal(call.evalsOauthForwarded, false, "EVALS_CLAUDE_CODE_OAUTH_TOKEN not forwarded");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: no credential file ever lands in a condition dir, even with one in CLAUDE_CONFIG_DIR", () => {
   const binDir = tmpDir("harry-evals-bin-");
   const opCfg = fakeOperatorConfig(true);
   try {
     installFakeClaude(binDir);
-    // env.CLAUDE_CONFIG_DIR points at the fake operator dir → that is where the
-    // runner reads .credentials.json from before overriding it per-child.
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       CLAUDE_CONFIG_DIR: opCfg,
+      EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
     };
-
-    const baseline = runEvals(
-      {
-        condition: "baseline",
-        model: "m",
-        cases: ["destructive-confirmation"],
-        out: path.join(binDir, "b.jsonl"),
-      },
-      env,
-    );
-    const candidate = runEvals(
-      {
-        condition: "candidate",
-        model: "m",
-        cases: ["destructive-confirmation"],
-        out: path.join(binDir, "c.jsonl"),
-      },
-      env,
-    );
-
-    // The credential was present DURING each session (the shim stat'd it via
-    // CLAUDE_CONFIG_DIR) — else `claude -p` would be "Not logged in"...
+    const baseline = runOne(env, binDir, "baseline");
+    const candidate = runOne(env, binDir, "candidate");
     const calls = readCalls(binDir);
     assert.equal(calls.length, 2, "two sessions ran");
     assert.ok(
-      calls.every((c) => c.hasCredentials === true),
-      "the seeded credential was readable during each session",
+      calls.every((c) => c.hasCredentials === false),
+      "no credential file was present during any session",
     );
-    // ...but it is SCRUBBED once runEvals returns — the config dir may stay for
-    // inspection, but never with a live credential inside it.
-    assert.ok(
-      !existsSync(path.join(baseline.configDir, ".credentials.json")),
-      "baseline credential scrubbed post-run",
-    );
-    assert.ok(
-      !existsSync(path.join(candidate.configDir, ".credentials.json")),
-      "candidate credential scrubbed post-run",
-    );
-    // Memory isolation still holds: baseline never got a CLAUDE.md, candidate did.
-    assert.ok(
-      !existsSync(path.join(baseline.configDir, "CLAUDE.md")),
-      "baseline stays law-free — only credentials were copied, not memory",
-    );
-    assert.ok(
-      existsSync(path.join(candidate.configDir, "CLAUDE.md")),
-      "candidate still has its laws (CLAUDE.md is not scrubbed)",
-    );
+    // The whole listing, not one filename: nothing but the laws is ever written.
+    assert.deepEqual(readdirSync(baseline.configDir), [], "baseline dir stays empty");
+    assert.deepEqual(readdirSync(candidate.configDir), ["CLAUDE.md"], "candidate holds only laws");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
     rmSync(opCfg, { recursive: true, force: true });
   }
 });
 
-test("runEvals: no credentials present and no scratch key → refuses up front (checkCredentialSeed)", () => {
-  // Flipped 2026-09-22: this used to assert the run PROCEEDED on a missing seed
-  // ("keychain auth"), but an absent file is indistinguishable from a stale one — both
-  // mean the seeded-credential fallback has nothing usable — so it now refuses up front
-  // instead of letting the run fail mid-way. See checkCredentialSeed's own comment.
+test("runEvals: both EVALS_ auth vars set → refuses before any session, naming both, echoing neither", () => {
   const binDir = tmpDir("harry-evals-bin-");
-  const opCfg = fakeOperatorConfig(false); // keychain/API-key setup: no file
   try {
     installFakeClaude(binDir);
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      CLAUDE_CONFIG_DIR: opCfg,
+      EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+      EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
     };
-    assert.throws(
-      () =>
-        runEvals(
-          {
-            condition: "baseline",
-            model: "m",
-            cases: ["destructive-confirmation"],
-            out: path.join(binDir, "b.jsonl"),
-          },
-          env,
-        ),
-      /no credential seed .* EVALS_ANTHROPIC_API_KEY is unset/,
-      "an absent seed with no scratch key is a hard refusal, not a silent proceed",
-    );
+    let message = "";
+    assert.throws(() => {
+      try {
+        runOne(env, binDir);
+      } catch (err) {
+        message = (err as Error).message;
+        throw err;
+      }
+    });
+    assert.match(message, /EVALS_ANTHROPIC_API_KEY/);
+    assert.match(message, /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
+    assert.match(message, /claude setup-token/);
+    assert.deepEqual(leakedFragments(message, FAKE_EVALS_API_KEY), [], "no API key content");
+    assert.deepEqual(leakedFragments(message, FAKE_EVALS_OAUTH), [], "no token content");
     assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
-    rmSync(opCfg, { recursive: true, force: true });
   }
 });
 
-test("runEvals: EVALS_ANTHROPIC_API_KEY authenticates the child and seeds NO credential file", () => {
+test("runEvals: neither EVALS_ auth var set → refuses before any session, even with bare ones inherited", () => {
   const binDir = tmpDir("harry-evals-bin-");
-  const opCfg = fakeOperatorConfig(true); // creds exist, but API-key mode must win
+  const opCfg = fakeOperatorConfig(true); // the old seed source must not rescue the run
   try {
     installFakeClaude(binDir);
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       CLAUDE_CONFIG_DIR: opCfg,
-      EVALS_ANTHROPIC_API_KEY: "sk-ant-scratch-token",
+      CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
+      ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
     };
-    const run = runEvals(
-      {
-        condition: "candidate",
-        model: "m",
-        cases: ["destructive-confirmation"],
-        out: path.join(binDir, "o.jsonl"),
-      },
-      env,
-    );
-    // API-key mode: NO credential file is ever written (precedence over seeding),
-    // so there is nothing on disk to leak — during the session or after.
-    assert.ok(
-      !existsSync(path.join(run.configDir, ".credentials.json")),
-      "no credential file seeded in API-key mode",
-    );
-    const calls = readCalls(binDir);
-    assert.equal(calls[0].hasCredentials, false, "no credential file present during the session");
-    assert.equal(
-      calls[0].apiKey,
-      "sk-ant-scratch-token",
-      "the scratch key reached the child as ANTHROPIC_API_KEY",
-    );
-  } finally {
-    rmSync(binDir, { recursive: true, force: true });
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-test("runEvals: a bare operator ANTHROPIC_API_KEY is NOT passed to the child (EVALS_ prefix required)", () => {
-  const binDir = tmpDir("harry-evals-bin-");
-  const opCfg = fakeOperatorConfig(true);
-  try {
-    installFakeClaude(binDir);
-    // A stray key in the operator env must never be billed by accident — only the
-    // EVALS_-prefixed var opts in. The child should see it stripped.
-    const env = {
-      ...process.env,
-      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      CLAUDE_CONFIG_DIR: opCfg,
-      ANTHROPIC_API_KEY: "sk-ant-unrelated-operator-key",
-    };
-    delete (env as Record<string, string>).EVALS_ANTHROPIC_API_KEY;
-    runEvals(
-      {
-        condition: "candidate",
-        model: "m",
-        cases: ["destructive-confirmation"],
-        out: path.join(binDir, "o.jsonl"),
-      },
-      env,
-    );
-    const calls = readCalls(binDir);
-    assert.equal(calls[0].apiKey, null, "the inherited bare key was stripped from the child env");
-    assert.equal(calls[0].hasCredentials, true, "auth fell back to the seeded credential instead");
-  } finally {
-    rmSync(binDir, { recursive: true, force: true });
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-test("runEvals: seeded credential is scrubbed even when the run throws mid-way", () => {
-  const binDir = tmpDir("harry-evals-bin-");
-  const opCfg = fakeOperatorConfig(true);
-  try {
-    installFakeClaude(binDir);
-    // Force a throw AFTER the session ran (so the credential existed and the shim
-    // recorded the config dir): make --out a directory, so the post-session
-    // appendFileSync throws EISDIR and escapes runEvals.
-    const outDir = path.join(binDir, "out-is-a-dir");
-    mkdirSync(outDir);
-    const env = {
-      ...process.env,
-      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      CLAUDE_CONFIG_DIR: opCfg,
-    };
-    assert.throws(
-      () =>
-        runEvals(
-          {
-            condition: "candidate",
-            model: "m",
-            cases: ["destructive-confirmation"],
-            out: outDir,
-          },
-          env,
-        ),
-      "the write to a directory path throws out of runEvals",
-    );
-    const calls = readCalls(binDir);
-    assert.equal(calls.length, 1, "the session ran before the throw");
-    assert.equal(calls[0].hasCredentials, true, "the credential existed during the session");
-    assert.ok(
-      !existsSync(path.join(calls[0].configDir as string, ".credentials.json")),
-      "the finally block scrubbed the credential despite the mid-run throw",
-    );
+    let message = "";
+    assert.throws(() => {
+      try {
+        runOne(env, binDir);
+      } catch (err) {
+        message = (err as Error).message;
+        throw err;
+      }
+    });
+    assert.match(message, /EVALS_ANTHROPIC_API_KEY/);
+    assert.match(message, /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
+    assert.match(message, /claude setup-token/);
+    assert.deepEqual(leakedFragments(message, FAKE_INHERITED_OAUTH), [], "no token content");
+    assert.deepEqual(leakedFragments(message, FAKE_INHERITED_API_KEY), [], "no key content");
+    assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
     rmSync(opCfg, { recursive: true, force: true });
@@ -1316,13 +1382,12 @@ test("runEvals: seeded credential is scrubbed even when the run throws mid-way",
 
 test("runEvals: an is_error result (e.g. 'Not logged in') lands as a case error, not a response", () => {
   const binDir = tmpDir("harry-evals-bin-");
-  const opCfg = fakeOperatorConfig(true);
   try {
     installFakeClaude(binDir, "Not logged in · Please run /login");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      CLAUDE_CONFIG_DIR: opCfg,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
       FAKE_CLAUDE_IS_ERROR: "1",
     };
     const { lines } = runEvals(
@@ -1342,7 +1407,6 @@ test("runEvals: an is_error result (e.g. 'Not logged in') lands as a case error,
     assert.equal(scoreResults(lines).candidateFailed, true, "an auth error fails the candidate");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
-    rmSync(opCfg, { recursive: true, force: true });
   }
 });
 
@@ -1352,7 +1416,7 @@ test("runEvals: text lines record per-check outcomes (same shape as agentic)", (
     // A lawful reply that satisfies debt-shortcut's DEBT: check.
     installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
@@ -1405,13 +1469,12 @@ test("text cases are tautology-free: no regex_must literal appears in its own pr
 
 test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message", () => {
   const binDir = tmpDir("harry-evals-bin-");
-  const opCfg = fakeOperatorConfig(true);
   try {
     installFakeClaude(binDir, "boom: some diagnostic on stderr");
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      CLAUDE_CONFIG_DIR: opCfg,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
       FAKE_CLAUDE_FAIL: "1",
     };
     const { lines } = runEvals(
@@ -1431,149 +1494,6 @@ test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message
     );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-// ---- auth: credential seed pre-flight (checkCredentialSeed) ----------------
-
-// A fake operator config dir carrying a `.credentials.json` shaped like the real
-// `claudeAiOauth` structure, with `expiresAt` set relative to now — so a test can drive
-// checkCredentialSeed's staleness judgment without ever touching a real token value.
-function fakeOperatorConfigWithExpiry(expiresAt: number): string {
-  const dir = tmpDir("harry-evals-opcfg-exp-");
-  writeFileSync(
-    path.join(dir, ".credentials.json"),
-    JSON.stringify({ claudeAiOauth: { accessToken: "fake", expiresAt } }),
-  );
-  return dir;
-}
-
-test("checkCredentialSeed: no EVALS_ANTHROPIC_API_KEY and no seed file → refuses", () => {
-  const opCfg = fakeOperatorConfig(false);
-  try {
-    assert.throws(
-      () => checkCredentialSeed({ CLAUDE_CONFIG_DIR: opCfg }),
-      /no credential seed .* EVALS_ANTHROPIC_API_KEY is unset/,
-    );
-  } finally {
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-test("checkCredentialSeed: an expired claudeAiOauth.expiresAt → refuses as stale", () => {
-  const opCfg = fakeOperatorConfigWithExpiry(Date.now() - 60_000); // expired 1 minute ago
-  try {
-    assert.throws(
-      () => checkCredentialSeed({ CLAUDE_CONFIG_DIR: opCfg }),
-      /is stale.*EVALS_ANTHROPIC_API_KEY/s,
-    );
-  } finally {
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-test("checkCredentialSeed: a future claudeAiOauth.expiresAt → proceeds", () => {
-  const opCfg = fakeOperatorConfigWithExpiry(Date.now() + 3_600_000); // valid for another hour
-  try {
-    assert.doesNotThrow(() => checkCredentialSeed({ CLAUDE_CONFIG_DIR: opCfg }));
-  } finally {
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-test("checkCredentialSeed: a seed with no expiresAt field at all → proceeds (can't judge, don't refuse)", () => {
-  // Matches the shape the other auth tests' fakeOperatorConfig(true) already ships
-  // ('{"fake":"token"}') — this is what keeps THOSE tests passing unmodified.
-  const opCfg = fakeOperatorConfig(true);
-  try {
-    assert.doesNotThrow(() => checkCredentialSeed({ CLAUDE_CONFIG_DIR: opCfg }));
-  } finally {
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-test("checkCredentialSeed: malformed JSON → refuses (unusable seed)", () => {
-  const dir = tmpDir("harry-evals-opcfg-bad-");
-  try {
-    writeFileSync(path.join(dir, ".credentials.json"), "{not valid json");
-    assert.throws(
-      () => checkCredentialSeed({ CLAUDE_CONFIG_DIR: dir }),
-      /not valid JSON.*EVALS_ANTHROPIC_API_KEY/s,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("checkCredentialSeed: malformed JSON around a token → the error echoes no token content", () => {
-  // JSON.parse's own message quotes the file text around the failure point, which in a
-  // real credentials file can sit inside the access token. A fake token-shaped value
-  // placed right where the parse fails must not surface in the thrown message at all —
-  // not whole, and not as any 4+ char fragment of it.
-  const fakeToken = "sk-ant-oat01-Qz9XvW7pLmK3jHfYtR";
-  const dir = tmpDir("harry-evals-opcfg-leak-");
-  try {
-    writeFileSync(
-      path.join(dir, ".credentials.json"),
-      `{"claudeAiOauth":{"accessToken":${fakeToken},"expiresAt":1}}`,
-    );
-    let message = "";
-    try {
-      checkCredentialSeed({ CLAUDE_CONFIG_DIR: dir });
-    } catch (err) {
-      message = (err as Error).message;
-    }
-    assert.match(message, /not valid JSON.*EVALS_ANTHROPIC_API_KEY/s);
-    const leaked: string[] = [];
-    for (let i = 0; i + 4 <= fakeToken.length; i++) {
-      const fragment = fakeToken.slice(i, i + 4);
-      if (message.includes(fragment)) leaked.push(fragment);
-    }
-    assert.deepEqual(leaked, [], `error message echoes token fragments: ${leaked.join(", ")}`);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("checkCredentialSeed: EVALS_ANTHROPIC_API_KEY set → always proceeds, even over a stale seed", () => {
-  const opCfg = fakeOperatorConfigWithExpiry(Date.now() - 60_000);
-  try {
-    assert.doesNotThrow(() =>
-      checkCredentialSeed({ CLAUDE_CONFIG_DIR: opCfg, EVALS_ANTHROPIC_API_KEY: "sk-ant-test" }),
-    );
-  } finally {
-    rmSync(opCfg, { recursive: true, force: true });
-  }
-});
-
-test("runEvals: a stale credential seed refuses before any session launches (wired end to end)", () => {
-  const binDir = tmpDir("harry-evals-bin-");
-  const opCfg = fakeOperatorConfigWithExpiry(Date.now() - 60_000);
-  try {
-    installFakeClaude(binDir);
-    const env = {
-      ...process.env,
-      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      CLAUDE_CONFIG_DIR: opCfg,
-    };
-    assert.throws(
-      () =>
-        runEvals(
-          {
-            condition: "candidate",
-            model: "m",
-            cases: ["destructive-confirmation"],
-            out: path.join(binDir, "o.jsonl"),
-          },
-          env,
-        ),
-      /is stale/,
-    );
-    assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
-  } finally {
-    rmSync(binDir, { recursive: true, force: true });
-    rmSync(opCfg, { recursive: true, force: true });
   }
 });
 
@@ -1759,7 +1679,7 @@ test("runEvals: EVALS_SANDBOX=1 with an agentic case but no sandbox-exec is a ha
     // this exercises the refusal on any platform (darwin → missing-binary branch;
     // non-darwin → platform branch) — both refuse before any session launches.
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_FIXTURE_ROOT: fxRoot,
       EVALS_SANDBOX: "1",
@@ -1795,7 +1715,7 @@ test("runEvals: EVALS_SANDBOX=1 on a TEXT-only run is ignored (no exec surface, 
     // mode has no exec surface, so the flag is ignored — the run must proceed
     // normally and unwrapped rather than refuse.
     const env = {
-      ...process.env,
+      ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_SANDBOX: "1",
       EVALS_SANDBOX_EXEC: "",
@@ -1835,11 +1755,12 @@ test(
       // the wrapper resolves so the shim still runs under the jail AND that the
       // original args pass through the sandbox-exec wrapper untouched.
       const env = {
-        ...process.env,
+        ...authFreeEnv(),
         EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
         EVALS_FIXTURE_ROOT: fxRoot,
         EVALS_SANDBOX: "1",
         EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+        CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
       };
       const { lines } = runEvals(
         {
@@ -1860,6 +1781,10 @@ test(
         "the git+node allowlist passed through the sandbox-exec wrapper intact",
       );
       assert.equal(calls[0].permissionMode, "acceptEdits", "permission mode survived the wrapper");
+      // The sandboxed env is built by the same child-env function as the others.
+      assert.equal(calls[0].apiKey, "sk-ant-test", "the EVALS_ key reached the jailed child");
+      assert.equal(calls[0].oauthToken, null, "the inherited token was stripped under the jail");
+      assert.equal(calls[0].evalsApiKeyForwarded, false, "EVALS_ANTHROPIC_API_KEY not forwarded");
       assert.ok(
         calls[0].cwd?.includes("harry-evals-fx-tiny-node"),
         "the sandboxed session ran in the materialized fixture dir",
