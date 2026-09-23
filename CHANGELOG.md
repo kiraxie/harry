@@ -249,6 +249,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DISABLE_AUTOUPDATER=1`.
 - **CI reads the pnpm version from `packageManager`** instead of a second copy
   in the workflow.
+- **CI runs on macOS as well as Linux**, so the eval runner's seatbelt-jail
+  tests (macOS-only) run in CI too.
 
 - **Worktree isolation follows concurrent writers, not tier** (`HARRY.md`
   §5). Two or more writers at once — parallel subagents, several efforts in
@@ -291,7 +293,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.git/config.worktree`, or `.git/config` is no longer a regular file.
   Unsandboxed the same step runs in the runner itself; there the session
   already ran as the operator, so the checks guard against accidents, not
-  attacks.
+  attacks. The step is bounded by a timeout (5 minutes), so a hung
+  model-written test no longer hangs the run.
+- **A sandboxed session could write outside the eval runner's jail and have
+  the runner run it later.** The seatbelt profile allowed every write outside
+  `$HOME`, including user-writable `PATH` directories such as Homebrew's
+  `bin`, and the runner later spawned `git`, `which` and `claude` by name,
+  unjailed. The config dir, work dir and fixtures' parent were also shared
+  across a run and writable from the jail. Now:
+  - the profile denies every write except to the trial's own config dir,
+    fixture repo and temp dir (plus `/dev/null`), and still denies reads
+    under `$HOME`;
+  - `git`, `claude` and `sandbox-exec` are resolved to absolute paths before
+    the first session and spawned by those paths from then on (`which` is no
+    longer run);
+  - every trial gets its own config, work, fixture and temp dirs, recorded on
+    each result line as `trialDir`.
+- **A child's output could write terminal escape sequences to the operator's
+  terminal.** Every child the eval runner spawns now has its stdout and
+  stderr piped, and what reaches the operator (error messages, result lines)
+  has control characters stripped.
 
 - **A reviewed repository could run its own `./codex` or `./git`.** On
   macOS/Linux the companion spawned both by bare name, and an empty or
