@@ -113,6 +113,8 @@ export function resolveModel(
 export function resolveAuth(env: Record<string, string | undefined>): {
   kind: "api-key" | "oauth-token";
 };
+export function buildBaseEnv(env: Record<string, string | undefined>): Record<string, string>;
+export function buildGitEnv(env: Record<string, string | undefined>): Record<string, string>;
 export function buildChildEnv(
   env: Record<string, string | undefined>,
   configDir: string,
@@ -122,17 +124,28 @@ export function materializeFixture(
   name: string,
   root?: string,
   env?: Record<string, string | undefined>,
-): { dir: string; initialBranch: string; initialCommit: string };
+): { dir: string; initialBranch: string; initialCommit: string; gitConfig: Buffer };
+export function restoreFixtureGitConfig(fixtureDir: string, gitConfig: Buffer | string): void;
 export function collectRepoState(
   fixtureDir: string,
   initialBranch: string,
   initialCommit: string,
   env?: Record<string, string | undefined>,
 ): RepoState;
-export function evaluateArtifactCheck(check: CheckInput, state: RepoState): ArtifactCheckOutcome;
+// A trial's seatbelt jail: the sandbox-exec path and the profile the session ran under.
+export interface Jail {
+  sandboxExec: string;
+  profile: string;
+}
+export function evaluateArtifactCheck(
+  check: CheckInput,
+  state: RepoState,
+  jail?: Jail | null,
+): ArtifactCheckOutcome;
 export function evaluateArtifactChecks(
   checks: CheckInput[] | undefined,
   state: RepoState,
+  jail?: Jail | null,
 ): { pass: boolean; results: ArtifactCheckOutcome[] };
 export function runEvals(
   opts: RunOpts,
@@ -153,6 +166,7 @@ export function buildAgenticSandboxProfile(opts: {
   home: string;
   allowWrite?: string[];
   bin: string;
+  env?: Record<string, string | undefined>;
 }): string;
 export function wrapWithSandbox(
   sandboxExec: string,

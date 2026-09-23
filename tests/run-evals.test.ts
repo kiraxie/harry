@@ -22,12 +22,15 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import type { CheckInput } from "../scripts/run-evals.mjs";
+import type { CheckInput, RepoState } from "../scripts/run-evals.mjs";
 import {
   buildAgenticSandboxProfile,
+  buildBaseEnv,
   buildChildEnv,
+  buildGitEnv,
   buildSeatbeltProfile,
   collectRepoState,
+  evaluateArtifactCheck,
   evaluateArtifactChecks,
   evaluateChecks,
   main,
@@ -37,6 +40,7 @@ import {
   resolveAuth,
   resolveModel,
   resolveTrials,
+  restoreFixtureGitConfig,
   runEvals,
   scoreResults,
   validateCases,
@@ -905,6 +909,116 @@ test("materializeFixture: copies a committed fixture into an isolated repo, seed
   }
 });
 
+test("materializeFixture: pins the fixture's git identity in its LOCAL config", () => {
+  // Every child's env also carries a pinned identity, which would mask a lost local
+  // pin; this keeps the pin itself guarded.
+  const root = tmpDir("harry-evals-fxroot-");
+  try {
+    const { dir } = materializeFixture("tiny-node", root);
+    const local = (key: string) =>
+      execFileSync("git", ["config", "--local", key], { cwd: dir, encoding: "utf8" }).trim();
+    assert.equal(local("user.name"), "Eval Fixture");
+    assert.equal(local("user.email"), "eval@localhost");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// A materialized fixture the test then tampers with as a session could.
+function withFixture(fn: (fx: ReturnType<typeof materializeFixture>, root: string) => void) {
+  const root = tmpDir("harry-evals-fxroot-");
+  try {
+    fn(materializeFixture("tiny-node", root), root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("restoreFixtureGitConfig: puts back exactly the config materializeFixture wrote", () => {
+  withFixture((fx) => {
+    const configPath = path.join(fx.dir, ".git", "config");
+    writeFileSync(configPath, "[core]\n\tfsmonitor = /tmp/anything\n[include]\n\tpath = /x\n");
+    restoreFixtureGitConfig(fx.dir, fx.gitConfig);
+    assert.deepEqual(readFileSync(configPath), fx.gitConfig);
+    // A session that deleted it gets it back too.
+    rmSync(configPath);
+    restoreFixtureGitConfig(fx.dir, fx.gitConfig);
+    assert.deepEqual(readFileSync(configPath), fx.gitConfig);
+  });
+});
+
+test("restoreFixtureGitConfig: refuses a commondir or config.worktree the session added", () => {
+  for (const name of ["commondir", "config.worktree"]) {
+    withFixture((fx) => {
+      writeFileSync(path.join(fx.dir, ".git", name), "../elsewhere\n");
+      assert.throws(
+        () => restoreFixtureGitConfig(fx.dir, fx.gitConfig),
+        new RegExp(`refusing to run git.*\\.git/${name.replace(".", "\\.")}`),
+      );
+    });
+  }
+});
+
+test("restoreFixtureGitConfig: refuses a .git that is a gitdir file or a symlink", () => {
+  withFixture((fx, root) => {
+    const gitDir = path.join(fx.dir, ".git");
+    const moved = path.join(root, "moved.git");
+    execFileSync("mv", [gitDir, moved]);
+    writeFileSync(gitDir, `gitdir: ${moved}\n`);
+    assert.throws(() => restoreFixtureGitConfig(fx.dir, fx.gitConfig), /not a plain directory/);
+    rmSync(gitDir);
+    symlinkSync(moved, gitDir);
+    assert.throws(() => restoreFixtureGitConfig(fx.dir, fx.gitConfig), /not a plain directory/);
+  });
+});
+
+test("restoreFixtureGitConfig: refuses a symlinked .git/config and never writes through it", () => {
+  withFixture((fx, root) => {
+    // Stands in for ~/.gitconfig: the file a malicious link would aim the write at.
+    const target = path.join(root, "operator.gitconfig");
+    writeFileSync(target, "[user]\n\tname = Operator\n");
+    const configPath = path.join(fx.dir, ".git", "config");
+    rmSync(configPath);
+    symlinkSync(target, configPath);
+    assert.throws(() => restoreFixtureGitConfig(fx.dir, fx.gitConfig), /not a regular file/);
+    assert.equal(readFileSync(target, "utf8"), "[user]\n\tname = Operator\n", "target untouched");
+  });
+});
+
+test("runEvals --agentic: a session that adds .git/commondir gets the trial refused, not judged", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
+  try {
+    const sessionScript = path.join(binDir, "session.mjs");
+    writeFileSync(
+      sessionScript,
+      'import { writeFileSync } from "node:fs";\nwriteFileSync(".git/commondir", "../x\\n");\n',
+    );
+    installFakeClaude(binDir, undefined, { script: sessionScript });
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: fxRoot,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+      },
+      env,
+    );
+    assert.match(lines[0].error ?? "", /refusing to run git.*commondir/);
+    assert.equal(lines[0].checkOutcomes, undefined, "no check was judged on a refused repo");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
+  }
+});
+
 test("materializeFixture: refuses an unknown fixture name", () => {
   assert.throws(() => materializeFixture("no-such-fixture", os.tmpdir()), /unknown fixture/);
 });
@@ -1206,33 +1320,71 @@ test("resolveAuth: both set → refuses as ambiguous, echoing no value", () => {
   assert.deepEqual(leakedFragments(message, FAKE_EVALS_OAUTH), []);
 });
 
-test("buildChildEnv: strips inherited auth and the EVALS_ sources, sets exactly one", () => {
+test("resolveAuth: a whitespace-only value counts as unset", () => {
+  assert.deepEqual(
+    resolveAuth({
+      EVALS_ANTHROPIC_API_KEY: " \t ",
+      EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
+    }),
+    { kind: "oauth-token" },
+  );
+  const message = refusalOf(() => resolveAuth({ EVALS_CLAUDE_CODE_OAUTH_TOKEN: "  \n" }));
+  assert.match(message, /claude setup-token/, "whitespace alone is neither set");
+});
+
+test("resolveAuth: a value containing \\r is refused up front, naming the var and never the value", () => {
+  for (const [name, value] of [
+    ["EVALS_CLAUDE_CODE_OAUTH_TOKEN", `${FAKE_EVALS_OAUTH}\r`],
+    ["EVALS_ANTHROPIC_API_KEY", `${FAKE_EVALS_API_KEY}\r`],
+  ]) {
+    const message = refusalOf(() => resolveAuth({ [name]: value }));
+    assert.match(message, new RegExp(name));
+    assert.match(message, /carriage return/);
+    assert.deepEqual(leakedFragments(message, value.trim()), [], `${name}: no value content`);
+  }
+});
+
+test("buildChildEnv: forwards the chosen value untouched (never trimmed or rewritten)", () => {
+  const padded = ` ${FAKE_EVALS_OAUTH} `;
+  const env = buildChildEnv({ EVALS_CLAUDE_CODE_OAUTH_TOKEN: padded }, "/cfg");
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, padded);
+});
+
+test("buildChildEnv: built from the allowlist plus one credential; nothing else survives", () => {
   const inherited = {
-    PATH: "/usr/bin",
+    PATH: "/usr/bin:relative/bin::/bin",
+    HOME: "/home/evaluser",
+    TMPDIR: "/somewhere/else",
     ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
     CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
+    ANTHROPIC_AUTH_TOKEN: FAKE_INHERITED_OAUTH,
+    ANTHROPIC_BASE_URL: "http://fake.invalid",
+    CLAUDE_CODE_USE_BEDROCK: "1",
+    NODE_OPTIONS: "--no-warnings",
+    SSH_AUTH_SOCK: "/nonexistent/agent.sock",
+    GIT_CONFIG_GLOBAL: "/home/evaluser/.gitconfig",
+  };
+  const pinned = {
+    // Relative and empty PATH entries resolve against the cwd (a fixture repo the
+    // session wrote), so only absolute ones survive, behind the running node's dir.
+    PATH: `${NODE_DIR}:/usr/bin:/bin`,
+    HOME: "/home/evaluser",
+    TMPDIR: os.tmpdir(),
+    GIT_AUTHOR_NAME: "Eval Fixture",
+    GIT_AUTHOR_EMAIL: "eval@localhost",
+    GIT_COMMITTER_NAME: "Eval Fixture",
+    GIT_COMMITTER_EMAIL: "eval@localhost",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    CLAUDE_CONFIG_DIR: "/cfg",
   };
   const oauth = buildChildEnv(
     { ...inherited, EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH },
     "/cfg",
   );
-  assert.deepEqual(oauth, {
-    PATH: "/usr/bin",
-    CLAUDE_CONFIG_DIR: "/cfg",
-    CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
-  });
+  assert.deepEqual(oauth, { ...pinned, CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH });
   const key = buildChildEnv({ ...inherited, EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY }, "/cfg");
-  assert.deepEqual(key, {
-    PATH: "/usr/bin",
-    CLAUDE_CONFIG_DIR: "/cfg",
-    ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
-  });
-  // An empty EVALS_ var is unset, and still never forwarded.
-  const withEmpty = buildChildEnv(
-    { EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY, EVALS_CLAUDE_CODE_OAUTH_TOKEN: "" },
-    "/cfg",
-  );
-  assert.ok(!("EVALS_CLAUDE_CODE_OAUTH_TOKEN" in withEmpty), "empty EVALS_ var not forwarded");
+  assert.deepEqual(key, { ...pinned, ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY });
   // Called outside runEvals it still refuses rather than launch an unauthenticated child.
   assert.throws(() => buildChildEnv(inherited, "/cfg"), /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
 });
@@ -1323,15 +1475,7 @@ test("runEvals: both EVALS_ auth vars set → refuses before any session, naming
       EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
       EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
     };
-    let message = "";
-    assert.throws(() => {
-      try {
-        runOne(env, binDir);
-      } catch (err) {
-        message = (err as Error).message;
-        throw err;
-      }
-    });
+    const message = refusalOf(() => runOne(env, binDir));
     assert.match(message, /EVALS_ANTHROPIC_API_KEY/);
     assert.match(message, /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
     assert.match(message, /claude setup-token/);
@@ -1355,15 +1499,7 @@ test("runEvals: neither EVALS_ auth var set → refuses before any session, even
       CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
       ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
     };
-    let message = "";
-    assert.throws(() => {
-      try {
-        runOne(env, binDir);
-      } catch (err) {
-        message = (err as Error).message;
-        throw err;
-      }
-    });
+    const message = refusalOf(() => runOne(env, binDir));
     assert.match(message, /EVALS_ANTHROPIC_API_KEY/);
     assert.match(message, /EVALS_CLAUDE_CODE_OAUTH_TOKEN/);
     assert.match(message, /claude setup-token/);
@@ -1373,6 +1509,216 @@ test("runEvals: neither EVALS_ auth var set → refuses before any session, even
   } finally {
     rmSync(binDir, { recursive: true, force: true });
     rmSync(opCfg, { recursive: true, force: true });
+  }
+});
+
+// A hostile-by-construction operator env: every value fake, and every var but the
+// allowlisted ones must be dropped before any child sees it.
+const NODE_DIR = path.dirname(process.execPath);
+function syntheticOperatorEnv(): Record<string, string> {
+  return {
+    PATH: `${NODE_DIR}:/usr/bin:/bin`,
+    HOME: "/nonexistent-eval-home",
+    USER: "evaluser",
+    LOGNAME: "evaluser",
+    SHELL: "/bin/sh",
+    TERM: "dumb",
+    LANG: "C.UTF-8",
+    LC_CTYPE: "C.UTF-8",
+    TMPDIR: "/nonexistent-eval-tmp",
+    NODE_OPTIONS: "--no-warnings",
+    SSH_AUTH_SOCK: "/nonexistent/agent.sock",
+    ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
+    CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
+    ANTHROPIC_AUTH_TOKEN: FAKE_INHERITED_OAUTH,
+    ANTHROPIC_BASE_URL: "http://fake.invalid",
+    ANTHROPIC_MODEL: "fake-model",
+    CLAUDE_CODE_USE_BEDROCK: "1",
+    CLAUDE_CODE_USE_VERTEX: "1",
+    CLAUDE_CODE_USE_FOUNDRY: "1",
+    HTTPS_PROXY: "http://proxy.invalid:3128",
+    NODE_EXTRA_CA_CERTS: "/nonexistent/ca.pem",
+    GITHUB_TOKEN: "ghp_fake_not_a_real_token",
+    AWS_SECRET_ACCESS_KEY: "fake-not-a-real-secret",
+  };
+}
+const BASE_KEYS = [
+  "HOME",
+  "LANG",
+  "LC_CTYPE",
+  "LOGNAME",
+  "PATH",
+  "SHELL",
+  "TERM",
+  "TMPDIR",
+  "USER",
+];
+// macOS CoreFoundation sets __CF_USER_TEXT_ENCODING inside any process that loads
+// it, node included, so it shows up in a child's env whatever env it was handed.
+// The builder tests pin that the runner never passes it; the spawn tests drop it.
+function spawnedKeys(keys: string[]): string[] {
+  return keys.filter((k) => k !== "__CF_USER_TEXT_ENCODING");
+}
+const GIT_KEYS = [
+  "GIT_AUTHOR_EMAIL",
+  "GIT_AUTHOR_NAME",
+  "GIT_COMMITTER_EMAIL",
+  "GIT_COMMITTER_NAME",
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_NOSYSTEM",
+];
+
+test("buildBaseEnv: the allowlist only; proxy/CA vars only on EVALS_FORWARD_PROXY=1", () => {
+  const operator = { ...syntheticOperatorEnv(), PATH: "relative:/usr/bin::/usr/bin:/bin" };
+  const base = {
+    PATH: `${NODE_DIR}:/usr/bin:/bin`,
+    HOME: "/nonexistent-eval-home",
+    USER: "evaluser",
+    LOGNAME: "evaluser",
+    SHELL: "/bin/sh",
+    TERM: "dumb",
+    LANG: "C.UTF-8",
+    LC_CTYPE: "C.UTF-8",
+    TMPDIR: os.tmpdir(),
+  };
+  assert.deepEqual(buildBaseEnv(operator), base);
+  assert.deepEqual(
+    buildBaseEnv({ ...operator, EVALS_FORWARD_PROXY: "1", no_proxy: "localhost" }),
+    {
+      ...base,
+      HTTPS_PROXY: "http://proxy.invalid:3128",
+      NODE_EXTRA_CA_CERTS: "/nonexistent/ca.pem",
+      no_proxy: "localhost",
+    },
+    "the fixed proxy/CA set only; the opt-in flag itself and everything else stay out",
+  );
+  assert.equal(buildBaseEnv({}).PATH, NODE_DIR, "no operator PATH: the running node's dir alone");
+});
+
+test("buildGitEnv: the allowlist plus a pinned identity and no global or system config", () => {
+  assert.deepEqual(buildGitEnv(syntheticOperatorEnv()), {
+    ...buildBaseEnv(syntheticOperatorEnv()),
+    GIT_AUTHOR_NAME: "Eval Fixture",
+    GIT_AUTHOR_EMAIL: "eval@localhost",
+    GIT_COMMITTER_NAME: "Eval Fixture",
+    GIT_COMMITTER_EMAIL: "eval@localhost",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  });
+});
+
+test("runEvals: the claude child's env is exactly the allowlist, its config dir, and one credential", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...syntheticOperatorEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
+    };
+    runOne(env, binDir);
+    const [call] = readCalls(binDir);
+    assert.deepEqual(
+      spawnedKeys(call.envKeys),
+      [...BASE_KEYS, ...GIT_KEYS, "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR"].sort(),
+    );
+    assert.equal(call.oauthToken, FAKE_EVALS_OAUTH);
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("test_command_passes: model-written tests run with the credential-free allowlist env", () => {
+  const dir = tmpDir("harry-evals-probe-");
+  try {
+    // The command the check runs is model-written code: here, a probe that records
+    // the names of every env var it was handed.
+    writeFileSync(
+      path.join(dir, "probe.mjs"),
+      'import { writeFileSync } from "node:fs";\n' +
+        'writeFileSync("env-keys.json", JSON.stringify(Object.keys(process.env).sort()));\n',
+    );
+    const state = {
+      fixtureDir: dir,
+      env: {
+        ...syntheticOperatorEnv(),
+        EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+        EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
+      },
+    } as unknown as RepoState;
+    const outcome = evaluateArtifactCheck(
+      { type: "test_command_passes", command: "node probe.mjs" },
+      state,
+    );
+    assert.equal(outcome.ok, true, outcome.detail);
+    const keys = spawnedKeys(JSON.parse(readFileSync(path.join(dir, "env-keys.json"), "utf8")));
+    assert.deepEqual(
+      keys,
+      BASE_KEYS,
+      "no credential, no config dir, nothing outside the allowlist",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A hook that leaves a marker file when git runs it: the probe for config-borne
+// command execution in the runner's own git calls.
+function plantHook(dir: string): { hook: string; marker: string } {
+  const hook = path.join(dir, "hook.sh");
+  const marker = path.join(dir, "hook-ran");
+  writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+  return { hook, marker };
+}
+
+test("collectRepoState: the runner's git calls ignore the operator's global git config", () => {
+  const { dir, initialBranch, initialCommit } = buildSimulatedRepo();
+  const home = tmpDir("harry-evals-home-");
+  try {
+    const { hook, marker } = plantHook(home);
+    writeFileSync(path.join(home, ".gitconfig"), `[core]\n\tfsmonitor = ${hook}\n`);
+    collectRepoState(dir, initialBranch, initialCommit, { PATH: process.env.PATH, HOME: home });
+    assert.ok(!existsSync(marker), "a hook in ~/.gitconfig never ran under the runner's git");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --agentic: a session that plants core.fsmonitor in .git/config never gets it run", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
+  try {
+    const { hook, marker } = plantHook(binDir);
+    const sessionScript = path.join(binDir, "session.mjs");
+    writeFileSync(
+      sessionScript,
+      'import { appendFileSync } from "node:fs";\n' +
+        `appendFileSync(".git/config", ${JSON.stringify(`[core]\n\tfsmonitor = ${hook}\n`)});\n`,
+    );
+    installFakeClaude(binDir, undefined, { script: sessionScript });
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: fxRoot,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+      },
+      env,
+    );
+    assert.equal(readCalls(binDir).length, 1, "the session ran");
+    assert.ok(!existsSync(marker), "the planted fsmonitor hook never ran");
+    assert.equal(lines[0].error, undefined, "the restored config let the checks run");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
   }
 });
 
@@ -1779,6 +2125,10 @@ test(
       assert.equal(calls[0].apiKey, "sk-ant-test", "the EVALS_ key reached the jailed child");
       assert.equal(calls[0].oauthToken, null, "the inherited token was stripped under the jail");
       assert.equal(calls[0].evalsApiKeyForwarded, false, "EVALS_ANTHROPIC_API_KEY not forwarded");
+      const testRun = lines[0].checkOutcomes.find(
+        (o: { check: { type: string } }) => o.check.type === "test_command_passes",
+      );
+      assert.equal(testRun?.ok, true, "the fixture's own tests pass under the jail");
       assert.ok(
         calls[0].cwd?.includes("harry-evals-fx-tiny-node"),
         "the sandboxed session ran in the materialized fixture dir",
@@ -1786,6 +2136,112 @@ test(
     } finally {
       rmSync(binDir, { recursive: true, force: true });
       rmSync(fxRoot, { recursive: true, force: true });
+    }
+  },
+);
+
+// Stands in for sandbox-exec: logs its argv (the profile and the wrapped command),
+// then hands the same argv to the real /usr/bin/sandbox-exec, so the jail still
+// applies and a test can compare what each spawn was wrapped with.
+function installLoggingSandboxExec(binDir: string): { wrapper: string; log: string } {
+  const wrapper = path.join(binDir, "sandbox-exec-logger");
+  const log = path.join(binDir, "sandbox-exec-log.jsonl");
+  writeFileSync(
+    wrapper,
+    [
+      "#!/usr/bin/env node",
+      'const { appendFileSync } = require("node:fs");',
+      'const { execFileSync } = require("node:child_process");',
+      "const argv = process.argv.slice(2);",
+      `appendFileSync(${JSON.stringify(log)}, JSON.stringify(argv) + "\\n");`,
+      "try {",
+      '  execFileSync("/usr/bin/sandbox-exec", argv, { stdio: "inherit" });',
+      "} catch (err) {",
+      "  process.exit(err.status ?? 1);",
+      "}",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  return { wrapper, log };
+}
+
+test(
+  "runEvals --agentic under EVALS_SANDBOX=1: test_command_passes runs under the session's profile",
+  DARWIN_ONLY,
+  () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const fxRoot = tmpDir("harry-evals-fxroot-");
+    try {
+      installFakeClaude(binDir);
+      const { wrapper, log } = installLoggingSandboxExec(binDir);
+      const env = {
+        ...authFreeEnv(),
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_FIXTURE_ROOT: fxRoot,
+        EVALS_SANDBOX: "1",
+        EVALS_SANDBOX_EXEC: wrapper,
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      };
+      runEvals(
+        {
+          condition: "candidate",
+          model: "m",
+          cases: ["agentic-isolate-branch"],
+          out: path.join(binDir, "o.jsonl"),
+          agentic: true,
+        },
+        env,
+      );
+      const spawns = readFileSync(log, "utf8")
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l) as string[]);
+      assert.equal(spawns.length, 2, "the session AND the test command went through the jail");
+      const [session, tests] = spawns;
+      assert.equal(session[2], path.join(binDir, "claude"), "first: the claude session");
+      assert.deepEqual(tests.slice(2), ["node", "--test"], "second: the fixture's test command");
+      assert.equal(tests[0], "-p");
+      assert.equal(tests[1], session[1], "the test command ran under the session's own profile");
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(fxRoot, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "test_command_passes under a jail: model-written code cannot read the operator's $HOME",
+  DARWIN_ONLY,
+  () => {
+    const dir = tmpDir("harry-evals-probe-");
+    try {
+      // The real home, baked in as a literal: the jail is rooted at the runner's
+      // homedir(), not at whatever HOME the child is handed.
+      writeFileSync(
+        path.join(dir, "probe.mjs"),
+        `import { readdirSync } from "node:fs";\nreaddirSync(${JSON.stringify(os.homedir())});\n`,
+      );
+      const state = {
+        fixtureDir: dir,
+        env: { PATH: `${NODE_DIR}:/usr/bin:/bin`, HOME: os.homedir() },
+      } as unknown as RepoState;
+      const check = { type: "test_command_passes", command: "node probe.mjs" };
+      assert.equal(evaluateArtifactCheck(check, state).ok, true, "unjailed, the read succeeds");
+      const jail = {
+        sandboxExec: "/usr/bin/sandbox-exec",
+        profile: buildAgenticSandboxProfile({
+          home: os.homedir(),
+          allowWrite: [dir, os.tmpdir()],
+          bin: process.execPath,
+        }),
+      };
+      assert.equal(
+        evaluateArtifactCheck(check, state, jail).ok,
+        false,
+        "jailed, the same read of $HOME is denied",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   },
 );
