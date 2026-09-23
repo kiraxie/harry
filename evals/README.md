@@ -25,7 +25,8 @@ gap is the point).
 
 ### Why isolation matters
 
-Each condition gets its own throwaway `mkdtemp` config dir. The runner never
+Each trial gets its own throwaway `mkdtemp` dir holding a config dir, a work dir,
+a fixture parent and a temp dir, shared with no other trial. The runner never
 reads or touches your real `~/.claude`. That is not incidental: if your own
 global `CLAUDE.md` leaked into the baseline, the baseline would already be
 "lawful" and the measured delta would collapse to nothing. The empty baseline
@@ -73,7 +74,7 @@ fixed; there is no way to name other variables. Because your own privacy flags
 no longer reach the child, the runner sets three itself, always:
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `DISABLE_TELEMETRY=1` and
 `DISABLE_AUTOUPDATER=1`. Nothing is written to disk
-either: no credential file lands in a condition dir for a session to read.
+either: no credential file lands in a trial's config dir for a session to read.
 
 **Hand the value over without printing it.** Keep it in a file only you can
 read, and pass it with `$(cat …)`, so it never appears on a command line,
@@ -174,8 +175,8 @@ say. The runner:
    pinned initial commit (author/committer `Eval Fixture <eval@localhost>`). Every
    git call is hardened with `-c commit.gpgsign=false -c core.hooksPath=` so the
    operator's own gpg-signing or git hooks can't break or side-effect the seed
-   commit. This never happens inside the repo/worktree — the copy lands under the
-   OS temp dir (override with `EVALS_FIXTURE_ROOT`).
+   commit. This never happens inside the repo/worktree — the copy lands in the
+   trial's own dir, under the OS temp dir (override with `EVALS_FIXTURE_ROOT`).
 2. **Runs a full session** in that dir: `claude -p <prompt> --model <id>
    --output-format json --permission-mode acceptEdits --allowedTools "<git
    subcommands>,Bash(node:*)"`. See the permission model below.
@@ -229,17 +230,25 @@ containment layers address this:
   now leads somewhere else (a session can rename its fixture away and leave a
   symlink to another repo), `.git` is no longer a plain directory, the session
   added `.git/commondir` or `.git/config.worktree`, or `.git/config` is no longer
-  a regular file. **Sandboxed**, this whole step runs as one child under the
-  session's own jail profile, with the credential-free allowlisted env, and the
-  runner treats what it prints as untrusted: it accepts only one `{ ok, detail }`
-  per check, strips control characters and caps the text. Whatever the session
-  planted, whether a swapped fixture, a config re-planted after the restore, a
-  `gpg.program` or a test, runs inside that jail if it runs at all. **Unsandboxed**
-  the step runs in the runner itself, and none of this is a security boundary:
-  the session already ran as you, with your filesystem. The checks there only
-  guard against accidents.
+  a regular file. It is bounded by a timeout (5 minutes), so a hung
+  model-written test cannot hang the run. **Sandboxed**, this whole step runs as
+  one child under the session's own jail profile, with the credential-free
+  allowlisted env, and the runner treats what it prints as untrusted: it accepts
+  only one `{ ok, detail }` per check, strips control characters and caps the
+  text. Whatever the session planted, whether a swapped fixture, a config
+  re-planted after the restore, a `gpg.program` or a test, runs inside that jail
+  if it runs at all. **Unsandboxed** the step runs in the runner itself, and none
+  of this is a security boundary: the session already ran as you, with your
+  filesystem. The checks there only guard against accidents.
+- **What the runner runs after a session** is fixed before the first one:
+  `git`, `claude` and `sandbox-exec` are resolved to absolute paths up front (on
+  the allowlisted `PATH`, in-process, with no `which`) and spawned by those paths
+  from then on. A binary a session drops into a `PATH` directory later is never
+  picked up. Every child's stdout and stderr are piped; what reaches you (error
+  messages, result lines) has control characters stripped first.
 - **Filesystem exposure** is bounded by the opt-in [OS sandbox](#os-sandbox-opt-in-evals_sandbox)
-  below: `EVALS_SANDBOX=1` jails the session out of the operator's wider `$HOME`.
+  below: `EVALS_SANDBOX=1` confines the session's writes to its own trial's dirs
+  and denies it reads under your `$HOME`.
 
 What remains unbounded even with both is *network* (the session must reach the API)
 and the **env-held credential** (no OS sandbox can hide an env var from the session's
@@ -251,28 +260,32 @@ prompts**. Do not point this at untrusted input.
 
 `EVALS_SANDBOX=1` wraps each **agentic** session in a macOS
 [seatbelt](https://developer.apple.com/) profile via `sandbox-exec`, so a
-misbehaving or prompt-injected session cannot read the operator's wider `$HOME`.
+misbehaving or prompt-injected session can write nothing outside its own trial
+and read nothing under your `$HOME`.
 
-**What it does:** the generated profile is `(allow default)` — everything permitted
-— then **denies all filesystem reads and writes under `$HOME`**, then re-allows a
-minimal set of exceptions:
+**What it does:** the generated profile starts from `(allow default)`, then:
 
-- **read+write:** the throwaway config dir, the materialized fixture repo, and the
-  OS temp root they live under (normally already outside `$HOME`, re-allowed
-  defensively).
-- **read-only:** the `claude` and `node` runtime install trees, resolved at run time
-  via `which` + `realpath` (a runtime under `$HOME` — nvm node, the `~/.local`
-  claude install — must stay readable for the child to start). Note this grants the
-  whole **containing directory** of each runtime, read-only — sibling files in those
-  `bin`/install dirs become readable too; it is a coarse, read-only allow, not a
-  single-file grant.
+- **denies every file write**, then re-allows writes to exactly this trial's own
+  config dir, fixture repo and temp dir (the trial's `TMPDIR`), plus `/dev/null`.
+  Not the fixture's parent, not the shared temp root, not another trial's dirs,
+  and not a user-writable directory such as `/opt/homebrew/bin`;
+- **denies every read under `$HOME`**, then re-allows reads of those same trial
+  dirs, the `claude` and `node` runtime install trees (a runtime under `$HOME`,
+  such as nvm node or the `~/.local` claude install, must stay readable for the
+  child to start), and `scripts/run-evals.mjs` itself (for the post-session
+  child). Each runtime tree is its whole **containing directory**, read-only, so
+  sibling files there become readable too: a coarse allow, not a single-file
+  grant.
 
-So the session keeps working in the fixture, but reads of ssh keys, other
-credentials, and documents elsewhere under `$HOME`, and writes anywhere outside the
-fixture/tmp, are denied by the kernel. The post-session step (above) runs as one
-child under the same profile, so the runner's own restore, git calls and the
-model-written tests stay inside the jail too; the profile additionally lets that
-child read `scripts/run-evals.mjs` itself. The session's git identity is pinned
+The minimum writable set was derived with the fake `claude` shim, and the jail
+tests pass with nothing beyond those three dirs and `/dev/null`. A live run with
+the real `claude` still has to confirm it needs no other path.
+
+So the session keeps working in its fixture, but reads of ssh keys, other
+credentials and documents under `$HOME`, and writes anywhere but its own trial's
+dirs, are denied by the kernel. The post-session step (above) runs as one child
+under the same profile, so the runner's own restore, git calls and the
+model-written tests stay inside the jail too. The session's git identity is pinned
 via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`,
 `GIT_CONFIG_NOSYSTEM=1`) so it can still commit without the jail having to
 re-open `~/.gitconfig`.
@@ -281,6 +294,9 @@ re-open `~/.gitconfig`.
 
 - **Network** — deliberately left open; the session must reach the model API. This
   is fs-containment, **not** a no-exfiltration boundary.
+- **Reads outside `$HOME`** — the session can read anything outside your home
+  that your user can read: system dirs, `/opt`, and the temp root, including
+  other trials' dirs. It cannot write them.
 - **The session's own credential** — the child's env is allowlisted, so nothing
   else from your shell reaches it. But it must hold its one credential to reach
   the API, and no OS sandbox can hide an env var from the session's own
@@ -291,9 +307,11 @@ re-open `~/.gitconfig`.
 - **What a background process does to the verdict** — a session can detach a
   process that outlives `claude` (`Bash(node:*)` allows it, `setsid` included).
   The profile is inherited by every descendant, so it stays jailed (a test pins
-  this), but nothing stops it, and it can still change the fixture while the
-  post-session step judges it. That is a threat to the *verdict's* integrity, not
-  an escape. See the `DEBT:` note on `judgeFixture` in `scripts/run-evals.mjs`.
+  this): it can write only its own trial's dirs, which no later trial and no
+  unjailed step reads. But nothing stops it, and it can still change its own
+  fixture while the post-session step judges it, so the verdict can describe a
+  repo the session did not leave. See the `DEBT:` note on `judgeFixture` in
+  `scripts/run-evals.mjs`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
   dependency.
@@ -301,12 +319,13 @@ re-open `~/.gitconfig`.
 **Refusal (never silently unsandboxed):** if `EVALS_SANDBOX=1` is set and an agentic
 case is queued to run but the platform is not macOS, or `sandbox-exec` is not found,
 the run **hard-errors before any session starts**. It never falls back to an
-unsandboxed agentic run. **Text mode ignores the flag** — a text case runs
-`claude -p` with all tools denied (`--allowedTools ""`), so it has no exec surface to
-jail; setting the flag on a text-only run is a no-op, not a refusal.
+unsandboxed agentic run. **Text mode ignores the flag**: a text case runs
+`claude -p` with all tools denied (`--allowedTools ""`), unjailed. Its config and
+work dirs belong to its own trial, which no jailed session can write. Setting the
+flag on a text-only run is a no-op, not a refusal.
 
 ```sh
-# Release gate, sandboxed: agentic cases jailed out of $HOME, token read from a file.
+# Release gate, sandboxed: each agentic trial jailed, token read from a file.
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" EVALS_SANDBOX=1 \
   node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
@@ -383,11 +402,11 @@ node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
 ```
 
-Each materialized fixture (and each condition's config/work dir) is left in place
-under the temp root on purpose — this is a manual, low-frequency tool and the
-leftover repos have post-hoc inspection value. There is no cleanup code; the OS
-temp dir is the janitor. Point `EVALS_FIXTURE_ROOT` somewhere you can prune if the
-accumulation ever bothers you.
+Each trial's dir (its config, work, fixture and temp dirs; each result line
+records it as `trialDir`) is left in place under the temp root on purpose — this
+is a manual, low-frequency tool and the leftover repos have post-hoc inspection
+value. There is no cleanup code; the OS temp dir is the janitor. Point
+`EVALS_FIXTURE_ROOT` somewhere you can prune if the accumulation ever bothers you.
 
 ## Reading the results: a green candidate is not evidence
 
