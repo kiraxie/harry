@@ -336,6 +336,16 @@ const POST_SESSION = "__post-session";
 // processes stay in the same jail. Unsandboxed it runs in-process: there is no fs
 // boundary then (the session ran as the operator), and the identity check is
 // only a guard against honest mistakes.
+//
+// DEBT: judging integrity. A session can detach a background process (`Bash(node:*)`
+// allows it, setsid included). It stays jailed, but nothing stops it, and it can
+// still change the fixture while this step judges it, so a verdict can describe a
+// repo the session did not leave. Killing a process group would miss a setsid'd one.
+// Ceiling: fine while the gate runs trusted prompts, whose sessions have no reason to
+// race their own judge. Upgrade path: narrow the session profile's writes to a
+// per-trial dir (its own TMPDIR instead of the whole temp root), and judge under a
+// separate profile that can read the fixture but write only a fresh judge dir outside
+// the session's writable set; copy the fixture there first and judge the copy.
 export function judgeFixture(payload, env = process.env) {
   const { fixtureDir, fixtureId, gitConfig, initialBranch, initialCommit, checks } = payload;
   const now = lstatOrNull(fixtureDir, { bigint: true });
@@ -869,6 +879,18 @@ export function prepareConditionDir(condition, lawsText, root = tmpdir()) {
 // from the operator's env survives — not a bare ANTHROPIC_API_KEY or
 // CLAUDE_CODE_OAUTH_TOKEN, not the EVALS_ sources, not any var that would outrank the
 // chosen credential.
+//
+// DEBT: the session holds its one credential. It needs it to reach the API, no OS
+// sandbox can hide an env var from the session's own processes, and network stays
+// OPEN under the jail (fs-containment, not a no-exfiltration boundary), so a hostile
+// session could exfiltrate it. Ceiling: one revocable credential (a console key or a
+// `claude setup-token` token, env-only, nothing on disk) exposed only to sessions
+// running trusted prompts on a maintainer-run gate; not fit for untrusted input.
+// Upgrade path: give the child no credential at all. Run a local forwarder in the
+// runner that adds the credential to the child's API requests, point the child at it
+// (ANTHROPIC_BASE_URL set by the runner, never forwarded from the operator), and deny
+// the jail all network except that forwarder. Not yet verified that Claude Code
+// accepts a forwarded endpoint for an OAuth token.
 export function buildChildEnv(env, configDir) {
   const auth = resolveAuth(env);
   const childEnv = {
@@ -969,29 +991,6 @@ function runTextCase(bin, model, prompt, configDir, workDir, env) {
 // arbitrary code execution, including network. Exec containment is the opt-in
 // EVALS_SANDBOX=1 seatbelt jail (see buildSeatbeltProfile / sandboxContext),
 // which denies the session reads/writes across the operator's wider $HOME.
-//
-// DEBT: three residuals remain, all scoped to a maintainer-run, local release gate on
-// trusted prompts. (1) The session holds its one credential (a revocable console key
-// or `claude setup-token` token, env-only, nothing on disk) and network stays OPEN
-// under the jail (the session must reach the API), so a hostile session could
-// exfiltrate that credential. Nothing else from the operator's shell reaches it: every
-// child's env is built from an allowlist (buildBaseEnv), so GITHUB_TOKEN / AWS_* /
-// SSH_AUTH_SOCK and the like stay behind. The seatbelt jail contains the FILESYSTEM
-// ($HOME reads / out-of-fixture writes), not the network — fs-containment, not a
-// no-exfiltration boundary. The mitigation is scope: trusted prompts + a revocable
-// credential. (2) EVALS_SANDBOX relies on `sandbox-exec`, which Apple has deprecated
-// but still ships and honors; it is opt-in and macOS-only (a hard refusal, never a
-// silent unsandboxed run, elsewhere), so we accept the deprecated tool for this local
-// use rather than take on a container/VM dependency. (3) Judging integrity: a session
-// can detach a background process (`Bash(node:*)` allows it, setsid included). The
-// seatbelt profile is inherited by every descendant, so it stays jailed and the
-// jailed post-session step (judgeFixture) is where anything it plants runs — but
-// nothing stops it, and it can still change the fixture while that step judges it,
-// so a verdict can describe a repo the session did not leave. Killing a process group
-// would miss a setsid'd one. Upgrade path: narrow the session profile's writes to a
-// per-trial dir (its own TMPDIR instead of the whole temp root), and judge under a
-// separate profile that can read the fixture but write only a fresh judge dir outside
-// the session's writable set; copy the fixture there first and judge the copy.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -1097,7 +1096,8 @@ export function buildAgenticSandboxProfile({
 // the operator's $HOME filesystem": a misbehaving or prompt-injected agentic
 // session can't read ssh keys / other credentials / documents under $HOME, nor
 // write outside the fixture. Network is intentionally NOT restricted — the session
-// must reach the model API, and the env-held key is visible by design (see DEBT).
+// must reach the model API, and the env-held key is visible by design (see the DEBT
+// note on buildChildEnv).
 //
 // SBPL is last-match-wins: the broad `(deny ... (subpath HOME))` comes first, then
 // the narrow `(allow ...)` exceptions override it for their subpaths.
@@ -1188,6 +1188,14 @@ function resolveRuntimeTrees(bin, env = process.env) {
 // or THROW. The whole point is "never silently unsandboxed": if EVALS_SANDBOX=1 is
 // set but we can't sandbox (not macOS, or sandbox-exec absent), we refuse hard
 // BEFORE any session starts rather than run an agentic session in the open.
+//
+// DEBT: the jail relies on `sandbox-exec`, which Apple has deprecated but still ships
+// and honors. It is opt-in and macOS-only (a hard refusal elsewhere, never a silent
+// unsandboxed run). Ceiling: works only while macOS keeps shipping and honoring
+// sandbox-exec, which is accepted for a local maintainer tool rather than taking on a
+// container/VM dependency now. Upgrade path: if Apple removes it or stops honoring
+// profiles, move the agentic session and the post-session step into a disposable VM
+// or container, which would also bring Linux into scope.
 export function requireSandboxSupport(platform, sandboxExecPath) {
   if (platform !== "darwin") {
     throw new Error(

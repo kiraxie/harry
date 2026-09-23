@@ -293,7 +293,7 @@ re-open `~/.gitconfig`.
   The profile is inherited by every descendant, so it stays jailed (a test pins
   this), but nothing stops it, and it can still change the fixture while the
   post-session step judges it. That is a threat to the *verdict's* integrity, not
-  an escape. See the DEBT note in `scripts/run-evals.mjs`.
+  an escape. See the `DEBT:` note on `judgeFixture` in `scripts/run-evals.mjs`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
   dependency.
