@@ -223,9 +223,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `historical_sources` before adding a re-ported upstream, and
   `references/upstream-sync.md` matches `upstream.json` on re-comparing a
   retired upstream (on demand only).
-- **The eval runner refuses a stale or absent credential seed up front**, with
-  a pointer to `EVALS_ANTHROPIC_API_KEY`, instead of failing every run midway;
-  `evals/README.md` documents it.
+- **The eval runner authenticates with exactly one explicit credential**:
+  `EVALS_ANTHROPIC_API_KEY` (a console API key, handed to the child as
+  `ANTHROPIC_API_KEY`) or `EVALS_CLAUDE_CODE_OAUTH_TOKEN` (a subscription
+  token from `claude setup-token`, handed over as `CLAUDE_CODE_OAUTH_TOKEN`).
+  Both set, or neither, refuses before any config dir exists, with a message
+  naming both variables and `claude setup-token` and carrying no value. A
+  bare `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in the shell is
+  stripped from the child, and so are the `EVALS_` variables themselves.
+  `evals/README.md` shows how to pass either from a mode-0600 file so it is
+  never echoed.
 - **CI reads the pnpm version from `packageManager`** instead of a second copy
   in the workflow.
 
@@ -341,6 +348,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for `references/skill-authoring.md`, stays). `codex-plugin-cc` is retired
   from `upstream.json`'s pinned `sources` to `historical_sources` (attribution
   only, not synced) — harry now pins three upstreams instead of four.
+- **The eval runner's seeded-credential fallback.** With no API key set, it
+  copied `.credentials.json` from the operator's config dir into each
+  condition dir, checked the copy up front, and scrubbed it after the run.
+  On macOS that file is a snapshot of a Keychain login that goes stale on its
+  own schedule, so runs failed with an expired token; and copying real
+  credentials into temp dirs was a liability however promptly they were
+  scrubbed. No credential file is written anywhere now.
 
 ## [0.21.0] - 2026-09-02
 
