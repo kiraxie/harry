@@ -228,11 +228,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ANTHROPIC_API_KEY`) or `EVALS_CLAUDE_CODE_OAUTH_TOKEN` (a subscription
   token from `claude setup-token`, handed over as `CLAUDE_CODE_OAUTH_TOKEN`).
   Both set, or neither, refuses before any config dir exists, with a message
-  naming both variables and `claude setup-token` and carrying no value. A
-  bare `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in the shell is
-  stripped from the child, and so are the `EVALS_` variables themselves.
-  `evals/README.md` shows how to pass either from a mode-0600 file so it is
-  never echoed.
+  naming both variables and `claude setup-token` and carrying no value; an
+  empty or whitespace-only value counts as unset, and a value containing a
+  carriage return is refused. `evals/README.md` shows how to pass either
+  from a mode-0600 file so it is never echoed.
+- **Every process the eval runner spawns gets an allowlisted environment**,
+  built key by key instead of copied from the shell and stripped: `PATH`
+  (the running node's directory first, absolute entries only), `HOME`,
+  `TMPDIR` (the runner's own), `LANG`/`LC_*`, `USER`, `LOGNAME`, `SHELL` and
+  `TERM`, plus proxy and CA variables only with `EVALS_FORWARD_PROXY=1`. git
+  and the `claude` child add a pinned identity with no global or system git
+  config; only the `claude` child adds its config dir and its one
+  credential. A bare `ANTHROPIC_API_KEY`, the `EVALS_` variables,
+  `NODE_OPTIONS`, `SSH_AUTH_SOCK` and every other `ANTHROPIC_*` or
+  `CLAUDE_CODE_*` variable no longer reach any child. Several of those
+  outrank `CLAUDE_CODE_OAUTH_TOKEN` in Claude Code, so one left in the shell
+  could silently replace the credential the run chose.
 - **CI reads the pnpm version from `packageManager`** instead of a second copy
   in the workflow.
 
@@ -258,6 +269,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mid-execution rather than guessing.
 
 ### Fixed
+
+- **The eval runner ran model-written tests outside the jail, with its own
+  credentials.** `test_command_passes` executed the fixture's tests, which
+  an agentic session writes, with the runner's full environment and outside
+  the `EVALS_SANDBOX` jail. They now run with the credential-free
+  allowlisted environment and under the session's own jail profile.
+- **A session could make the eval runner run a command of its choosing.**
+  The runner's own post-session `git` calls read the fixture's
+  `.git/config`, which the session can edit, so a planted `core.fsmonitor`
+  ran with the runner's rights. The runner now restores the config it wrote
+  at materialization before those calls, and refuses the trial if `.git` is
+  no longer a plain directory, the session added `.git/commondir` or
+  `.git/config.worktree`, or `.git/config` is no longer a regular file; its
+  git calls also pass `-c core.fsmonitor=false`.
 
 - **A reviewed repository could run its own `./codex` or `./git`.** On
   macOS/Linux the companion spawned both by bare name, and an empty or
