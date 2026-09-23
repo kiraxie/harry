@@ -243,7 +243,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NODE_OPTIONS`, `SSH_AUTH_SOCK` and every other `ANTHROPIC_*` or
   `CLAUDE_CODE_*` variable no longer reach any child. Several of those
   outrank `CLAUDE_CODE_OAUTH_TOKEN` in Claude Code, so one left in the shell
-  could silently replace the credential the run chose.
+  could silently replace the credential the run chose. Since the operator's
+  own privacy flags no longer reach it either, the `claude` child always gets
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `DISABLE_TELEMETRY=1` and
+  `DISABLE_AUTOUPDATER=1`.
 - **CI reads the pnpm version from `packageManager`** instead of a second copy
   in the workflow.
 
@@ -270,19 +273,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **The eval runner ran model-written tests outside the jail, with its own
-  credentials.** `test_command_passes` executed the fixture's tests, which
-  an agentic session writes, with the runner's full environment and outside
-  the `EVALS_SANDBOX` jail. They now run with the credential-free
-  allowlisted environment and under the session's own jail profile.
-- **A session could make the eval runner run a command of its choosing.**
-  The runner's own post-session `git` calls read the fixture's
-  `.git/config`, which the session can edit, so a planted `core.fsmonitor`
-  ran with the runner's rights. The runner now restores the config it wrote
-  at materialization before those calls, and refuses the trial if `.git` is
-  no longer a plain directory, the session added `.git/commondir` or
-  `.git/config.worktree`, or `.git/config` is no longer a regular file; its
-  git calls also pass `-c core.fsmonitor=false`.
+- **A sandboxed agentic session could act outside the eval runner's jail
+  through the runner's own post-session work.** After the session, the
+  runner ran the fixture's tests (written by the session) and its own `git`
+  calls unjailed, with its full environment. A session could plant a
+  command in `.git/config` (`core.fsmonitor`, or `log.showSignature` with a
+  `gpg.program`) for that `git` to run, or swap its fixture for a symlink to
+  another repo, whose config the runner would then rewrite. Everything the
+  runner does on session-controlled paths after a sandboxed session (check
+  the fixture is still the directory it created, restore the `.git/config`
+  it wrote at materialization, collect the repo state, evaluate every check)
+  now runs as one child under the session's own jail profile, with the
+  credential-free allowlisted environment. The runner accepts only one
+  `{ ok, detail }` per check from that child, sanitized and capped. The trial
+  is refused, not judged, if the fixture path leads elsewhere, `.git` is no
+  longer a plain directory, the session added `.git/commondir` or
+  `.git/config.worktree`, or `.git/config` is no longer a regular file.
+  Unsandboxed the same step runs in the runner itself; there the session
+  already ran as the operator, so the checks guard against accidents, not
+  attacks.
 
 - **A reviewed repository could run its own `./codex` or `./git`.** On
   macOS/Linux the companion spawned both by bare name, and an empty or
