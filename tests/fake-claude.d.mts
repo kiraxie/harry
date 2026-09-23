@@ -13,11 +13,21 @@ export interface FakeClaudeCall {
   oauthToken: string | null;
   evalsApiKeyForwarded: boolean;
   evalsOauthForwarded: boolean;
+  envKeys: string[];
+}
+
+export interface FakeClaudeSettings {
+  failOnNth?: number[];
+  failReply?: string;
+  script?: string;
+  fail?: boolean;
+  isError?: boolean;
 }
 
 export function installFakeClaude(
   binDir: string,
   reply?: string,
+  settings?: FakeClaudeSettings,
 ): { scriptPath: string; callsPath: string };
 
 export function readCalls(binDir: string): FakeClaudeCall[];

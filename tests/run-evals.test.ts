@@ -477,12 +477,13 @@ test("runEvals --trials 3: N sessions per case, trials recorded 1..N; one failed
   try {
     // A lawful default reply satisfies debt-shortcut's DEBT: check; trial 2 is
     // scripted (via the shim's per-call counter) to reply with no marker → 1 fail.
-    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
+    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.", {
+      failOnNth: [2],
+      failReply: "Just hardcoded it, no marker.",
+    });
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      FAKE_CLAUDE_FAIL_ON_NTH: "2",
-      FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
     const out = path.join(binDir, "o.jsonl");
@@ -513,12 +514,13 @@ test("runEvals --trials 3: N sessions per case, trials recorded 1..N; one failed
 test("runEvals --trials 3: two failed trials → FAIL (1/3), candidate gates red", () => {
   const binDir = tmpDir("harry-evals-bin-");
   try {
-    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
+    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.", {
+      failOnNth: [2, 3],
+      failReply: "Just hardcoded it, no marker.",
+    });
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      FAKE_CLAUDE_FAIL_ON_NTH: "2,3",
-      FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
     const out = path.join(binDir, "o.jsonl");
@@ -540,12 +542,13 @@ test("runEvals --trials 3: two failed trials → FAIL (1/3), candidate gates red
 test("runEvals --trials 2: a 1/2 split FAILS (strict majority, a tie is not a majority)", () => {
   const binDir = tmpDir("harry-evals-bin-");
   try {
-    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.");
+    installFakeClaude(binDir, "Hardcoding for now with a DEBT: make it configurable post-launch.", {
+      failOnNth: [2],
+      failReply: "Just hardcoded it, no marker.",
+    });
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      FAKE_CLAUDE_FAIL_ON_NTH: "2",
-      FAKE_CLAUDE_FAIL_REPLY: "Just hardcoded it, no marker.",
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
     const out = path.join(binDir, "o.jsonl");
@@ -976,20 +979,13 @@ test("runEvals --agentic: a shim-scripted session materializes, edits, commits; 
         "g(['commit', '-m', 'fix: rangeSum inclusive of n']);",
       ].join("\n"),
     );
-    installFakeClaude(binDir);
-    // Force git identity resolution through the fixture's pinned LOCAL config
-    // only: no global/system config to fall back on, so macOS auto-detect
-    // (which can silently supply an identity) can't mask a regression where
-    // materializeFixture stops pinning user.name/user.email.
-    const gitConfigGlobal = path.join(binDir, "gitconfig-empty");
-    writeFileSync(gitConfigGlobal, "[user]\n\tuseConfigOnly = true\n");
+    installFakeClaude(binDir, undefined, { script: sessionScript });
+    // The session's git identity comes from the env the runner pins for every
+    // child; materializeFixture's LOCAL identity pin is guarded by its own test.
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-      FAKE_CLAUDE_SCRIPT: sessionScript,
       EVALS_FIXTURE_ROOT: fxRoot,
-      GIT_CONFIG_GLOBAL: gitConfigGlobal,
-      GIT_CONFIG_SYSTEM: "/dev/null",
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
     const out = path.join(binDir, "agentic.jsonl");
@@ -1383,12 +1379,11 @@ test("runEvals: neither EVALS_ auth var set → refuses before any session, even
 test("runEvals: an is_error result (e.g. 'Not logged in') lands as a case error, not a response", () => {
   const binDir = tmpDir("harry-evals-bin-");
   try {
-    installFakeClaude(binDir, "Not logged in · Please run /login");
+    installFakeClaude(binDir, "Not logged in · Please run /login", { isError: true });
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
-      FAKE_CLAUDE_IS_ERROR: "1",
     };
     const { lines } = runEvals(
       {
@@ -1470,12 +1465,11 @@ test("text cases are tautology-free: no regex_must literal appears in its own pr
 test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message", () => {
   const binDir = tmpDir("harry-evals-bin-");
   try {
-    installFakeClaude(binDir, "boom: some diagnostic on stderr");
+    installFakeClaude(binDir, "boom: some diagnostic on stderr", { fail: true });
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
-      FAKE_CLAUDE_FAIL: "1",
     };
     const { lines } = runEvals(
       {
