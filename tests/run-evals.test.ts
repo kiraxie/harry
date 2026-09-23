@@ -1671,6 +1671,153 @@ function plantHook(dir: string): { hook: string; marker: string } {
   return { hook, marker };
 }
 
+// A logging stand-in for a real binary, put first on a test PATH: it appends the
+// names (never values) of the env vars it was spawned with, then either runs the
+// real binary with the same argv or exits 1.
+function installEnvLogger(
+  dir: string,
+  name: string,
+  realBin: string | null,
+): { log: string; readKeys: () => string[][] } {
+  const log = path.join(dir, `${name}-env.jsonl`);
+  writeFileSync(
+    path.join(dir, name),
+    [
+      "#!/usr/bin/env node",
+      'const { appendFileSync } = require("node:fs");',
+      'const { execFileSync } = require("node:child_process");',
+      `appendFileSync(${JSON.stringify(log)}, JSON.stringify(Object.keys(process.env).sort()) + "\\n");`,
+      realBin === null
+        ? "process.exit(1);"
+        : [
+            "try {",
+            `  execFileSync(${JSON.stringify(realBin)}, process.argv.slice(2), { stdio: "inherit" });`,
+            "} catch (err) {",
+            "  process.exit(err.status ?? 1);",
+            "}",
+          ].join("\n"),
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  const readKeys = () =>
+    existsSync(log)
+      ? readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .map((l) => spawnedKeys(JSON.parse(l)))
+      : [];
+  return { log, readKeys };
+}
+
+// The allowlist puts the running node's dir first on PATH; a logger placed after it
+// is shadowed if that dir also holds the real binary (e.g. /usr/bin on some Linux).
+function shadowedBy(name: string): { skip: string | false } {
+  return {
+    skip: existsSync(path.join(NODE_DIR, name))
+      ? `${name} lives next to node, so a PATH logger cannot shadow it`
+      : false,
+  };
+}
+
+test(
+  "collectRepoState: every git spawn gets exactly the base allowlist plus the git pins",
+  shadowedBy("git"),
+  () => {
+    const { dir, initialBranch, initialCommit } = buildSimulatedRepo();
+    const fake = tmpDir("harry-evals-fakebin-");
+    try {
+      const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+      const { readKeys } = installEnvLogger(fake, "git", realGit);
+      collectRepoState(dir, initialBranch, initialCommit, {
+        ...syntheticOperatorEnv(),
+        PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin`,
+      });
+      const spawns = readKeys();
+      assert.ok(spawns.length >= 5, "each of collectRepoState's git calls went through the logger");
+      for (const keys of spawns) assert.deepEqual(keys, [...BASE_KEYS, ...GIT_KEYS].sort());
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(fake, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "buildAgenticSandboxProfile: its `which <claude>` spawn gets exactly the base allowlist",
+  shadowedBy("which"),
+  () => {
+    const fake = tmpDir("harry-evals-fakebin-");
+    try {
+      const { readKeys } = installEnvLogger(fake, "which", null);
+      buildAgenticSandboxProfile({
+        home: os.homedir(),
+        bin: "claude",
+        env: { ...syntheticOperatorEnv(), PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin` },
+      });
+      assert.deepEqual(readKeys(), [BASE_KEYS]);
+    } finally {
+      rmSync(fake, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "runEvals: the `which sandbox-exec` spawn gets exactly the base allowlist",
+  shadowedBy("which"),
+  () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const fake = tmpDir("harry-evals-fakebin-");
+    try {
+      installFakeClaude(binDir);
+      // A `which` that finds nothing: the run then refuses before any session starts.
+      const { readKeys } = installEnvLogger(fake, "which", null);
+      const env = {
+        ...syntheticOperatorEnv(),
+        PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin`,
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_SANDBOX: "1",
+        EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+      };
+      assert.throws(
+        () =>
+          runEvals(
+            {
+              condition: "candidate",
+              model: "m",
+              cases: ["agentic-isolate-branch"],
+              out: path.join(binDir, "o.jsonl"),
+              agentic: true,
+            },
+            env,
+          ),
+        /refusing to run an agentic session unsandboxed/,
+      );
+      assert.deepEqual(readKeys(), [BASE_KEYS]);
+      assert.equal(readCalls(binDir).length, 0, "no session was launched");
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(fake, { recursive: true, force: true });
+    }
+  },
+);
+
+test("collectRepoState: a repo-local core.fsmonitor never runs, even with no restore", () => {
+  // The second layer on its own: collectRepoState does not restore .git/config, so
+  // only the runner's `-c core.fsmonitor=false` stands between this hook and git.
+  const { dir, initialBranch, initialCommit } = buildSimulatedRepo();
+  try {
+    const { hook, marker } = plantHook(dir);
+    writeFileSync(
+      path.join(dir, ".git", "config"),
+      `${readFileSync(path.join(dir, ".git", "config"), "utf8")}[core]\n\tfsmonitor = ${hook}\n`,
+    );
+    collectRepoState(dir, initialBranch, initialCommit, { PATH: process.env.PATH });
+    assert.ok(!existsSync(marker), "the repo-local fsmonitor hook never ran");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("collectRepoState: the runner's git calls ignore the operator's global git config", () => {
   const { dir, initialBranch, initialCommit } = buildSimulatedRepo();
   const home = tmpDir("harry-evals-home-");
