@@ -9,8 +9,14 @@ permissions:
 
 jobs:
   ci:
-    name: CI
-    runs-on: ubuntu-latest
+    name: CI (${{ matrix.os }})
+    # macOS too: the eval runner's seatbelt-jail tests (DARWIN_ONLY) are skipped on
+    # Linux, and they are the ones that pin its containment.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
 
     steps:
