@@ -31,67 +31,56 @@ global `CLAUDE.md` leaked into the baseline, the baseline would already be
 "lawful" and the measured delta would collapse to nothing. The empty baseline
 dir is what keeps the comparison honest.
 
-### Authentication (two paths) and the post-run scrub
+### Authentication (two paths)
 
 A fresh config dir is also *logged out* — `claude -p` returns
-`{"is_error":true,"result":"Not logged in · ..."}`. Two ways to authenticate the
-child, in precedence order:
+`{"is_error":true,"result":"Not logged in · ..."}`. So the child authenticates
+from its environment alone, and every `run` takes **exactly one** of two
+credentials:
 
-1. **Scratch token (preferred)** — set `EVALS_ANTHROPIC_API_KEY` to a console API
-   key. The runner passes it to the child as `ANTHROPIC_API_KEY` and seeds **no
-   credential file at all** — nothing lands on disk for a session to read, and a
-   console key is independently revocable. This is the recommended mode for the
-   agentic gate (see the permission model). Note the runner honors **only** the
-   `EVALS_`-prefixed variable — a bare `ANTHROPIC_API_KEY` sitting in your shell is
-   deliberately **not** used (and is stripped from the child env), so an unrelated
-   key can never be billed by accident.
-2. **Seeded credential (fallback)** — if `EVALS_ANTHROPIC_API_KEY` is unset, the
-   runner copies exactly one file into each fresh dir: `.credentials.json`, read
-   from your real config dir (`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod
-   `0600`. Nothing else is copied — **no `CLAUDE.md`, no settings, no memory** — so
-   the isolation that keeps the baseline honest is preserved; only the login token
-   rides along.
+1. **Console API key** — `EVALS_ANTHROPIC_API_KEY`. Create a key in the Anthropic
+   Console; spend is billed to that API account, and the key can be revoked on
+   its own at any time. The runner hands it to the child as `ANTHROPIC_API_KEY`.
+2. **Subscription token** — `EVALS_CLAUDE_CODE_OAUTH_TOKEN`. Run
+   `claude setup-token` to mint a long-lived token for your Claude subscription;
+   runs draw on the subscription's quota instead of API billing. The runner
+   hands it to the child as `CLAUDE_CODE_OAUTH_TOKEN`.
 
-**Post-run scrub:** in the seeded-credential path, the runner **deletes** every
-copied `.credentials.json` in a `finally` block — on success, on error, and on a
-thrown exception mid-run. The config dirs themselves stay under the temp root for
-post-hoc inspection, but **never with a live credential inside**: the token's
-on-disk exposure is bounded to the session lifetime. (The scratch-token path never
-writes one in the first place, so there is nothing to scrub.)
+Both set, or neither set (an empty value counts as unset), and `run` refuses
+before any config dir is created or session starts. The message names both
+variables and `claude setup-token`, and never includes a value.
 
-### Pre-flight: a stale or absent seed refuses up front
+The runner honors **only** the `EVALS_`-prefixed variables. A bare
+`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` already in your shell is
+**stripped** from the child's environment and never used, so an unrelated
+credential can never be billed by accident. The `EVALS_` variables themselves
+are not forwarded either: the child gets exactly one credential, under its
+unprefixed name. Nothing is written to disk — no credential file lands in a
+condition dir for a session to read.
 
-Every `run` checks the seeded-credential path **before** any config dir is created
-or session starts (skipped entirely when `EVALS_ANTHROPIC_API_KEY` is set — the
-scratch-token path needs no seed at all):
+**Hand the value over without printing it.** Keep it in a file only you can
+read, and pass it with `$(cat …)`, so it never appears on a command line,
+in shell history, or in the terminal:
 
-- **Missing `.credentials.json`** — refused immediately. On macOS the live login
-  often lives in the OS Keychain, and `.credentials.json` is only a point-in-time
-  snapshot the CLI happened to write; its absence is not proof that login is fine.
-- **A present file whose `claudeAiOauth.expiresAt` is already in the past** —
-  refused as **stale**. This is the common real-world case on macOS: the
-  Keychain-backed session keeps refreshing without necessarily rewriting this file
-  back out, so the on-disk snapshot's access token can sit expired for days while
-  `claude` itself keeps working interactively. This runner has confirmed the check
-  *fires* on a genuinely stale file (an access token expired days ago, refresh
-  token still weeks out) — it has **not** verified whether a copy of that exact
-  file would actually fail once handed to a real session, or auto-refresh from the
-  still-live `refreshToken`. Treat the refusal as the safe assumption, not a
-  proven failure mode. On a **Linux, file-backed** login (no Keychain — this file
-  *is* the store, and the CLI normally keeps it current), this same check can be a
-  false positive if the operator hasn't run `claude` in a while: the access token
-  ages out on schedule even though the file would refresh fine on next use. Either
-  way, `EVALS_ANTHROPIC_API_KEY` sidesteps the judgment call entirely.
-- **A present file with no recognizable `claudeAiOauth.expiresAt` field** —
-  proceeds. The check can only judge staleness it can see; an unfamiliar or partial
-  credential shape is not treated as a positive staleness signal.
+```sh
+mkdir -p ~/.config/harry
+(umask 077 && : > ~/.config/harry/evals.token)   # create it empty, mode 0600
+# Paste the token into that file with your editor; do not `echo` it into place.
 
-Either refusal's message names the file path and points at
-`EVALS_ANTHROPIC_API_KEY` — the fix is always the scratch key, never `claude
-login`, since a fresh interactive login does not guarantee this on-disk file gets
-rewritten. The check reads only the file's **structure** (existence, and one
-nested numeric field) — never a token value — so nothing credential-shaped ever
-reaches a log line or an error message.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
+  node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+  --out evals/results/run.jsonl
+```
+
+The same pattern works for `EVALS_ANTHROPIC_API_KEY` with a key file of its own.
+
+**The seeded-credential fallback is gone.** The runner used to copy
+`.credentials.json` from your real config dir into each condition dir when no
+API key was set, and delete it after the run. It was removed for two reasons.
+On macOS the live login is in the Keychain and that file is only a snapshot,
+which goes stale on its own schedule, so runs failed with an expired token
+while `claude` kept working interactively. And copying real credentials into
+temp dirs was a liability in itself, however promptly they were scrubbed.
 
 The child also runs with its **cwd set to a fresh empty dir**, not the repo root.
 `claude` reads *project* memory by walking up from the working directory, so
@@ -208,17 +197,17 @@ misbehaving session.** `Bash(node:*)` is arbitrary code execution — including
 network — so a session that wants to reach out or exfiltrate still can. Two
 containment layers address this:
 
-- **Credential exposure** is bounded on two axes (see
-  [Authentication](#authentication-two-paths-and-the-post-run-scrub)): use
-  `EVALS_ANTHROPIC_API_KEY` (a revocable scratch token) and **no credential is
-  written to disk at all**; in the fallback seeded-credential path the copy is
-  **scrubbed post-run**, so its window is the session lifetime only.
+- **Credential exposure** is bounded (see
+  [Authentication](#authentication-two-paths)): the session gets exactly one
+  revocable credential, `EVALS_ANTHROPIC_API_KEY` or
+  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`, through its env only — **no credential is
+  written to disk at all**.
 - **Filesystem exposure** is bounded by the opt-in [OS sandbox](#os-sandbox-opt-in-evals_sandbox)
   below: `EVALS_SANDBOX=1` jails the session out of the operator's wider `$HOME`.
 
 What remains unbounded even with both is *network* (the session must reach the API)
-and the **env-held API key** (no OS sandbox can hide an env var from the session's
-own processes — the mitigation is the scratch key's revocability). That residual is
+and the **env-held credential** (no OS sandbox can hide an env var from the session's
+own processes — the mitigation is that the key or token is revocable). That residual is
 an accepted trade for a **maintainer-run, local** release gate on **trusted
 prompts**. Do not point this at untrusted input.
 
@@ -253,12 +242,13 @@ it can still commit without the jail having to re-open `~/.gitconfig`.
 - **Network** — deliberately left open; the session must reach the model API. This
   is fs-containment, **not** a no-exfiltration boundary.
 - **The whole inherited environment** — the child inherits the operator's entire
-  shell env, not just the API key: any `GITHUB_TOKEN`, `AWS_*`, or other secret
+  shell env, not just its one credential: any `GITHUB_TOKEN`, `AWS_*`, or other secret
   present is visible to the session, and no OS sandbox can hide an env var from its
   own child processes. Combined with open network, a hostile session could
   exfiltrate any of them. The honest ceiling: run this only on **trusted prompts**,
-  with a **revocable scratch key** (`EVALS_ANTHROPIC_API_KEY`), from a shell that
-  isn't carrying secrets you'd mind exposing. See the DEBT note in
+  with a **revocable credential** (`EVALS_ANTHROPIC_API_KEY` or
+  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`), from a shell that isn't carrying secrets you'd
+  mind exposing. See the DEBT note in
   `scripts/run-evals.mjs`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
@@ -272,8 +262,8 @@ unsandboxed agentic run. **Text mode ignores the flag** — a text case runs
 jail; setting the flag on a text-only run is a no-op, not a refusal.
 
 ```sh
-# Release gate, sandboxed: agentic cases jailed out of $HOME, scratch-token auth.
-EVALS_ANTHROPIC_API_KEY=sk-ant-… EVALS_SANDBOX=1 \
+# Release gate, sandboxed: agentic cases jailed out of $HOME, token read from a file.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" EVALS_SANDBOX=1 \
   node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
 ```
