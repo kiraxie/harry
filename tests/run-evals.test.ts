@@ -3344,7 +3344,7 @@ test(
 );
 
 test(
-  "runEvals --agentic under EVALS_SANDBOX=1: a session cannot launch a program outside the jail through a system service",
+  "runEvals --agentic under EVALS_SANDBOX=1: `open` and `launchctl submit` cannot launch a program outside the jail",
   DARWIN_ONLY,
   () => {
     const binDir = tmpDir("harry-evals-bin-");
