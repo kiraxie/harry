@@ -1236,8 +1236,11 @@ const JAIL_MACH_SERVICES = [
 //     documents); under $HOME only `allowWrite` and the `allowRead` runtime trees.
 //     Never a terminal: `/dev/tty` and the pty slaves `/dev/ttysN` are denied (the
 //     last rule), so nothing the operator types during a run can be read. That
-//     closes opening one by path; it is enough because no child is handed the
-//     terminal as an fd (stdin is ignored or piped). The legacy BSD pty pairs
+//     closes opening one by path only: a terminal fd already open reads freely,
+//     and a shell's terminal is one read-write file on fds 0, 1 and 2 alike. So
+//     fds 0, 1 and 2 of every jailed child must not be the terminal: each spawn
+//     pipes or ignores all three (never "inherit"), and libuv passes no other fd.
+//     A pty test pins this for every spawn. The legacy BSD pty pairs
 //     (`/dev/ttyp0`, `/dev/ptyp0`, ...) are left readable: no shell runs on them.
 //   - WRITES only to `allowWrite` (the trial's own config dir, fixture and temp dir)
 //     and /dev/null. Not a user-writable PATH dir such as /opt/homebrew/bin, not
