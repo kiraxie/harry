@@ -320,23 +320,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `node`, `claude` and `git` install trees; reads outside `$HOME` (a
   terminal excepted, see the next entry) plus the trial dirs, runtime
   trees and the runner script under it; writes to the trial's own dirs and `/dev/null`; one
-  system service by name (user lookup), pinned as an exact set by a test;
-  and outbound IP plus the DNS resolver's socket. LaunchServices, launchd
-  job submission and every other system service that launches programs
-  are unreachable. Outbound IP includes localhost, so a local TCP service
+  system service by name (user lookup); and outbound IP plus the DNS
+  resolver's socket. A test compares the whole generated profile to fixed
+  text, so any rule change, an added service included, is a test edit.
+  LaunchServices, launchd job submission and every other system service
+  that launches programs are unreachable. Outbound IP includes localhost, so a local TCP service
   that runs commands on request still acts for the session. A darwin test
   pins that a jailed `open` and `launchctl submit` both exit nonzero and
   launch nothing. The allowlist was derived with the fake `claude` shim,
   the real `claude --version` and a `node` HTTPS request; a live sandboxed
   session has not been run against it yet. When one needs more, the
-  evals README says how to read the denied name from the unified log.
+  evals README says how to read the denied name from the unified log,
+  narrowed to the run's time window rather than to a few process names.
 - **A sandboxed session could read what the operator typed into the
   terminal.** The eval runner's jail allowed file reads of `/dev/tty` and
   the pty devices, and its children share the runner's terminal, so a
   jailed session or post-session step could read keystrokes typed during a
   run and send them out over the network. The profile's last rule now
   denies reading `/dev/tty` and `/dev/ttysN`; a darwin test runs a reader
-  in a real pty and pins that both opens are refused.
+  in a real pty and pins that both opens are refused. The deny acts only
+  when a terminal is opened, so no spawned child is handed it either: fds
+  0, 1 and 2 are piped or `/dev/null` at every spawn. A second darwin test
+  runs the runner in a real pty and pins that the jailed session, the
+  jailed post-session step and the runner's own git calls hold the
+  terminal on none of them.
 - **A child's output could write terminal escape sequences to the operator's
   terminal.** Every child the eval runner spawns now has its stdout and
   stderr piped, and what reaches the operator (error messages, result lines)
