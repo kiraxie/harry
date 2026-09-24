@@ -1707,10 +1707,27 @@ test("resolveAuth: a value containing \\r is refused up front, naming the var an
   }
 });
 
-test("buildChildEnv: forwards the chosen value untouched (never trimmed or rewritten)", () => {
-  const padded = ` ${FAKE_EVALS_OAUTH} `;
-  const env = buildChildEnv({ EVALS_CLAUDE_CODE_OAUTH_TOKEN: padded }, "/cfg");
-  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, padded);
+test("resolveAuth: whitespace inside a value (a wrapped copy) is refused up front", () => {
+  for (const [name, value] of [
+    [
+      "EVALS_CLAUDE_CODE_OAUTH_TOKEN",
+      `${FAKE_EVALS_OAUTH.slice(0, 20)}\n${FAKE_EVALS_OAUTH.slice(20)}`,
+    ],
+    ["EVALS_ANTHROPIC_API_KEY", ` ${FAKE_EVALS_API_KEY}`],
+  ]) {
+    const message = refusalOf(() => resolveAuth({ [name]: value }));
+    assert.match(message, new RegExp(name));
+    assert.match(message, /whitespace/);
+    assert.deepEqual(leakedFragments(message, value.trim()), [], `${name}: no value content`);
+  }
+});
+
+test("buildChildEnv: forwards the chosen value exactly, and refuses a padded one rather than trim it", () => {
+  const env = buildChildEnv({ EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH }, "/cfg");
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, FAKE_EVALS_OAUTH);
+  assert.throws(() =>
+    buildChildEnv({ EVALS_CLAUDE_CODE_OAUTH_TOKEN: ` ${FAKE_EVALS_OAUTH} ` }, "/cfg"),
+  );
 });
 
 test("buildChildEnv: built from the allowlist plus one credential; nothing else survives", () => {

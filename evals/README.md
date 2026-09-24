@@ -50,8 +50,9 @@ credentials:
 
 Both set, or neither set, and `run` refuses before any config dir is created or
 session starts; an empty or whitespace-only value counts as unset. A value
-containing a carriage return (a file saved with CRLF line endings) is refused up
-front too, never silently trimmed. Each message names the variables involved, and
+containing any whitespace — a carriage return from CRLF line endings, or a line
+break from a copy that wrapped — is refused up front too, never silently
+trimmed. Each message names the variables involved, and
 never includes a value.
 
 **Every child gets an allowlisted environment, not a copy of yours.** The runner

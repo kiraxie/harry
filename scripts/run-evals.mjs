@@ -941,14 +941,14 @@ export function resolveAuth(env) {
         `with "Not logged in"; ${AUTH_HINT}.`,
     );
   }
-  // A carriage return means a file saved with CRLF line endings: `$(cat …)` strips
-  // the trailing \n but keeps the \r, and the credential would be sent with it.
-  // Refused here, before any dir exists, rather than silently repaired.
+  // Refused up front rather than repaired: the API would reject it after spend begins.
   const name = apiKey ? "EVALS_ANTHROPIC_API_KEY" : "EVALS_CLAUDE_CODE_OAUTH_TOKEN";
-  if (env[name].includes("\r")) {
+  if (/\s/.test(env[name])) {
+    const cause = env[name].includes("\r")
+      ? "a carriage return (a file saved with CRLF line endings?)"
+      : "whitespace (a line break from a wrapped copy?)";
     throw new Error(
-      `${name} contains a carriage return (a file saved with CRLF line endings?); ` +
-        `remove it from the file and retry. The value is not shown.`,
+      `${name} contains ${cause}; remove it from the file and retry. The value is not shown.`,
     );
   }
   return { kind: apiKey ? "api-key" : "oauth-token" };
