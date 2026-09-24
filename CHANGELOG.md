@@ -275,6 +275,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The eval runner refuses a jail that would re-open `$HOME`.** A runtime
+  tree (node, claude or git's install) at `/`, at or above `$HOME`, or
+  overlapping a trial's writable dirs would have made those paths readable
+  and executable inside the jail. The trial now fails with the tree named.
+
 - **A sandboxed agentic session could act outside the eval runner's jail
   through the runner's own post-session work.** After the session, the
   runner ran the fixture's tests (written by the session) and its own `git`
