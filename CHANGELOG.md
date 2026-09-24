@@ -360,6 +360,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   install it was meant to allow, nothing more. A test pins this with a
   symlinked git prefix, both in the generated profile and under the real
   `sandbox-exec`.
+- **A failed `claude` run's error hid its cause.** The result line's error
+  began with the child's whole command line: the prompt and, in a sandboxed
+  run, the whole seatbelt profile. With the error capped, that left no room
+  for the child's own output. The error now says how `claude` ended (its exit
+  status or signal), followed by the tails of its stdout and stderr.
 - **A child's output could write terminal escape sequences to the operator's
   terminal.** Every child the eval runner spawns now has its stdout and
   stderr piped, and what reaches the operator (error messages, result lines)

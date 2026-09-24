@@ -2388,6 +2388,36 @@ test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message
   }
 });
 
+test("runEvals: a failed claude's error names its exit status and output, never its argv", () => {
+  // execFileSync's own message is "Command failed: <the whole argv>" — the prompt,
+  // and under the jail the whole seatbelt profile — which crowded the child's
+  // stderr out of the capped error and left the cause unreadable.
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir, "boom: the cause", { fail: true });
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      {
+        ...authFreeEnv(),
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      },
+    );
+    const error = String(lines[0].error);
+    assert.match(error, /^claude exited with status 1\b/, error);
+    assert.match(error, /stderr: boom: the cause/, error);
+    assert.ok(!error.includes("Command failed"), error);
+    assert.ok(!error.includes(String(lines[0].prompt).slice(0, 40)), "the prompt is not echoed");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
 // ---- opt-in OS sandbox (EVALS_SANDBOX=1, macOS seatbelt) --------------------
 
 const DARWIN_ONLY = { skip: process.platform !== "darwin" ? "macOS-only (seatbelt)" : false };

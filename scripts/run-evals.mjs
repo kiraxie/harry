@@ -1033,36 +1033,46 @@ function extractResponse(stdout) {
 
 // Run the claude CLI and decode its response. On an execFileSync failure
 // (nonzero exit or spawn error), surface a structured {is_error} stdout if the
-// child still printed one, otherwise attach stdout/stderr tails so a failing
-// line carries a real diagnostic instead of a bare "Command failed".
+// child still printed one, otherwise name how it ended and attach stdout/stderr
+// tails so a failing line carries a real diagnostic. Never execFileSync's own
+// message: that is "Command failed: <the whole argv>" — the prompt and, jailed,
+// the whole seatbelt profile — which crowds the child's own output out of the cap.
 function invokeClaude(bin, args, cwd, configDir, env, tmpDir = tmpdir()) {
   const childEnv = buildChildEnv(env, configDir, tmpDir);
+  let stdout;
   try {
     // All three streams piped: claude's stderr never reaches the operator's
     // terminal directly; a failure surfaces it only through untrustedText.
-    const stdout = execFileSync(bin, args, {
+    stdout = execFileSync(bin, args, {
       cwd,
       env: childEnv,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024,
     });
-    return extractResponse(stdout);
   } catch (err) {
-    const stdout = err?.stdout ? String(err.stdout) : "";
-    if (stdout.trim().startsWith("{")) {
+    const printed = err?.stdout ? String(err.stdout) : "";
+    if (printed.trim().startsWith("{")) {
       // The child exited nonzero but still emitted a JSON result — decode it
       // (this rethrows the readable is_error message when present).
-      return extractResponse(stdout);
+      return extractResponse(printed);
     }
     const tail = (s) => (s ? untrustedText(String(s).trim().slice(-800), 800) : "");
-    const parts = [untrustedText(err?.message ?? "claude invocation failed", 800)];
+    const ended = Number.isInteger(err?.status)
+      ? `claude exited with status ${err.status}`
+      : err?.signal
+        ? `claude was killed by ${err.signal}`
+        : `claude failed: ${err?.code ?? "unknown error"}`;
+    const parts = [untrustedText(ended, 200)];
     const out = tail(err?.stdout);
     const errOut = tail(err?.stderr);
     if (out) parts.push(`stdout: ${out}`);
     if (errOut) parts.push(`stderr: ${errOut}`);
     throw new Error(parts.join("\n"));
   }
+  // Outside the try: a clean exit's own decode error (an is_error result, stdout
+  // that is not JSON) is already readable and must not be relabelled a spawn failure.
+  return extractResponse(stdout);
 }
 
 // Invoke the claude CLI for one text case under one condition.
