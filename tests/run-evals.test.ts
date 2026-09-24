@@ -35,6 +35,7 @@ import {
   evaluateArtifactCheck,
   evaluateArtifactChecks,
   evaluateChecks,
+  findOnPath,
   jailExecDirs,
   jailedPath,
   judgeFixture,
@@ -3803,4 +3804,37 @@ test("every text case REJECTS a degenerate reply corpus", () => {
     }
   }
   assert.deepEqual(leaks, [], "degenerate replies that score as compliant");
+});
+
+test("a test command killed by a signal is reported as killed, not timed out", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "evals-kill-"));
+  try {
+    const state = { fixtureDir: dir, env: syntheticOperatorEnv() } as unknown as RepoState;
+    const outcome = evaluateArtifactCheck(
+      {
+        type: "test_command_passes",
+        command: "node -e process.kill(process.pid,'SIGKILL')",
+      },
+      state,
+    );
+    assert.equal(outcome.ok, false);
+    assert.doesNotMatch(outcome.detail, /timed out/);
+    assert.match(outcome.detail, /SIGKILL/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("findOnPath refuses a path that is not an executable file", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "evals-find-"));
+  try {
+    const plain = path.join(dir, "plain");
+    writeFileSync(plain, "");
+    assert.equal(findOnPath(path.join(dir, "missing")), null);
+    assert.equal(findOnPath(plain), null);
+    assert.equal(findOnPath(dir), null);
+    assert.equal(findOnPath(process.execPath), process.execPath);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

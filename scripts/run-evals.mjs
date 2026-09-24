@@ -171,15 +171,21 @@ export function buildGitEnv(env, tmpDir = tmpdir()) {
 // operator's user (Homebrew's bin is), and a session must not be able to put a
 // `git` or `claude` there for the runner to pick up later.
 export function findOnPath(name, env = process.env) {
-  if (name.includes("/")) return resolve(name);
-  for (const dir of buildBaseEnv(env).PATH.split(delimiter)) {
-    const candidate = join(dir, name);
+  const executable = (candidate) => {
     try {
       accessSync(candidate, fsConstants.X_OK);
-      if (statSync(candidate).isFile()) return candidate;
+      return statSync(candidate).isFile();
     } catch {
-      /* not here: keep looking */
+      return false;
     }
+  };
+  if (name.includes("/")) {
+    const candidate = resolve(name);
+    return executable(candidate) ? candidate : null;
+  }
+  for (const dir of buildBaseEnv(env).PATH.split(delimiter)) {
+    const candidate = join(dir, name);
+    if (executable(candidate)) return candidate;
   }
   return null;
 }
@@ -748,10 +754,11 @@ export function evaluateArtifactCheck(check, state) {
         });
         return { check, ok: true, detail: `${command} exited 0` };
       } catch (err) {
-        if (err?.code === "ETIMEDOUT" || err?.signal === "SIGKILL") {
+        if (err?.code === "ETIMEDOUT") {
           return { check, ok: false, detail: `${command} timed out after ${timeoutMs}ms` };
         }
-        return { check, ok: false, detail: `${command} failed: ${err.status ?? err.message}` };
+        const how = err?.status ?? (err?.signal ? `killed by ${err.signal}` : err?.message);
+        return { check, ok: false, detail: `${command} failed: ${how}` };
       }
     }
     default:
