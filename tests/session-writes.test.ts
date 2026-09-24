@@ -139,13 +139,13 @@ test("AC-17: no rule reads older Progress lines; users finish in-flight units fi
 });
 
 test("AC-15: the CHANGELOG marks the removed roles breaking and says to re-sync", () => {
+  // Pinned on the whole file, not on an [Unreleased] section: a release renames that
+  // section to its version, and the entry stays there for good.
   const changelog = readFileSync(path.join(repoRoot, "CHANGELOG.md"), "utf-8").replace(/\s+/g, " ");
-  const unreleased = changelog.slice(0, changelog.indexOf(" ## [0"));
-  const removed = unreleased.slice(unreleased.indexOf("### Removed"));
-  assert.match(removed, /\*\*The `mech`, `writer` and `security` role agents \(breaking\)\.\*\*/);
-  assert.match(removed, /`harry:analyst`/);
-  assert.match(unreleased, /run `\/harry:sync` \(Claude Code\) and the `sync` skill \(Codex\)/);
-  assert.match(unreleased, /finish or discard every in-flight Standard or Major unit/);
+  assert.match(changelog, /\*\*The `mech`, `writer` and `security` role agents \(breaking\)\.\*\*/);
+  assert.match(changelog, /`harry:analyst`/);
+  assert.match(changelog, /run `\/harry:sync` \(Claude Code\) and the `sync` skill \(Codex\)/);
+  assert.match(changelog, /finish or discard every in-flight Standard or Major unit/);
 });
 
 test("AC-16: files Progress names are unit state, and a missing findings file re-runs the review", () => {

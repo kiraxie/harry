@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.22.0] - 2026-09-25
 
 ### Added
 
@@ -90,6 +90,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   final-message contract free of one; `doc-types` describes an item's Notes
   and Why/What by what they hold rather than what they replaced;
   `distilling` drops a dated incident note.
+
+- **Dated prompt text removed after a prompt audit.** `HARRY.md` §6 opens with
+  the outcome and stops when the content stops, instead of listing the
+  phrases an older model used to produce; `references/plain-language.md`
+  mirrors it. `brainstorming` states its approval gate in one plain sentence
+  and drops a patch for a mode prompt it never had. `CLAUDE.md`, `ask`,
+  `review`, `debate` and the Codex role map describe what is true now rather
+  than what changed, and the release notes drop the list of past releases
+  that missed a tag. Every rule keeps its reason; only the history and the
+  pressure register go.
 
 - **How a message to the user is paced is now a law, not a habit.**
   `HARRY.md` §6 states it for prose addressed to the user: the conclusion

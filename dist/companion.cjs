@@ -656,7 +656,7 @@ Log: ${logPath}
 // package.json
 var package_default = {
   name: "harry",
-  version: "0.21.0",
+  version: "0.22.0",
   description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
   type: "module",
   license: "MIT",

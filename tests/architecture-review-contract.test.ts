@@ -520,20 +520,18 @@ test("fix now: executing's pre-flight does not count a superseding pair as a con
   );
 });
 
-test("AC-6: CHANGELOG [Unreleased] records the architecture review", () => {
-  const text = read(CHANGELOG);
-  const start = text.indexOf("## [Unreleased]");
-  assert.ok(start !== -1, "CHANGELOG.md has no [Unreleased] section");
-  const next = text.indexOf("\n## ", start + 1);
-  const unreleased = plain(text.slice(start, next === -1 ? undefined : next));
+test("AC-6: the CHANGELOG records the architecture review", () => {
+  // Pinned on the whole file, not on an [Unreleased] section: a release renames that
+  // section to its version, and the announcement stays there for good.
+  const changelog = plain(read(CHANGELOG));
   assert.match(
-    unreleased,
+    changelog,
     /Finishing reviews the change's shape before anything merges or is pushed\./,
-    "[Unreleased] no longer announces the architecture review",
+    "the CHANGELOG no longer announces the architecture review",
   );
   assert.match(
-    unreleased,
+    changelog,
     /references\/architecture-review\.md/,
-    "[Unreleased] no longer names the architecture-review reference",
+    "the CHANGELOG no longer names the architecture-review reference",
   );
 });
