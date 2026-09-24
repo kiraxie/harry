@@ -1231,6 +1231,11 @@ const JAIL_MACH_SERVICES = [
 //     shim); signals only to processes in the same jail; sysctl reads.
 //   - READS everywhere EXCEPT under the operator's $HOME (ssh keys, credentials,
 //     documents); under $HOME only `allowWrite` and the `allowRead` runtime trees.
+//     Never a terminal: `/dev/tty` and the pty slaves `/dev/ttysN` are denied (the
+//     last rule), so nothing the operator types during a run can be read. That
+//     closes opening one by path; it is enough because no child is handed the
+//     terminal as an fd (stdin is ignored or piped). The legacy BSD pty pairs
+//     (`/dev/ttyp0`, `/dev/ptyp0`, ...) are left readable: no shell runs on them.
 //   - WRITES only to `allowWrite` (the trial's own config dir, fixture and temp dir)
 //     and /dev/null. Not a user-writable PATH dir such as /opt/homebrew/bin, not
 //     another trial's dirs, not the runner's.
@@ -1240,7 +1245,8 @@ const JAIL_MACH_SERVICES = [
 //     socket, so no local daemon reachable that way (a Docker socket, say).
 //
 // DEBT: three allowances stay broad. (1) Reads outside $HOME: the session can read
-// anything there the operator's user can, other trials' dirs included; (2) exec of
+// anything there the operator's user can but a terminal, other trials' dirs
+// included; (2) exec of
 // everything in /bin, /usr/bin and the runtime trees' whole dirs (`open`,
 // `launchctl` and `osascript` included), which is safe only because the services
 // those tools would need to act outside the jail are denied; (3) outbound IP to any host
@@ -1301,6 +1307,10 @@ export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [], al
       ")",
     );
   }
+  lines.push(
+    ";; no terminal reads (what the operator types); last, so no allow above re-opens it.",
+    '(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))',
+  );
   return `${lines.join("\n")}\n`;
 }
 

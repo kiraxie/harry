@@ -8,9 +8,11 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -2389,6 +2391,9 @@ test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message
 // ---- opt-in OS sandbox (EVALS_SANDBOX=1, macOS seatbelt) --------------------
 
 const DARWIN_ONLY = { skip: process.platform !== "darwin" ? "macOS-only (seatbelt)" : false };
+// The rule that keeps a jailed process from opening a terminal to read what the
+// operator types (F-4): the controlling tty and every pty slave.
+const TTY_DENY = '(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))';
 // Mirror of AGENTIC_ALLOWED_TOOLS (not exported) — the args must pass through the
 // sandbox-exec wrapper unchanged, so the shim still sees this exact allowlist.
 const AGENTIC_TOOLS =
@@ -2488,6 +2493,18 @@ test("buildSeatbeltProfile: allows exactly the pinned system services, by name",
   const profile = buildSeatbeltProfile({ home: "/Users/op" });
   const services = Array.from(profile.matchAll(/\(global-name "([^"]+)"\)/g), (m) => m[1]);
   assert.deepEqual(services.sort(), ["com.apple.system.opendirectoryd.libinfo"]);
+});
+
+test("buildSeatbeltProfile: denies reading the terminal as its LAST rule", () => {
+  // SBPL is last-match-wins, so a deny placed before the read allows could be
+  // re-opened by one of them ("/dev" handed in as a read, say). Last, it cannot.
+  const profile = buildSeatbeltProfile({
+    home: "/Users/op",
+    allowWrite: ["/var/folders/t/trial/fx"],
+    allowRead: ["/dev", "/opt/homebrew/bin"],
+  });
+  assert.ok(profile.includes(TTY_DENY), "the terminal deny is present");
+  assert.ok(profile.trimEnd().endsWith(TTY_DENY), "and it is the last rule");
 });
 
 test("buildSeatbeltProfile: escapes quotes/backslashes so a path can't break the literal", () => {
@@ -2620,6 +2637,87 @@ test("buildAgenticSandboxProfile: a symlinked $HOME is canonicalized (I-1: jails
     rmSync(real, { recursive: true, force: true });
   }
 });
+
+test(
+  "buildAgenticSandboxProfile under REAL sandbox-exec: a jailed process cannot read the terminal it runs in",
+  DARWIN_ONLY,
+  () => {
+    // A real pty: script(1) runs the command with a fresh pty slave as its
+    // controlling terminal and copies its own stdin into it, standing in for the
+    // operator typing during a run. script's stdin must be one tcgetattr fails on
+    // with ENOTTY (a file); node's own stdio pipes are sockets, which script rejects.
+    const dir = realpathSync(tmpDir("harry-sb-tty-"));
+    try {
+      const profile = buildAgenticSandboxProfile({
+        home: os.homedir(),
+        allowWrite: [dir],
+        bin: process.execPath,
+      });
+      const typed = path.join(dir, "typed.txt");
+      writeFileSync(typed, "typed-secret\n");
+      const result = path.join(dir, "result.json");
+      // Opens the controlling tty by both names, records each outcome, then reads
+      // what was typed from the first one that opened.
+      const reader = [
+        'const fs = require("node:fs");',
+        "const dir = process.argv[1];",
+        "const r = { open: {}, read: null };",
+        "const fds = [];",
+        'for (const p of ["/dev/tty", fs.readFileSync(dir + "/ttyname", "utf8").trim()]) {',
+        '  try { fds.push(fs.openSync(p, "r")); r.open[p] = "ok"; } catch (e) { r.open[p] = e.code; }',
+        "}",
+        'const save = () => fs.writeFileSync(dir + "/result.json", JSON.stringify(r));',
+        "save();",
+        "if (fds.length) {",
+        '  let text = ""; const b = Buffer.alloc(256);',
+        '  for (let i = 0; i < 5 && !text.includes("typed-secret"); i++)',
+        "    text += b.subarray(0, fs.readSync(fds[0], b)).toString();",
+        "  r.read = text; save();",
+        "}",
+      ].join("\n");
+      const inner =
+        '/usr/bin/tty > "$1/ttyname"; ' +
+        'if [ -n "$5" ]; then exec /usr/bin/sandbox-exec -p "$2" "$3" -e "$4" "$1"; fi; ' +
+        'exec "$3" -e "$4" "$1"';
+      const inPty = (jailed: boolean) => {
+        rmSync(result, { force: true });
+        const stdin = openSync(typed, "r");
+        try {
+          spawnSync(
+            "/usr/bin/script",
+            ["-q", "/dev/null", "/bin/sh", "-c", inner, "sh", dir, profile, process.execPath]
+              .concat([reader, jailed ? "1" : ""]),
+            { stdio: [stdin, "ignore", "ignore"], timeout: 10_000, killSignal: "SIGKILL" },
+          );
+        } finally {
+          closeSync(stdin);
+        }
+        return JSON.parse(readFileSafe(result) || "{}") as {
+          open?: Record<string, string>;
+          read?: string | null;
+        };
+      };
+      const ttyOf = () => readFileSync(path.join(dir, "ttyname"), "utf8").trim();
+
+      // Not vacuous: unjailed, the same process opens the terminal by both names and
+      // reads what was typed into it.
+      const free = inPty(false);
+      assert.match(ttyOf(), /^\/dev\/ttys[0-9]+$/, "script gave the child a real pty slave");
+      assert.deepEqual(free.open, { "/dev/tty": "ok", [ttyOf()]: "ok" }, "unjailed: both open");
+      assert.match(String(free.read), /typed-secret/, "unjailed: the typed text is readable");
+
+      const jailed = inPty(true);
+      assert.deepEqual(
+        jailed.open,
+        { "/dev/tty": "EPERM", [ttyOf()]: "EPERM" },
+        "jailed: the terminal cannot be opened for reading by either name",
+      );
+      assert.equal(jailed.read, null, "jailed: nothing typed was read");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
 
 test("requireSandboxSupport: refuses non-macOS and a missing sandbox-exec; passes on both present", () => {
   assert.throws(
