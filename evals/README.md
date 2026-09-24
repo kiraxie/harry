@@ -319,12 +319,16 @@ the run starts is jailed, including each tool the session or its tests run, and
 the log names each one by the binary running when it was denied: `node`, `git`,
 `claude` by its version (such as `2.1.281`), `touch` when `env touch` ran it, and
 `bash` for `/bin/sh` (which runs bash on a default install). A filter on `node`,
-`git` and `claude` drops the one line that explains a failing tool. The jailed processes also log denials they run fine without;
-never add these: `mach-lookup` of `com.apple.logd`,
-`com.apple.diagnosticd`, `com.apple.system.notification_center`,
+`git` and `claude` drops the one line that explains a failing tool. The jailed
+processes also log denials they run fine without; never add these:
+`mach-lookup` of `com.apple.logd`, `com.apple.diagnosticd`,
+`com.apple.system.notification_center`,
 `com.apple.system.opendirectoryd.membership` and `com.apple.bsd.dirhelper`,
-`file-read-data ~/.CFUserTextEncoding`, `file-write-data /dev/dtracehelper` and
-`system-info vfs.disk-space`. The log is not complete: the kernel folds repeats
+`file-read-data ~/.CFUserTextEncoding`, `file-write-data /dev/dtracehelper`,
+`system-info vfs.disk-space`, and `file-read-data` or `file-read-metadata` of
+`/dev/tty` or a `/dev/ttysN`. That last one is the terminal deny, on purpose
+(see **reads** above), and a jailed `bash` can log it just by starting. The log
+is not complete: the kernel folds repeats
 into `N duplicate reports` lines and does not report every denial (a jailed
 `claude` started from a directory under `$HOME`, which it may not read, failed
 and logged only the `/dev/dtracehelper` line). If nothing there explains the failure, the log will
