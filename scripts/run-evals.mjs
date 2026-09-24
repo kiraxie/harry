@@ -1240,7 +1240,10 @@ const JAIL_MACH_SERVICES = [
 //     and a shell's terminal is one read-write file on fds 0, 1 and 2 alike. So
 //     fds 0, 1 and 2 of every jailed child must not be the terminal: each spawn
 //     pipes or ignores all three (never "inherit"), and libuv passes no other fd.
-//     A pty test pins this for every spawn. The legacy BSD pty pairs
+//     A pty test pins this from inside each spawned process: the claude session
+//     and the test command, jailed and not; the jailed post-session step; and the
+//     runner's own git calls wherever PATH can shadow git (the jailed git calls
+//     hold the post-session step's fds). The legacy BSD pty pairs
 //     (`/dev/ttyp0`, `/dev/ptyp0`, ...) are left readable: no shell runs on them.
 //   - WRITES only to `allowWrite` (the trial's own config dir, fixture and temp dir)
 //     and /dev/null. Not a user-writable PATH dir such as /opt/homebrew/bin, not
