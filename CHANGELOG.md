@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Laws for comments, review fixes and fix size.** Code carries no comment by
+  default; the one kept kind is a short, neutral trade-off line, `DEBT:`
+  included, and tool directives such as `biome-ignore` are not comments (§4).
+  Every review finding reaches the user with its long-term structural fix; a
+  short-term fix only when that is not simple, a workaround never (§6). A fix
+  inside a unit is tiered like a task: one that is Trivial and
+  weakens no test is made in the session and checked by the full suite, with
+  no re-review; any other fix keeps the full loop (§3). New findings in the
+  same area in two review rounds in a row stop the work to ask the user
+  whether the scope still serves the goal (§6). Both review references now ask
+  for the structural fix, and the rubric flags comments that restate code,
+  justify a workaround, or resist a change. Two new informative eval cases
+  track comment density and structural-fix replies; on claude-sonnet-4-5
+  neither showed a first-response difference yet.
+
 - **Finishing reviews the change's shape before anything merges or is
   pushed.** A new step 2 in `skills/finishing/SKILL.md`, between verifying
   tests and the merge-or-PR question, runs on every path out of the menu —
@@ -41,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--context @<file>`, so that build's architecture review is independent too.
 
 ### Changed
+
+- **Plain writing covers every text written for people**, not only replies
+  to the user: commit messages, PR comments, README, CHANGELOG, skills,
+  references, code comments and drafted messages too (§6). Subagent briefs
+  and review reports stay precision-first.
 
 - **Prompt text tuned for current models.** The `scout` role states what its
   answer must contain instead of a line cap, and a test keeps every role's

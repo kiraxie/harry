@@ -28,7 +28,9 @@ reviews **read-only** — no working-tree, index, or HEAD mutation; the one writ
    under-weight and the one worth keeping.
 2. **Code quality.** Clear separation of concerns; error handling at trust
    boundaries; edge cases (empty / null / overflow / concurrency); type safety
-   where the language offers it; integrates cleanly with surrounding code.
+   where the language offers it; integrates cleanly with surrounding code. Flag a
+   comment that restates the code, justifies a workaround, or resists a change —
+   code carries no comment by default (HARRY.md §4).
 3. **YAGNI / altitude** (HARRY.md §1–§2). Speculative abstraction (interface with
    one impl, factory for one product, config for a constant), premature
    generality or optimization (a cache/index/clever rewrite with no measured
@@ -61,7 +63,8 @@ never Critical. Acknowledge what was done well before listing issues.
   think a finding is a false positive, let it surface and adjudicate it in the
   review loop. The brief's example code is a starting point, not proof its
   weaknesses were chosen.
-- **Be specific:** `file:line`, what's wrong, why it matters, how to fix.
+- **Be specific:** `file:line`, what's wrong, why it matters, and the long-term
+  structural fix — never a workaround (HARRY.md §6).
 - A finding that **conflicts with an AC** is the human's call — present the
   finding beside the AC text; do not silently fix against the AC, or dismiss
   the finding because the AC mandated it.
@@ -93,7 +96,7 @@ never Critical. Acknowledge what was done well before listing issues.
 #### Critical (must fix)
 #### Important (should fix)
 #### Minor (nice to have — item's `## Follow-ups` for final triage)
-[each: file:line · what's wrong · why it matters · how to fix]
+[each: file:line · what's wrong · why it matters · structural fix · short-term fix, only when the structural one is not simple]
 
 ### Assessment
 Spec (one line per AC): AC-1 pass / fail / partial / superseded by AC-<m> · evidence read

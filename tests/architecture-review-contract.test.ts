@@ -4,22 +4,6 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// Finishing's step 2 reviews the SHAPE of a change (API, DB schema, public interface,
-// module or service boundary) before anything merges or is pushed, and the
-// architecture-review reference (`references/architecture-review.md`) is what the
-// reviewer applies. The step is only real while it stays on every path out of the
-// menu, keeps its reviewer independent, and keeps its findings away from any automatic
-// fixer — each of those is one sentence of prose that an edit can drop or invert
-// without any other test noticing.
-//
-// These tests pin the CLAIMS, not the phrasing around them. Each assertion anchors on a
-// clause's key words INCLUDING its polarity word ("never", "only", "no", "if any"), so
-// the inverted sentence fails; there are no loose alternations, which is how an earlier
-// contract test in this repo passed on the very inversion it existed to catch. Every
-// test was watched failing against a mutated copy of the file it pins.
-//
-// Sibling of grilling-contract.test.ts and plain-language-contract.test.ts.
-
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 
@@ -30,23 +14,12 @@ const DOC_TYPES = path.join("references", "doc-types.md");
 const RUBRIC = path.join("references", "review-rubric.md");
 const EXECUTING = path.join("skills", "executing", "SKILL.md");
 
-/**
- * Whitespace-flattened with markdown emphasis and code ticks dropped. The prose is
- * hard-wrapped, so a clause routinely straddles a line break; and bolding or
- * code-quoting a word inside a claim does not change what it says. Underscores are
- * dropped only as emphasis markers (`_word_`), never inside a path or identifier.
- */
 const plain = (text: string): string =>
   text
     .replace(/\s+/g, " ")
     .replace(/[*`]/g, "")
     .replace(/(^|[^\w])_(?=\S)|(?<=\S)_(?=[^\w]|$)/g, "$1");
 
-/**
- * The text from `startHeading` up to `endHeading` (exclusive). Throws when either is
- * missing: a section that silently falls back to "" passes every negative check and
- * reads as "the contract still holds".
- */
 function section(text: string, rel: string, startHeading: string, endHeading: string): string {
   const start = text.indexOf(startHeading);
   assert.ok(start !== -1, `${rel} no longer has the heading "${startHeading}"`);
@@ -55,11 +28,6 @@ function section(text: string, rel: string, startHeading: string, endHeading: st
   return text.slice(start, end);
 }
 
-/**
- * The blank-line-separated paragraph of `text` whose plain form starts with `label`,
- * flattened. Paragraphs are split BEFORE flattening. Throws when absent, for the same
- * vacuity reason as `section`.
- */
 function labelled(text: string, rel: string, label: string): string {
   const hit = text
     .split(/\n\s*\n/)
@@ -70,11 +38,6 @@ function labelled(text: string, rel: string, label: string): string {
   return hit;
 }
 
-/**
- * Finishing's architecture-review step, raw (line starts intact): from its heading to
- * the next `## ` heading. Found by name, not by number or by its neighbour, so a
- * reordered or renumbered step fails only the AC-1 order test instead of every test.
- */
 function step2Raw(): string {
   const text = read(FINISHING);
   const start = text.search(/^## \d+\. Architecture review/m);
@@ -84,9 +47,6 @@ function step2Raw(): string {
 }
 const step2 = (label: string): string => labelled(step2Raw(), FINISHING, label);
 const archReview = (): string => plain(read(ARCH_REVIEW));
-
-// ---------------------------------------------------------------------------
-// AC-1 — placement: between the test gate and the merge-or-PR question, on every path
 
 test("AC-1: the architecture review is step 2, after verify-tests and before merge-or-PR", () => {
   const text = read(FINISHING);
@@ -111,12 +71,16 @@ test("AC-1: merge, PR and keep all pass through the review; only Discard skips i
   );
   assert.match(intro, /only Discard skips it/, "step 2 no longer limits the skip to Discard");
 
-  // The quick reference is the second place a reader looks; a row that says the
-  // review does not apply to an integrating option contradicts the step.
   const table = read(FINISHING)
     .split("\n")
     .filter((l) => /^\| (1\. Merge|2\. PR|3\. Keep) \|/.test(l));
-  assert.equal(table.length, 3, "the quick reference lost a Merge, PR or Keep row");
+  assert.equal(
+    table.length,
+    3,
+    "the quick reference lost a Merge, PR or Keep row" +
+      " — " +
+      "The quick reference is the second place a reader looks; a row that says the review does not apply to an integrating option contradicts the step.",
+  );
   for (const row of table) {
     const cell = row.split("|")[3].trim();
     assert.match(
@@ -136,9 +100,6 @@ test("AC-1: a pre-decided integration path still runs the architecture review", 
     "the pre-decided path no longer runs step 2's architecture review before the tail",
   );
 });
-
-// ---------------------------------------------------------------------------
-// AC-2 — the shape gate
 
 test("AC-2: a shape is one of four kinds, defined the same in the step and the architecture-review reference", () => {
   const kinds =
@@ -180,9 +141,6 @@ test("AC-2: with no item (Trivial) the skip line is written in the reply", () =>
   );
 });
 
-// ---------------------------------------------------------------------------
-// AC-3 — one independent, read-only opus reviewer, and what it is handed
-
 test("AC-3: one read-only opus subagent, one lane", () => {
   const p = step2("Reviewer.");
   assert.match(
@@ -217,32 +175,37 @@ test("AC-3: the reviewer is handed every input", () => {
   for (const [re, what] of inputs) assert.match(p, re, `the reviewer is no longer handed ${what}`);
 });
 
-// Executing's setup creates no per-branch tmp directory, and for a Trivial unit no
-// executing step writes there either; without the mkdir the diff write fails first.
 test("AC-3: the command that writes the diff also creates its directory", () => {
   const p = step2("Reviewer.");
   assert.match(
     p,
     /in one command that resolves <store>, creates that directory with mkdir -p .*?, and writes the file;/,
-    "the diff is no longer written by one command that resolves <store> and creates its directory",
+    "the diff is no longer written by one command that resolves <store> and creates its directory" +
+      " — " +
+      "Executing's setup creates no per-branch tmp directory, and for a Trivial unit no executing step writes there either; without the mkdir the diff write fails first.",
   );
   assert.match(
     p,
     /mkdir -p \(nothing earlier writes there for a Trivial unit\)/,
     "the reason for the mkdir no longer says nothing earlier writes there for a Trivial unit",
   );
-  // Trivial does run executing's setup; that setup just creates no directory.
-  assert.doesNotMatch(p, /never ran executing's setup/, "the step claims Trivial skips setup");
+  assert.doesNotMatch(
+    p,
+    /never ran executing's setup/,
+    "the step claims Trivial skips setup" +
+      " — " +
+      "Trivial does run executing's setup; that setup just creates no directory.",
+  );
 });
 
-// With --architecture --base, codex computes the diff itself: a packaged diff file
-// on the Codex build would be written and never read.
 test("AC-3: the diff file is the CC reviewer's input only; the Codex build writes none", () => {
   const p = step2("Reviewer.");
   assert.match(
     p,
     /Package the diff to a file .*?\(the CC reviewer's input only — the Codex build below writes none\)/,
-    "the diff file is no longer marked as the CC reviewer's input only",
+    "the diff file is no longer marked as the CC reviewer's input only" +
+      " — " +
+      "With --architecture --base, codex computes the diff itself: a packaged diff file on the Codex build would be written and never read.",
   );
   assert.match(
     p,
@@ -312,9 +275,6 @@ test("AC-3: with no item (Trivial) the reviewer gets the task as the user stated
     "the architecture-review reference no longer tells the reviewer about the Trivial input",
   );
 });
-
-// ---------------------------------------------------------------------------
-// AC-4 — the architecture-review reference
 
 test("AC-4: the architecture-review reference carries the five categories", () => {
   const cats = section(
@@ -388,15 +348,15 @@ test("AC-4: a finding that depends on missing context is a question", () => {
   );
 });
 
-test("AC-4: every finding carries where, why, suggested change and recommended ruling", () => {
+test("AC-4: every finding carries where, why, structural fix and recommended ruling", () => {
   const out = section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "```");
   assert.match(
     plain(out),
-    /Every finding carries four things: where .*?, why it matters, the suggested change, and your recommended ruling\./,
+    /Every finding carries four things: where .*?, why it matters, the structural fix, and your recommended ruling\./,
     "a finding no longer carries all four fields",
   );
   const template = section(read(ARCH_REVIEW), ARCH_REVIEW, "### Findings", "```\n\nA finding");
-  for (const field of ["Where:", "Why:", "Suggested change:", "Recommended ruling:"])
+  for (const field of ["Where:", "Why:", "Structural fix:", "Recommended ruling:"])
     assert.ok(template.includes(field), `the output template lost "${field}"`);
 });
 
@@ -408,16 +368,13 @@ test("AC-4: no findings is said plainly", () => {
   );
 });
 
-// ---------------------------------------------------------------------------
-// AC-5 — rulings
-//
-// The rulings are anchored on their ruling form — a bullet that opens with the ruling
-// and an arrow — never on the bare words "keep" or "change", which collide with the
-// menu's Option 3 Keep and with the noun.
-
 test("AC-5: findings never reach an automatic fixer and go to the user as one list", () => {
   const p = step2("Rulings.");
-  assert.match(p, /Findings never go to an automatic fixer\./, "findings may now reach a fixer");
+  assert.match(
+    p,
+    /Findings never go to an automatic fixer\./,
+    "findings may now reach a fixer; every finding is the user's to rule",
+  );
   assert.match(p, /Put them to the user as one list/, "findings are no longer one list");
   assert.match(
     archReview(),
@@ -474,16 +431,13 @@ test("AC-5: after a fix, only the shapes the fix changed are re-checked", () => 
   );
 });
 
-// The fix-now bullet alone does not narrow a later round: the shape gate and the diff
-// packaging run every round, so each must say how it narrows, and to what range. The
-// range is anchored on the head the previous round reviewed, not on AC completion
-// lines: a Major unit's final-review fix wave commits after those lines are written,
-// and a range built from them would let a shape that fixer altered merge unreviewed.
 test("AC-5: every round records the head it reviews", () => {
   assert.match(
     step2("Shape gate."),
     /Every round records the head it reviews — architecture review at <sha7> \(git rev-parse --short HEAD\) — in ## Progress\./,
-    "a round no longer records the head it reviewed, so the next round has no range to start from",
+    "a round no longer records the head it reviewed, so the next round has no range to start from" +
+      " — " +
+      "The fix-now bullet alone does not narrow a later round: the shape gate and the diff packaging run every round, so each must say how it narrows, and to what range. The range is anchored on the head the previous round reviewed, not on AC completion lines: a Major unit's final-review fix wave commits after those lines are written, and a range built from them would let a shape that fixer altered merge unreviewed.",
   );
   assert.match(
     step2("No item (Trivial)."),
@@ -545,17 +499,13 @@ test("AC-5: with no item (Trivial) rulings go to the reply and fix now fixes in 
   assert.match(p, /backlog still opens a new item\./, "a Trivial backlog no longer opens an item");
 });
 
-// ---------------------------------------------------------------------------
-// A fix-now AC supersedes an approved one. doc-types owns the rule; the rubric (which
-// both review lanes read) and executing's pre-flight scan are where it is acted on, so
-// each must cite it — otherwise the pre-flight flags the pair as a conflict and the
-// final review fails the superseded AC and hands the approved fix to be reverted.
-
 test("fix now: doc-types owns the superseded-AC rule", () => {
   assert.match(
     plain(read(DOC_TYPES)),
     /An AC appended later may name an AC it supersedes \(finishing's fix now ruling drafts one that way\); the superseded AC keeps its text and is judged by its successor, not on its own\./,
-    "doc-types no longer says a superseded AC keeps its text and is judged by its successor",
+    "doc-types no longer says a superseded AC keeps its text and is judged by its successor" +
+      " — " +
+      "A fix-now AC supersedes an approved one. doc-types owns the rule; the rubric (which both review lanes read) and executing's pre-flight scan are where it is acted on, so each must cite it — otherwise the pre-flight flags the pair as a conflict and the final review fails the superseded AC and hands the approved fix to be reverted.",
   );
 });
 
@@ -578,10 +528,6 @@ test("fix now: executing's pre-flight does not count a superseding pair as a con
     "executing's pre-flight may now flag a superseding AC pair as a conflict",
   );
 });
-
-// ---------------------------------------------------------------------------
-// AC-6 — the parts a test can hold (the suite, typecheck, lint and the unchanged files
-// are command outputs and `git diff`, not assertions)
 
 test("AC-6: CHANGELOG [Unreleased] records the architecture review", () => {
   const text = read(CHANGELOG);

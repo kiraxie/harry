@@ -40,6 +40,8 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 
 **Gate scaling on a red-line promotion.** When a red line — not file count — is what forces Major, the promotion exists to guarantee the **verification** gates: a failing-reproduction / red-green test with watch-it-fail, the Major review gate (reviewer subagent plus the Codex lane, where the build has one), and full evidence discipline (§6), because the domain risk is exactly what those gates guard. The **design** gates scale with the change's actual design complexity — a mechanically-trivial red-line change (one-glance diff, no alternatives to weigh) takes a compressed brainstorm and a one-line `## Why / What` plus its acceptance criteria, not the full decision record. Acceptance criteria never scale away: they carry the verification. Scaling never reaches verification: a trivial-looking change in a red-line domain still ships red-green + review.
 
+**Fixes inside a unit.** Whatever the unit's tier, a fix is small or not by HARRY.md §3; `skills/executing` step 4 runs it. Small, for example: rewording a sentence without changing what it asks of a model, an added test pin, a local one-line rename. Not small, for example: a sentence that changes what a model does (a real decision, rule 2), a loosened or deleted assertion, a one-line change in a red-line domain (it tiers Major), a refactor across files.
+
 ## Promotion rules
 
 Tiers are not chosen by file count alone. Apply these in order:

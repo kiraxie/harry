@@ -64,6 +64,7 @@ mid-loop from it; in subagent mode, a task the user sends back to step 4 takes
 the round one past it, `fix round 1/4` when it has none),
 `integration: conflicts resolved in <merge7>` (reviewed again at the final
 review), `complete (commits …)` (the AC is done), and adjudication rulings.
+`small fix: <what> (commit <sha7>)` is a record only; no rule reads it back.
 A unit in subagent mode (the executing skill) keeps three stores: git holds
 code positions — task branches, their worktrees and `refs/harry/…` base refs;
 `## Progress` holds durable outcomes; and each task's report log under

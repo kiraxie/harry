@@ -1,15 +1,15 @@
-# Plain Language — writing for the user
+# Plain Language — writing for people
 
-HARRY.md §6 binds this to prose addressed to the user — a chat reply, a chat-facing
-summary, a PR body, anything written for the person rather than for another agent.
-The PR body counts as the user's because people read it and because HARRY.md §5 has
-the user approve the draft before the PR is opened. Everything else is model-side and
-stays precision-first per the law instead: subagent briefs, review reports, commit
-messages, and code comments.
+HARRY.md §6 makes every text written for people plain, short and to the point: chat
+replies, PR bodies and comments, commit messages, README, CHANGELOG, skills and
+references, code comments, and drafted Slack, Jira or email messages. The grounding rule
+and the self-check below apply to all of them. Subagent briefs and review reports stay
+precision-first per the law, and coin no new term.
 
-This file's two levels below apply only to the user side. The model side borrows
-nothing from them; its one shared rule — no new term — is stated in HARRY.md §6
-directly, not here.
+The two levels below pace prose addressed to the user — a chat reply, a chat-facing
+summary, a PR body, anything written for the person rather than for another agent. The
+PR body counts as the user's because people read it and because HARRY.md §5 has the user
+approve the draft before the PR is opened.
 
 ## Callers
 
@@ -64,8 +64,7 @@ same violation as an undefined term, just wearing plain words.
 
 ### Applying it — a worked example
 
-Before (HARRY.md §5, model-side — dense on purpose, four roles and a policy in one
-breath):
+Before (a subagent brief may be this dense — four roles and a policy in one breath):
 
 > predictable work routes by nature to a durable role — recon/lookup → `scout`;
 > mechanical, fully-specified edits → `mech`; prose/docs → `writer`;

@@ -89,9 +89,10 @@ rubric, not here.
 ## Output
 
 Every finding carries four things: **where** (`file:line`, or the shape's name
-when it spans files), **why** it matters, the **suggested change**, and your
-**recommended ruling**. The user rules each finding one of three ways, and you
-recommend one of the same three:
+when it spans files), **why** it matters, the **structural fix**, and your
+**recommended ruling**. The structural fix is the long-term one, never a workaround
+(HARRY.md §6). The user rules each finding one of three ways, and you recommend one
+of the same three:
 
 - **fix now** — fix it before this merges. The work goes back to be fixed, and
   this review then re-checks the shapes the fix changed.
@@ -108,7 +109,8 @@ recommend one of the same three:
 1. <shape> · <category> [· seen only one level up] [· question]
    Where: <file:line or shape name>
    Why: <what goes wrong, and for whom>
-   Suggested change: <the change>
+   Structural fix: <the long-term change>
+   [Short-term fix: <only when the structural one is not simple>]
    Recommended ruling: fix now / backlog / leave as is · <one-line reason>
 2. …
 ```
