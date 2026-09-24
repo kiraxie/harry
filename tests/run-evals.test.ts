@@ -2391,120 +2391,112 @@ test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message
 // ---- opt-in OS sandbox (EVALS_SANDBOX=1, macOS seatbelt) --------------------
 
 const DARWIN_ONLY = { skip: process.platform !== "darwin" ? "macOS-only (seatbelt)" : false };
-// The rule that keeps a jailed process from opening a terminal to read what the
-// operator types (F-4): the controlling tty and every pty slave.
-const TTY_DENY = '(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))';
 // Mirror of AGENTIC_ALLOWED_TOOLS (not exported) — the args must pass through the
 // sandbox-exec wrapper unchanged, so the shim still sees this exact allowlist.
 const AGENTIC_TOOLS =
   "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*)," +
   "Bash(git branch:*),Bash(git checkout:*),Bash(git switch:*),Bash(node:*)";
 
-test("buildSeatbeltProfile: denies everything, denies reads under $HOME, then allows the trial's own dirs", () => {
+// The whole profile, pinned as fixed text for fixed inputs: any rule added,
+// removed, widened or reordered is an edit here that review sees, not only a
+// change to the names or paths some narrower check extracts. SBPL is
+// last-match-wins, so the order is policy too: `(deny default)` first, the broad
+// read allow, then the $HOME deny, the narrow allows, and the terminal deny LAST so
+// no read allow (of /dev, say) can re-open it. Literal on purpose: never build the
+// expectation from the code's own constants.
+test("buildSeatbeltProfile: the whole profile is exactly this text (golden)", () => {
   const profile = buildSeatbeltProfile({
     home: "/Users/op",
+    // Deduped, in order of first appearance.
     allowWrite: [
-      "/var/folders/t/trial/config",
-      "/var/folders/t/trial/fx",
-      "/var/folders/t/trial/fx",
+      "/private/var/folders/t/trial/config",
+      "/private/var/folders/t/trial/fixture/repo",
+      "/private/var/folders/t/trial/tmp",
+      "/private/var/folders/t/trial/tmp",
     ],
-    allowRead: ["/Users/op/.local/share/claude", "/opt/homebrew/bin"],
-    allowExec: ["/Users/op/.local/share/claude", "/opt/homebrew/bin"],
+    // An empty path is dropped, never emitted as a (subpath "").
+    allowRead: [
+      "/Users/op/.local/share/claude/versions",
+      "/opt/homebrew/Cellar/node/26.9.0/bin",
+      "",
+      "/Users/op/Projects/harry/scripts/run-evals.mjs",
+    ],
+    // /usr/bin, the xcrun git shim's tree, is already allowed and is not repeated.
+    allowExec: [
+      "/Users/op/.local/share/claude/versions",
+      "/opt/homebrew/Cellar/node/26.9.0/bin",
+      "/usr/bin",
+    ],
   });
-  assert.match(profile, /^\(version 1\)/, "a v1 seatbelt profile");
-  // SBPL is last-match-wins: the broad rules come first, the narrow allows after.
-  const order = [
-    "(deny default)",
-    "(allow file-read*)",
-    '(deny file-read* (subpath "/Users/op"))',
-    "(allow file-read* file-write*\n",
-    "(allow file-read*\n",
-  ].map((needle) => profile.indexOf(needle));
-  assert.ok(
-    order.every((idx) => idx >= 0),
-    `every rule present: ${order}`,
-  );
-  assert.deepEqual(
-    [...order].sort((a, b) => a - b),
-    order,
-    "in last-match-wins order",
-  );
-  const pathsOf = (pattern: RegExp) =>
-    profile
-      .split("\n(")
-      .filter((rule) => pattern.test(rule))
-      .flatMap((rule) =>
-        Array.from(rule.matchAll(/\((?:subpath|literal) "([^"]+)"\)/g), (m) => m[1]),
-      );
-  // The ONLY paths that may be written: the trial's own dirs (deduped) and /dev/null.
-  assert.deepEqual(pathsOf(/^allow file-(read\* file-)?write\*/).sort(), [
-    "/dev/null",
-    "/var/folders/t/trial/config",
-    "/var/folders/t/trial/fx",
-  ]);
-  // The ONLY paths a jailed process may exec from: the system shells and tools, and
-  // the runtime trees handed in. Never a trial dir.
-  assert.deepEqual(pathsOf(/^allow process-exec/).sort(), [
-    "/Users/op/.local/share/claude",
-    "/bin",
-    "/opt/homebrew/bin",
-    "/usr/bin",
-  ]);
-  assert.match(
+  assert.equal(
     profile,
-    /\(subpath "\/Users\/op\/.local\/share\/claude"\)/,
-    "runtime tree readable",
+    `(version 1)
+;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
+;; Deny everything, then allow back only what node, claude and git need:
+;; no system service that could start a program outside this jail.
+(deny default)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow file-read*)
+(deny file-read* (subpath "/Users/op"))
+(allow file-read* file-write* (literal "/dev/null"))
+(allow mach-lookup
+  (global-name "com.apple.system.opendirectoryd.libinfo")
+)
+(allow network-outbound (remote ip "*:*"))
+(allow network-outbound (literal "/private/var/run/mDNSResponder"))
+(allow process-exec
+  (subpath "/bin")
+  (subpath "/usr/bin")
+  (subpath "/Users/op/.local/share/claude/versions")
+  (subpath "/opt/homebrew/Cellar/node/26.9.0/bin")
+)
+;; read+write: this trial's config dir, fixture repo and temp dir only.
+(allow file-read* file-write*
+  (subpath "/private/var/folders/t/trial/config")
+  (subpath "/private/var/folders/t/trial/fixture/repo")
+  (subpath "/private/var/folders/t/trial/tmp")
+)
+;; read-only: claude + node runtime install trees, and the runner script.
+(allow file-read*
+  (subpath "/Users/op/.local/share/claude/versions")
+  (subpath "/opt/homebrew/Cellar/node/26.9.0/bin")
+  (subpath "/Users/op/Projects/harry/scripts/run-evals.mjs")
+)
+;; no terminal reads (what the operator types); last, so no allow above re-opens it.
+(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))
+`,
   );
 });
 
-test("buildSeatbeltProfile: starts from (deny default) and never allows a service broadly", () => {
-  const profile = buildSeatbeltProfile({
-    home: "/Users/op",
-    allowWrite: ["/var/folders/t/trial/fx"],
-    allowRead: ["/opt/homebrew/bin"],
-  });
-  const rules = profile
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith(";;"));
-  assert.equal(rules[0], "(version 1)");
-  assert.equal(rules[1], "(deny default)", "the first rule denies everything");
-  assert.ok(!profile.includes("(allow default)"), "nothing re-opens the default");
-  // Every service lookup is by exact name: no bare `(allow mach-lookup)`, no prefix
-  // or regex match, and never LaunchServices or launchd's job services.
-  assert.ok(!/\(allow mach-lookup\s*\)/.test(profile), "no bare mach-lookup allow");
-  assert.ok(!/global-name-(prefix|regex)/.test(profile), "no wildcard service name");
-  const services = Array.from(profile.matchAll(/\(global-name "([^"]+)"\)/g), (m) => m[1]);
-  assert.ok(services.length > 0, "the services the binaries need are listed by name");
-  for (const name of services) {
-    assert.ok(
-      !/launchservices|coreservices|\.lsd\.|launchd|xpc\.smd|appleevents|pasteboard/i.test(name),
-      `${name} is a service that can start or drive programs outside the jail`,
-    );
-  }
-});
-
-test("buildSeatbeltProfile: allows exactly the pinned system services, by name", () => {
-  // The service list is the part of the jail expected to grow (README tells the
-  // operator to add a name a live run needs), and a substring blocklist lets through
-  // services that act for the caller (keychain, preferences, login items). So the
-  // set is pinned exactly, like the write and exec sets: every addition is a
-  // deliberate edit here that review sees. Literal on purpose, not the constant.
-  const profile = buildSeatbeltProfile({ home: "/Users/op" });
-  const services = Array.from(profile.matchAll(/\(global-name "([^"]+)"\)/g), (m) => m[1]);
-  assert.deepEqual(services.sort(), ["com.apple.system.opendirectoryd.libinfo"]);
-});
-
-test("buildSeatbeltProfile: denies reading the terminal as its LAST rule", () => {
-  // SBPL is last-match-wins, so a deny placed before the read allows could be
-  // re-opened by one of them ("/dev" handed in as a read, say). Last, it cannot.
-  const profile = buildSeatbeltProfile({
-    home: "/Users/op",
-    allowWrite: ["/var/folders/t/trial/fx"],
-    allowRead: ["/dev", "/opt/homebrew/bin"],
-  });
-  assert.ok(profile.includes(TTY_DENY), "the terminal deny is present");
-  assert.ok(profile.trimEnd().endsWith(TTY_DENY), "and it is the last rule");
+test("buildSeatbeltProfile: with no trial dirs or runtime trees, those sections are left out (golden)", () => {
+  assert.equal(
+    buildSeatbeltProfile({ home: "/Users/op" }),
+    `(version 1)
+;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
+;; Deny everything, then allow back only what node, claude and git need:
+;; no system service that could start a program outside this jail.
+(deny default)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow file-read*)
+(deny file-read* (subpath "/Users/op"))
+(allow file-read* file-write* (literal "/dev/null"))
+(allow mach-lookup
+  (global-name "com.apple.system.opendirectoryd.libinfo")
+)
+(allow network-outbound (remote ip "*:*"))
+(allow network-outbound (literal "/private/var/run/mDNSResponder"))
+(allow process-exec
+  (subpath "/bin")
+  (subpath "/usr/bin")
+)
+;; no terminal reads (what the operator types); last, so no allow above re-opens it.
+(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))
+`,
+  );
 });
 
 test("buildSeatbeltProfile: escapes quotes/backslashes so a path can't break the literal", () => {
