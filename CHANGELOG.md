@@ -341,9 +341,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in a real pty and pins that both opens are refused. The deny acts only
   when a terminal is opened, so no spawned child is handed it either: fds
   0, 1 and 2 are piped or `/dev/null` at every spawn. A second darwin test
-  runs the runner in a real pty and pins that the jailed session, the
-  jailed post-session step and the runner's own git calls hold the
-  terminal on none of them.
+  runs the runner in a real pty, jailed and not, and pins from inside each
+  spawned process that the session, the post-session step and the
+  model-written test command hold the terminal on none of them, nor do the
+  runner's own git calls wherever `PATH` can shadow git (not when git sits
+  next to `node`).
 - **A child's output could write terminal escape sequences to the operator's
   terminal.** Every child the eval runner spawns now has its stdout and
   stderr piped, and what reaches the operator (error messages, result lines)
