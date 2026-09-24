@@ -237,18 +237,22 @@ containment layers address this:
   only one `{ ok, detail }` per check, strips control characters and caps the
   text. Whatever the session planted, whether a swapped fixture, a config
   re-planted after the restore, a `gpg.program` or a test, runs inside that jail
-  if it runs at all. **Unsandboxed** the step runs in the runner itself, and none
-  of this is a security boundary: the session already ran as you, with your
-  filesystem. The checks there only guard against accidents.
+  if it runs at all. The jail is deny-by-default (below), so code running there
+  can write only the trial's own dirs and cannot ask a system service to start a
+  program outside the jail. **Unsandboxed** the step runs in the runner itself,
+  and none of this is a security boundary: the session already ran as you, with
+  your filesystem. The checks there only guard against accidents.
 - **What the runner runs after a session** is fixed before the first one:
   `git`, `claude` and `sandbox-exec` are resolved to absolute paths up front (on
   the allowlisted `PATH`, in-process, with no `which`) and spawned by those paths
   from then on. A binary a session drops into a `PATH` directory later is never
   picked up. Every child's stdout and stderr are piped; what reaches you (error
   messages, result lines) has control characters stripped first.
-- **Filesystem exposure** is bounded by the opt-in [OS sandbox](#os-sandbox-opt-in-evals_sandbox)
-  below: `EVALS_SANDBOX=1` confines the session's writes to its own trial's dirs
-  and denies it reads under your `$HOME`.
+- **Filesystem and system-service exposure** is bounded by the opt-in
+  [OS sandbox](#os-sandbox-opt-in-evals_sandbox) below: `EVALS_SANDBOX=1` runs the
+  session under a deny-by-default profile that confines its writes to its own
+  trial's dirs, denies it reads under your `$HOME`, and lets it reach no system
+  service that could start a program outside the jail.
 
 What remains unbounded even with both is *network* (the session must reach the API)
 and the **env-held credential** (no OS sandbox can hide an env var from the session's
@@ -259,32 +263,47 @@ prompts**. Do not point this at untrusted input.
 ### OS sandbox (opt-in, `EVALS_SANDBOX`)
 
 `EVALS_SANDBOX=1` wraps each **agentic** session in a macOS
-[seatbelt](https://developer.apple.com/) profile via `sandbox-exec`, so a
-misbehaving or prompt-injected session can write nothing outside its own trial
-and read nothing under your `$HOME`.
+[seatbelt](https://developer.apple.com/) profile via `sandbox-exec`. The profile
+is deny-by-default: a misbehaving or prompt-injected session can write only its
+own trial's dirs, read nothing under your `$HOME`, and reach no system service
+that could start a program outside the jail, such as LaunchServices (`open`) or
+launchd (`launchctl`).
 
-**What it does:** the generated profile starts from `(allow default)`, then:
+**What it does:** the generated profile's first rule is `(deny default)`. It then
+allows back only this list:
 
-- **denies every file write**, then re-allows writes to exactly this trial's own
-  config dir, fixture repo and temp dir (the trial's `TMPDIR`), plus `/dev/null`.
-  Not the fixture's parent, not the shared temp root, not another trial's dirs,
-  and not a user-writable directory such as `/opt/homebrew/bin`;
-- **denies every read under `$HOME`**, then re-allows reads of those same trial
-  dirs, the `claude` and `node` runtime install trees (a runtime under `$HOME`,
-  such as nvm node or the `~/.local` claude install, must stay readable for the
-  child to start), and `scripts/run-evals.mjs` itself (for the post-session
-  child). Each runtime tree is its whole **containing directory**, read-only, so
-  sibling files there become readable too: a coarse allow, not a single-file
-  grant.
+- **processes:** fork; exec from `/bin`, `/usr/bin` and the resolved `node`,
+  `claude` and `git` install trees (including git's helper dir and the real
+  binary behind Apple's `/usr/bin/git` shim), never from a trial dir; signals to
+  processes in the same jail only; sysctl reads;
+- **reads:** everything outside `$HOME`. Under `$HOME`, only the trial dirs, the
+  `claude`, `node` and `git` install trees (a runtime under `$HOME`, such as nvm
+  node or the `~/.local` claude install, must stay readable for the child to
+  start), and `scripts/run-evals.mjs` itself (for the post-session child). Each
+  runtime tree is its whole **containing directory**, so sibling files there are
+  readable and executable too: a coarse allow, not a single-file grant;
+- **writes:** exactly this trial's own config dir, fixture repo and temp dir (the
+  trial's `TMPDIR`), plus `/dev/null`. Not the fixture's parent, not the shared
+  temp root, not another trial's dirs, and not a user-writable directory such as
+  `/opt/homebrew/bin`;
+- **system services:** one, by exact name: `com.apple.system.opendirectoryd.libinfo`,
+  for user and group lookup. Nothing that can start or drive a program;
+- **network:** outbound IP to any host and port, and the DNS resolver's socket.
+  No other unix socket, so a local daemon listening on one (a Docker socket, for
+  example) is unreachable.
 
-The minimum writable set was derived with the fake `claude` shim, and the jail
-tests pass with nothing beyond those three dirs and `/dev/null`. A live run with
-the real `claude` still has to confirm it needs no other path.
+This allowlist was derived with the fake `claude` shim: the jail tests pass with
+nothing more, and the real `claude --version` and an HTTPS request from `node`
+also run under it. A live run with the real `claude` still has to confirm it
+needs nothing else. If it does, the trial fails with a sandbox denial (the jail
+fails closed, never open); add the one exact rule the denial names, never a
+broad one.
 
-So the session keeps working in its fixture, but reads of ssh keys, other
-credentials and documents under `$HOME`, and writes anywhere but its own trial's
-dirs, are denied by the kernel. The post-session step (above) runs as one child
-under the same profile, so the runner's own restore, git calls and the
+So the session keeps working in its fixture. The kernel denies anything the list
+does not allow: reads of ssh keys, other credentials and documents under
+`$HOME`, writes anywhere but its own trial's dirs, and requests to a service that
+would start a program as you, outside the jail. The post-session step (above) runs
+as one child under the same profile, so the runner's own restore, git calls and the
 model-written tests stay inside the jail too. The session's git identity is pinned
 via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`,
 `GIT_CONFIG_NOSYSTEM=1`) so it can still commit without the jail having to
@@ -292,11 +311,20 @@ re-open `~/.gitconfig`.
 
 **What it does NOT contain:**
 
-- **Network** — deliberately left open; the session must reach the model API. This
-  is fs-containment, **not** a no-exfiltration boundary.
+- **Network** — outbound IP is deliberately left open; the session must reach
+  the model API, directly or through your opt-in proxy. This is **not** a
+  no-exfiltration boundary. It includes `localhost`, so a local TCP service that
+  runs commands for any client would act for the session.
+- **Exec of system tools** — the session can run anything in `/bin`, `/usr/bin`
+  and the runtime trees, `open` and `launchctl` included. That is safe only
+  because the services those tools need to act outside the jail are denied; a
+  test pins that `open` and `launchctl submit` launch nothing.
 - **Reads outside `$HOME`** — the session can read anything outside your home
   that your user can read: system dirs, `/opt`, and the temp root, including
-  other trials' dirs. It cannot write them.
+  other trials' dirs. It cannot write them. These three broad allowances
+  (outbound IP, exec of whole system and runtime dirs, reads outside `$HOME`)
+  are recorded, with their upgrade path, in the `DEBT:` note on
+  `buildSeatbeltProfile` in `scripts/run-evals.mjs`.
 - **The session's own credential** — the child's env is allowlisted, so nothing
   else from your shell reaches it. But it must hold its one credential to reach
   the API, and no OS sandbox can hide an env var from the session's own

@@ -988,8 +988,8 @@ export function prepareTrialDirs(condition, lawsText, root = tmpdir()) {
 // chosen credential.
 //
 // DEBT: the session holds its one credential. It needs it to reach the API, no OS
-// sandbox can hide an env var from the session's own processes, and network stays
-// OPEN under the jail (fs-containment, not a no-exfiltration boundary), so a hostile
+// sandbox can hide an env var from the session's own processes, and outbound network
+// stays OPEN under the jail (it is not a no-exfiltration boundary), so a hostile
 // session could exfiltrate it. Ceiling: one revocable credential (a console key or a
 // `claude setup-token` token, env-only, nothing on disk) exposed only to sessions
 // running trusted prompts on a maintainer-run gate; not fit for untrusted input.
