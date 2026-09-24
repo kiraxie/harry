@@ -301,14 +301,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bin`, and the runner later spawned `git`, `which` and `claude` by name,
   unjailed. The config dir, work dir and fixtures' parent were also shared
   across a run and writable from the jail. Now:
-  - the profile denies every write except to the trial's own config dir,
-    fixture repo and temp dir (plus `/dev/null`), and still denies reads
-    under `$HOME`;
+  - writes are allowed only to the trial's own config dir, fixture repo
+    and temp dir (plus `/dev/null`), and reads under `$HOME` stay denied
+    (the profile is now deny-by-default; see the next entry);
   - `git`, `claude` and `sandbox-exec` are resolved to absolute paths before
     the first session and spawned by those paths from then on (`which` is no
     longer run);
   - every trial gets its own config, work, fixture and temp dirs, recorded on
     each result line as `trialDir`.
+- **A sandboxed session could have a system service start a program outside
+  the eval runner's jail.** The seatbelt profile started from
+  `(allow default)` and denied only file writes and reads under `$HOME`, so
+  IPC to system services stayed open. A jailed session could write an app
+  into its own temp dir and `open` it: LaunchServices then started it as
+  the operator, outside the jail (reproduced on macOS 27). The profile now
+  starts from `(deny default)` and allows back only fork and signals within
+  the jail; exec from `/bin`, `/usr/bin` and the resolved `node`, `claude`
+  and `git` install trees; reads outside `$HOME` plus the trial dirs and
+  runtime trees under it; writes to the trial's own dirs; one system
+  service by name (user lookup); and outbound IP plus the DNS resolver's
+  socket. LaunchServices, launchd job submission and every other launching
+  service are unreachable. A darwin test pins that a jailed `open` and
+  `launchctl submit` launch nothing. The allowlist was derived with the fake
+  `claude` shim, the real `claude --version` and a `node` HTTPS request; a
+  live sandboxed session has not been run against it yet.
 - **A child's output could write terminal escape sequences to the operator's
   terminal.** Every child the eval runner spawns now has its stdout and
   stderr piped, and what reaches the operator (error messages, result lines)
