@@ -306,15 +306,20 @@ Watch it while the run happens, or read it back afterwards:
 
 ```sh
 log stream --style compact --predicate 'sender == "Sandbox"'
-log show --last 10m --style compact --predicate 'sender == "Sandbox"'
+log show --start '2026-09-24 12:00:00' --style compact --predicate 'sender == "Sandbox"'
 ```
 
-Each line reads `Sandbox: <process>(<pid>) deny(1) <operation> <target>`, for
-example `Sandbox: pbpaste(123) deny(1) mach-lookup com.apple.pasteboard.1`. The
-target is the service name or path that was refused. Other apps' sandboxes log
-here too, so keep only the jailed processes (`node`, `git`, and `claude`, which
-the log names by its version, such as `2.1.281`). Those also log denials they
-run fine without; never add these: `mach-lookup` of `com.apple.logd`,
+(`--start` takes the time the run began; `--last 10m` also works.) Each line
+reads `Sandbox: <process>(<pid>) deny(1) <operation> <target>`, for example
+`Sandbox: pbpaste(123) deny(1) mach-lookup com.apple.pasteboard.1`. The target
+is the service name or path that was refused. Other apps' sandboxes log here
+too, so narrow by time, to the run's window, not by process name: every process
+the run starts is jailed, including each tool the session or its tests run, and
+the log names each one by the binary running when it was denied: `node`, `git`,
+`claude` by its version (such as `2.1.281`), `touch` when `env touch` ran it, and
+`bash` for `/bin/sh` (which runs bash on a default install). A filter on `node`,
+`git` and `claude` drops the one line that explains a failing tool. The jailed processes also log denials they run fine without;
+never add these: `mach-lookup` of `com.apple.logd`,
 `com.apple.diagnosticd`, `com.apple.system.notification_center`,
 `com.apple.system.opendirectoryd.membership` and `com.apple.bsd.dirhelper`,
 `file-read-data ~/.CFUserTextEncoding`, `file-write-data /dev/dtracehelper` and
