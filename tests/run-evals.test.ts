@@ -3242,7 +3242,9 @@ test(
             testCommand: none,
             ...(logGit ? { git: [JSON.stringify(none)] } : {}),
           },
-          `${mode}: no spawned child holds the terminal on fd 0, 1 or 2`,
+          // The trial's own error rides along: a jailed step that failed (so the probe
+          // never ran) shows up here as testCommand: null, and only the error says why.
+          `${mode}: no spawned child holds the terminal on fd 0, 1 or 2 (trial error: ${lines[0]?.error ?? "none"})`,
         );
         if (logGit) {
           const gitSpawns = ttyRecords(gitLog).length;
@@ -3388,7 +3390,13 @@ test(
       const deadline = Date.now() + 10_000;
       while (Date.now() < deadline && !readFileSafe(log).includes("bg-done")) sleepMs(50);
       const status = readFileSafe(log).trim().split("\n");
-      assert.ok(status.includes("bg-done"), "the writer ran to completion");
+      // A session that died before starting the writer, and a writer that died
+      // mid-loop, look the same from the log alone; the trial's error and the
+      // markers written so far tell them apart.
+      assert.ok(
+        status.includes("bg-done"),
+        `the writer ran to completion (markers: ${JSON.stringify(status)}, trial error: ${line.error ?? "none"})`,
+      );
       assert.ok(status.includes("bg-jailed"), "the setsid'd writer is still inside the jail");
       assert.ok(!status.includes("bg-free"), "the setsid'd writer never escaped");
       // Not vacuous: the re-planted gpg.program did run, just inside the jail. The
