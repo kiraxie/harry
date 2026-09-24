@@ -110,7 +110,7 @@ request on whatever the previous message was.
 ## What this does not license
 
 Plain is not padded. HARRY.md §6's "Talk like an engineer" bullet still holds in
-full: no announce-openers, no agreement theater, no manufactured hedges, and no
-re-narrating what tool output already shows — it goes back verbatim. A shorter true
+full: open with the outcome, no manufactured hedges, and no re-narrating what tool
+output already shows — it goes back verbatim. A shorter true
 sentence is usually the plain one — this file asks for fewer hard ideas per message,
 never more words per idea.

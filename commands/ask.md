@@ -14,10 +14,9 @@ Raw slash-command arguments:
 `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask` spawns
 `codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
 with the prompt on stdin. Read-only means the model may read files and run
-read-only commands under Codex's own read-only sandbox — not the no-filesystem,
-no-shell isolation an earlier version of `ask` had (a fixed preamble on every
-prompt tells the model not to explore the working directory or run commands
-unless the prompt asks about files in it). It never passes a model —
+read-only commands under Codex's own read-only sandbox; a fixed preamble on every
+prompt tells it not to explore the working directory or run commands unless the
+prompt asks about files in it. It never passes a model —
 `~/.codex/config.toml` decides which one runs; `--reasoning` overrides effort
 for that one call.
 

@@ -30,12 +30,10 @@ Google subscription via `agy`.
 prior-round context) must be in that one string. `opus` (Agent tool) and `gpt`
 (`ask`, via a shell variable / heredoc) accept multi-line prompts normally.
 
-**`agy` is slow and high-variance — plan for it.** Live measurement of
-`Gemini 3.1 Pro (High)` via `agy -p`: the same prompt returned in 11–25s on some
-runs and took **18+ minutes** on others, with no correlation to prompt length or
-formatting (an earlier theory that multi-line prompts hang was disproven — single-line
-prompts also ran 18 min). `--print-timeout` did NOT reliably cap the wait (a `3m`
-setting still ran 18 min). Practical consequences for the conductor:
+**`agy` is slow and high-variance — plan for it.** `Gemini 3.1 Pro (High)` via
+`agy -p` answers the same prompt in under half a minute on some runs and in 18+
+minutes on others, unrelated to prompt length or formatting, and `--print-timeout`
+does not reliably cap the wait. Consequences for the conductor:
 - Run the gemini call with `run_in_background: true` — a backgrounded Bash task
   is not subject to the 10-min foreground timeout, so an 18-min Gemini turn can
   still land (a foreground call would be killed at 10m, below Gemini's worst
@@ -48,8 +46,8 @@ setting still ran 18 min). Practical consequences for the conductor:
   **two-voice debate** (opus + gpt) and say so explicitly in the final report
   rather than blocking the whole debate on the slowest leg.
 - If predictable latency matters more than peak reasoning depth, `Gemini 3.1 Pro
-  (Low)` was consistently fast (~14s) in testing — but the fixed routing calls for
-  High, so only drop to Low if the user opts in.
+  (Low)` answers in seconds — but the fixed routing calls for High, so only drop
+  to Low if the user opts in.
 
 **`gpt`'s failure signal is simpler: gate on the exit code.** A failed `ask`
 call exits non-zero and prints exactly three lines to stdout: `# Ask Failed`, a

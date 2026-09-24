@@ -55,8 +55,7 @@ ask the user:
 
 1–2 files → run in the foreground. Everything else, and anything the size
 estimate leaves unclear, runs with the harness's background mode
-(`run_in_background: true`) — do not ask the user first, just background it and
-say so.
+(`run_in_background: true`) and say so.
 
 A run can take several minutes — a five-file branch has taken ~5.5 minutes, a
 small one 35–90s. The foreground path is the only one bound by the Bash tool's

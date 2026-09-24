@@ -7,18 +7,16 @@ description: "Use when starting any creative work — a new feature, component, 
 
 Turn an idea into an agreed design through collaborative dialogue, then write it into an item. This is a procedure governed by the Harry laws (HARRY.md); when they conflict, the laws win.
 
-<HARD-GATE>
-No code, no scaffolding, no implementation skill, no implementation action until you have presented a design AND the user has approved it. This governs every task that enters this skill — Standard and Major alike (Trivial never enters, per HARRY.md §3). "Too simple to design" is not an exit from this skill: it is a tier claim, and tier claims are settled by §3, not by feel.
-</HARD-GATE>
+**Gate.** Present a design and get the user's approval before any implementation — code, scaffolding, or the executing skill. Every task that enters this skill is Standard or Major (Trivial never enters, per HARRY.md §3), so the gate holds however simple the task looks; tier is settled by §3.
 
 ## Tier-Aware Entry (HARRY.md §3)
 
-Classify the task first, then take the matching path. Do NOT pop a mode-choice prompt.
+Classify the task first, then take the matching path.
 
 | Tier | Brainstorming |
 |------|---------------|
 | Trivial | **Skip** — go straight to the work. |
-| Standard | **Compressed path**: interview at compressed depth (below) → design (one approach proposal is enough) → close per `references/grilling.md`'s exit gate, unabridged → approve → write the item, always with `### Acceptance criteria`. The `## Why / What` prose sections come only when a real design decision was weighed (alternatives existed); with none weighed, `## Why / What` holds the AC list alone — no decision record. |
+| Standard | **Compressed path**: the Full Flow at compressed depth with one approach proposal — the exact sequence, and what the item holds, are spelled out in the paragraph after the Full Flow steps below. |
 | Major | **Full flow** below. |
 
 A red line hit (HARRY.md §2) auto-promotes to Major. **Tier sets the interview's
@@ -44,7 +42,7 @@ Complete these in order:
 6. **Write the item** (template below) → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What` including its `### Acceptance criteria`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
 7. **Item self-review** — fix inline (see below).
 8. **User reviews the item** — ask, wait, revise if needed.
-9. **Premise check, then transition** — before handing off, confirm the base is up to date (rebase/refresh from the base branch) and that the premises the design rests on still hold in that base. AC cannot catch a wrong premise: it is built on them. A premise that moved sends you back to step 4 with the user. Then invoke `executing`. It is the ONLY next skill — there is no plan stage.
+9. **Premise check, then transition** — before handing off, confirm the base is up to date (rebase/refresh from the base branch) and that the premises the design rests on still hold in that base. AC cannot catch a wrong premise: it is built on them. A premise that moved sends you back to step 4 with the user. Then invoke `executing`.
 
 The compressed Standard path runs steps 1 → (2 at compressed depth (above) ⇄ present (one approach, step 4)) → residue manifest + AC per `references/grilling.md`'s exit gate, unabridged → approve → step 6, which always writes the item: `### Acceptance criteria` always, the `## Why / What` prose sections **only when a real design decision was weighed** (alternatives existed); with no such decision, `## Why / What` holds the AC list alone. Then steps 7-9 as usual. The ⇄ is the reference's loop running on this path too, not a one-shot pass: a design that surfaces a gap or moves the destination sends you back into the interview, and the close comes only once the reference's three termination conditions hold. The manifest's deferred lines land the same way as the Full Flow's — create `## Follow-ups` on the item when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items.
 
@@ -55,7 +53,7 @@ The compressed Standard path runs steps 1 → (2 at compressed depth (above) ⇄
   discussion (the answer needs to be *run*, not argued), offer a minimal throwaway
   prototype: one command to run, no polish, state printed after every action. It
   lives on a throwaway branch — main keeps only the validated decision — and is
-  exploration under the HARD-GATE, never grown into the implementation.
+  exploration under the gate, never grown into the implementation.
 
 ## Item Template (write literally)
 

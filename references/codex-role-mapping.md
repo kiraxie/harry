@@ -17,5 +17,4 @@ with a 400 (*"The 'gpt-5.6-sol' model is not supported when using Codex with a
 ChatGPT account."*, probed 2026-08-08, codex-cli 0.144.4), so the analyst row
 names `gpt-5.6-luna`, which answers there. This table is advisory, not
 read by any harry command. `ask` and `/debate`'s gpt voice take their model from
-`~/.codex/config.toml`, not from this table; they no longer expose a `--model`
-override.
+`~/.codex/config.toml`, not from this table.

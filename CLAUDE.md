@@ -59,13 +59,11 @@ Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`
 `plugins[harry].version` in `.claude-plugin/marketplace.json` — `tests/version-sync.test.ts`
 fails if any one of them disagrees. Add the `CHANGELOG.md` entry, then rebuild `dist/`
 (`build.mjs` inlines `package.json`, so a version bump with no rebuild fails CI's drift
-gate). Finally `git tag vX.Y.Z` and push the tag — load-bearing, not optional ceremony, and
-it has lapsed before: `0.12.0`, `0.13.2`–`0.13.4`, `0.14.0` and `0.15.0` have `CHANGELOG.md`
-entries and no git ref, so there is no way to diff what those releases actually shipped.
-Deliberately not backfilled — reconstructing six tags from CHANGELOG commits cannot be
-verified, and a wrong tag is worse than a missing one. Audit gaps with
-`git tag --sort=v:refname`: plain `git tag` sorts lexically, filing `v0.10.0` ahead of
-`v0.2.0`, so a `tail` of it hides the newest tags and makes the gap look far older than it is.
+gate). Finally `git tag vX.Y.Z` and push the tag: without it there is no way to diff what a
+release shipped. Some older releases have a `CHANGELOG.md` entry and no tag; do not backfill
+them — a tag reconstructed from CHANGELOG commits cannot be verified, and a wrong tag is worse
+than a missing one. Audit gaps with `git tag --sort=v:refname`: plain `git tag` sorts
+lexically, filing `v0.10.0` ahead of `v0.2.0`, so a `tail` of it hides the newest tags.
 `/release <version>` (repo-local, `.claude/commands/release.md`) automates the
 bump/build/verify/commit steps above; re-run it after the merge to tag.
 
@@ -75,8 +73,8 @@ Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/comma
 (`review`, `ask`, `setup`). Bundled by `build.mjs`
 (esbuild, CJS, Node built-ins kept external) into the one committed file `dist/companion.cjs`.
 
-There is no in-process session driver any more: both `ask` and `review` spawn the `codex` CLI
-as a separate, ephemeral, read-only subprocess and read its output back. `ask` runs
+Both `ask` and `review` spawn the `codex` CLI as a separate, ephemeral, read-only
+subprocess and read its output back. `ask` runs
 `codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
 with the prompt on stdin. `review` spawns `codex exec review` (`sandbox_mode="read-only"`),
 with the review rubric and context built into its prompt, and writes findings to a file
@@ -124,9 +122,8 @@ invariants (alias models only, no edit or spawn tools; `analyst` keeps Bash and 
 no per-subagent model/effort mechanism: `codex --help` exposes no subagent dispatch, its
 plugin `agents/` are frontmatter-less persona/interface cards (no `model`/`effort`), and
 `codex debug prompt-input` shows harry contributing skills + AGENTS.md laws but **no
-agents**. (An earlier draft shipped `codex-agents/*.toml` with `model_reasoning_effort`,
-based on web docs that don't match 0.144.4 — removed as non-functional: it claimed working
-dispatch config and wasn't.) The role→model *bindings* now exist for Codex too, though —
+agents**. Web docs describing `codex-agents/*.toml` with `model_reasoning_effort` do not
+match the live CLI; do not add them. The role→model *bindings* exist for Codex, though —
 `references/codex-role-mapping.md` is an advisory table that `install-codex.mjs` inlines
 into `~/.codex/AGENTS.md` alongside HARRY.md, applied via session profile / `-m` plus
 reasoning-effort config rather than dispatch, since there is still no subagent to route to.
@@ -188,14 +185,12 @@ field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 
 - `debate` has no Codex skill (its "self" voice is Claude/opus by design).
-- `grill` is in this list as a *closed* gap — a marker, not a difference, so the
-  build-specific cadence it once had does not get re-added: both builds ask one
-  question per round, in both phases, per `references/grilling.md`. A single
-  question needs no harness-specific question UI, so there is nothing for Codex
-  to do differently — same technique file, same delivery, only the door differs
+- `grill` is listed to keep this parity list complete, not as a difference: both builds
+  ask one question per round, in both phases, per `references/grilling.md`. A single
+  question needs no harness-specific question UI, so only the door differs
   (`commands/grill.md` vs `codex-skills/grill/SKILL.md`).
-- `review` is read-only on both builds — there is no fix backend, dual-lane, or
-  full mode any more, and no in-runtime path to apply what it finds. On both
+- `review` is read-only on both builds — it has no fix backend and no in-runtime
+  path to apply what it finds. On both
   builds the review itself is held read-only by the spawned `codex exec review`
   process's own `sandbox_mode="read-only"` override. On Claude Code,
   `commands/review.md`'s `allowed-tools` only **pre-approves** the review
@@ -203,7 +198,7 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   `git status`/`git diff`, and `Read` — it does not block other tools, so the
   orchestrator side stays read-only by instruction. Every command line in that
   doc starts with that exact invocation so it matches the pattern (an unmatched
-  one only costs a permission prompt). The frontmatter no longer sets
+  one only costs a permission prompt). The frontmatter does not set
   `disable-model-invocation`, so both the `SlashCommand` and `Skill` tools — and
   `skills/executing/SKILL.md`'s review step (step 3) — can invoke it directly.
 - Codex `audit`'s RO round-boundaries are likewise instruction-only, not
