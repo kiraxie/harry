@@ -1220,8 +1220,8 @@ export function buildAgenticSandboxProfile({
 // another service (evals/README.md says how to read the denied name from the unified
 // log), add that one exact name after checking it cannot launch, drive or act for
 // the caller as a program (keychain, preferences and login-item services can), never
-// a prefix or a bare `(allow mach-lookup)`. A test pins this exact set, so the
-// addition is also a visible test edit.
+// a prefix or a bare `(allow mach-lookup)`. A test pins the whole generated
+// profile as fixed text, so the addition is also a visible test edit.
 const JAIL_MACH_SERVICES = [
   "com.apple.system.opendirectoryd.libinfo", // getpwuid/getgrgid: user and group lookup
 ];

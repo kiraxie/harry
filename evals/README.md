@@ -290,7 +290,8 @@ allows back only this list:
   `/opt/homebrew/bin`;
 - **system services:** one, by exact name: `com.apple.system.opendirectoryd.libinfo`,
   for user and group lookup. Nothing that can start or drive a program. A test
-  pins this exact set, so adding a name means editing that test too;
+  pins the whole generated profile as fixed text, so adding a name, or changing
+  any other rule, means editing that test too;
 - **network:** outbound IP to any host and port, and the DNS resolver's socket.
   No other unix socket, so a local daemon listening on one (a Docker socket, for
   example) is unreachable.
