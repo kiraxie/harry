@@ -110,7 +110,14 @@ const reply = failThisCall
 // materialized fixture repo) to simulate a session's tool use — branch/edit/commit
 // — so a test can exercise the artifact checks with no real claude.
 if (SETTINGS.script) {
-  execFileSync(process.execPath, [SETTINGS.script], { cwd: process.cwd(), stdio: "inherit" });
+  try {
+    execFileSync(process.execPath, [SETTINGS.script], { cwd: process.cwd(), stdio: "inherit" });
+  } catch (err) {
+    // The script's own error already went to stderr (inherited); exit with its
+    // status rather than print this shim's stack after it, which would push the
+    // script's error out of the runner's stderr tail.
+    process.exit(err.status ?? 1);
+  }
 }
 
 if (SETTINGS.stderr) process.stderr.write(SETTINGS.stderr);

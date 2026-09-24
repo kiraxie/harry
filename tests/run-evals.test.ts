@@ -3398,13 +3398,20 @@ test(
         session,
         [
           'import { execFileSync, spawn } from "node:child_process";',
-          "const g = (args, input) => execFileSync('git', args, { encoding: 'utf8', input }).trim();",
+          // A failing step names itself on one stderr line: the runner keeps only
+          // the tail of the session's stderr.
+          "const g = (args, input) => {",
+          "  try { return execFileSync('git', args, { encoding: 'utf8', input, stdio: 'pipe' }).trim(); }",
+          "  catch (e) { console.error('session: git ' + args[0] + ' failed (' + (e.code ?? e.status) + '): ' + String(e.stderr ?? e.message).trim()); process.exit(1); }",
+          "};",
           "const tree = g(['rev-parse', 'HEAD^{tree}']);",
           "const plain = g(['cat-file', 'commit', g(['commit-tree', tree, '-p', 'HEAD', '-m', 'signed'])]);",
           "const sig = 'gpgsig -----BEGIN PGP SIGNATURE-----\\n \\n iQ==\\n -----END PGP SIGNATURE-----\\n';",
           "const signed = plain.replace(/\\n\\n/, '\\n' + sig + '\\n') + '\\n';",
           "g(['update-ref', 'refs/heads/signed', g(['hash-object', '-t', 'commit', '-w', '--stdin'], signed)]);",
-          `spawn(process.execPath, [${JSON.stringify(writer)}], { detached: true, stdio: "ignore" }).unref();`,
+          `spawn(process.execPath, [${JSON.stringify(writer)}], { detached: true, stdio: "ignore" })`,
+          '  .on("error", (e) => { console.error("session: writer spawn failed (" + e.code + ")"); process.exit(1); })',
+          "  .unref();",
           // End the session only once the writer is running, so it is already
           // re-planting when the runner's post-session git calls start.
           'import { existsSync, readFileSync } from "node:fs";',
