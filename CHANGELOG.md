@@ -350,6 +350,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model-written test command hold the terminal on none of them, nor do the
   runner's own git calls wherever `PATH` can shadow git (not when git sits
   next to `node`).
+- **The eval runner's jail blocked Homebrew git's own helpers.** The jail
+  lets a process run git's install tree, found from `git --exec-path`.
+  Homebrew's git reports that path through its `opt` symlink
+  (`/opt/homebrew/opt/git/...`). Seatbelt matches the real path behind the
+  symlink (`Cellar/git/<version>/...`), so those rules never matched and git's
+  non-builtin helpers could not run under the jail. The exec path is now
+  resolved to its real path first. This lets the jail run exactly the git
+  install it was meant to allow, nothing more. A test pins this with a
+  symlinked git prefix, both in the generated profile and under the real
+  `sandbox-exec`.
 - **A child's output could write terminal escape sequences to the operator's
   terminal.** Every child the eval runner spawns now has its stdout and
   stderr piped, and what reaches the operator (error messages, result lines)

@@ -1375,14 +1375,18 @@ function resolveRuntimeTrees(bin, env = process.env, gitBin = null) {
   // git: the resolved binary, plus the real git and its helpers behind it. The
   // pre-resolved gitBin reports its own exec path (<prefix>/libexec/git-core); the
   // real binary sits in <prefix>/bin, which is what /usr/bin/git (Apple's xcrun
-  // shim) execs.
+  // shim) execs. The exec path is canonicalized first, and <prefix>/bin derived
+  // from the canonical one: Homebrew's git reports it through the `opt` symlink
+  // (/opt/homebrew/opt/git/libexec/git-core -> Cellar/git/<v>/...), and seatbelt
+  // matches the canonical path, so a rule spelled through the symlink never matches.
   if (gitBin) {
     addDirs(gitBin);
     try {
       const execPath = git(["--exec-path"], tmpdir(), env, gitBin);
       if (isAbsolute(execPath)) {
-        trees.add(execPath);
-        trees.add(resolve(execPath, "..", "..", "bin"));
+        const real = realpathSync(execPath);
+        trees.add(real);
+        trees.add(resolve(real, "..", "..", "bin"));
       }
     } catch {
       /* no exec path: git's helpers stay unexecutable; the jailed step fails, closed */

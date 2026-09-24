@@ -2632,6 +2632,65 @@ test("buildAgenticSandboxProfile: a symlinked $HOME is canonicalized (I-1: jails
   }
 });
 
+test("buildAgenticSandboxProfile: git's exec path is canonicalized, so a symlinked prefix still lets git's helpers run", () => {
+  // Homebrew's git reports its exec path through the `opt` symlink
+  // (/opt/homebrew/opt/git/libexec/git-core -> Cellar/git/<v>/...). Seatbelt matches
+  // the kernel-canonical path, so an exec-path rule spelled through that symlink never
+  // matches: git's helpers, and its own bin reached through a PATH launcher that is
+  // not git itself, stay unexecutable. Same shape here: a launcher that is not the
+  // real git reports an exec path through a symlinked prefix.
+  const root = realpathSync(tmpDir("harry-sb-gitprefix-"));
+  try {
+    const keg = path.join(root, "Cellar", "git", "9.9.9");
+    const libexec = path.join(keg, "libexec", "git-core");
+    const kegBin = path.join(keg, "bin");
+    const launcherDir = path.join(root, "bin");
+    for (const d of [libexec, kegBin, launcherDir, path.join(root, "opt")]) {
+      mkdirSync(d, { recursive: true });
+    }
+    const optGit = path.join(root, "opt", "git");
+    symlinkSync(keg, optGit);
+    const probe = '#!/bin/sh\necho "$0 ran"\n';
+    writeFileSync(path.join(libexec, "git-probe"), probe, { mode: 0o755 });
+    writeFileSync(path.join(kegBin, "git"), probe, { mode: 0o755 });
+    const launcher = path.join(launcherDir, "git");
+    writeFileSync(
+      launcher,
+      `#!/bin/sh\necho ${JSON.stringify(path.join(optGit, "libexec", "git-core"))}\n`,
+      { mode: 0o755 },
+    );
+    const profile = buildAgenticSandboxProfile({
+      home: os.homedir(),
+      bin: process.execPath,
+      gitBin: launcher,
+    });
+    const exec = profile.slice(profile.indexOf("(allow process-exec"));
+    const execRules = exec.slice(0, exec.indexOf("\n)"));
+    for (const dir of [libexec, kegBin]) {
+      assert.ok(execRules.includes(`(subpath "${dir}")`), `exec allows the canonical ${dir}`);
+    }
+    assert.ok(
+      !profile.includes(`(subpath "${optGit}`),
+      "no rule is spelled through the symlinked prefix (it would silently fail to match)",
+    );
+
+    if (process.platform === "darwin") {
+      // Reached through the symlinked prefix, both run under the real jail.
+      for (const target of [
+        path.join(optGit, "libexec", "git-core", "git-probe"),
+        path.join(optGit, "bin", "git"),
+      ]) {
+        const r = spawnSync("/usr/bin/sandbox-exec", ["-p", profile, target], {
+          encoding: "utf8",
+        });
+        assert.equal(r.status, 0, `jailed exec of ${target}: ${r.stderr}`);
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test(
   "buildAgenticSandboxProfile under REAL sandbox-exec: a jailed process cannot read the terminal it runs in",
   DARWIN_ONLY,
