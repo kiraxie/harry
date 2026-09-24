@@ -47,16 +47,19 @@ test("finishing squash-merges locally and on PRs with a summarising message", ()
 
 test("finishing proves the branch landed and the worktree is clean before forcing cleanup", () => {
   const skill = read("skills/finishing/SKILL.md");
+  // The tree-equality proof lives in executing's 5.5; the landing check runs it.
+  const proof = read("skills/executing/SKILL.md");
   assert.ok(
-    skill.includes("git merge-tree --write-tree <base> <branch>"),
+    skill.includes("executing's 5.5 deletion proof") &&
+      proof.includes("git merge-tree --write-tree <into> <from>"),
     "the landing check is gone",
   );
   assert.ok(
-    !/merge-tree[^`]*\| *head/.test(skill),
+    !/merge-tree[^`]*\| *head/.test(proof),
     "the landing check compares only the first line, which passes modify/delete and binary conflicts",
   );
   assert.ok(
-    skill.includes("allowed only when f.1 passed AND f.2 found the worktree clean"),
+    skill.includes("allowed only when f.1 passed AND f.3 found the worktree clean"),
     "the discard flag lost its clean-worktree guard",
   );
   assert.ok(

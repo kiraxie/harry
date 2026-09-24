@@ -58,7 +58,17 @@ signature or contract another unit has not written yet is not parallel with it.
 Dispatch it after that unit lands, and read the interface from the landed code.
 
 `## Progress` is append-only and cites AC IDs and commit ranges. Approved AC
-text is never edited to record progress — progress goes here instead.
+text is never edited to record progress — progress goes here instead. The
+lines that rules read back: `fix round <R>/<cap>` (session mode resumes
+mid-loop from it; in subagent mode, a task the user sends back to step 4 takes
+the round one past it, `fix round 1/4` when it has none),
+`integration: conflicts resolved in <merge7>` (reviewed again at the final
+review), `complete (commits …)` (the AC is done), and adjudication rulings.
+A unit in subagent mode (the executing skill) keeps three stores: git holds
+code positions — task branches, their worktrees and `refs/harry/…` base refs;
+`## Progress` holds durable outcomes; and each task's report log under
+`.local/tmp/<branch>/` is an evidence record, read by people and shown when a
+resume asks, deleted with the unit's tmp dir at finishing.
 
 **Legacy items.** An item written under the older shape keeps its `## Plan` and
 is read as-is; nothing migrates it, and no acceptance criteria are invented for it.

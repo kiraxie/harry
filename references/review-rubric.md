@@ -13,7 +13,7 @@ review, the item's `### Acceptance criteria` verbatim for a whole-branch pass
 or for session mode's single review — plus the diff (as a file) and the
 item's Constraints verbatim when it has them; a per-task review (subagent mode
 step 3) also hands the task's report — session mode has none to hand. It
-reviews **read-only** — no working-tree, index, or HEAD mutation.
+reviews **read-only** — no working-tree, index, or HEAD mutation; the one write a review makes is its own report file, at the path it was handed, when it was handed one.
 
 ## Four dimensions
 

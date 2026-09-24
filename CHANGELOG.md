@@ -194,7 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is named in the completion report and the quick-reference table; moving
   files into the main checkout checks for name collisions first; ignored files
   are listed to the user before removal, since `-uall` does not show them;
-  step f.3 names `f.1`/`f.2` instead of an ambiguous "step 2"; and Option 2's
+  step f.4 names `f.1`/`f.3` instead of an ambiguous "step 2"; and Option 2's
   In-flight annotation uses the main checkout's `.local/` from inside the
   worktree. A commit answering PR feedback re-runs step 2's shape gate before
   it is pushed, so a shape changed during PR iteration is reviewed too.
@@ -237,18 +237,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/tier-gates.md` say the same. A parallel task keeps its worktree
   through its review and fix rounds, then integrates there before it is
   marked complete: the unit branch is merged into it and the suite runs in
-  the worktree; a red suite goes back into the task's fix loop (inside its
-  write set, and to the user rather than adjudicated at the cap), and only a
-  green tree fast-forwards the unit branch, after which `executing` removes
-  the worktree and branch. Conflict resolutions made at integration are
-  recorded and reviewed by name at the final review. While any parallel task
-  is in flight, every task gets its own worktree, so nothing writes in the
-  unit branch's checkout when it fast-forwards. So `finishing` only
-  ever handles the unit's own checkout: a linked worktree or, for a branch in
-  place, none.
-  Discard checks the main checkout is still on the unit's branch before
-  touching it, and has the user name any parallel worktree left
-  mid-execution rather than guessing.
+  the worktree. Conflicts and a red suite go back into the task's fix loop
+  (the fixer, never the session, resolves conflicts; it stays inside the
+  task's write set; either one still open at the cap goes to the user
+  rather than being adjudicated), and conflict resolutions are reviewed
+  again by name at the final review. Only a green tree fast-forwards the
+  unit branch, and only while the unit's checkout is on that branch. Git,
+  not `## Progress`, is the record of task worktrees: each task's branch and
+  worktree are named from the unit branch and the task's AC ids
+  (`task/<unit branch>/<task id>`), and its branch point is kept as a
+  `refs/harry/<unit branch>/<task id>/base` ref. The worktree lives under
+  the git directory (`harry-worktrees/<unit branch>/<task id>`), outside
+  every working tree, so test runners and other tools that scan directories
+  never pick up a task's copy. Branch and base ref are created together in
+  one transaction before the worktree is cut, only if neither exists, and
+  deleted together too, so a lone base ref can only belong to a task that
+  ran on the unit branch; `executing` never deletes a base ref before its
+  task's complete line, so a re-run or resume reuses it. The task merges the
+  unit branch in with `--no-ff`, and its own work is counted without those
+  merges, so a task with no commits of its own lands nothing and never takes
+  other tasks' work as its own. The complete line (base ref → the head the
+  unit branch landed at) is written before `executing` removes the worktree,
+  branch and base ref, a removal that is safe to re-run. Each task's brief and
+  report are named by its task id, so git's record finds them, and its report
+  file is an append-only log — the session logs each dispatch and review, the
+  implementer its result, and each review attempt writes its own numbered
+  report file. The log is an evidence record, not state: people read it and a
+  resume shows its last entries, but nothing routes on it. Whether a task
+  branch is safe to delete is one check across both skills — `executing`'s
+  deletion proof, which compares trees, not commits — and `finishing`'s
+  landing check runs it. An implementer never merges, rebases, resets or pulls
+  the unit branch into its own task branch; integration does that. A session
+  that resumes the unit — a new one, or the same one after compaction —
+  continues a task on its own in one case only, read from git and
+  `## Progress`: complete, with its branch gone or safe to delete → remove it,
+  unless its worktree has uncommitted files or a merge in progress. Anything
+  else goes to the user — no complete line, even on a task already
+  fast-forwarded, or a complete task whose branch is not safe to delete —
+  since git cannot show whether an agent is still working on it or
+  whether its work was reviewed, and a check that cannot run counts as not
+  passing; a resume never re-dispatches a task on its own, repairs it or
+  writes an agent's entry for it. A scoped re-review after a resume starts at
+  the base ref unless the user names a head. While any parallel task is in
+  flight, every task gets its own worktree, so nothing writes in the unit
+  branch's checkout when it fast-forwards. On merge, PR or keep, `finishing`
+  only ever handles the unit's own checkout: a linked worktree or, for a
+  branch in place, none. Discard checks the main checkout is still on the
+  unit's branch before touching it, lists the unit's leftover task worktrees
+  and branches by their names for the user to confirm, and deletes the
+  confirmed tasks' branches and `refs/harry/` refs; if any entry is left
+  unconfirmed it keeps the unit's branch as well. Only `executing` writes a
+  complete line, and only its resume table classifies a leftover task: before
+  anything merges, `finishing` runs that table and removes only the tasks it
+  marks for removal, handing every other one back to `executing` or to the
+  user. Cleanup runs the table again after its landing check and before it
+  removes the unit's worktree, since a PR merged in a later session skips that
+  first check, and removes a task by running `executing`'s own removal step,
+  whose clean check the unit's worktree shares; PR follow-up commits re-run
+  the check before they are pushed. `references/doc-types.md` names the three
+  stores a unit keeps: git for code positions, `## Progress` for durable
+  outcomes, and the per-task log as an evidence record deleted with the unit's
+  tmp dir.
 
 ### Fixed
 
