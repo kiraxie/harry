@@ -1099,9 +1099,10 @@ function runTextCase(bin, model, prompt, configDir, workDir, env, tmpDir) {
 // would still execute model-authored files. This narrows the surface; the
 // allowlist alone does NOT contain a misbehaving session: `Bash(node:*)` is
 // arbitrary code execution, including network. Exec containment is the opt-in
-// EVALS_SANDBOX=1 seatbelt jail (see buildSeatbeltProfile / sandboxContext),
-// which denies the session every write outside its own trial's dirs and every
-// read under the operator's $HOME.
+// EVALS_SANDBOX=1 seatbelt jail (see buildSeatbeltProfile / sandboxContext): a
+// deny-by-default profile that lets the session write only its own trial's dirs,
+// read nothing under the operator's $HOME, and reach no system service that
+// could start a program outside the jail.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -1138,7 +1139,8 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, tmpDir, 
     return invokeClaude(bin, args, fixtureDir, configDir, env, tmpDir);
   }
   // Opt-in EVALS_SANDBOX: the child runs inside the trial's seatbelt jail (built in
-  // runEvals by trialJail): writes only to its own trial's dirs, no reads under $HOME.
+  // runEvals by trialJail): deny-by-default, writes only to its own trial's dirs, no
+  // reads under $HOME, no system service that could launch a program outside it.
   const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, bin, args);
   return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, env, tmpDir);
 }
@@ -1147,16 +1149,17 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, tmpDir, 
 // it (see sandboxContext for the refusal path). The only writable paths are this
 // trial's own config dir, fixture and temp dir (canonicalized with realpath) — not
 // the fixture's parent, not the shared temp root, nothing another trial or an
-// unjailed step reads. The runtime read trees are resolved inside
-// buildAgenticSandboxProfile; this script itself is readable (never writable) so the
-// post-session child can load it from under $HOME.
-function trialJail(sandbox, { configDir, fixtureDir, tmpDir, bin, env }) {
+// unjailed step reads. The runtime trees (readable and executable) are resolved
+// inside buildAgenticSandboxProfile; this script itself is readable (never writable)
+// so the post-session child can load it from under $HOME.
+function trialJail(sandbox, { configDir, fixtureDir, tmpDir, bin, gitBin, env }) {
   if (!sandbox) return null;
   const profile = buildAgenticSandboxProfile({
     home: homedir(),
     allowWrite: [configDir, fixtureDir, tmpDir],
     allowRead: [realpathSync(fileURLToPath(import.meta.url))],
     bin,
+    gitBin,
     env,
   });
   return { sandboxExec: sandbox.sandboxExec, profile, tmpDir };
@@ -1177,13 +1180,14 @@ function trialJail(sandbox, { configDir, fixtureDir, tmpDir, bin, env }) {
 //     resolved is dropped, safe-fail: it just stays unwritable), so they match real
 //     kernel paths (/var → /private/var). Deduped by the Set in buildSeatbeltProfile
 //     after normalization.
-// Read trees come from resolveRuntimeTrees, which already includes canonical
-// (dirname-of-realpath) forms.
+// The runtime trees come from resolveRuntimeTrees, which already includes canonical
+// (dirname-of-realpath) forms; they are both readable and executable.
 export function buildAgenticSandboxProfile({
   home,
   allowWrite = [],
   allowRead = [],
   bin,
+  gitBin,
   env = process.env,
 }) {
   const home_ = realpathSync(home); // HARD: refuse (throw) rather than un-jail silently.
@@ -1195,29 +1199,62 @@ export function buildAgenticSandboxProfile({
     }
   };
   const writes = allowWrite.map(canonicalizeSafe).filter(Boolean);
+  const trees = resolveRuntimeTrees(bin, env, gitBin);
   return buildSeatbeltProfile({
     home: home_,
     allowWrite: writes,
-    allowRead: [...resolveRuntimeTrees(bin, env), ...allowRead],
+    allowRead: [...trees, ...allowRead],
+    allowExec: trees,
   });
 }
 
+// The system services (mach-lookup global names) a jailed process may reach, by
+// exact name. Every other service is denied by `(deny default)`, and that is what
+// keeps the jail closed: LaunchServices (`open`), launchd job submission
+// (`launchctl`), Apple Events (`osascript`) and every other broker that could start
+// or drive a program OUTSIDE the jail, as the operator, are unreachable. Derived
+// empirically: the jailed post-session step (git, node --test), `claude --version`
+// and an HTTPS fetch all run with none; user lookup is the one thing that fails
+// without it (node's os.userInfo() throws), and it answers directory queries only.
+// A live `claude` session was not run to derive this list (API spend); if one needs
+// another service, add that one exact name after checking it cannot launch or drive
+// a program, never a prefix or a bare `(allow mach-lookup)`.
+const JAIL_MACH_SERVICES = [
+  "com.apple.system.opendirectoryd.libinfo", // getpwuid/getgrgid: user and group lookup
+];
+
 // Generate a seatbelt (sandbox_init) profile as a string. Pure and unit-testable:
-// no IO, deterministic given its inputs. The policy:
-//   - WRITES are an allowlist: every file write is denied except to `allowWrite`
-//     (the trial's own config dir, fixture and temp dir) and /dev/null. So a jailed
-//     session cannot touch anything outside its trial — not a user-writable PATH
-//     dir such as /opt/homebrew/bin, not another trial's dirs, not the runner's.
-//   - READS are denied under the operator's $HOME (ssh keys, credentials,
-//     documents), except `allowWrite` and the `allowRead` runtime trees. Reads
-//     elsewhere (system dirs, /opt, the temp root) stay allowed.
-//   - Everything else (process exec, network, ...) is allowed. Network is
-//     intentionally NOT restricted — the session must reach the model API, and the
-//     env-held credential is visible by design (see the DEBT note on buildChildEnv).
+// no IO, deterministic given its inputs. The policy is deny-by-default: the first
+// rule is `(deny default)`, and only the following are allowed back.
+//   - PROCESSES: fork; exec of `allowExec` (the node, claude and git install trees)
+//     and the system shells and tools in /bin and /usr/bin (sh, env, the xcrun git
+//     shim); signals only to processes in the same jail; sysctl reads.
+//   - READS everywhere EXCEPT under the operator's $HOME (ssh keys, credentials,
+//     documents); under $HOME only `allowWrite` and the `allowRead` runtime trees.
+//   - WRITES only to `allowWrite` (the trial's own config dir, fixture and temp dir)
+//     and /dev/null. Not a user-writable PATH dir such as /opt/homebrew/bin, not
+//     another trial's dirs, not the runner's.
+//   - SERVICES: only JAIL_MACH_SERVICES, by exact name.
+//   - NETWORK: outbound IP (the session must reach the model API, directly or via
+//     the operator's opt-in proxy) and the DNS resolver's socket. No other unix
+//     socket, so no local daemon reachable that way (a Docker socket, say).
 //
-// SBPL is last-match-wins: the broad denies come first, then the narrow `(allow ...)`
-// exceptions override them for their paths.
-export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [] }) {
+// DEBT: three allowances stay broad. (1) Reads outside $HOME: the session can read
+// anything there the operator's user can, other trials' dirs included; (2) exec of
+// everything in /bin, /usr/bin and the runtime trees' whole dirs (`open`,
+// `launchctl` and `osascript` included), which is safe only because the services
+// those tools would need to act outside the jail are denied; (3) outbound IP to any host
+// and port, localhost included, so a local TCP service that runs commands on
+// request would act for the session. Ceiling: fine for a maintainer-run gate on
+// trusted prompts, where network was already open by design. Upgrade path: a read
+// allowlist (the runtime trees, system libraries, the trial dirs) in place of
+// (1), exec of exactly the resolved binaries in place of (2), and a forwarder that
+// gives the session one loopback port to the API in place of (3) (the same one the
+// credential DEBT on buildChildEnv names).
+//
+// SBPL is last-match-wins: the broad rules come first, then the narrow ones
+// override them for their paths.
+export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [], allowExec = [] }) {
   // Escape backslashes and quotes so a path with either can't break out of the
   // SBPL string literal (macOS paths rarely contain them, but never trust input).
   const esc = (p) => p.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -1228,12 +1265,23 @@ export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [] }) 
   const lines = [
     "(version 1)",
     ";; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).",
-    ";; Deny every write but the trial's own dirs, deny reads under the operator's",
-    ";; $HOME, allow the rest. Network stays allowed by design.",
-    "(allow default)",
-    "(deny file-write*)",
+    ";; Deny everything, then allow back only what node, claude and git need:",
+    ";; no system service that could start a program outside this jail.",
+    "(deny default)",
+    "(allow process-fork)",
+    "(allow signal (target same-sandbox))",
+    "(allow sysctl-read)",
+    "(allow file-read*)",
     `(deny file-read* (subpath "${esc(home)}"))`,
-    '(allow file-write* (literal "/dev/null"))',
+    '(allow file-read* file-write* (literal "/dev/null"))',
+    "(allow mach-lookup",
+    ...JAIL_MACH_SERVICES.map((name) => `  (global-name "${esc(name)}")`),
+    ")",
+    '(allow network-outbound (remote ip "*:*"))',
+    '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',
+    "(allow process-exec",
+    ...subpaths(["/bin", "/usr/bin", ...allowExec]),
+    ")",
   ];
   const writes = subpaths(allowWrite);
   if (writes.length) {
@@ -1263,14 +1311,14 @@ export function wrapWithSandbox(sandboxExec, profile, bin, args) {
   return { bin: sandboxExec, args: ["-p", profile, bin, ...args] };
 }
 
-// Resolve the claude + node runtime install trees that must stay readable under the
-// $HOME jail. For each: take the resolved launcher path, follow symlinks
-// (realpath), and allow BOTH the launcher's dir and the resolved target's dir — a
-// launcher symlink and its real payload can live in different trees, and the kernel
-// reads both to exec. Trees outside $HOME (e.g. Homebrew node) are harmless no-ops.
-// Best-effort: a path that can't be resolved is simply skipped (the jail stays
-// closed; a genuinely-needed missing tree surfaces as a session failure, not a leak).
-function resolveRuntimeTrees(bin, env = process.env) {
+// Resolve the claude, node and git install trees the jail must let a process read
+// (under $HOME) and exec (everywhere). For each: take the resolved launcher path,
+// follow symlinks (realpath), and allow BOTH the launcher's dir and the resolved
+// target's dir — a launcher symlink and its real payload can live in different
+// trees, and the kernel reads both to exec. Best-effort: a path that can't be
+// resolved is simply skipped (the jail stays closed; a genuinely-needed missing
+// tree surfaces as a session failure, not a leak).
+function resolveRuntimeTrees(bin, env = process.env, gitBin = null) {
   const trees = new Set();
   const addDirs = (p) => {
     if (!p) return;
@@ -1290,6 +1338,22 @@ function resolveRuntimeTrees(bin, env = process.env) {
   // claude: runEvals hands in an absolute path; a bare name (a direct caller) is
   // looked up in-process, never by spawning `which`.
   addDirs(bin ? findOnPath(bin, env) : null);
+  // git: the resolved binary, plus the real git and its helpers behind it. The
+  // pre-resolved gitBin reports its own exec path (<prefix>/libexec/git-core); the
+  // real binary sits in <prefix>/bin, which is what /usr/bin/git (Apple's xcrun
+  // shim) execs.
+  if (gitBin) {
+    addDirs(gitBin);
+    try {
+      const execPath = git(["--exec-path"], tmpdir(), env, gitBin);
+      if (isAbsolute(execPath)) {
+        trees.add(execPath);
+        trees.add(resolve(execPath, "..", "..", "bin"));
+      }
+    } catch {
+      /* no exec path: git's helpers stay unexecutable; the jailed step fails, closed */
+    }
+  }
   return [...trees];
 }
 
@@ -1460,6 +1524,7 @@ export function runEvals(opts, env = process.env) {
             fixtureDir: fx.dir,
             tmpDir: dirs.tmpDir,
             bin: claudeBin,
+            gitBin,
             env,
           });
           line.response = runAgenticCase(

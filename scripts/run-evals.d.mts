@@ -190,12 +190,14 @@ export function buildSeatbeltProfile(opts: {
   home: string;
   allowWrite?: string[];
   allowRead?: string[];
+  allowExec?: string[];
 }): string;
 export function buildAgenticSandboxProfile(opts: {
   home: string;
   allowWrite?: string[];
   allowRead?: string[];
   bin: string;
+  gitBin?: string;
   env?: Record<string, string | undefined>;
 }): string;
 export function wrapWithSandbox(

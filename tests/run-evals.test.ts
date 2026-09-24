@@ -2395,7 +2395,7 @@ const AGENTIC_TOOLS =
   "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*)," +
   "Bash(git branch:*),Bash(git checkout:*),Bash(git switch:*),Bash(node:*)";
 
-test("buildSeatbeltProfile: denies every write, denies reads under $HOME, then allows the trial's own dirs", () => {
+test("buildSeatbeltProfile: denies everything, denies reads under $HOME, then allows the trial's own dirs", () => {
   const profile = buildSeatbeltProfile({
     home: "/Users/op",
     allowWrite: [
@@ -2404,14 +2404,15 @@ test("buildSeatbeltProfile: denies every write, denies reads under $HOME, then a
       "/var/folders/t/trial/fx",
     ],
     allowRead: ["/Users/op/.local/share/claude", "/opt/homebrew/bin"],
+    allowExec: ["/Users/op/.local/share/claude", "/opt/homebrew/bin"],
   });
   assert.match(profile, /^\(version 1\)/, "a v1 seatbelt profile");
-  // SBPL is last-match-wins: the broad denies come first, the narrow allows after.
+  // SBPL is last-match-wins: the broad rules come first, the narrow allows after.
   const order = [
-    "(allow default)",
-    "(deny file-write*)",
+    "(deny default)",
+    "(allow file-read*)",
     '(deny file-read* (subpath "/Users/op"))',
-    "(allow file-read* file-write*",
+    "(allow file-read* file-write*\n",
     "(allow file-read*\n",
   ].map((needle) => profile.indexOf(needle));
   assert.ok(
@@ -2423,23 +2424,59 @@ test("buildSeatbeltProfile: denies every write, denies reads under $HOME, then a
     order,
     "in last-match-wins order",
   );
+  const pathsOf = (pattern: RegExp) =>
+    profile
+      .split("\n(")
+      .filter((rule) => pattern.test(rule))
+      .flatMap((rule) =>
+        Array.from(rule.matchAll(/\((?:subpath|literal) "([^"]+)"\)/g), (m) => m[1]),
+      );
   // The ONLY paths that may be written: the trial's own dirs (deduped) and /dev/null.
-  const writable = profile
-    .split("\n(")
-    .filter((rule) => /^allow file-(read\* file-)?write\*/.test(rule))
-    .flatMap((rule) =>
-      Array.from(rule.matchAll(/\((?:subpath|literal) "([^"]+)"\)/g), (m) => m[1]),
-    );
-  assert.deepEqual(writable.sort(), [
+  assert.deepEqual(pathsOf(/^allow file-(read\* file-)?write\*/).sort(), [
     "/dev/null",
     "/var/folders/t/trial/config",
     "/var/folders/t/trial/fx",
+  ]);
+  // The ONLY paths a jailed process may exec from: the system shells and tools, and
+  // the runtime trees handed in. Never a trial dir.
+  assert.deepEqual(pathsOf(/^allow process-exec/).sort(), [
+    "/Users/op/.local/share/claude",
+    "/bin",
+    "/opt/homebrew/bin",
+    "/usr/bin",
   ]);
   assert.match(
     profile,
     /\(subpath "\/Users\/op\/.local\/share\/claude"\)/,
     "runtime tree readable",
   );
+});
+
+test("buildSeatbeltProfile: starts from (deny default) and never allows a service broadly", () => {
+  const profile = buildSeatbeltProfile({
+    home: "/Users/op",
+    allowWrite: ["/var/folders/t/trial/fx"],
+    allowRead: ["/opt/homebrew/bin"],
+  });
+  const rules = profile
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith(";;"));
+  assert.equal(rules[0], "(version 1)");
+  assert.equal(rules[1], "(deny default)", "the first rule denies everything");
+  assert.ok(!profile.includes("(allow default)"), "nothing re-opens the default");
+  // Every service lookup is by exact name: no bare `(allow mach-lookup)`, no prefix
+  // or regex match, and never LaunchServices or launchd's job services.
+  assert.ok(!/\(allow mach-lookup\s*\)/.test(profile), "no bare mach-lookup allow");
+  assert.ok(!/global-name-(prefix|regex)/.test(profile), "no wildcard service name");
+  const services = Array.from(profile.matchAll(/\(global-name "([^"]+)"\)/g), (m) => m[1]);
+  assert.ok(services.length > 0, "the services the binaries need are listed by name");
+  for (const name of services) {
+    assert.ok(
+      !/launchservices|coreservices|\.lsd\.|launchd|xpc\.smd|appleevents|pasteboard/i.test(name),
+      `${name} is a service that can start or drive programs outside the jail`,
+    );
+  }
 });
 
 test("buildSeatbeltProfile: escapes quotes/backslashes so a path can't break the literal", () => {
@@ -2979,6 +3016,102 @@ test(
     } finally {
       rmSync(binDir, { recursive: true, force: true });
       rmSync(fxRoot, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "runEvals --agentic under EVALS_SANDBOX=1: a session cannot launch a program outside the jail through a system service",
+  DARWIN_ONLY,
+  () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const fxRoot = tmpDir("harry-evals-fxroot-");
+    // The markers land here: outside every trial dir, so the jail cannot write it.
+    // Only a program started OUTSIDE the jail, as the operator, can.
+    const outside = realpathSync(tmpDir("harry-evals-outside-"));
+    const tag = `${process.pid}-${Date.now()}`;
+    const label = `dev.harry.evals.escape-probe.${tag}`;
+    const logName = "escape-attempts.log";
+    const appName = `HarryEscapeProbe-${tag}.app`;
+    let trialDir = "";
+    try {
+      // The session builds an app bundle in its own trial TMPDIR (writable), then
+      // asks LaunchServices (`open`) and launchd (`launchctl submit`) to run it.
+      // Either service would start the program itself, unjailed, if the profile
+      // let the session reach it. Every attempt is bounded, so a hang fails the
+      // assertion rather than the suite.
+      const session = path.join(binDir, "escape-session.mjs");
+      writeFileSync(
+        session,
+        [
+          'import { spawnSync } from "node:child_process";',
+          'import { appendFileSync, chmodSync, mkdirSync, writeFileSync } from "node:fs";',
+          'import { join } from "node:path";',
+          "const tmp = process.env.TMPDIR;",
+          `const log = join(tmp, ${JSON.stringify(logName)});`,
+          `const app = join(tmp, ${JSON.stringify(appName)});`,
+          'mkdirSync(join(app, "Contents", "MacOS"), { recursive: true });',
+          `writeFileSync(join(app, "Contents", "Info.plist"), ${JSON.stringify(
+            '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>' +
+              "<key>CFBundleExecutable</key><string>probe</string>" +
+              `<key>CFBundleIdentifier</key><string>${label}</string>` +
+              "<key>CFBundlePackageType</key><string>APPL</string>" +
+              "<key>LSUIElement</key><true/></dict></plist>\n",
+          )});`,
+          `const probe = join(app, "Contents", "MacOS", "probe");`,
+          `writeFileSync(probe, ${JSON.stringify(`#!/bin/sh\necho escaped > "${outside}/open-marker"\n`)});`,
+          "chmodSync(probe, 0o755);",
+          "const run = (name, bin, args) => {",
+          '  const r = spawnSync(bin, args, { timeout: 10000, killSignal: "SIGKILL", stdio: "ignore" });',
+          '  appendFileSync(log, name + "-tried " + r.status + " " + (r.signal ?? "") + "\\n");',
+          "};",
+          'run("open", "/usr/bin/open", [app]);',
+          `run("launchctl", "/bin/launchctl", ["submit", "-l", ${JSON.stringify(label)}, "--", "/bin/sh", "-c", ${JSON.stringify(`echo escaped > "${outside}/launchctl-marker"`)}]);`,
+        ].join("\n"),
+      );
+      installFakeClaude(binDir, undefined, { script: session, callsInConfigDir: true });
+      const [line] = runJailedTrial(binDir, fxRoot);
+      trialDir = String(line.trialDir);
+      // Not vacuous: the session did make both attempts.
+      const attempts = readFileSafe(path.join(trialDir, "tmp", logName));
+      assert.match(attempts, /^open-tried /m, "the session tried `open`");
+      assert.match(attempts, /^launchctl-tried /m, "the session tried `launchctl submit`");
+      // Both services answer asynchronously; the unjailed positive landed in under
+      // 0.5s, so a 3s window with no marker is a clean negative.
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline && readdirSync(outside).length === 0) sleepMs(100);
+      assert.deepEqual(
+        readdirSync(outside),
+        [],
+        "no program the session asked a system service to launch ran outside the jail",
+      );
+      // The jail still judges the trial normally.
+      assert.equal(line.error, undefined, String(line.error));
+      const outcomes = line.checkOutcomes as { check: { type: string }; ok: boolean }[];
+      assert.deepEqual(
+        outcomes.map((o) => [o.check.type, o.ok]),
+        [
+          ["git_created_branch", false],
+          ["git_no_new_commits_on_initial", true],
+          ["test_command_passes", true],
+        ],
+        "the jailed post-session step still passes",
+      );
+    } finally {
+      // A probe that did escape must not linger: drop the launchd job, kill the app
+      // and forget its LaunchServices registration.
+      spawnSync("/bin/launchctl", ["remove", label], { stdio: "ignore" });
+      spawnSync("/usr/bin/pkill", ["-f", appName], { stdio: "ignore" });
+      if (trialDir) {
+        spawnSync(
+          "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+          ["-u", path.join(trialDir, "tmp", appName)],
+          { stdio: "ignore" },
+        );
+      }
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(fxRoot, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
     }
   },
 );
