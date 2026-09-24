@@ -229,11 +229,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `historical_sources` before adding a re-ported upstream, and
   `references/upstream-sync.md` matches `upstream.json` on re-comparing a
   retired upstream (on demand only).
-- **The eval runner refuses a stale or absent credential seed up front**, with
-  a pointer to `EVALS_ANTHROPIC_API_KEY`, instead of failing every run midway;
-  `evals/README.md` documents it.
+- **The eval runner authenticates with exactly one explicit credential**:
+  `EVALS_ANTHROPIC_API_KEY` (a console API key, handed to the child as
+  `ANTHROPIC_API_KEY`) or `EVALS_CLAUDE_CODE_OAUTH_TOKEN` (a subscription
+  token from `claude setup-token`, handed over as `CLAUDE_CODE_OAUTH_TOKEN`).
+  Both set, or neither, refuses before any config dir exists, with a message
+  naming both variables and `claude setup-token` and carrying no value; an
+  empty or whitespace-only value counts as unset, and a value containing a
+  carriage return is refused. `evals/README.md` shows how to pass either
+  from a mode-0600 file so it is never echoed.
+- **Every process the eval runner spawns gets an allowlisted environment**,
+  built key by key instead of copied from the shell and stripped: `PATH`
+  (the running node's directory first, absolute entries only), `HOME`,
+  `TMPDIR` (the runner's own), `LANG`/`LC_*`, `USER`, `LOGNAME`, `SHELL` and
+  `TERM`, plus proxy and CA variables only with `EVALS_FORWARD_PROXY=1`. git
+  and the `claude` child add a pinned identity with no global or system git
+  config; only the `claude` child adds its config dir and its one
+  credential. A bare `ANTHROPIC_API_KEY`, the `EVALS_` variables,
+  `NODE_OPTIONS`, `SSH_AUTH_SOCK` and every other `ANTHROPIC_*` or
+  `CLAUDE_CODE_*` variable no longer reach any child. Several of those
+  outrank `CLAUDE_CODE_OAUTH_TOKEN` in Claude Code, so one left in the shell
+  could silently replace the credential the run chose. Since the operator's
+  own privacy flags no longer reach it either, the `claude` child always gets
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `DISABLE_TELEMETRY=1` and
+  `DISABLE_AUTOUPDATER=1`.
 - **CI reads the pnpm version from `packageManager`** instead of a second copy
   in the workflow.
+- **CI runs on macOS as well as Linux**, so the eval runner's seatbelt-jail
+  tests (macOS-only) run in CI too.
 
 - **Worktree isolation follows concurrent writers, not tier** (`HARRY.md`
   §5). Two or more writers at once — parallel subagents, several efforts in
@@ -306,6 +329,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tmp dir.
 
 ### Fixed
+
+- **The eval runner refuses a jail that would re-open `$HOME`.** A runtime
+  tree (node, claude or git's install) at `/`, at or above `$HOME`, or
+  overlapping a trial's writable dirs would have made those paths readable
+  and executable inside the jail. The trial now fails with the tree named.
+
+- **A sandboxed agentic session could act outside the eval runner's jail
+  through the runner's own post-session work.** After the session, the
+  runner ran the fixture's tests (written by the session) and its own `git`
+  calls unjailed, with its full environment. A session could plant a
+  command in `.git/config` (`core.fsmonitor`, or `log.showSignature` with a
+  `gpg.program`) for that `git` to run, or swap its fixture for a symlink to
+  another repo, whose config the runner would then rewrite. Everything the
+  runner does on session-controlled paths after a sandboxed session (check
+  the fixture is still the directory it created, restore the `.git/config`
+  it wrote at materialization, collect the repo state, evaluate every check)
+  now runs as one child under the session's own jail profile, with the
+  credential-free allowlisted environment. The runner accepts only one
+  `{ ok, detail }` per check from that child, sanitized and capped. The trial
+  is refused, not judged, if the fixture path leads elsewhere, `.git` is no
+  longer a plain directory, the session added `.git/commondir` or
+  `.git/config.worktree`, or `.git/config` is no longer a regular file.
+  Unsandboxed the same step runs in the runner itself; there the session
+  already ran as the operator, so the checks guard against accidents, not
+  attacks. The step is bounded by a timeout (5 minutes), so a hung
+  model-written test no longer hangs the run.
+- **A sandboxed session could write outside the eval runner's jail and have
+  the runner run it later.** The seatbelt profile allowed every write outside
+  `$HOME`, including user-writable `PATH` directories such as Homebrew's
+  `bin`, and the runner later spawned `git`, `which` and `claude` by name,
+  unjailed. The config dir, work dir and fixtures' parent were also shared
+  across a run and writable from the jail. Now:
+  - writes are allowed only to the trial's own config dir, fixture repo
+    and temp dir (plus `/dev/null`), and reads under `$HOME` stay denied
+    (the profile is now deny-by-default; see the next entry);
+  - `git`, `claude` and `sandbox-exec` are resolved to absolute paths before
+    the first session and spawned by those paths from then on (`which` is no
+    longer run);
+  - every trial gets its own config, work, fixture and temp dirs, recorded on
+    each result line as `trialDir`.
+- **A sandboxed session could have a system service start a program outside
+  the eval runner's jail.** The seatbelt profile started from
+  `(allow default)` and denied only file writes and reads under `$HOME`, so
+  IPC to system services stayed open. A jailed session could write an app
+  into its own temp dir and `open` it: LaunchServices then started it as
+  the operator, outside the jail (reproduced on macOS 27). The profile now
+  starts from `(deny default)` and allows back only fork, signals within
+  the jail and sysctl reads; exec from `/bin`, `/usr/bin` and the resolved
+  `node`, `claude` and `git` install trees; reads outside `$HOME` (a
+  terminal excepted, see the next entry) plus the trial dirs, runtime
+  trees and the runner script under it; writes to the trial's own dirs and `/dev/null`; one
+  system service by name (user lookup); and outbound IP plus the DNS
+  resolver's socket. A test compares the whole generated profile to fixed
+  text, so any rule change, an added service included, is a test edit.
+  LaunchServices and Apple Events need mach-lookup names the profile denies;
+  launchd does not: `launchctl` reaches it over the task's bootstrap port
+  instead, so the profile does not gate it. launchd refuses submission but starts
+  an already-loaded job on `kickstart` and persists a `disable`, both outside
+  the jail — recorded, with its ceiling and upgrade path, in the `DEBT:` note
+  on `buildSeatbeltProfile`. Outbound IP includes localhost, so a local TCP
+  service that runs commands on request still acts for the session. A darwin
+  test pins that a jailed `open` and `launchctl submit` both exit nonzero and
+  launch nothing. The allowlist was derived with the fake `claude` shim,
+  the real `claude --version` and a `node` HTTPS request; a live sandboxed
+  session has not been run against it yet. When one needs more, the
+  evals README says how to read the denied name from the unified log,
+  narrowed to the run's time window rather than to a few process names.
+- **A sandboxed session could read what the operator typed into the
+  terminal.** The eval runner's jail allowed file reads of `/dev/tty` and
+  the pty devices, and its children share the runner's terminal, so a
+  jailed session or post-session step could read keystrokes typed during a
+  run and send them out over the network. The profile's last rule now
+  denies reading `/dev/tty` and `/dev/ttysN`; a darwin test runs a reader
+  in a real pty and pins that both opens are refused. The deny acts only
+  when a terminal is opened, so no spawned child is handed it either: fds
+  0, 1 and 2 are piped or `/dev/null` at every spawn. A second darwin test
+  runs the runner in a real pty, jailed and not, and pins from inside each
+  spawned process that the session, the post-session step and the
+  model-written test command hold the terminal on none of them, nor do the
+  runner's own git calls wherever `PATH` can shadow git (not when git sits
+  next to `node`).
+- **A failed `claude` run's error hid its cause.** The result line's error
+  began with the child's whole command line: the prompt and, in a sandboxed
+  run, the whole seatbelt profile. With the error capped, that left no room
+  for the child's own output. The error now says how `claude` ended (its exit
+  status or signal), followed by the tails of its stdout and stderr.
+- **A child's output could write terminal escape sequences to the operator's
+  terminal.** Every child the eval runner spawns now has its stdout and
+  stderr piped, and what reaches the operator (error messages, result lines)
+  has control characters stripped.
 
 - **A reviewed repository could run its own `./codex` or `./git`.** On
   macOS/Linux the companion spawned both by bare name, and an empty or
@@ -396,6 +509,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for `references/skill-authoring.md`, stays). `codex-plugin-cc` is retired
   from `upstream.json`'s pinned `sources` to `historical_sources` (attribution
   only, not synced) — harry now pins three upstreams instead of four.
+- **The eval runner's seeded-credential fallback.** With no API key set, it
+  copied `.credentials.json` from the operator's config dir into each
+  condition dir, checked the copy up front, and scrubbed it after the run.
+  On macOS that file is a snapshot of a Keychain login that goes stale on its
+  own schedule, so runs failed with an expired token; and copying real
+  credentials into temp dirs was a liability however promptly they were
+  scrubbed. No credential file is written anywhere now.
 
 ## [0.21.0] - 2026-09-02
 

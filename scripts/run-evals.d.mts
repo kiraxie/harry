@@ -94,6 +94,8 @@ export interface RunOpts {
   out?: string;
   trials?: string | number;
   agentic?: boolean;
+  // How long the post-session step may run (default 5 minutes). Programmatic only.
+  postSessionTimeoutMs?: number;
 }
 
 export function parseCasesJsonl(text: string): { cases: EvalRecord[]; errors: string[] };
@@ -110,36 +112,77 @@ export function resolveModel(
   opts: { model?: string },
   env: Record<string, string | undefined>,
 ): string;
-export function prepareConditionDir(
+export function resolveAuth(env: Record<string, string | undefined>): {
+  kind: "api-key" | "oauth-token";
+};
+export function buildBaseEnv(
+  env: Record<string, string | undefined>,
+  tmpDir?: string,
+): Record<string, string>;
+export function buildGitEnv(
+  env: Record<string, string | undefined>,
+  tmpDir?: string,
+): Record<string, string>;
+export function findOnPath(name: string, env?: Record<string, string | undefined>): string | null;
+export function buildChildEnv(
+  env: Record<string, string | undefined>,
+  configDir: string,
+  tmpDir?: string,
+): Record<string, string | undefined>;
+export function prepareTrialDirs(
   condition: string,
   lawsText: string,
   root?: string,
-  env?: Record<string, string | undefined>,
-): string;
-export function checkCredentialSeed(env?: Record<string, string | undefined>): void;
+): { trialDir: string; configDir: string; workDir: string; fixtureParent: string; tmpDir: string };
 export function materializeFixture(
   name: string,
   root?: string,
   env?: Record<string, string | undefined>,
-): { dir: string; initialBranch: string; initialCommit: string };
+  gitBin?: string,
+): {
+  dir: string;
+  initialBranch: string;
+  initialCommit: string;
+  gitConfig: Buffer;
+  id: { dev: string; ino: string };
+};
+export function restoreFixtureGitConfig(fixtureDir: string, gitConfig: Buffer | string): void;
 export function collectRepoState(
   fixtureDir: string,
   initialBranch: string,
   initialCommit: string,
   env?: Record<string, string | undefined>,
+  gitBin?: string,
 ): RepoState;
 export function evaluateArtifactCheck(check: CheckInput, state: RepoState): ArtifactCheckOutcome;
 export function evaluateArtifactChecks(
   checks: CheckInput[] | undefined,
   state: RepoState,
 ): { pass: boolean; results: ArtifactCheckOutcome[] };
+// What the post-session step needs to judge one trial's fixture.
+export interface PostSessionPayload {
+  fixtureDir: string;
+  fixtureId: { dev: string; ino: string };
+  gitConfig: string; // base64
+  initialBranch: string;
+  initialCommit: string;
+  checks: CheckInput[];
+  gitBin?: string; // absolute; resolved by runEvals before the first session
+  timeoutMs?: number;
+}
+export function judgeFixture(
+  payload: PostSessionPayload,
+  env?: Record<string, string | undefined>,
+): { ok: boolean; detail: string }[];
+export function parsePostSessionOutput(
+  stdout: string,
+  count: number,
+): { ok: boolean; detail: string }[];
 export function runEvals(
   opts: RunOpts,
   env?: Record<string, string | undefined>,
 ): {
   outPath: string;
-  configDir: string;
-  workDir: string;
   lines: EvalRecord[];
   skipped: string[];
 };
@@ -147,12 +190,19 @@ export function buildSeatbeltProfile(opts: {
   home: string;
   allowWrite?: string[];
   allowRead?: string[];
+  allowExec?: string[];
 }): string;
 export function buildAgenticSandboxProfile(opts: {
   home: string;
   allowWrite?: string[];
-  bin: string;
+  allowRead?: string[];
+  bin?: string;
+  gitBin?: string;
+  env?: Record<string, string | undefined>;
+  trees?: string[];
 }): string;
+export function jailExecDirs(trees?: string[]): string[];
+export function jailedPath(env: Record<string, string | undefined>, execDirs: string[]): string;
 export function wrapWithSandbox(
   sandboxExec: string,
   profile: string,

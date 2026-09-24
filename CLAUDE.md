@@ -50,6 +50,8 @@ change a model's first-response behavior — each case runs the same prompt twic
 global `CLAUDE.md` (baseline) and once with `HARRY.md` inlined (candidate), and the delta is the
 laws' effect. Run them after any material `HARRY.md` change. `validate` (schema-check the cases) and
 `score` (grade a results file) are free; `run` is **real API spend** and requires a pinned `--model`.
+The opt-in agentic jail (`EVALS_SANDBOX=1`) is for trusted, repo-authored cases only; untrusted cases
+belong on an ephemeral machine (see `evals/README.md`).
 Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`.
 
 **Cutting a release:** bump the four hand-maintained version fields in lockstep —

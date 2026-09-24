@@ -25,73 +25,85 @@ gap is the point).
 
 ### Why isolation matters
 
-Each condition gets its own throwaway `mkdtemp` config dir. The runner never
+Each trial gets its own throwaway `mkdtemp` dir holding a config dir, a work dir,
+a fixture parent and a temp dir, shared with no other trial. The runner never
 reads or touches your real `~/.claude`. That is not incidental: if your own
 global `CLAUDE.md` leaked into the baseline, the baseline would already be
 "lawful" and the measured delta would collapse to nothing. The empty baseline
 dir is what keeps the comparison honest.
 
-### Authentication (two paths) and the post-run scrub
+### Authentication (two paths)
 
 A fresh config dir is also *logged out* — `claude -p` returns
-`{"is_error":true,"result":"Not logged in · ..."}`. Two ways to authenticate the
-child, in precedence order:
+`{"is_error":true,"result":"Not logged in · ..."}`. So the child authenticates
+from its environment alone, and every `run` takes **exactly one** of two
+credentials:
 
-1. **Scratch token (preferred)** — set `EVALS_ANTHROPIC_API_KEY` to a console API
-   key. The runner passes it to the child as `ANTHROPIC_API_KEY` and seeds **no
-   credential file at all** — nothing lands on disk for a session to read, and a
-   console key is independently revocable. This is the recommended mode for the
-   agentic gate (see the permission model). Note the runner honors **only** the
-   `EVALS_`-prefixed variable — a bare `ANTHROPIC_API_KEY` sitting in your shell is
-   deliberately **not** used (and is stripped from the child env), so an unrelated
-   key can never be billed by accident.
-2. **Seeded credential (fallback)** — if `EVALS_ANTHROPIC_API_KEY` is unset, the
-   runner copies exactly one file into each fresh dir: `.credentials.json`, read
-   from your real config dir (`$CLAUDE_CONFIG_DIR`, else `~/.claude`), chmod
-   `0600`. Nothing else is copied — **no `CLAUDE.md`, no settings, no memory** — so
-   the isolation that keeps the baseline honest is preserved; only the login token
-   rides along.
+1. **Console API key** — `EVALS_ANTHROPIC_API_KEY`. Create a key in the Anthropic
+   Console; spend is billed to that API account, and the key can be revoked on
+   its own at any time. The runner hands it to the child as `ANTHROPIC_API_KEY`.
+2. **Subscription token** — `EVALS_CLAUDE_CODE_OAUTH_TOKEN`. Run
+   `claude setup-token` to mint a token for your Claude subscription. It needs a
+   paid Claude plan and is valid for one year; runs draw on the subscription's
+   quota instead of API billing. The runner hands it to the child as
+   `CLAUDE_CODE_OAUTH_TOKEN`.
 
-**Post-run scrub:** in the seeded-credential path, the runner **deletes** every
-copied `.credentials.json` in a `finally` block — on success, on error, and on a
-thrown exception mid-run. The config dirs themselves stay under the temp root for
-post-hoc inspection, but **never with a live credential inside**: the token's
-on-disk exposure is bounded to the session lifetime. (The scratch-token path never
-writes one in the first place, so there is nothing to scrub.)
+Both set, or neither set, and `run` refuses before any config dir is created or
+session starts; an empty or whitespace-only value counts as unset. A value
+containing any whitespace — a carriage return from CRLF line endings, or a line
+break from a copy that wrapped — is refused up front too, never silently
+trimmed. Each message names the variables involved, and
+never includes a value.
 
-### Pre-flight: a stale or absent seed refuses up front
+**Every child gets an allowlisted environment, not a copy of yours.** The runner
+builds each spawned process's env key by key: `PATH` (the running node's
+directory first, then only the absolute entries of yours), `HOME`, `TMPDIR` (the
+runner's own), `LANG` and `LC_*`, `USER`, `LOGNAME`, `SHELL` and `TERM`. Under
+`EVALS_SANDBOX=1`, the jailed children's `PATH` also drops every entry the jail
+does not let them run programs from. A denied entry answers a lookup by name with
+"operation not permitted", and the lookup stops there instead of trying the next
+entry. The
+`claude` child adds its config dir, a pinned git identity with no global or system
+git config, and its **one** credential under the unprefixed name. Nothing else
+from your shell reaches it. That includes a bare `ANTHROPIC_API_KEY` or
+`CLAUDE_CODE_OAUTH_TOKEN`, the `EVALS_` variables themselves, `NODE_OPTIONS`,
+`SSH_AUTH_SOCK`, `GITHUB_TOKEN`, `AWS_*`, and every other `ANTHROPIC_*` or
+`CLAUDE_CODE_*` variable. This is what makes "exactly one credential" true:
+Claude Code ranks `CLAUDE_CODE_USE_BEDROCK`/`VERTEX`/`FOUNDRY`, then
+`ANTHROPIC_AUTH_TOKEN`, then `ANTHROPIC_API_KEY` above `CLAUDE_CODE_OAUTH_TOKEN`,
+so any of them reaching the child would silently replace the credential the run
+chose. Behind a corporate proxy or TLS-inspecting CA, set `EVALS_FORWARD_PROXY=1`
+to also forward `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (and their lowercase
+forms), `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE` and `SSL_CERT_DIR`. The set is
+fixed; there is no way to name other variables. Because your own privacy flags
+no longer reach the child, the runner sets three itself, always:
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `DISABLE_TELEMETRY=1` and
+`DISABLE_AUTOUPDATER=1`. Nothing is written to disk
+either: no credential file lands in a trial's config dir for a session to read.
 
-Every `run` checks the seeded-credential path **before** any config dir is created
-or session starts (skipped entirely when `EVALS_ANTHROPIC_API_KEY` is set — the
-scratch-token path needs no seed at all):
+**Hand the value over without printing it.** Keep it in a file only you can
+read, and pass it with `$(cat …)`, so it never appears on a command line,
+in shell history, or in the terminal:
 
-- **Missing `.credentials.json`** — refused immediately. On macOS the live login
-  often lives in the OS Keychain, and `.credentials.json` is only a point-in-time
-  snapshot the CLI happened to write; its absence is not proof that login is fine.
-- **A present file whose `claudeAiOauth.expiresAt` is already in the past** —
-  refused as **stale**. This is the common real-world case on macOS: the
-  Keychain-backed session keeps refreshing without necessarily rewriting this file
-  back out, so the on-disk snapshot's access token can sit expired for days while
-  `claude` itself keeps working interactively. This runner has confirmed the check
-  *fires* on a genuinely stale file (an access token expired days ago, refresh
-  token still weeks out) — it has **not** verified whether a copy of that exact
-  file would actually fail once handed to a real session, or auto-refresh from the
-  still-live `refreshToken`. Treat the refusal as the safe assumption, not a
-  proven failure mode. On a **Linux, file-backed** login (no Keychain — this file
-  *is* the store, and the CLI normally keeps it current), this same check can be a
-  false positive if the operator hasn't run `claude` in a while: the access token
-  ages out on schedule even though the file would refresh fine on next use. Either
-  way, `EVALS_ANTHROPIC_API_KEY` sidesteps the judgment call entirely.
-- **A present file with no recognizable `claudeAiOauth.expiresAt` field** —
-  proceeds. The check can only judge staleness it can see; an unfamiliar or partial
-  credential shape is not treated as a positive staleness signal.
+```sh
+mkdir -p ~/.config/harry
+(umask 077 && : > ~/.config/harry/evals.token)   # create it empty, mode 0600
+# Paste the token into that file with your editor; do not `echo` it into place.
 
-Either refusal's message names the file path and points at
-`EVALS_ANTHROPIC_API_KEY` — the fix is always the scratch key, never `claude
-login`, since a fresh interactive login does not guarantee this on-disk file gets
-rewritten. The check reads only the file's **structure** (existence, and one
-nested numeric field) — never a token value — so nothing credential-shaped ever
-reaches a log line or an error message.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
+  node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+  --out evals/results/run.jsonl
+```
+
+The same pattern works for `EVALS_ANTHROPIC_API_KEY` with a key file of its own.
+
+**The seeded-credential fallback is gone.** The runner used to copy
+`.credentials.json` from your real config dir into each condition dir when no
+API key was set, and delete it after the run. It was removed for two reasons.
+On macOS the live login is in the Keychain and that file is only a snapshot,
+which goes stale on its own schedule, so runs failed with an expired token
+while `claude` kept working interactively. And copying real credentials into
+temp dirs was a liability in itself, however promptly they were scrubbed.
 
 The child also runs with its **cwd set to a fresh empty dir**, not the repo root.
 `claude` reads *project* memory by walking up from the working directory, so
@@ -125,6 +137,7 @@ looking like three genuine non-compliances.
 
 ```sh
 # Run each case three times; the majority verdict rides out one-off noise.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --trials 3 --out evals/results/run.jsonl
 ```
@@ -167,8 +180,8 @@ say. The runner:
    pinned initial commit (author/committer `Eval Fixture <eval@localhost>`). Every
    git call is hardened with `-c commit.gpgsign=false -c core.hooksPath=` so the
    operator's own gpg-signing or git hooks can't break or side-effect the seed
-   commit. This never happens inside the repo/worktree — the copy lands under the
-   OS temp dir (override with `EVALS_FIXTURE_ROOT`).
+   commit. This never happens inside the repo/worktree — the copy lands in the
+   trial's own dir, under the OS temp dir (override with `EVALS_FIXTURE_ROOT`).
 2. **Runs a full session** in that dir: `claude -p <prompt> --model <id>
    --output-format json --permission-mode acceptEdits --allowedTools "<git
    subcommands>,Bash(node:*)"`. See the permission model below.
@@ -208,57 +221,194 @@ misbehaving session.** `Bash(node:*)` is arbitrary code execution — including
 network — so a session that wants to reach out or exfiltrate still can. Two
 containment layers address this:
 
-- **Credential exposure** is bounded on two axes (see
-  [Authentication](#authentication-two-paths-and-the-post-run-scrub)): use
-  `EVALS_ANTHROPIC_API_KEY` (a revocable scratch token) and **no credential is
-  written to disk at all**; in the fallback seeded-credential path the copy is
-  **scrubbed post-run**, so its window is the session lifetime only.
-- **Filesystem exposure** is bounded by the opt-in [OS sandbox](#os-sandbox-opt-in-evals_sandbox)
-  below: `EVALS_SANDBOX=1` jails the session out of the operator's wider `$HOME`.
+- **Credential exposure** is bounded (see
+  [Authentication](#authentication-two-paths)): the session gets exactly one
+  revocable credential, `EVALS_ANTHROPIC_API_KEY` or
+  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`, through an allowlisted env that carries
+  nothing else from your shell — and **no credential is written to disk at
+  all**.
+- **The post-session step** is everything the runner does on paths the session
+  controlled: it checks the fixture is still the directory it created, puts
+  back the `.git/config` it wrote at materialization, collects the repo state,
+  and evaluates every check, model-written tests (`test_command_passes`)
+  included. It refuses the trial, rather than judging it, if the fixture path
+  now leads somewhere else (a session can rename its fixture away and leave a
+  symlink to another repo), `.git` is no longer a plain directory, the session
+  added `.git/commondir` or `.git/config.worktree`, or `.git/config` is no longer
+  a regular file. It is bounded by a timeout (5 minutes), so a hung
+  model-written test cannot hang the run. **Sandboxed**, this whole step runs as
+  one child under the session's own jail profile, with the credential-free
+  allowlisted env, and the runner treats what it prints as untrusted: it accepts
+  only one `{ ok, detail }` per check, strips control characters and caps the
+  text. Whatever the session planted, whether a swapped fixture, a config
+  re-planted after the restore, a `gpg.program` or a test, runs inside that jail
+  if it runs at all. The jail is deny-by-default (below), so code running there
+  can write only the trial's own dirs and cannot ask a system service to start a
+  program outside the jail, with one exception: launchd will `kickstart` a job
+  you already have loaded (see the OS sandbox section's "does NOT contain" list
+  below). **Unsandboxed** the step runs in the runner itself,
+  and none of this is a security boundary: the session already ran as you, with
+  your filesystem. The checks there only guard against accidents.
+- **What the runner runs after a session** is fixed before the first one:
+  `git`, `claude` and `sandbox-exec` are resolved to absolute paths up front (on
+  the allowlisted `PATH`, in-process, with no `which`) and spawned by those paths
+  from then on. A binary a session drops into a `PATH` directory later is never
+  picked up. Every child's stdout and stderr are piped; what reaches you (error
+  messages, result lines) has control characters stripped first.
+- **Filesystem and system-service exposure** is bounded by the opt-in
+  [OS sandbox](#os-sandbox-opt-in-evals_sandbox) below: `EVALS_SANDBOX=1` runs the
+  session under a deny-by-default profile that confines its writes to its own
+  trial's dirs, denies it reads under your `$HOME`, and lets it reach almost no
+  system service that could start a program outside the jail (see "What it does
+  NOT contain" below for the launchd exception).
 
 What remains unbounded even with both is *network* (the session must reach the API)
-and the **env-held API key** (no OS sandbox can hide an env var from the session's
-own processes — the mitigation is the scratch key's revocability). That residual is
+and the **env-held credential** (no OS sandbox can hide an env var from the session's
+own processes — the mitigation is that the key or token is revocable). That residual is
 an accepted trade for a **maintainer-run, local** release gate on **trusted
 prompts**. Do not point this at untrusted input.
 
 ### OS sandbox (opt-in, `EVALS_SANDBOX`)
 
 `EVALS_SANDBOX=1` wraps each **agentic** session in a macOS
-[seatbelt](https://developer.apple.com/) profile via `sandbox-exec`, so a
-misbehaving or prompt-injected session cannot read the operator's wider `$HOME`.
+[seatbelt](https://developer.apple.com/) profile via `sandbox-exec`. The profile
+is deny-by-default: a misbehaving or prompt-injected session can write only its
+own trial's dirs, read nothing under your `$HOME` and nothing you type into the
+terminal, and reach no *mach-lookup* system service that could start a program
+outside the jail, such as LaunchServices (`open`) or Apple Events (`osascript`).
+launchd is an exception: `launchctl` reaches it over the task's bootstrap
+port rather than a mach-lookup name, so this profile does not gate it at all
+(see "What it does NOT contain" below).
 
-**What it does:** the generated profile is `(allow default)` — everything permitted
-— then **denies all filesystem reads and writes under `$HOME`**, then re-allows a
-minimal set of exceptions:
+**What it does:** the generated profile's first rule is `(deny default)`. It then
+allows back only this list:
 
-- **read+write:** the throwaway config dir, the materialized fixture repo, and the
-  OS temp root they live under (normally already outside `$HOME`, re-allowed
-  defensively).
-- **read-only:** the `claude` and `node` runtime install trees, resolved at run time
-  via `which` + `realpath` (a runtime under `$HOME` — nvm node, the `~/.local`
-  claude install — must stay readable for the child to start). Note this grants the
-  whole **containing directory** of each runtime, read-only — sibling files in those
-  `bin`/install dirs become readable too; it is a coarse, read-only allow, not a
-  single-file grant.
+- **processes:** fork; exec from `/bin`, `/usr/bin` and the resolved `node`,
+  `claude` and `git` install trees (including git's helper dir and the real
+  binary behind Apple's `/usr/bin/git` shim), never from a trial dir; signals to
+  processes in the same jail only; sysctl reads;
+- **reads:** everything outside `$HOME` except a terminal: `/dev/tty` and the
+  pty devices `/dev/ttysN` are denied, so the session cannot read what you type
+  while it runs. Under `$HOME`, only the trial dirs, the
+  `claude`, `node` and `git` install trees (a runtime under `$HOME`, such as nvm
+  node or the `~/.local` claude install, must stay readable for the child to
+  start), and `scripts/run-evals.mjs` itself (for the post-session child). Each
+  runtime tree is its whole **containing directory**, so sibling files there are
+  readable and executable too: a coarse allow, not a single-file grant — an nvm
+  `node` install makes that whole node-version directory exec-able, and a
+  `claude` installed as `~/.local/bin/claude` (a common location) makes the
+  whole of `~/.local/bin` readable and exec-able, other binaries there included;
+- **writes:** exactly this trial's own config dir, fixture repo and temp dir (the
+  trial's `TMPDIR`), plus `/dev/null`. Not the fixture's parent, not the shared
+  temp root, not another trial's dirs, and not a user-writable directory such as
+  `/opt/homebrew/bin`;
+- **system services:** one *mach-lookup* name allowed, by exact match:
+  `com.apple.system.opendirectoryd.libinfo`, for user and group lookup — nothing
+  else reachable that way can start or drive a program. launchd is reached
+  through a different channel this allowlist does not cover at all; see "What it
+  does NOT contain" below. A test pins the whole generated profile as fixed
+  text, so adding a name, or changing any other rule, means editing that test
+  too;
+- **network:** outbound IP to any host and port, and the DNS resolver's socket.
+  No other unix socket, so a local daemon listening on one (a Docker socket, for
+  example) is unreachable.
 
-So the session keeps working in the fixture, but reads of ssh keys, other
-credentials, and documents elsewhere under `$HOME`, and writes anywhere outside the
-fixture/tmp, are denied by the kernel. Under the jail the session's git identity is
-pinned via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`) so
-it can still commit without the jail having to re-open `~/.gitconfig`.
+This allowlist was derived with the fake `claude` shim: the jail tests pass with
+nothing more, and the real `claude --version` and an HTTPS request from `node`
+also run under it. A live run with the real `claude` still has to confirm it
+needs nothing else. If it does, the trial fails closed, never open: its `error`
+carries the failing child's own stderr, which does not name what was denied.
+The kernel logs sandbox denials to the unified log, readable without `sudo`.
+Watch it while the run happens, or read it back afterwards:
+
+```sh
+log stream --style compact --predicate 'sender == "Sandbox"'
+log show --last 10m --style compact --predicate 'sender == "Sandbox"'
+```
+
+To read back exactly the run's window, give `log show` `--start '<YYYY-MM-DD HH:MM:SS>'`,
+the time the run began, in place of `--last`. Each line
+reads `Sandbox: <process>(<pid>) deny(1) <operation> <target>`, for example
+`Sandbox: pbpaste(123) deny(1) mach-lookup com.apple.pasteboard.1`. The target
+is the service name or path that was refused. Other apps' sandboxes log here
+too, so narrow by time, to the run's window, not by process name: every process
+the run starts is jailed, including each tool the session or its tests run, and
+the log names each one by the binary running when it was denied: `node`, `git`,
+`claude` by its version (such as `2.1.281`), `touch` when `env touch` ran it, and
+`bash` for `/bin/sh` (which runs bash on a default install). A filter on `node`,
+`git` and `claude` drops the one line that explains a failing tool. The jailed
+processes also log denials they run fine without; never add these:
+`mach-lookup` of `com.apple.logd`, `com.apple.diagnosticd`,
+`com.apple.system.notification_center`,
+`com.apple.system.opendirectoryd.membership` and `com.apple.bsd.dirhelper`,
+`file-read-data ~/.CFUserTextEncoding`, `file-write-data /dev/dtracehelper`,
+`system-info vfs.disk-space`, and `file-read-data` or `file-read-metadata` of
+`/dev/tty` or a `/dev/ttysN`. That last one is the terminal deny, on purpose
+(see **reads** above), and a jailed `bash` can log it just by starting. The log
+is not complete: the kernel folds repeats
+into `N duplicate reports` lines and does not report every denial (a jailed
+`claude` started from a directory under `$HOME`, which it may not read, failed
+and logged only the `/dev/dtracehelper` line). If nothing there explains the failure, the log will
+not name it; do not guess a rule from the error text. Add only a denial the
+failing process hit, by its exact name, after checking by hand that it cannot
+start, drive or act for you as a program outside the jail (a keychain,
+preferences or login-item service can). Never add a prefix or a broad rule.
+
+So the session keeps working in its fixture. The kernel denies anything the list
+does not allow: reads of ssh keys, other credentials and documents under
+`$HOME`, writes anywhere but its own trial's dirs, and mach-lookup requests to a
+service that would start a program as you, outside the jail — with the launchd
+exception below ("What it does NOT contain"). The post-session step (above) runs
+as one child under the same profile, so the runner's own restore, git calls and the
+model-written tests stay inside the jail too. The session's git identity is pinned
+via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`,
+`GIT_CONFIG_NOSYSTEM=1`) so it can still commit without the jail having to
+re-open `~/.gitconfig`.
 
 **What it does NOT contain:**
 
-- **Network** — deliberately left open; the session must reach the model API. This
-  is fs-containment, **not** a no-exfiltration boundary.
-- **The whole inherited environment** — the child inherits the operator's entire
-  shell env, not just the API key: any `GITHUB_TOKEN`, `AWS_*`, or other secret
-  present is visible to the session, and no OS sandbox can hide an env var from its
-  own child processes. Combined with open network, a hostile session could
-  exfiltrate any of them. The honest ceiling: run this only on **trusted prompts**,
-  with a **revocable scratch key** (`EVALS_ANTHROPIC_API_KEY`), from a shell that
-  isn't carrying secrets you'd mind exposing. See the DEBT note in
+- **Network** — outbound IP is deliberately left open; the session must reach
+  the model API, directly or through your opt-in proxy. This is **not** a
+  no-exfiltration boundary. It includes `localhost`, so a local TCP service that
+  runs commands for any client would act for the session.
+- **Exec of system tools** — the session can run anything in `/bin`, `/usr/bin`
+  and the runtime trees, `open` and `launchctl` included. Running `open` or
+  `osascript` is safe only because the mach-lookup services they'd need to act
+  outside the jail are denied; a test pins that `open` and `launchctl submit`
+  both exit nonzero and launch nothing. `launchctl` is not fully covered by that
+  same guarantee — see the next bullet.
+- **launchd job control** — `launchctl` reaches launchd over the task's
+  bootstrap port, not a mach-lookup name, so the jail does not gate it at all.
+  launchd applies its own checks per subcommand: `submit`, `bootstrap`, `load`,
+  `kill`, `bootout` and `setenv` are refused. Two are not: `launchctl kickstart
+  gui/<uid>/<label>` starts an already-loaded job of yours outside the jail, and
+  `launchctl disable gui/<uid>/<label>` writes a disabled entry to launchd's
+  override store that persists across reboot. This is fine for a maintainer-run
+  gate on trusted, repo-authored cases; it is not a boundary for untrusted
+  input. Run untrusted cases on an ephemeral machine (a CI runner or a VM)
+  instead.
+- **Reads outside `$HOME`** — the session can read anything outside your home
+  that your user can read, a terminal excepted: system dirs, `/opt`, and the
+  temp root, including other trials' dirs. It cannot write them.
+
+These four broad allowances (outbound IP, exec of whole system and runtime
+dirs, reads outside `$HOME`, and the launchd residual above) are recorded, with
+their upgrade path, in the `DEBT:` note on `buildSeatbeltProfile` in
+`scripts/run-evals.mjs`.
+- **The session's own credential** — the child's env is allowlisted, so nothing
+  else from your shell reaches it. But it must hold its one credential to reach
+  the API, and no OS sandbox can hide an env var from the session's own
+  processes. Combined with open network, a hostile session could exfiltrate that
+  credential. The honest ceiling: run this only on **trusted prompts**, with a
+  **revocable credential** (`EVALS_ANTHROPIC_API_KEY` or
+  `EVALS_CLAUDE_CODE_OAUTH_TOKEN`).
+- **What a background process does to the verdict** — a session can detach a
+  process that outlives `claude` (`Bash(node:*)` allows it, `setsid` included).
+  The profile is inherited by every descendant, so it stays jailed (a test pins
+  this): it can write only its own trial's dirs, which no later trial and no
+  unjailed step reads. But nothing stops it, and it can still change its own
+  fixture while the post-session step judges it, so the verdict can describe a
+  repo the session did not leave. See the `DEBT:` note on `judgeFixture` in
   `scripts/run-evals.mjs`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
@@ -267,13 +417,14 @@ it can still commit without the jail having to re-open `~/.gitconfig`.
 **Refusal (never silently unsandboxed):** if `EVALS_SANDBOX=1` is set and an agentic
 case is queued to run but the platform is not macOS, or `sandbox-exec` is not found,
 the run **hard-errors before any session starts**. It never falls back to an
-unsandboxed agentic run. **Text mode ignores the flag** — a text case runs
-`claude -p` with all tools denied (`--allowedTools ""`), so it has no exec surface to
-jail; setting the flag on a text-only run is a no-op, not a refusal.
+unsandboxed agentic run. **Text mode ignores the flag**: a text case runs
+`claude -p` with all tools denied (`--allowedTools ""`), unjailed. Its config and
+work dirs belong to its own trial, which no jailed session can write. Setting the
+flag on a text-only run is a no-op, not a refusal.
 
 ```sh
-# Release gate, sandboxed: agentic cases jailed out of $HOME, scratch-token auth.
-EVALS_ANTHROPIC_API_KEY=sk-ant-… EVALS_SANDBOX=1 \
+# Release gate, sandboxed: each agentic trial jailed, token read from a file.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" EVALS_SANDBOX=1 \
   node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
 ```
@@ -337,21 +488,23 @@ rather than a silent skip, so you never spend on one by accident.
 
 ```sh
 # Text cases only (agentic ones are skipped with a notice):
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
 # Release gate: include agentic cases AND repeat each 3× so the majority verdict
 # rides out one-off noise (real, heavier spend — this is the gate you run before
 # shipping a HARRY.md change):
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
 ```
 
-Each materialized fixture (and each condition's config/work dir) is left in place
-under the temp root on purpose — this is a manual, low-frequency tool and the
-leftover repos have post-hoc inspection value. There is no cleanup code; the OS
-temp dir is the janitor. Point `EVALS_FIXTURE_ROOT` somewhere you can prune if the
-accumulation ever bothers you.
+Each trial's dir (its config, work, fixture and temp dirs; each result line
+records it as `trialDir`) is left in place under the temp root on purpose — this
+is a manual, low-frequency tool and the leftover repos have post-hoc inspection
+value. There is no cleanup code; the OS temp dir is the janitor. Point
+`EVALS_FIXTURE_ROOT` somewhere you can prune if the accumulation ever bothers you.
 
 ## Reading the results: a green candidate is not evidence
 
@@ -436,14 +589,18 @@ exact phrases.
 # Free: schema-check the cases file.
 node scripts/run-evals.mjs validate
 
-# Real API spend: run BOTH conditions into the SAME --out file (run appends, so
-# score can contrast baseline against candidate in one table).
+# Real spend: run BOTH conditions into the SAME --out file (run appends, so
+# score can contrast baseline against candidate in one table). Every `run` needs
+# exactly one credential (see Authentication); these read the token from its file.
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition baseline  --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
 # A subset by id, or set the model via env:
+EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 EVALS_MODEL=claude-sonnet-4-5 node scripts/run-evals.mjs run \
   --condition candidate --cases tier-small-feature,debt-shortcut --out evals/results/run.jsonl
 

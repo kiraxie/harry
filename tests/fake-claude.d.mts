@@ -10,11 +10,28 @@ export interface FakeClaudeCall {
   lawsPresent: boolean;
   hasCredentials: boolean;
   apiKey: string | null;
+  oauthToken: string | null;
+  evalsApiKeyForwarded: boolean;
+  evalsOauthForwarded: boolean;
+  envKeys: string[];
+  tty: boolean[];
+}
+
+export interface FakeClaudeSettings {
+  failOnNth?: number[];
+  failReply?: string;
+  script?: string;
+  fail?: boolean;
+  isError?: boolean;
+  stderr?: string;
+  stdoutBytes?: number;
+  callsInConfigDir?: boolean;
 }
 
 export function installFakeClaude(
   binDir: string,
   reply?: string,
+  settings?: FakeClaudeSettings,
 ): { scriptPath: string; callsPath: string };
 
 export function readCalls(binDir: string): FakeClaudeCall[];
