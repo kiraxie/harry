@@ -1215,12 +1215,37 @@ export function buildAgenticSandboxProfile({
     }
   };
   const writes = allowWrite.map(canonicalizeSafe).filter(Boolean);
+  refuseUnsafeTrees(trees, home_, writes);
   return buildSeatbeltProfile({
     home: home_,
     allowWrite: writes,
     allowRead: [...trees, ...allowRead],
     allowExec: trees,
   });
+}
+
+// Trees are readable and executable and come after the $HOME deny (last match
+// wins), so a tree at /, at or above $HOME re-opens every read under $HOME, and one
+// overlapping a writable dir lets a session run what it writes. Refuse either.
+function refuseUnsafeTrees(trees, home, writes) {
+  const within = (p, dir) => dir === "/" || p === dir || p.startsWith(`${dir}/`);
+  for (const tree of trees) {
+    let real = tree;
+    try {
+      real = realpathSync(tree);
+    } catch {
+      /* unresolved: judge the spelling the profile carries */
+    }
+    const write = writes.find((w) => within(w, real) || within(real, w));
+    const clash = within(home, real)
+      ? `covers $HOME (${home})`
+      : write && `overlaps the writable ${write}`;
+    if (clash) {
+      throw new Error(
+        `refusing to build the jail: runtime tree ${tree} ${clash}; it would be readable and executable`,
+      );
+    }
+  }
 }
 
 // The system services (mach-lookup global names) a jailed process may reach, by

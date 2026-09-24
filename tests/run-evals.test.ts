@@ -2664,6 +2664,51 @@ test("buildAgenticSandboxProfile: a symlinked $HOME is canonicalized (I-1: jails
   }
 });
 
+test("buildAgenticSandboxProfile refuses a runtime tree that would re-open $HOME or cover a writable dir", () => {
+  // Trees are readable and executable, and come after the $HOME deny (last match
+  // wins): a tree at /, at $HOME or above it re-opens every read under $HOME, and
+  // one overlapping a trial dir would let a session run what it writes.
+  const root = realpathSync(tmpDir("harry-sb-trees-"));
+  try {
+    const home = path.join(root, "users", "me");
+    const trial = path.join(root, "trial");
+    const tool = path.join(root, "tool");
+    for (const d of [home, path.join(trial, "fixture"), tool]) mkdirSync(d, { recursive: true });
+    const build =
+      (trees: string[], allowWrite: string[] = []) =>
+      () =>
+        buildAgenticSandboxProfile({ home, allowWrite, trees });
+    const refuses = (label: string, run: () => string, tree: string) =>
+      assert.throws(run, (err: Error) => err.message.includes(`runtime tree ${tree}`), label);
+    refuses("the filesystem root", build(["/"]), "/");
+    refuses("$HOME itself", build([home]), home);
+    refuses("an ancestor of $HOME", build([path.join(root, "users")]), path.join(root, "users"));
+    refuses(
+      "a tree containing a writable dir",
+      build([trial], [path.join(trial, "fixture")]),
+      trial,
+    );
+    refuses(
+      "a tree inside a writable dir",
+      build([path.join(trial, "fixture")], [trial]),
+      path.join(trial, "fixture"),
+    );
+    // The ordinary shape still builds: disjoint trees and trial dirs.
+    assert.match(build([tool], [path.join(trial, "fixture")])(), /\(subpath "[^"]*\/tool"\)/);
+
+    // The route through git: an exec path of / made both rules cover everything.
+    const fakeGit = path.join(tool, "git");
+    writeFileSync(fakeGit, "#!/bin/sh\necho /\n", { mode: 0o755 });
+    refuses(
+      "git reporting / as its exec path",
+      () => buildAgenticSandboxProfile({ home, bin: process.execPath, gitBin: fakeGit }),
+      "/",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("buildAgenticSandboxProfile: git's exec path is canonicalized, so a symlinked prefix still lets git's helpers run", () => {
   // Homebrew's git reports its exec path through the `opt` symlink
   // (/opt/homebrew/opt/git/libexec/git-core -> Cellar/git/<v>/...). Seatbelt matches

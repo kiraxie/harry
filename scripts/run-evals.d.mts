@@ -196,7 +196,7 @@ export function buildAgenticSandboxProfile(opts: {
   home: string;
   allowWrite?: string[];
   allowRead?: string[];
-  bin: string;
+  bin?: string;
   gitBin?: string;
   env?: Record<string, string | undefined>;
   trees?: string[];
