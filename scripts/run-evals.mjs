@@ -1393,10 +1393,10 @@ export function jailExecDirs(trees = []) {
 // jail may exec from, in their original order. A name lookup walks PATH, and
 // libuv's walk (like execvp's) stops at the first entry that fails with anything
 // but ENOENT: an entry the jail denies can answer EPERM, and the lookup then fails
-// although an allowed copy sits further along. Kept entries can only miss (ENOENT)
-// or hit an allowed binary. The binaries runEvals resolved (findOnPath) stay the
-// first match: their dirs are runtime trees, and every entry dropped before them
-// held no match, or findOnPath would have picked it.
+// although an allowed copy sits further along. The binaries runEvals resolved
+// (findOnPath) stay the first match: their dirs are runtime trees, and every entry
+// dropped before them held no match. Another name in a kept dir can still be a
+// symlink out of the exec dirs and EPERM (fails closed).
 export function jailedPath(env, execDirs) {
   const canonical = (p) => {
     try {

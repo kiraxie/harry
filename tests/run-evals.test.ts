@@ -2738,6 +2738,29 @@ test("buildAgenticSandboxProfile refuses a runtime tree that would re-open $HOME
   }
 });
 
+test("jailedPath: keeps an entry by where it resolves, not how it is spelled, in PATH order", () => {
+  const root = realpathSync(tmpDir("harry-jailedpath-"));
+  try {
+    const allowed = path.join(root, "allowed");
+    const outside = path.join(root, "outside");
+    const sibling = `${allowed}2`; // shares the prefix, not the dir
+    for (const d of [allowed, outside, sibling]) mkdirSync(d);
+    const toAllowed = path.join(root, "to-allowed");
+    const toOutside = path.join(root, "to-outside");
+    symlinkSync(allowed, toAllowed);
+    symlinkSync(outside, toOutside);
+    const PATH = [toOutside, path.join(root, "missing"), toAllowed, sibling, outside, allowed].join(
+      path.delimiter,
+    );
+    assert.deepEqual(
+      jailedPath({ PATH }, jailExecDirs([NODE_DIR, allowed])).split(path.delimiter),
+      [NODE_DIR, toAllowed, allowed],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("buildAgenticSandboxProfile: git's exec path is canonicalized, so a symlinked prefix still lets git's helpers run", () => {
   // Homebrew's git reports its exec path through the `opt` symlink
   // (/opt/homebrew/opt/git/libexec/git-core -> Cellar/git/<v>/...). Seatbelt matches
