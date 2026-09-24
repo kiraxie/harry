@@ -306,10 +306,11 @@ Watch it while the run happens, or read it back afterwards:
 
 ```sh
 log stream --style compact --predicate 'sender == "Sandbox"'
-log show --start '2026-09-24 12:00:00' --style compact --predicate 'sender == "Sandbox"'
+log show --last 10m --style compact --predicate 'sender == "Sandbox"'
 ```
 
-(`--start` takes the time the run began; `--last 10m` also works.) Each line
+To read back exactly the run's window, give `log show` `--start '<YYYY-MM-DD HH:MM:SS>'`,
+the time the run began, in place of `--last`. Each line
 reads `Sandbox: <process>(<pid>) deny(1) <operation> <target>`, for example
 `Sandbox: pbpaste(123) deny(1) mach-lookup com.apple.pasteboard.1`. The target
 is the service name or path that was refused. Other apps' sandboxes log here
