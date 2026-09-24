@@ -2683,11 +2683,15 @@ test(
         rmSync(result, { force: true });
         const stdin = openSync(typed, "r");
         try {
+          const shArgs = [dir, profile, process.execPath, reader, jailed ? "1" : ""];
           spawnSync(
             "/usr/bin/script",
-            ["-q", "/dev/null", "/bin/sh", "-c", inner, "sh", dir, profile, process.execPath]
-              .concat([reader, jailed ? "1" : ""]),
-            { stdio: [stdin, "ignore", "ignore"], timeout: 10_000, killSignal: "SIGKILL" },
+            ["-q", "/dev/null", "/bin/sh", "-c", inner, "sh", ...shArgs],
+            {
+              stdio: [stdin, "ignore", "ignore"],
+              timeout: 10_000,
+              killSignal: "SIGKILL",
+            },
           );
         } finally {
           closeSync(stdin);
