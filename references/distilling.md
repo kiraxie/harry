@@ -7,8 +7,7 @@ modes observed in practice:
 
 - **Untracked influence** — a repo gets studied, ideas get absorbed, and nothing records
   where they came from or which commit was current, so the next philosophy shift
-  upstream is never checked. (This happened with the grill family: distilled 2026-07-26,
-  tracked only a day later when someone asked.)
+  upstream is never checked.
 - **Re-imported rejects** — harry deliberately deviates from its upstreams (the
   correctness-over-cost recalibration, the residue-manifest exit gate, the assumption
   dispositions, the ledger). A survey that doesn't read the deviation record first will

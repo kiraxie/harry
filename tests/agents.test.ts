@@ -67,3 +67,19 @@ test("every CC role agent binds an alias model, a valid effort, and leaf-ness wh
     }
   }
 });
+
+// A role's final-message contract says what the answer contains, not how many
+// lines it may run to: a numeric cap is dated prompting and truncates real
+// findings. scripts/assets/explore-override.md repeats scout's contract for the
+// built-in Explore agent, so it is held to the same rule — edit both together.
+test("no role's final-message contract caps its length in lines", () => {
+  const files = [
+    ...ROLES.map((role) => path.join(ccDir, `${role}.md`)),
+    path.join(repoRoot, "scripts", "assets", "explore-override.md"),
+  ];
+  const lineCap = /~?\d+\s*-?\s*lines?\b/i;
+  for (const file of files) {
+    const body = readFileSync(file, "utf-8");
+    assert.doesNotMatch(body, lineCap, `${path.relative(repoRoot, file)}: states a line cap`);
+  }
+});

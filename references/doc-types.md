@@ -25,9 +25,9 @@ milestone: <slug>      # optional key — omit entirely if standalone
 ```markdown
 # <title>
 
-## Notes           <!-- backlog stage: freeform accumulation; absorbs what
-                        used to be a separate "research" doc -->
-## Why / What      <!-- filled when promoted to active — what a spec used to hold -->
+## Notes           <!-- backlog stage: freeform accumulation — findings,
+                        research, open questions -->
+## Why / What      <!-- filled when promoted to active — the design and its acceptance criteria -->
 ### Acceptance criteria  <!-- last subsection of Why / What; approved with the design -->
 ## Dispatch        <!-- optional — only when 2+ units are dispatched in parallel -->
 ## Progress        <!-- append-only, filled during execution -->

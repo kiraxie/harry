@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Prompt text tuned for current models.** The `scout` role states what its
+  answer must contain instead of a line cap, and a test keeps every role's
+  final-message contract free of one; `doc-types` describes an item's Notes
+  and Why/What by what they hold rather than what they replaced;
+  `distilling` drops a dated incident note.
+
 - **How a message to the user is paced is now a law, not a habit.**
   `HARRY.md` §6 states it for prose addressed to the user: the conclusion
   first, one layer at a time and the next only when it is asked for, at most
