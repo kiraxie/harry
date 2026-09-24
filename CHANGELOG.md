@@ -315,16 +315,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   IPC to system services stayed open. A jailed session could write an app
   into its own temp dir and `open` it: LaunchServices then started it as
   the operator, outside the jail (reproduced on macOS 27). The profile now
-  starts from `(deny default)` and allows back only fork and signals within
-  the jail; exec from `/bin`, `/usr/bin` and the resolved `node`, `claude`
-  and `git` install trees; reads outside `$HOME` plus the trial dirs and
-  runtime trees under it; writes to the trial's own dirs; one system
-  service by name (user lookup); and outbound IP plus the DNS resolver's
-  socket. LaunchServices, launchd job submission and every other launching
-  service are unreachable. A darwin test pins that a jailed `open` and
-  `launchctl submit` launch nothing. The allowlist was derived with the fake
-  `claude` shim, the real `claude --version` and a `node` HTTPS request; a
-  live sandboxed session has not been run against it yet.
+  starts from `(deny default)` and allows back only fork, signals within
+  the jail and sysctl reads; exec from `/bin`, `/usr/bin` and the resolved
+  `node`, `claude` and `git` install trees; reads outside `$HOME` (a
+  terminal excepted, see the next entry) plus the trial dirs, runtime
+  trees and the runner script under it; writes to the trial's own dirs and `/dev/null`; one
+  system service by name (user lookup), pinned as an exact set by a test;
+  and outbound IP plus the DNS resolver's socket. LaunchServices, launchd
+  job submission and every other system service that launches programs
+  are unreachable. Outbound IP includes localhost, so a local TCP service
+  that runs commands on request still acts for the session. A darwin test
+  pins that a jailed `open` and `launchctl submit` both exit nonzero and
+  launch nothing. The allowlist was derived with the fake `claude` shim,
+  the real `claude --version` and a `node` HTTPS request; a live sandboxed
+  session has not been run against it yet. When one needs more, the
+  evals README says how to read the denied name from the unified log.
+- **A sandboxed session could read what the operator typed into the
+  terminal.** The eval runner's jail allowed file reads of `/dev/tty` and
+  the pty devices, and its children share the runner's terminal, so a
+  jailed session or post-session step could read keystrokes typed during a
+  run and send them out over the network. The profile's last rule now
+  denies reading `/dev/tty` and `/dev/ttysN`; a darwin test runs a reader
+  in a real pty and pins that both opens are refused.
 - **A child's output could write terminal escape sequences to the operator's
   terminal.** Every child the eval runner spawns now has its stdout and
   stderr piped, and what reaches the operator (error messages, result lines)
