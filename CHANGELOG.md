@@ -355,24 +355,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model-written test command hold the terminal on none of them, nor do the
   runner's own git calls wherever `PATH` can shadow git (not when git sits
   next to `node`).
-- **The eval runner's jail blocked Homebrew git's own helpers.** The jail
-  lets a process run git's install tree, found from `git --exec-path`.
-  Homebrew's git reports that path through its `opt` symlink
-  (`/opt/homebrew/opt/git/...`). Seatbelt matches the real path behind the
-  symlink (`Cellar/git/<version>/...`), so those rules never matched and git's
-  non-builtin helpers could not run under the jail. The exec path is now
-  resolved to its real path first. This lets the jail run exactly the git
-  install it was meant to allow, nothing more. A test pins this with a
-  symlinked git prefix, both in the generated profile and under the real
-  `sandbox-exec`.
-- **A sandboxed session could fail to find `git` by name.** A lookup by name
-  walks `PATH` and stops at the first entry that fails with anything but "not
-  found". Inside the jail, an entry it denies (on the macOS CI runner, one
-  ahead of Homebrew's `git`) failed with "operation not permitted", so the
-  session's `git` failed with EPERM, and a real session's Bash tool would
-  have hit the same. Jailed children now get a `PATH` holding only the
-  entries the jail lets them run programs from. That list is built from the
-  same directories as the profile's exec rule, so the two cannot drift.
 - **A failed `claude` run's error hid its cause.** The result line's error
   began with the child's whole command line: the prompt and, in a sandboxed
   run, the whole seatbelt profile. With the error capped, that left no room
