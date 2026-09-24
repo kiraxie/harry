@@ -1217,8 +1217,11 @@ export function buildAgenticSandboxProfile({
 // and an HTTPS fetch all run with none; user lookup is the one thing that fails
 // without it (node's os.userInfo() throws), and it answers directory queries only.
 // A live `claude` session was not run to derive this list (API spend); if one needs
-// another service, add that one exact name after checking it cannot launch or drive
-// a program, never a prefix or a bare `(allow mach-lookup)`.
+// another service (evals/README.md says how to read the denied name from the unified
+// log), add that one exact name after checking it cannot launch, drive or act for
+// the caller as a program (keychain, preferences and login-item services can), never
+// a prefix or a bare `(allow mach-lookup)`. A test pins this exact set, so the
+// addition is also a visible test edit.
 const JAIL_MACH_SERVICES = [
   "com.apple.system.opendirectoryd.libinfo", // getpwuid/getgrgid: user and group lookup
 ];

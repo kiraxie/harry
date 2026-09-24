@@ -265,9 +265,9 @@ prompts**. Do not point this at untrusted input.
 `EVALS_SANDBOX=1` wraps each **agentic** session in a macOS
 [seatbelt](https://developer.apple.com/) profile via `sandbox-exec`. The profile
 is deny-by-default: a misbehaving or prompt-injected session can write only its
-own trial's dirs, read nothing under your `$HOME`, and reach no system service
-that could start a program outside the jail, such as LaunchServices (`open`) or
-launchd (`launchctl`).
+own trial's dirs, read nothing under your `$HOME` and nothing you type into the
+terminal, and reach no system service that could start a program outside the
+jail, such as LaunchServices (`open`) or launchd (`launchctl`).
 
 **What it does:** the generated profile's first rule is `(deny default)`. It then
 allows back only this list:
@@ -276,7 +276,9 @@ allows back only this list:
   `claude` and `git` install trees (including git's helper dir and the real
   binary behind Apple's `/usr/bin/git` shim), never from a trial dir; signals to
   processes in the same jail only; sysctl reads;
-- **reads:** everything outside `$HOME`. Under `$HOME`, only the trial dirs, the
+- **reads:** everything outside `$HOME` except a terminal: `/dev/tty` and the
+  pty devices `/dev/ttysN` are denied, so the session cannot read what you type
+  while it runs. Under `$HOME`, only the trial dirs, the
   `claude`, `node` and `git` install trees (a runtime under `$HOME`, such as nvm
   node or the `~/.local` claude install, must stay readable for the child to
   start), and `scripts/run-evals.mjs` itself (for the post-session child). Each
@@ -287,7 +289,8 @@ allows back only this list:
   temp root, not another trial's dirs, and not a user-writable directory such as
   `/opt/homebrew/bin`;
 - **system services:** one, by exact name: `com.apple.system.opendirectoryd.libinfo`,
-  for user and group lookup. Nothing that can start or drive a program;
+  for user and group lookup. Nothing that can start or drive a program. A test
+  pins this exact set, so adding a name means editing that test too;
 - **network:** outbound IP to any host and port, and the DNS resolver's socket.
   No other unix socket, so a local daemon listening on one (a Docker socket, for
   example) is unreachable.
@@ -295,9 +298,33 @@ allows back only this list:
 This allowlist was derived with the fake `claude` shim: the jail tests pass with
 nothing more, and the real `claude --version` and an HTTPS request from `node`
 also run under it. A live run with the real `claude` still has to confirm it
-needs nothing else. If it does, the trial fails with a sandbox denial (the jail
-fails closed, never open); add the one exact rule the denial names, never a
-broad one.
+needs nothing else. If it does, the trial fails closed, never open: its `error`
+carries the failing child's own stderr, which does not name what was denied.
+The kernel logs sandbox denials to the unified log, readable without `sudo`.
+Watch it while the run happens, or read it back afterwards:
+
+```sh
+log stream --style compact --predicate 'sender == "Sandbox"'
+log show --last 10m --style compact --predicate 'sender == "Sandbox"'
+```
+
+Each line reads `Sandbox: <process>(<pid>) deny(1) <operation> <target>`, for
+example `Sandbox: pbpaste(123) deny(1) mach-lookup com.apple.pasteboard.1`. The
+target is the service name or path that was refused. Other apps' sandboxes log
+here too, so keep only the jailed processes (`node`, `git`, and `claude`, which
+the log names by its version, such as `2.1.281`). Those also log denials they
+run fine without; never add these: `mach-lookup` of `com.apple.logd`,
+`com.apple.diagnosticd`, `com.apple.system.notification_center`,
+`com.apple.system.opendirectoryd.membership` and `com.apple.bsd.dirhelper`,
+`file-read-data ~/.CFUserTextEncoding`, `file-write-data /dev/dtracehelper` and
+`system-info vfs.disk-space`. The log is not complete: the kernel folds repeats
+into `N duplicate reports` lines and does not report every denial (a jailed
+`claude` started from a directory under `$HOME`, which it may not read, failed
+and logged only the `/dev/dtracehelper` line). If nothing there explains the failure, the log will
+not name it; do not guess a rule from the error text. Add only a denial the
+failing process hit, by its exact name, after checking by hand that it cannot
+start, drive or act for you as a program outside the jail (a keychain,
+preferences or login-item service can). Never add a prefix or a broad rule.
 
 So the session keeps working in its fixture. The kernel denies anything the list
 does not allow: reads of ssh keys, other credentials and documents under
@@ -318,10 +345,11 @@ re-open `~/.gitconfig`.
 - **Exec of system tools** — the session can run anything in `/bin`, `/usr/bin`
   and the runtime trees, `open` and `launchctl` included. That is safe only
   because the services those tools need to act outside the jail are denied; a
-  test pins that `open` and `launchctl submit` launch nothing.
+  test pins that `open` and `launchctl submit` both exit nonzero and launch
+  nothing.
 - **Reads outside `$HOME`** — the session can read anything outside your home
-  that your user can read: system dirs, `/opt`, and the temp root, including
-  other trials' dirs. It cannot write them. These three broad allowances
+  that your user can read, a terminal excepted: system dirs, `/opt`, and the
+  temp root, including other trials' dirs. It cannot write them. These three broad allowances
   (outbound IP, exec of whole system and runtime dirs, reads outside `$HOME`)
   are recorded, with their upgrade path, in the `DEBT:` note on
   `buildSeatbeltProfile` in `scripts/run-evals.mjs`.
