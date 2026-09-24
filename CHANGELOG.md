@@ -323,10 +323,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   system service by name (user lookup); and outbound IP plus the DNS
   resolver's socket. A test compares the whole generated profile to fixed
   text, so any rule change, an added service included, is a test edit.
-  LaunchServices, launchd job submission and every other system service
-  that launches programs are unreachable. Outbound IP includes localhost, so a local TCP service
-  that runs commands on request still acts for the session. A darwin test
-  pins that a jailed `open` and `launchctl submit` both exit nonzero and
+  LaunchServices and Apple Events need mach-lookup names the profile denies;
+  launchd does not: `launchctl` reaches it over the task's bootstrap port
+  instead, so the profile does not gate it. launchd refuses submission but starts
+  an already-loaded job on `kickstart` and persists a `disable`, both outside
+  the jail — recorded, with its ceiling and upgrade path, in the `DEBT:` note
+  on `buildSeatbeltProfile`. Outbound IP includes localhost, so a local TCP
+  service that runs commands on request still acts for the session. A darwin
+  test pins that a jailed `open` and `launchctl submit` both exit nonzero and
   launch nothing. The allowlist was derived with the fake `claude` shim,
   the real `claude --version` and a `node` HTTPS request; a live sandboxed
   session has not been run against it yet. When one needs more, the

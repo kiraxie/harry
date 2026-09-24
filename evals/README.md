@@ -239,7 +239,9 @@ containment layers address this:
   re-planted after the restore, a `gpg.program` or a test, runs inside that jail
   if it runs at all. The jail is deny-by-default (below), so code running there
   can write only the trial's own dirs and cannot ask a system service to start a
-  program outside the jail. **Unsandboxed** the step runs in the runner itself,
+  program outside the jail, with one exception: launchd will `kickstart` a job
+  you already have loaded (see the OS sandbox section's "does NOT contain" list
+  below). **Unsandboxed** the step runs in the runner itself,
   and none of this is a security boundary: the session already ran as you, with
   your filesystem. The checks there only guard against accidents.
 - **What the runner runs after a session** is fixed before the first one:
@@ -251,8 +253,9 @@ containment layers address this:
 - **Filesystem and system-service exposure** is bounded by the opt-in
   [OS sandbox](#os-sandbox-opt-in-evals_sandbox) below: `EVALS_SANDBOX=1` runs the
   session under a deny-by-default profile that confines its writes to its own
-  trial's dirs, denies it reads under your `$HOME`, and lets it reach no system
-  service that could start a program outside the jail.
+  trial's dirs, denies it reads under your `$HOME`, and lets it reach almost no
+  system service that could start a program outside the jail (see "What it does
+  NOT contain" below for the launchd exception).
 
 What remains unbounded even with both is *network* (the session must reach the API)
 and the **env-held credential** (no OS sandbox can hide an env var from the session's
@@ -266,8 +269,11 @@ prompts**. Do not point this at untrusted input.
 [seatbelt](https://developer.apple.com/) profile via `sandbox-exec`. The profile
 is deny-by-default: a misbehaving or prompt-injected session can write only its
 own trial's dirs, read nothing under your `$HOME` and nothing you type into the
-terminal, and reach no system service that could start a program outside the
-jail, such as LaunchServices (`open`) or launchd (`launchctl`).
+terminal, and reach no *mach-lookup* system service that could start a program
+outside the jail, such as LaunchServices (`open`) or Apple Events (`osascript`).
+launchd is an exception: `launchctl` reaches it over the task's bootstrap
+port rather than a mach-lookup name, so this profile does not gate it at all
+(see "What it does NOT contain" below).
 
 **What it does:** the generated profile's first rule is `(deny default)`. It then
 allows back only this list:
@@ -283,15 +289,21 @@ allows back only this list:
   node or the `~/.local` claude install, must stay readable for the child to
   start), and `scripts/run-evals.mjs` itself (for the post-session child). Each
   runtime tree is its whole **containing directory**, so sibling files there are
-  readable and executable too: a coarse allow, not a single-file grant;
+  readable and executable too: a coarse allow, not a single-file grant — an nvm
+  `node` install makes that whole node-version directory exec-able, and a
+  `claude` installed as `~/.local/bin/claude` (a common location) makes the
+  whole of `~/.local/bin` readable and exec-able, other binaries there included;
 - **writes:** exactly this trial's own config dir, fixture repo and temp dir (the
   trial's `TMPDIR`), plus `/dev/null`. Not the fixture's parent, not the shared
   temp root, not another trial's dirs, and not a user-writable directory such as
   `/opt/homebrew/bin`;
-- **system services:** one, by exact name: `com.apple.system.opendirectoryd.libinfo`,
-  for user and group lookup. Nothing that can start or drive a program. A test
-  pins the whole generated profile as fixed text, so adding a name, or changing
-  any other rule, means editing that test too;
+- **system services:** one *mach-lookup* name allowed, by exact match:
+  `com.apple.system.opendirectoryd.libinfo`, for user and group lookup — nothing
+  else reachable that way can start or drive a program. launchd is reached
+  through a different channel this allowlist does not cover at all; see "What it
+  does NOT contain" below. A test pins the whole generated profile as fixed
+  text, so adding a name, or changing any other rule, means editing that test
+  too;
 - **network:** outbound IP to any host and port, and the DNS resolver's socket.
   No other unix socket, so a local daemon listening on one (a Docker socket, for
   example) is unreachable.
@@ -339,8 +351,9 @@ preferences or login-item service can). Never add a prefix or a broad rule.
 
 So the session keeps working in its fixture. The kernel denies anything the list
 does not allow: reads of ssh keys, other credentials and documents under
-`$HOME`, writes anywhere but its own trial's dirs, and requests to a service that
-would start a program as you, outside the jail. The post-session step (above) runs
+`$HOME`, writes anywhere but its own trial's dirs, and mach-lookup requests to a
+service that would start a program as you, outside the jail — with the launchd
+exception below ("What it does NOT contain"). The post-session step (above) runs
 as one child under the same profile, so the runner's own restore, git calls and the
 model-written tests stay inside the jail too. The session's git identity is pinned
 via env (`Eval Fixture <eval@localhost>`, `GIT_CONFIG_GLOBAL=/dev/null`,
@@ -354,16 +367,29 @@ re-open `~/.gitconfig`.
   no-exfiltration boundary. It includes `localhost`, so a local TCP service that
   runs commands for any client would act for the session.
 - **Exec of system tools** — the session can run anything in `/bin`, `/usr/bin`
-  and the runtime trees, `open` and `launchctl` included. That is safe only
-  because the services those tools need to act outside the jail are denied; a
-  test pins that `open` and `launchctl submit` both exit nonzero and launch
-  nothing.
+  and the runtime trees, `open` and `launchctl` included. Running `open` or
+  `osascript` is safe only because the mach-lookup services they'd need to act
+  outside the jail are denied; a test pins that `open` and `launchctl submit`
+  both exit nonzero and launch nothing. `launchctl` is not fully covered by that
+  same guarantee — see the next bullet.
+- **launchd job control** — `launchctl` reaches launchd over the task's
+  bootstrap port, not a mach-lookup name, so the jail does not gate it at all.
+  launchd applies its own checks per subcommand: `submit`, `bootstrap`, `load`,
+  `kill`, `bootout` and `setenv` are refused. Two are not: `launchctl kickstart
+  gui/<uid>/<label>` starts an already-loaded job of yours outside the jail, and
+  `launchctl disable gui/<uid>/<label>` writes a disabled entry to launchd's
+  override store that persists across reboot. This is fine for a maintainer-run
+  gate on trusted, repo-authored cases; it is not a boundary for untrusted
+  input. Run untrusted cases on an ephemeral machine (a CI runner or a VM)
+  instead.
 - **Reads outside `$HOME`** — the session can read anything outside your home
   that your user can read, a terminal excepted: system dirs, `/opt`, and the
-  temp root, including other trials' dirs. It cannot write them. These three broad allowances
-  (outbound IP, exec of whole system and runtime dirs, reads outside `$HOME`)
-  are recorded, with their upgrade path, in the `DEBT:` note on
-  `buildSeatbeltProfile` in `scripts/run-evals.mjs`.
+  temp root, including other trials' dirs. It cannot write them.
+
+These four broad allowances (outbound IP, exec of whole system and runtime
+dirs, reads outside `$HOME`, and the launchd residual above) are recorded, with
+their upgrade path, in the `DEBT:` note on `buildSeatbeltProfile` in
+`scripts/run-evals.mjs`.
 - **The session's own credential** — the child's env is allowlisted, so nothing
   else from your shell reaches it. But it must hold its one credential to reach
   the API, and no OS sandbox can hide an env var from the session's own

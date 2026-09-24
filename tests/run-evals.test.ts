@@ -2433,7 +2433,8 @@ test("buildSeatbeltProfile: the whole profile is exactly this text (golden)", ()
     `(version 1)
 ;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
 ;; Deny everything, then allow back only what node, claude and git need:
-;; no system service that could start a program outside this jail.
+;; no mach-lookup service can start a program outside this jail (launchd's
+;; bootstrap port is a separate, narrower exception; see the DEBT note).
 (deny default)
 (allow process-fork)
 (allow signal (target same-sandbox))
@@ -2476,7 +2477,8 @@ test("buildSeatbeltProfile: with no trial dirs or runtime trees, those sections 
     `(version 1)
 ;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
 ;; Deny everything, then allow back only what node, claude and git need:
-;; no system service that could start a program outside this jail.
+;; no mach-lookup service can start a program outside this jail (launchd's
+;; bootstrap port is a separate, narrower exception; see the DEBT note).
 (deny default)
 (allow process-fork)
 (allow signal (target same-sandbox))

@@ -1101,8 +1101,8 @@ function runTextCase(bin, model, prompt, configDir, workDir, env, tmpDir) {
 // arbitrary code execution, including network. Exec containment is the opt-in
 // EVALS_SANDBOX=1 seatbelt jail (see buildSeatbeltProfile / sandboxContext): a
 // deny-by-default profile that lets the session write only its own trial's dirs,
-// read nothing under the operator's $HOME, and reach no system service that
-// could start a program outside the jail.
+// read nothing under the operator's $HOME, and reach almost no system service —
+// see the launchd exception in the DEBT note on buildSeatbeltProfile.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -1140,7 +1140,8 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, tmpDir, 
   }
   // Opt-in EVALS_SANDBOX: the child runs inside the trial's seatbelt jail (built in
   // runEvals by trialJail): deny-by-default, writes only to its own trial's dirs, no
-  // reads under $HOME, no system service that could launch a program outside it.
+  // reads under $HOME, almost no system service (the launchd exception is in the
+  // DEBT note on buildSeatbeltProfile).
   const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, bin, args);
   return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, env, tmpDir);
 }
@@ -1210,9 +1211,13 @@ export function buildAgenticSandboxProfile({
 
 // The system services (mach-lookup global names) a jailed process may reach, by
 // exact name. Every other service is denied by `(deny default)`, and that is what
-// keeps the jail closed: LaunchServices (`open`), launchd job submission
-// (`launchctl`), Apple Events (`osascript`) and every other broker that could start
-// or drive a program OUTSIDE the jail, as the operator, are unreachable. Derived
+// keeps LaunchServices (`open`) and Apple Events (`osascript`) from starting or
+// driving a program OUTSIDE the jail, as the operator: both reach their broker
+// through a mach-lookup global name this deny closes. launchd is different:
+// `launchctl` reaches it over the task's bootstrap port, not a mach-lookup name,
+// so this allowlist does not gate it at all — launchd applies its own checks per
+// subcommand instead (see the DEBT note on buildSeatbeltProfile for what those
+// checks still let through). Derived
 // empirically: the jailed post-session step (git, node --test), `claude --version`
 // and an HTTPS fetch all run with none; user lookup is the one thing that fails
 // without it (node's os.userInfo() throws), and it answers directory queries only.
@@ -1253,18 +1258,27 @@ const JAIL_MACH_SERVICES = [
 //     the operator's opt-in proxy) and the DNS resolver's socket. No other unix
 //     socket, so no local daemon reachable that way (a Docker socket, say).
 //
-// DEBT: three allowances stay broad. (1) Reads outside $HOME: the session can read
+// DEBT: four allowances stay broad. (1) Reads outside $HOME: the session can read
 // anything there the operator's user can but a terminal, other trials' dirs
-// included; (2) exec of
-// everything in /bin, /usr/bin and the runtime trees' whole dirs (`open`,
-// `launchctl` and `osascript` included), which is safe only because the services
-// those tools would need to act outside the jail are denied; (3) outbound IP to any host
+// included; (2) exec of everything in /bin, /usr/bin and the runtime trees' whole
+// dirs (`open`, `launchctl` and `osascript` included) — safe for `open` and
+// `osascript` because the mach-lookup services they'd need to act outside the
+// jail are denied, but NOT for `launchctl`, see (4); (3) outbound IP to any host
 // and port, localhost included, so a local TCP service that runs commands on
-// request would act for the session. Ceiling: fine for a maintainer-run gate on
-// trusted prompts, where network was already open by design. Upgrade path: a read
-// allowlist (the runtime trees, system libraries, the trial dirs) in place of
-// (1), exec of exactly the resolved binaries in place of (2), and a forwarder that
-// gives the session one loopback port to the API in place of (3) (the same one the
+// request would act for the session; (4) `launchctl` reaches launchd over the
+// task's bootstrap port, which this profile cannot deny, and launchd applies its
+// own checks per subcommand: `submit`, `bootstrap`, `load`, `kill`, `bootout` and
+// `setenv` are refused, but `kickstart gui/<uid>/<label>` starts an already-loaded
+// job of the operator's outside the jail, and `disable gui/<uid>/<label>` writes a
+// disabled entry to launchd's override store that persists across reboot.
+// Ceiling: fine for a maintainer-run gate on trusted, repo-authored cases — not
+// for untrusted input. Upgrade path for (4): run untrusted cases on an ephemeral
+// machine (a CI runner or a VM) instead of the operator's own session, since that
+// also moves the jailed process out of the operator's launchd domain, which is
+// what actually closes it. Upgrade path for (1)-(3): a read allowlist (the
+// runtime trees, system libraries, the trial dirs) in place of (1), exec of
+// exactly the resolved binaries in place of (2), and a forwarder that gives the
+// session one loopback port to the API in place of (3) (the same one the
 // credential DEBT on buildChildEnv names).
 //
 // SBPL is last-match-wins: the broad rules come first, then the narrow ones
@@ -1281,7 +1295,8 @@ export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [], al
     "(version 1)",
     ";; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).",
     ";; Deny everything, then allow back only what node, claude and git need:",
-    ";; no system service that could start a program outside this jail.",
+    ";; no mach-lookup service can start a program outside this jail (launchd's",
+    ";; bootstrap port is a separate, narrower exception; see the DEBT note).",
     "(deny default)",
     "(allow process-fork)",
     "(allow signal (target same-sandbox))",
