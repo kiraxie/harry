@@ -2479,6 +2479,17 @@ test("buildSeatbeltProfile: starts from (deny default) and never allows a servic
   }
 });
 
+test("buildSeatbeltProfile: allows exactly the pinned system services, by name", () => {
+  // The service list is the part of the jail expected to grow (README tells the
+  // operator to add a name a live run needs), and a substring blocklist lets through
+  // services that act for the caller (keychain, preferences, login items). So the
+  // set is pinned exactly, like the write and exec sets: every addition is a
+  // deliberate edit here that review sees. Literal on purpose, not the constant.
+  const profile = buildSeatbeltProfile({ home: "/Users/op" });
+  const services = Array.from(profile.matchAll(/\(global-name "([^"]+)"\)/g), (m) => m[1]);
+  assert.deepEqual(services.sort(), ["com.apple.system.opendirectoryd.libinfo"]);
+});
+
 test("buildSeatbeltProfile: escapes quotes/backslashes so a path can't break the literal", () => {
   const profile = buildSeatbeltProfile({ home: '/Users/o"p\\x', allowWrite: [], allowRead: [] });
   assert.match(profile, /\(subpath "\/Users\/o\\"p\\\\x"\)/, "quote and backslash are escaped");
@@ -3076,6 +3087,13 @@ test(
       const attempts = readFileSafe(path.join(trialDir, "tmp", logName));
       assert.match(attempts, /^open-tried /m, "the session tried `open`");
       assert.match(attempts, /^launchctl-tried /m, "the session tried `launchctl submit`");
+      // And each attempt was refused: a launch tool that exits 0 was let through, and
+      // one killed by the timeout (status null) hung rather than being denied. Either
+      // would leave the marker check below passing on a slow or broken probe alone.
+      for (const name of ["open", "launchctl"]) {
+        const status = attempts.match(new RegExp(`^${name}-tried (\\S+)`, "m"))?.[1];
+        assert.ok(Number(status) > 0, `jailed \`${name}\` exits nonzero (got ${status})`);
+      }
       // Both services answer asynchronously; the unjailed positive landed in under
       // 0.5s, so a 3s window with no marker is a clean negative.
       const deadline = Date.now() + 3000;
