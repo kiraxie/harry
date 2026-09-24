@@ -2991,27 +2991,58 @@ test(
 );
 
 test(
-  "run CLI under a real pty, EVALS_SANDBOX=1: no spawned child holds the terminal on fd 0, 1 or 2",
+  "run CLI under a real pty, jailed and unjailed: no spawned child holds the terminal on fd 0, 1 or 2",
   DARWIN_ONLY,
   () => {
     // The jail denies OPENING a terminal (its last rule), not reading one a process
     // already holds: a terminal handed over on fd 0, 1 or 2 reads freely under the
     // jail. So a runner started from a terminal must hand every child pipes or
     // /dev/null, never "inherit". script(1) gives the runner a real pty on all three
-    // fds, as the operator's shell would, and each spawned child records its own:
-    //   - the sandbox-exec stand-in, which IS the child the session spawn and the
-    //     post-session spawn start (the jailed process keeps its fds);
-    //   - the fake claude, from inside the jail;
-    //   - a git logger on PATH, for the runner's own git spawns (skipped alone when
-    //     git sits next to node, where PATH cannot shadow it). The jailed git
-    //     calls cannot write its log, and hold the post-session child's fds,
-    //     recorded above; so does the model-written test command.
+    // fds, as the operator's shell would, and each of the runner's spawns records
+    // isatty for its own fds 0-2, from inside the spawned process:
+    //   - the claude session and the post-session step: the sandbox-exec stand-in,
+    //     which IS the child both jailed spawns start (the jailed process keeps its
+    //     fds), and the fake claude itself, jailed or not;
+    //   - the model-written test command: a probe the case runs as its test
+    //     command. Jailed, the post-session step spawns it, so its fds come from
+    //     that step's; unjailed, the runner spawns it itself (see the loop below);
+    //   - the runner's own git spawns: a git logger on PATH, ONLY where PATH can
+    //     shadow git (not when git sits next to node). The jailed git calls, inside
+    //     the post-session step, cannot write its log; their fds come from that
+    //     step's, recorded above. Unjailed, every git call is the runner's own.
+    // The run uses a copy of the runner under a throwaway plugin root, so the probe
+    // case and fixture need not ship in evals/.
     const dir = realpathSync(tmpDir("harry-evals-pty-fds-"));
     try {
       const binDir = path.join(dir, "bin");
       const gitDir = path.join(dir, "git");
       const fxRoot = path.join(dir, "root");
-      for (const d of [binDir, gitDir, fxRoot]) mkdirSync(d);
+      const plugin = path.join(dir, "plugin");
+      const fixture = path.join(plugin, "evals", "fixtures", "pty-probe");
+      for (const d of [binDir, gitDir, fxRoot, path.join(plugin, "scripts"), fixture]) {
+        mkdirSync(d, { recursive: true });
+      }
+      const runner = path.join(plugin, "scripts", "run-evals.mjs");
+      writeFileSync(runner, readFileSync(path.join(pluginRoot, "scripts", "run-evals.mjs")));
+      writeFileSync(
+        path.join(plugin, "evals", "cases.jsonl"),
+        `${JSON.stringify({
+          id: "pty-fds",
+          mode: "agentic",
+          fixture: "pty-probe",
+          prompt: "Probe the fds.",
+          law: "§5",
+          checks: [{ type: "test_command_passes", command: "node tty-probe.mjs" }],
+        })}\n`,
+      );
+      writeFileSync(
+        path.join(fixture, "tty-probe.mjs"),
+        [
+          'import { writeFileSync } from "node:fs";',
+          'import { isatty } from "node:tty";',
+          'writeFileSync("tty-probe.json", JSON.stringify([0, 1, 2].map((fd) => isatty(fd))));',
+        ].join("\n"),
+      );
       installFakeClaude(binDir, undefined, { callsInConfigDir: true });
       const { wrapper, ttyLog } = installLoggingSandboxExec(binDir);
       const logGit = !shadowedBy("git").skip;
@@ -3036,22 +3067,25 @@ test(
           ].join("\n"),
           { mode: 0o755 },
         );
-      // script's stdin must be a file (see the terminal-read test above).
+      // script's stdin must be a file (see the terminal-read test above). script
+      // exits with its command's status; inPty says how the run ended.
       const typed = path.join(dir, "typed.txt");
       writeFileSync(typed, "typed\n");
       const inPty = (argv: string[], env: Record<string, string | undefined>) => {
         const stdin = openSync(typed, "r");
         try {
-          spawnSync("/usr/bin/script", ["-q", "/dev/null", ...argv], {
+          const r = spawnSync("/usr/bin/script", ["-q", "/dev/null", ...argv], {
             stdio: [stdin, "ignore", "ignore"],
             env,
             timeout: 120_000,
             killSignal: "SIGKILL",
           });
+          return `status ${r.status}, signal ${r.signal}, error ${r.error?.message ?? "none"}`;
         } finally {
           closeSync(stdin);
         }
       };
+      const EXITED_0 = "status 0, signal null, error none";
       const ttyRecords = (file: string) =>
         readFileSafe(file)
           .split("\n")
@@ -3067,8 +3101,16 @@ test(
         allowWrite: [dir],
         bin: process.execPath,
       });
-      inPty([process.execPath, "-e", probe], process.env);
-      inPty(["/usr/bin/sandbox-exec", "-p", profile, process.execPath, "-e", probe], process.env);
+      assert.equal(
+        inPty([process.execPath, "-e", probe], process.env),
+        EXITED_0,
+        "unjailed control",
+      );
+      assert.equal(
+        inPty(["/usr/bin/sandbox-exec", "-p", profile, process.execPath, "-e", probe], process.env),
+        EXITED_0,
+        "jailed control",
+      );
       assert.deepEqual(
         ttyRecords(control),
         [
@@ -3078,59 +3120,76 @@ test(
         "script gives a process the terminal on fds 0-2, and isatty sees it jailed too",
       );
 
-      const out = path.join(dir, "o.jsonl");
-      const runner = path.join(pluginRoot, "scripts", "run-evals.mjs");
-      inPty(
-        [
-          process.execPath,
-          runner,
-          "run",
-          "--condition",
-          "candidate",
-          "--model",
-          "m",
-          "--cases",
-          "agentic-isolate-branch",
-          "--out",
-          out,
-          "--agentic",
-        ],
-        {
-          ...authFreeEnv(),
-          PATH: logGit ? `${gitDir}:${process.env.PATH}` : process.env.PATH,
-          EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-          EVALS_FIXTURE_ROOT: fxRoot,
-          EVALS_SANDBOX: "1",
-          EVALS_SANDBOX_EXEC: wrapper,
-          EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
-        },
-      );
-      const lines = readFileSafe(out)
-        .split("\n")
-        .filter(Boolean)
-        .map((l) => JSON.parse(l) as Record<string, string>);
-      assert.equal(lines.length, 1, "the run wrote its one result line");
-      assert.equal(lines[0].error, undefined, String(lines[0].error));
-      assert.deepEqual(
-        ttyRecords(ttyLog),
-        [
-          [false, false, false],
-          [false, false, false],
-        ],
-        "the session spawn and the post-session spawn: no fd is the terminal",
-      );
-      assert.deepEqual(
-        readCalls(lines[0].configDir).map((c) => c.tty),
-        [[false, false, false]],
-        "inside the jail, the session holds no terminal fd",
-      );
-      if (logGit) {
-        const gitSpawns = ttyRecords(gitLog);
-        assert.ok(
-          gitSpawns.length >= 5,
-          `the runner's git spawns were logged (${gitSpawns.length})`,
+      // Twice: jailed, and unjailed, where the post-session step runs in the
+      // runner's own process, so the runner spawns the test command itself and the
+      // probe pins that spawn's options directly (jailed, it pins them only through
+      // the post-session step's fds).
+      const none = [false, false, false];
+      for (const sandboxed of [true, false]) {
+        const mode = sandboxed ? "jailed" : "unjailed";
+        rmSync(ttyLog, { force: true });
+        rmSync(gitLog, { force: true });
+        const out = path.join(dir, `${mode}.jsonl`);
+        const ended = inPty(
+          [
+            process.execPath,
+            runner,
+            "run",
+            "--condition",
+            "baseline",
+            "--model",
+            "m",
+            "--cases",
+            "pty-fds",
+            "--out",
+            out,
+            "--agentic",
+          ],
+          {
+            ...authFreeEnv(),
+            PATH: logGit ? `${gitDir}:${process.env.PATH}` : process.env.PATH,
+            EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+            EVALS_FIXTURE_ROOT: fxRoot,
+            EVALS_SANDBOX: sandboxed ? "1" : "",
+            EVALS_SANDBOX_EXEC: wrapper,
+            EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+          },
         );
-        for (const fds of gitSpawns) assert.deepEqual(fds, [false, false, false], "a git spawn");
+        const lines = readFileSafe(out)
+          .split("\n")
+          .filter(Boolean)
+          .map((l) => JSON.parse(l) as Record<string, string>);
+        const testCommand = lines[0]?.fixtureDir
+          ? readFileSafe(path.join(lines[0].fixtureDir, "tty-probe.json"))
+          : "";
+        // The fd records first, all in one comparison: a terminal handed to a child
+        // also breaks the run downstream (a stdin that is not the payload, a stdout
+        // nobody reads), and the exit status or the line's error would then name
+        // that symptom instead of the cause.
+        assert.deepEqual(
+          {
+            jailEntries: ttyRecords(ttyLog),
+            session: lines[0] ? readCalls(lines[0].configDir).map((c) => c.tty) : [],
+            testCommand: testCommand ? (JSON.parse(testCommand) as boolean[]) : null,
+            ...(logGit
+              ? { git: [...new Set(ttyRecords(gitLog).map((f) => JSON.stringify(f)))] }
+              : {}),
+          },
+          {
+            jailEntries: sandboxed ? [none, none] : [],
+            session: [none],
+            testCommand: none,
+            ...(logGit ? { git: [JSON.stringify(none)] } : {}),
+          },
+          `${mode}: no spawned child holds the terminal on fd 0, 1 or 2`,
+        );
+        if (logGit) {
+          const gitSpawns = ttyRecords(gitLog).length;
+          assert.ok(gitSpawns >= 5, `${mode}: the runner's git spawns were logged (${gitSpawns})`);
+        }
+        assert.equal(ended, EXITED_0, `${mode}: the runner itself`);
+        assert.equal(lines.length, 1, `${mode}: the run wrote its one result line`);
+        assert.equal(lines[0].error, undefined, String(lines[0].error));
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
