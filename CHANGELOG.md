@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Every review finding reaches the user with its long-term structural fix; a
   short-term fix only when that is not simple, a workaround never (§6). A fix
   inside a unit is tiered like a task: one that is Trivial and
-  weakens no test is made in the session and checked by the full suite, with
-  no re-review; any other fix keeps the full loop (§3). New findings in the
+  weakens no test is checked by the full suite, with no re-review; any other
+  fix is re-reviewed (§3). New findings in the
   same area in two review rounds in a row stop the work to ask the user
   whether the scope still serves the goal (§6). Both review references now ask
   for the structural fix, and the rubric flags comments that restate code,
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the shapes the change added or altered: an API, a DB schema, a public
   interface, or a module or service boundary. None → one declared line, `no
   shape changed, architecture review skipped`. Otherwise one independent,
-  read-only `opus` subagent reviews them, handed the shape list, the item's
+  read-only `analyst` reviews them, handed the shape list, the item's
   design and acceptance criteria, the branch diff, the last 20 commits
   touching the changed paths, and the whole repo to read. On the Codex build
   it runs out of session through `review --architecture` (below), falling back
@@ -56,6 +56,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--context @<file>`, so that build's architecture review is independent too.
 
 ### Changed
+
+- **The session writes; subagents only judge and read.** Splitting a unit
+  across parallel writers was almost never used, and the writing roles were
+  rarely dispatched. So the session now does all implementation, fixing and
+  writing at every tier, and dispatches only two roles: `analyst` (new; opus
+  at high effort, no edit tools) for review, architecture review, the debate's
+  opus voice and audit analysis (`/audit`'s deterministic candidate step is
+  now a script the session runs), and `scout` for reading. The Agent tool
+  takes no effort setting, so the fixed effort lives in the agent file.
+  `mech`, `writer` and `security` are removed, as are the dispatch cap,
+  subagent mode, task worktrees, the task ledger, per-task review and
+  `## Dispatch`. Review is one pass with the tier's lanes in parallel (Standard:
+  `analyst`; Major: `analyst` plus Codex), one fix wave by the session, one
+  scoped re-review, then a ruling on each open finding; there is no second
+  wave, and a small fix skips the re-review there too. A failed Codex lane is
+  recorded and the review goes on with one lane. Each review writes its merged
+  findings to a file that `## Progress` names, and a resume reads
+  `## Progress`, `git log` and those files. `/debate`'s opus voice no longer asks
+  for "ultrathink".
+  **Before updating:** finish or discard every in-flight Standard or Major
+  unit; this version does not read their `## Progress` or task worktrees.
+  After updating, run `/harry:sync` (Claude Code) and the `sync` skill
+  (Codex): the deployed laws still name the removed roles until you do.
 
 - **Plain writing covers every text written for people**, not only replies
   to the user: commit messages, PR comments, README, CHANGELOG, skills,
@@ -127,14 +150,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `## Plan`.** `## Why / What` ends with `### Acceptance criteria`: numbered
   `AC-1, AC-2, …`, each an outcome ("invalid input returns 400", never "add
   validate()") carrying its own verification — a command, a test, or a named
-  manual check. `## Dispatch` is optional and exists only when 2+ units run in
-  parallel (unit · AC covered · write set · cross-unit reads · lands first or
-  last). `## Progress` is append-only, cites AC IDs and commit ranges, and is
+  manual check. `## Progress` is append-only, cites AC IDs and commit ranges, and is
   what a resumed session reads; approved AC text is never edited to record
   progress. An in-flight item that still carries a legacy `## Plan` is read
   as-is.
 - **Review's spec verdict is per AC** — pass/fail/partial with evidence per
-  criterion, so subagent reports, review verdicts and progress notes all cite
+  criterion, so review verdicts and progress notes all cite
   the same IDs. A finding that conflicts with an AC goes to the human beside
   the AC text rather than being settled by an edit. An AC appended later may name one it
   supersedes; the superseded AC keeps its text and is judged by its successor
@@ -145,11 +166,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   approval covers all three. It then runs a premise check at exit (base up to
   date, premises still hold; AC is built on premises and cannot catch a wrong
   one) and hands off to `executing` directly.
-- **`executing`** works the AC list: briefs carry AC verbatim, reports and
-  review verdicts cite AC IDs, and task completion, fix rounds and the
-  breaker's rulings are appended to `## Progress`. It never edits an AC — one
-  that is wrong, impossible or ambiguous stops and asks the user. Parallel
-  dispatch reads `## Dispatch` when the item has one.
+- **`executing`** works the AC list: review verdicts cite AC IDs, and AC
+  completion, the review and its rulings are appended to `## Progress`. It
+  never edits an AC — one that is wrong, impossible or ambiguous stops and
+  asks the user.
 
 - **`/review` collapsed onto `codex exec review`.** The runtime command now
   spawns `codex exec review` directly as a separate, ephemeral, read-only
@@ -210,8 +230,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removed, and `version` (the `codex-cli` version, or `null` when unavailable)
   is added. `setup` now reads `codex --version` and `codex login status`.
 - The Codex role map (`references/codex-role-mapping.md`, inlined into
-  `~/.codex/AGENTS.md` by `/sync`) binds the security row and judgment-heavy
-  work to `gpt-5.6-luna` instead of `gpt-5.6-sol`, which a ChatGPT login
+  `~/.codex/AGENTS.md` by `/sync`) binds the analyst row to `gpt-5.6-luna` instead of `gpt-5.6-sol`, which a ChatGPT login
   rejects with a 400. Re-run `/sync` on the Codex build to pick it up.
 
 - **Finishing's cleanup and PR path, tightened.** The three rescue choices for
@@ -220,21 +239,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is named in the completion report and the quick-reference table; moving
   files into the main checkout checks for name collisions first; ignored files
   are listed to the user before removal, since `-uall` does not show them;
-  step f.4 names `f.1`/`f.3` instead of an ambiguous "step 2"; and Option 2's
+  and Option 2's
   In-flight annotation uses the main checkout's `.local/` from inside the
   worktree. A commit answering PR feedback re-runs step 2's shape gate before
   it is pushed, so a shape changed during PR iteration is reviewed too.
-- **Executing and the review rubric name their modes.** The round-4 cap names
-  subagent mode; step 6 hands the rubric itself, as step 3 does; steps 3 and 6
-  point at the Codex-build reviewer carve-out; the tmp dir's `mkdir -p` runs in
-  the steps that write there, not at every tier. The rubric's handoff list
-  covers session mode as well as subagent mode, and it states that on the Codex
-  build the rubric `review` embeds is what binds the single review lane.
-  `references/tier-gates.md`'s red-line gate names the Codex lane only where
-  the build has one.
-- **A unit that builds against another unit's unwritten interface is not
-  parallel with it.** `## Dispatch` gains no interfaces column; such a unit is
-  dispatched after the one it depends on lands.
 - **`/wait-what` keeps a question's recommended answer.** Re-asking a question
   plainer restates the recommendation it carried (grilling has every question
   carry one) rather than dropping it; it still never answers for the reader.
@@ -279,74 +287,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tests (macOS-only) run in CI too.
 
 - **Worktree isolation follows concurrent writers, not tier** (`HARRY.md`
-  §5). Two or more writers at once — parallel subagents, several efforts in
-  flight, the user editing alongside — each get a worktree, cut from the unit's
-  branch rather than the default branch; a single session working sequentially
-  takes a fresh branch in place at any tier. `executing` and
-  `references/tier-gates.md` say the same. A parallel task keeps its worktree
-  through its review and fix rounds, then integrates there before it is
-  marked complete: the unit branch is merged into it and the suite runs in
-  the worktree. Conflicts and a red suite go back into the task's fix loop
-  (the fixer, never the session, resolves conflicts; it stays inside the
-  task's write set; either one still open at the cap goes to the user
-  rather than being adjudicated), and conflict resolutions are reviewed
-  again by name at the final review. Only a green tree fast-forwards the
-  unit branch, and only while the unit's checkout is on that branch. Git,
-  not `## Progress`, is the record of task worktrees: each task's branch and
-  worktree are named from the unit branch and the task's AC ids
-  (`task/<unit branch>/<task id>`), and its branch point is kept as a
-  `refs/harry/<unit branch>/<task id>/base` ref. The worktree lives under
-  the git directory (`harry-worktrees/<unit branch>/<task id>`), outside
-  every working tree, so test runners and other tools that scan directories
-  never pick up a task's copy. Branch and base ref are created together in
-  one transaction before the worktree is cut, only if neither exists, and
-  deleted together too, so a lone base ref can only belong to a task that
-  ran on the unit branch; `executing` never deletes a base ref before its
-  task's complete line, so a re-run or resume reuses it. The task merges the
-  unit branch in with `--no-ff`, and its own work is counted without those
-  merges, so a task with no commits of its own lands nothing and never takes
-  other tasks' work as its own. The complete line (base ref → the head the
-  unit branch landed at) is written before `executing` removes the worktree,
-  branch and base ref, a removal that is safe to re-run. Each task's brief and
-  report are named by its task id, so git's record finds them, and its report
-  file is an append-only log — the session logs each dispatch and review, the
-  implementer its result, and each review attempt writes its own numbered
-  report file. The log is an evidence record, not state: people read it and a
-  resume shows its last entries, but nothing routes on it. Whether a task
-  branch is safe to delete is one check across both skills — `executing`'s
-  deletion proof, which compares trees, not commits — and `finishing`'s
-  landing check runs it. An implementer never merges, rebases, resets or pulls
-  the unit branch into its own task branch; integration does that. A session
-  that resumes the unit — a new one, or the same one after compaction —
-  continues a task on its own in one case only, read from git and
-  `## Progress`: complete, with its branch gone or safe to delete → remove it,
-  unless its worktree has uncommitted files or a merge in progress. Anything
-  else goes to the user — no complete line, even on a task already
-  fast-forwarded, or a complete task whose branch is not safe to delete —
-  since git cannot show whether an agent is still working on it or
-  whether its work was reviewed, and a check that cannot run counts as not
-  passing; a resume never re-dispatches a task on its own, repairs it or
-  writes an agent's entry for it. A scoped re-review after a resume starts at
-  the base ref unless the user names a head. While any parallel task is in
-  flight, every task gets its own worktree, so nothing writes in the unit
-  branch's checkout when it fast-forwards. On merge, PR or keep, `finishing`
-  only ever handles the unit's own checkout: a linked worktree or, for a
-  branch in place, none. Discard checks the main checkout is still on the
-  unit's branch before touching it, lists the unit's leftover task worktrees
-  and branches by their names for the user to confirm, and deletes the
-  confirmed tasks' branches and `refs/harry/` refs; if any entry is left
-  unconfirmed it keeps the unit's branch as well. Only `executing` writes a
-  complete line, and only its resume table classifies a leftover task: before
-  anything merges, `finishing` runs that table and removes only the tasks it
-  marks for removal, handing every other one back to `executing` or to the
-  user. Cleanup runs the table again after its landing check and before it
-  removes the unit's worktree, since a PR merged in a later session skips that
-  first check, and removes a task by running `executing`'s own removal step,
-  whose clean check the unit's worktree shares; PR follow-up commits re-run
-  the check before they are pushed. `references/doc-types.md` names the three
-  stores a unit keeps: git for code positions, `## Progress` for durable
-  outcomes, and the per-task log as an evidence record deleted with the unit's
-  tmp dir.
+  §5). Two or more writers at once — several units in flight, the user
+  editing alongside — each get a worktree; a single session working
+  sequentially takes a fresh branch in place at any tier. On merge, PR or
+  keep, `finishing` only ever handles the unit's own checkout: a linked
+  worktree or, for a branch in place, none. Discard checks the main checkout
+  is still on the unit's branch before touching it.
 
 ### Fixed
 
@@ -491,6 +437,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **The `mech`, `writer` and `security` role agents (breaking).** Anything
+  that dispatches `harry:mech`, `harry:writer` or `harry:security` fails.
+  Writing and mechanical edits are the session's own work now; review and
+  security analysis go to `harry:analyst`.
+
 - **Windows support.** The companion supports macOS and Linux only: its
   Windows `codex` resolution and `.cmd` shim spawning, and the Windows CI job,
   are gone. On Windows it now exits with a clear "not supported" error instead
@@ -500,7 +451,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `skills/writing-plans/` is deleted. By the time a plan was written the
   decisions were already settled, so it mostly transcribed `## Why / What`; its
   two parts that earned their place — the parallel split and the after-the-fact
-  record — survive as `## Dispatch` and `## Progress`.
+  record — survived as `## Dispatch` and `## Progress`; `## Dispatch` was later dropped.
 - `--adversarial`, `--simplify`, `--full`, `--fix`, `--harry-fix`, `--scope`,
   `--wait`, `--background`, `--model`, and `--timeout` on `review` — the CLI
   now rejects each by name.

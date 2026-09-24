@@ -64,21 +64,19 @@ same violation as an undefined term, just wearing plain words.
 
 ### Applying it — a worked example
 
-Before (a subagent brief may be this dense — four roles and a policy in one breath):
+Before (a subagent brief may be this dense — two roles and a policy in one breath):
 
-> predictable work routes by nature to a durable role — recon/lookup → `scout`;
-> mechanical, fully-specified edits → `mech`; prose/docs → `writer`;
-> security-sensitive → `security`. Roles carry their own model+effort bindings, so
-> dispatch the role and pass neither; judgment-heavy implementation has no role —
-> dispatch it ad-hoc at the dispatch cap with explicit model+effort…
+> The session does all implementation, fixing and writing itself. Dispatch only
+> independent judgment — review, debate, audit analysis → `analyst` — and bulk
+> reading → `scout`; each role binds its own model and effort, so pass neither…
 
 After (user-side, first layer of the same fact):
 
-> Routine work goes to a fixed helper, picked by what kind of work it is.
+> I do the work myself, and only hand off a second opinion or a lot of reading.
 
 Same fact, one new idea per message, no term used before its job is stated — the
-rest of it (which kind maps to which helper, what happens with judgment-heavy work)
-is a question away, not delivered unasked.
+rest of it (which helper takes which, how each is set up) is a question away,
+not delivered unasked.
 
 ### The deeper level — `/wait-what`
 

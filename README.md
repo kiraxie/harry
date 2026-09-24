@@ -14,8 +14,8 @@ Every non-trivial task is classified; the tier decides how much process applies 
 | Tier | Trigger | What runs |
 |------|---------|-----------|
 | **Trivial** | 1 file, mechanical, no branching | just do it + verify |
-| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, acceptance criteria, one test, inline execution + required independent review |
-| **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → item `## Why / What` + numbered acceptance criteria → subagent execution with per-AC review → finish |
+| **Standard** | 2–5 files, real logic, one subsystem | compressed brainstorm, acceptance criteria, one test, the session builds + one independent review |
+| **Major** | 6+ files, cross-subsystem, or a red line | full brainstorm → item `## Why / What` + numbered acceptance criteria → the session builds test-first → two review lanes (analyst + Codex) → finish |
 
 Any red line (security/auth/money/delete/migration/external contract/cross-boundary contract) forces **Major** regardless of size.
 
@@ -117,7 +117,7 @@ Neither passes a model — `~/.codex/config.toml` decides which one runs;
 These auto-trigger (no slash command); they are the pipeline:
 
 - **brainstorming** — turn an idea into an approved item `## Why / What` (SCQA) via the grilling interview (`references/grilling.md`), closing on a residue manifest and the numbered acceptance criteria approved with it (HARD-GATE: no code before approval). A Major/contested decision can escalate to `/debate`.
-- **executing** — build against the acceptance criteria, recording progress per AC ID; the tier auto-routes between session (inline) and subagent (fresh subagent per task + per-task review) mode.
+- **executing** — build against the acceptance criteria, recording progress per AC ID. The session writes the code; the tier sets the tests and the review (one `analyst` lane for Standard, plus a Codex lane for Major).
 - **finishing** — verify green, run an architecture review when the change altered an API, DB schema, public interface or module/service boundary, ask merge-vs-PR, then verify the merged result before any cleanup, archive the item, clean up the branch and any worktrees, and end on the confirmed base (CI as evidence when pushed; the merged-result suite when the merge stays local).
 
 ## Layout

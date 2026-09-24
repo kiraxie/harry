@@ -29,7 +29,6 @@ milestone: <slug>      # optional key — omit entirely if standalone
                         research, open questions -->
 ## Why / What      <!-- filled when promoted to active — the design and its acceptance criteria -->
 ### Acceptance criteria  <!-- last subsection of Why / What; approved with the design -->
-## Dispatch        <!-- optional — only when 2+ units are dispatched in parallel -->
 ## Progress        <!-- append-only, filled during execution -->
 ## Follow-ups      <!-- filled at brainstorming step 6 or during execution; flushed to new backlog items at finish -->
 ```
@@ -45,34 +44,18 @@ them (a wrong or impossible AC stops and asks). An AC appended later may name
 an AC it supersedes (finishing's **fix now** ruling drafts one that way); the
 superseded AC keeps its text and is judged by its successor, not on its own.
 
-`## Dispatch` exists only when 2+ units are dispatched in parallel — one row per
-unit:
-
-| Unit | AC | Writes | Reads from other units | Lands |
-|---|---|---|---|---|
-
-`Lands` is `first` or `last`; a cross-unit contract test lands last.
-
-There is no interfaces column on purpose: a unit that must build against a
-signature or contract another unit has not written yet is not parallel with it.
-Dispatch it after that unit lands, and read the interface from the landed code.
-
 `## Progress` is append-only and cites AC IDs and commit ranges. Approved AC
 text is never edited to record progress — progress goes here instead. The
-lines that rules read back: `fix round <R>/<cap>` (session mode resumes
-mid-loop from it; in subagent mode, a task the user sends back to step 4 takes
-the round one past it, `fix round 1/4` when it has none),
-`integration: conflicts resolved in <merge7>` (reviewed again at the final
-review), `complete (commits …)` (the AC is done), and adjudication rulings.
-`small fix: <what> (commit <sha7>)` is a record only; no rule reads it back.
-A unit in subagent mode (the executing skill) keeps three stores: git holds
-code positions — task branches, their worktrees and `refs/harry/…` base refs;
-`## Progress` holds durable outcomes; and each task's report log under
-`.local/tmp/<branch>/` is an evidence record, read by people and shown when a
-resume asks, deleted with the unit's tmp dir at finishing.
+lines that rules read back: `complete (commits …)` (the AC is done; resuming
+builds from the first AC without one), the review and fix-wave lines (where
+the review stands, and the findings file each names, holding what is open), and adjudication rulings. `small fix: <what> (commit
+<sha7>)` is a record only; no rule reads it back.
 
 **Legacy items.** An item written under the older shape keeps its `## Plan` and
 is read as-is; nothing migrates it, and no acceptance criteria are invented for it.
+
+A file `## Progress` names is unit state: it is kept until finishing's cleanup
+deletes the unit's tmp dir.
 
 ## Milestone items
 
@@ -113,8 +96,7 @@ milestone edit.
 - **One store per repo, resolved via the git common dir.** `.local/` lives in
   the MAIN checkout only. From inside any linked worktree, resolve the store
   root as the parent directory of `git rev-parse --path-format=absolute --git-common-dir` — worktrees
-  share the main repo's `.git`, so this lands every worktree (and every
-  subagent dispatched into one) on the same `.local/` without configuration
+  share the main repo's `.git`, so this lands every worktree on the same `.local/` without configuration
   or absolute-path conventions. (Caveat: worktrees off a bare-repo hub have
   no main checkout — the formula lands beside the bare dir; confirm a store
   location with the user there.) Never create a `.local/` inside a worktree;

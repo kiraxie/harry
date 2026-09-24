@@ -14,7 +14,6 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 | Item | none |
 | TDD | none — trivial one-liners need no test |
 | Review | none |
-| Execution | session, one-shot (no subagent needed) |
 
 ### Standard
 
@@ -24,8 +23,7 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 | Brainstorm | compressed depth — the interview runs, but divergence is brief and convergence covers only the frontier this task's scope raises (`references/grilling.md`); one approach proposal is enough, no full exploration; closes on the reference's exit gate unabridged |
 | Item | one `.local/items/<slug>.md`, `status: active` — `## Why / What` holds only `### Acceptance criteria` (short, each AC an outcome with its check) unless a real design decision was weighed (alternatives existed), in which case the decision record precedes them. Plus an append-only `## Progress`. |
 | TDD | one runnable check left behind (smallest thing that fails if the logic breaks); watch-it-fail encouraged, not mandatory |
-| Review | free subagent review — required (compensates for inline execution) |
-| Execution | session (inline), on a fresh branch in place — one writer needs no worktree (§5) |
+| Review | one `analyst` lane — required (`skills/executing/SKILL.md` step 3) |
 
 ### Major
 
@@ -33,12 +31,11 @@ Classify every non-trivial task into exactly one tier, then run that tier's gate
 |------|---------|
 | Trigger | 6+ files, cross-subsystem, **or any red line (see below)** |
 | Brainstorm | full — explore intent, requirements, design before any code |
-| Item | one `.local/items/<slug>.md`, `status: active` — `## Why / What` is a full decision record (Discussion → Decision → considered-but-rejected) ending in `### Acceptance criteria`, plus an append-only `## Progress` and a `## Dispatch` table when units run in parallel. If the work spans several items, add a `type: milestone` item linking them. |
+| Item | one `.local/items/<slug>.md`, `status: active` — `## Why / What` is a full decision record (Discussion → Decision → considered-but-rejected) ending in `### Acceptance criteria`, plus an append-only `## Progress`. If the work spans several items, add a `type: milestone` item linking them. |
 | TDD | full red-green-refactor, **watch-it-fail mandatory** (`references/red-green.md`) |
-| Review | per-task reviewer subagents, then a whole-branch reviewer subagent **plus** the Codex CLI review lane where the build has one (`skills/executing/SKILL.md` step 6) |
-| Execution | subagent (parallel independent units, each in its own worktree cut from the unit's branch — §5) |
+| Review | the `analyst` lane **plus** the Codex CLI review lane where the build has one (`skills/executing/SKILL.md` step 3) |
 
-**Gate scaling on a red-line promotion.** When a red line — not file count — is what forces Major, the promotion exists to guarantee the **verification** gates: a failing-reproduction / red-green test with watch-it-fail, the Major review gate (reviewer subagent plus the Codex lane, where the build has one), and full evidence discipline (§6), because the domain risk is exactly what those gates guard. The **design** gates scale with the change's actual design complexity — a mechanically-trivial red-line change (one-glance diff, no alternatives to weigh) takes a compressed brainstorm and a one-line `## Why / What` plus its acceptance criteria, not the full decision record. Acceptance criteria never scale away: they carry the verification. Scaling never reaches verification: a trivial-looking change in a red-line domain still ships red-green + review.
+**Gate scaling on a red-line promotion.** When a red line — not file count — is what forces Major, the promotion exists to guarantee the **verification** gates: a failing-reproduction / red-green test with watch-it-fail, the Major review gate (the `analyst` lane plus the Codex lane, where the build has one), and full evidence discipline (§6), because the domain risk is exactly what those gates guard. The **design** gates scale with the change's actual design complexity — a mechanically-trivial red-line change (one-glance diff, no alternatives to weigh) takes a compressed brainstorm and a one-line `## Why / What` plus its acceptance criteria, not the full decision record. Acceptance criteria never scale away: they carry the verification. Scaling never reaches verification: a trivial-looking change in a red-line domain still ships red-green + review.
 
 **Fixes inside a unit.** Whatever the unit's tier, a fix is small or not by HARRY.md §3; `skills/executing` step 4 runs it. Small, for example: rewording a sentence without changing what it asks of a model, an added test pin, a local one-line rename. Not small, for example: a sentence that changes what a model does (a real decision, rule 2), a loosened or deleted assertion, a one-line change in a red-line domain (it tiers Major), a refactor across files.
 

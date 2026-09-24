@@ -1,6 +1,6 @@
 # Round 2: Deep-dive hunt
 
-Launch **multiple `general` agents in parallel** (in one message, so they run concurrently). `general`, not `research`: a hunter that finds a deep thread — a coupling problem that needs the whole import graph traced — can spawn its own `research` sub-agent instead of blowing its context.
+Launch **multiple `general` agents in parallel** (in one message, so they run concurrently). `general`, not `research`: a hunter that finds a deep thread — a coupling problem that needs the whole import graph traced — returns it as a lead instead of blowing its context, and you dispatch a fresh agent on it.
 
 ## How many agents, and how to split
 
@@ -62,8 +62,8 @@ How to hunt structure:
 - PREFER THE DOC-VS-REALITY GAPS. Where the architecture summary flagged that stated intent
   and actual code disagree, that's often where the real debt is.
 
-YOU CAN SPAWN SUB-AGENTS. To understand a subsystem deeply enough to judge a finding, launch
-a research sub-agent rather than holding everything in context.
+DON'T HOLD EVERYTHING IN CONTEXT. When a thread needs more depth than you can hold, return it
+as a lead: its location and the open question. Don't guess, and don't drop it.
 
 YOUR SCOPE IS A FOCUS, NOT A FENCE. If while auditing coupling you spot a swallowed error or
 a dead export, report it. Don't drop a real problem because it's "not your dimension."

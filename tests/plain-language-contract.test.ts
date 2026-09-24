@@ -357,10 +357,6 @@ const DEFINITIONS: Record<string, [string, RegExp]> = {
     /frontier: every question whose prerequisites are already settled/i,
   ],
   "residue manifest": ["references/grilling.md", /Residue manifest [—-] the exit gate/i],
-  "dispatch cap": [
-    path.join("skills", "executing", "SKILL.md"),
-    /dispatch cap — `opus`[^)]*HARD cap/i,
-  ],
 };
 
 for (const [term, [rel, re]] of Object.entries(DEFINITIONS)) {

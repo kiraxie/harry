@@ -384,10 +384,10 @@ test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
       const out = readFileSync(g, "utf8");
       assert.ok(out.includes(BEGIN), "marker block present");
       assert.ok(out.includes("Resident Engineering Laws"), "HARRY.md content inlined");
-      for (const role of ["scout", "mech", "writer", "security"]) {
+      for (const role of ["scout", "analyst"]) {
         assert.ok(out.includes(role), `role map names ${role}`);
       }
-      for (const model of ["gpt-5.6-luna", "gpt-5.6-terra"]) {
+      for (const model of ["gpt-5.6-luna"]) {
         assert.ok(out.includes(model), `role map binds ${model}`);
       }
       // gpt-5.6-sol 400s on a ChatGPT login; it may appear only in the note saying so.

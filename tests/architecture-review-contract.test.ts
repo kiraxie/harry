@@ -141,18 +141,9 @@ test("AC-2: with no item (Trivial) the skip line is written in the reply", () =>
   );
 });
 
-test("AC-3: one read-only opus subagent, one lane", () => {
+test("AC-3: one analyst, one lane", () => {
   const p = step2("Reviewer.");
-  assert.match(
-    p,
-    /dispatch ONE CC reviewer subagent \(explicit model: opus/,
-    "the review is no longer ONE subagent pinned to opus",
-  );
-  assert.match(
-    p,
-    /read-only, one lane — no Codex lane/,
-    "the reviewer is no longer read-only, one lane",
-  );
+  assert.match(p, /dispatch ONE harry:analyst, one lane — no Codex lane/);
 });
 
 test("AC-3: the reviewer is handed every input", () => {
@@ -437,7 +428,7 @@ test("AC-5: every round records the head it reviews", () => {
     /Every round records the head it reviews — architecture review at <sha7> \(git rev-parse --short HEAD\) — in ## Progress\./,
     "a round no longer records the head it reviewed, so the next round has no range to start from" +
       " — " +
-      "The fix-now bullet alone does not narrow a later round: the shape gate and the diff packaging run every round, so each must say how it narrows, and to what range. The range is anchored on the head the previous round reviewed, not on AC completion lines: a Major unit's final-review fix wave commits after those lines are written, and a range built from them would let a shape that fixer altered merge unreviewed.",
+      "The fix-now bullet alone does not narrow a later round: the shape gate and the diff packaging run every round, so each must say how it narrows, and to what range. The range is anchored on the head the previous round reviewed, not on AC completion lines: the review's fix wave commits after those lines are written, and a range built from them would let a shape that fixer altered merge unreviewed.",
   );
   assert.match(
     step2("No item (Trivial)."),
@@ -449,7 +440,7 @@ test("AC-5: every round records the head it reviews", () => {
 test("AC-5: a later round lists and packages everything since the previous round's head", () => {
   assert.match(
     step2("Shape gate."),
-    /On a later round — a fix now ruling is already recorded — list only the shapes changed since the head the most recent round recorded: <sha>\.\.HEAD, which covers every commit since, whoever made it \(the executing fix, its reviews' fix rounds, a final-review fix wave\)\./,
+    /On a later round — a fix now ruling is already recorded — list only the shapes changed since the head the most recent round recorded: <sha>\.\.HEAD, which covers every commit since, whoever made it \(the executing fix and its review's fix wave\)\./,
     "a later round's shape gate no longer covers every commit since the previous round's head",
   );
   assert.match(

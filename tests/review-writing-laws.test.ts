@@ -117,10 +117,8 @@ test("AC-12: HARRY.md §3 tiers a fix like a task, small only when Trivial and n
     /one that is Trivial and weakens no test/i,
     "small is no longer bound to the Trivial row",
   );
-  assert.match(rule, /weakens no test/i, "a small fix may now weaken a test");
-  assert.match(rule, /in-session, full suite, no re-review/i);
-  assert.match(rule, /any other[^.]*full loop/i, "a non-Trivial fix no longer takes the loop");
-  assert.match(s3, /The final review is unchanged/i);
+  assert.match(rule, /gets the full suite and no re-review/i);
+  assert.match(rule, /any other is re-reviewed/i, "a non-Trivial fix is no longer re-reviewed");
   assert.doesNotMatch(
     s3,
     /changes no behavior|no §2 red line/i,
@@ -128,55 +126,25 @@ test("AC-12: HARRY.md §3 tiers a fix like a task, small only when Trivial and n
   );
 });
 
-test("AC-5: executing applies the fix tier in both fix loops", () => {
-  const executing = plain(EXECUTING);
-  const standard = between(
-    executing,
-    "4. Standard: mandatory independent review",
-    "## Subagent mode",
-  );
-  const loop = between(executing, "4. Fix loop", "5. Integrate, then mark complete");
-  for (const [name, text] of [
-    ["session mode step 4", standard],
-    ["subagent mode step 4", loop],
-  ] as const) {
-    assert.match(text, /small fix \(HARRY\.md §3\)/i, `${name} lost the fix tier`);
-    assert.doesNotMatch(
-      text,
-      /no branching|one-glance|weakens no test|changes no behavior/i,
-      `${name} restates §3's definition instead of citing it`,
-    );
-    assert.equal(text.match(/HARRY\.md §3/g)?.length, 1, `${name} should cite §3 exactly once`);
-    assert.match(
-      text,
-      /When a round has both kinds/,
-      `${name} lets a second writer make small fixes beside the round's fixer`,
-    );
-    assert.match(text, /same file or same rule/, `${name} leaves "same area" undefined`);
-    assert.match(
-      text,
-      /AC-<n>: small fix: <what> \(commit <sha7>\)/,
-      `${name} records no small fix`,
-    );
-    assert.match(text, /Any other fix takes the loop/, `${name} lost the route to the loop`);
-  }
-  assert.match(
-    loop,
-    /Integration findings \(step 5\) always take the loop, under that step's limits/,
-  );
+test("AC-5: executing's one fix wave applies the fix tier", () => {
+  const wave = between(plain(EXECUTING), "4. One fix wave.", "Codex build.");
+  assert.match(wave, /small fix \(HARRY\.md §3\)/i, "the wave lost the fix tier");
   assert.doesNotMatch(
-    loop,
-    /Step 5's integration findings enter this loop/,
-    "integration routing is stated twice",
+    wave,
+    /no branching|one-glance|weakens no test|changes no behavior/i,
+    "the wave restates §3's definition instead of citing it",
   );
+  assert.equal(wave.match(/HARRY\.md §3/g)?.length, 1, "the wave should cite §3 exactly once");
+  assert.match(wave, /When a wave has both kinds, its small fixes are re-reviewed with the rest/);
+  assert.match(wave, /same file or same rule/, 'the wave leaves "same area" undefined');
   assert.match(
-    between(executing, "4. Mark complete.", "5. Remove the task's worktree"),
-    /review clean only when the last review raised nothing; review clean after small fixes when/,
-    "5.4 can record review clean over unreviewed small fixes",
+    wave,
+    /AC-<n>: small fix: <what> \(commit <sha7>\)/,
+    "the wave records no small fix",
   );
-  const final = between(executing, "6. Final review", "7. → finishing");
-  assert.match(final, /exactly one scoped re-review/i, "the final review changed");
-  assert.match(final, /fixes to this review's findings are never small/i);
+  assert.match(wave, /Any other fix is re-reviewed: exactly one scoped re-review/);
+  assert.match(wave, /There is no second wave/);
+  assert.match(wave, /review clean after small fixes/);
 });
 
 test("AC-6: HARRY.md §6 states the scope brake beside the three-failed-fixes rule", () => {
@@ -188,19 +156,12 @@ test("AC-6: HARRY.md §6 states the scope brake beside the three-failed-fixes ru
   );
 });
 
-test("AC-6: executing applies the scope brake in both fix loops", () => {
-  const executing = plain(EXECUTING);
-  const standard = between(
-    executing,
-    "4. Standard: mandatory independent review",
-    "## Subagent mode",
+test("AC-6: executing applies the scope brake to the re-review", () => {
+  const wave = between(plain(EXECUTING), "4. One fix wave.", "Codex build.");
+  assert.match(
+    wave,
+    /re-review raising new findings in the same area[^.]*as the review → stop and ask the user whether the scope still serves the unit's goal; name the goal/i,
   );
-  const loop = between(executing, "4. Fix loop", "5. Integrate, then mark complete");
-  for (const text of [standard, loop])
-    assert.match(
-      text,
-      /same area[^.]*two consecutive review rounds[^.]*stop and ask the user whether the scope still serves the unit's goal; name the goal/i,
-    );
 });
 
 test("AC-5: tier-gates cites §3's small-fix rule and gives examples only", () => {

@@ -112,14 +112,13 @@ acceptance criteria inside the item's `## Why / What`, and executing builds agai
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
 skill files themselves short.
 
-`agents/` holds four **durable-routing role agents** — `scout` (recon, haiku/low,
-read-only), `mech` (mechanical edits, sonnet/low), `writer` (prose/docs,
-sonnet/medium), `security` (security-sensitive, opus/high). CC namespaces plugin agents,
-so they dispatch as `harry:scout` … `harry:security` (the bare frontmatter `name` avoids
-a redundant `harry:harry-*`). Each binds model+effort **once** in frontmatter so predictable
-work self-routes instead of being specified at every dispatch (HARRY.md §5);
-`tests/agents.test.ts` enforces the invariants (alias models only, read-only recon grants no
-write/spawn tools, writing roles leaf via `disallowedTools: Agent, Workflow`).
+`agents/` holds two **role agents**: `scout` (recon, haiku/low, read-only tools) and
+`analyst` (independent judgment — review, architecture review, the debate's opus voice,
+audit analysis — opus/high, no edit or spawn tools). The session writes everything
+itself; it dispatches only these two (HARRY.md §5). The Agent tool takes a model but no
+effort, so a fixed effort needs an agent file. CC namespaces plugin agents, so they
+dispatch as `harry:scout` and `harry:analyst`. `tests/agents.test.ts` enforces the
+invariants (alias models only, no edit or spawn tools; `analyst` keeps Bash and is read-only by instruction).
 
 **Dispatch mechanism is Claude Code only — verified against live Codex 0.144.4.** Codex has
 no per-subagent model/effort mechanism: `codex --help` exposes no subagent dispatch, its
@@ -206,7 +205,7 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   doc starts with that exact invocation so it matches the pattern (an unmatched
   one only costs a permission prompt). The frontmatter no longer sets
   `disable-model-invocation`, so both the `SlashCommand` and `Skill` tools — and
-  `skills/executing/SKILL.md`'s final review step — can invoke it directly.
+  `skills/executing/SKILL.md`'s review step (step 3) — can invoke it directly.
 - Codex `audit`'s RO round-boundaries are likewise instruction-only, not
   tool-enforced (see its skill's own "Known limitation" note); it shares the same
   `references/audit/` reference bundle and `report-schema.json`/

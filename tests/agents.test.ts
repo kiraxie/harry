@@ -1,20 +1,12 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// harry ships four durable-routing role agents (Claude Code only — Codex has no
-// per-subagent model/effort binding; its routing is prose-only via HARRY.md §5).
-// Each binds model+effort ONCE in frontmatter so predictable work self-routes.
-// Nothing else enforces these invariants, so this test is the enforcement: model
-// must be a churn-safe alias (never a pinned ID), and writing roles must be leaf
-// (can't recursively fan out).
-
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const ROLES = ["scout", "mech", "writer", "security"];
-const WRITING_ROLES = new Set(["mech", "writer", "security"]);
+const ROLES = ["scout", "analyst"];
 const MODEL_ALIASES = new Set(["haiku", "sonnet", "opus"]);
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
@@ -33,7 +25,7 @@ function readFrontmatter(file: string): Record<string, string> {
 
 const ccDir = path.join(repoRoot, "agents");
 
-test("every CC role agent binds an alias model, a valid effort, and leaf-ness where it writes", () => {
+test("AC-2: every role agent binds an alias model and effort, and neither has edit or spawn tools", () => {
   for (const role of ROLES) {
     const file = path.join(ccDir, `${role}.md`);
     assert.ok(existsSync(file), `missing CC agent: agents/${role}.md`);
@@ -45,17 +37,13 @@ test("every CC role agent binds an alias model, a valid effort, and leaf-ness wh
       `${role}: model must be an alias (haiku|sonnet|opus), got "${fm.model}" — no pinned IDs`,
     );
     assert.ok(EFFORTS.has(fm.effort ?? ""), `${role}: effort must be one of ${[...EFFORTS]}`);
-    if (WRITING_ROLES.has(role)) {
-      const denied = fm.disallowedTools ?? "";
-      assert.match(
-        denied,
-        /Agent/,
-        `${role}: writing role must be leaf (disallowedTools includes Agent)`,
-      );
-      assert.match(denied, /Workflow/, `${role}: disallowedTools includes Workflow`);
+    if (role === "analyst") {
+      assert.equal(fm.model, "opus", "analyst: judgment runs on opus");
+      assert.equal(fm.effort, "high", "analyst: judgment runs at high effort");
+      const denied = (fm.disallowedTools ?? "").split(",").map((t) => t.trim());
+      for (const tool of ["Edit", "Write", "NotebookEdit", "Agent", "Workflow"])
+        assert.ok(denied.includes(tool), `analyst: disallowedTools must include ${tool}`);
     } else {
-      // recon is read-only: a positive tools allowlist that grants no write or
-      // fan-out capability (a bare truthy check would let a future edit slip Write in).
       assert.ok(fm.tools, `${role}: read-only recon must declare a tools allowlist`);
       const granted = (fm.tools ?? "").split(",").map((s) => s.trim());
       for (const forbidden of ["Write", "Edit", "NotebookEdit", "Bash", "Agent", "Workflow"]) {
@@ -82,4 +70,9 @@ test("no role's final-message contract caps its length in lines", () => {
     const body = readFileSync(file, "utf-8");
     assert.doesNotMatch(body, lineCap, `${path.relative(repoRoot, file)}: states a line cap`);
   }
+});
+
+test("AC-2: agents/ holds exactly the two roles", () => {
+  const files = readdirSync(ccDir).filter((f) => f.endsWith(".md"));
+  assert.deepEqual(files.sort(), ROLES.map((r) => `${r}.md`).sort());
 });

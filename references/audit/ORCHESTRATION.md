@@ -55,7 +55,7 @@ This methodology is agent-neutral:
 - **Task tool** means the coding agent's delegation / sub-agent mechanism (the `Agent`
   tool on Claude Code).
 - **`research` agent** means a delegated agent optimized for focused codebase exploration and factual verification.
-- **`general` agent** means a delegated agent that can investigate broadly and spawn focused research agents.
+- **`general` agent** means a delegated agent that investigates broadly and returns a thread that outgrows its context as a lead, for you to dispatch a fresh agent on.
 
 Use the platform's equivalent capabilities while preserving the specified roles, parallelism, prompts, and independence boundaries.
 
@@ -76,12 +76,10 @@ All files written during the audit go in the output directory:
 - `REPORT.md` — human-readable report (Round 6)
 - `FINDINGS-DETAIL.md` — detailed evidence for MODERATE+ findings (Round 6)
 
-Subagents in Round 1 (Steps 1b and 2), Round 2, Round 3, and Round 5 do NOT write files — they return results to you. You write all files. Rounds 4 and 6 have no subagents at all — structured-output assembly and report writing are yours directly, not delegated.
+Subagents in Round 1 (Step 2), Round 2, Round 3, and Round 5 do NOT write files — they return results to you. You write all files. Rounds 4 and 6 have no subagents at all — structured-output assembly and report writing are yours directly, not delegated.
 
-- **Claude Code build:** every subagent dispatch sets `model` explicitly, at the
-  dispatch cap or below (HARRY.md §5; the cap's concrete name lives in the
-  executing skill's Model-by-role paragraph). Never let a dispatch inherit the
-  session model.
+- **Claude Code build:** every `research` and `general` agent is `harry:analyst`
+  (HARRY.md §5).
 - **Codex build:** there is no per-subagent model parameter — model/effort comes
   from the session profile per the `/sync`-wired role map (HARRY.md §5).
 

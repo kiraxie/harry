@@ -1,19 +1,14 @@
 # Review Rubric (shared)
 
-The rubric a **CC reviewer subagent (dispatched at the §5 cap)** applies for per-task and whole-branch
-reviews (`skills/executing/SKILL.md`, subagent mode steps 3 and 6), and for Standard's
-single review (session mode step 4). This is also the rubric `dist/companion.cjs review`
+The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md`,
+step 3, and its scoped re-review in step 4). This is also the rubric `dist/companion.cjs review`
 embeds verbatim into its `codex exec review` prompt (`src/lib/review-prompts.ts`), so
-the CC and Codex lanes judge by the same standard even though they run in isolated
-sessions. On the Codex build there is no CC reviewer subagent at all, so this
-embedded prompt is what binds that build's single review lane, at every review
-step `skills/executing/SKILL.md` calls, not only step 6's Codex lane. Hand the
-reviewer the acceptance criteria it judges — the task's brief for a per-task
-review, the item's `### Acceptance criteria` verbatim for a whole-branch pass
-or for session mode's single review — plus the diff (as a file) and the
-item's Constraints verbatim when it has them; a per-task review (subagent mode
-step 3) also hands the task's report — session mode has none to hand. It
-reviews **read-only** — no working-tree, index, or HEAD mutation; the one write a review makes is its own report file, at the path it was handed, when it was handed one.
+the analyst and Codex lanes judge by the same standard even though they run in isolated
+sessions. On the Codex build there is no `analyst` at all, so this
+embedded prompt is what binds that build's single review lane. Hand the
+reviewer the item's `### Acceptance criteria` verbatim, the diff range, and the
+item's Constraints verbatim when it has them. It reviews **read-only** — no
+working-tree, index, or HEAD mutation; its report is its final message.
 
 ## Four dimensions
 
@@ -60,9 +55,8 @@ never Critical. Acknowledge what was done well before listing issues.
 
 - **Do not pre-judge.** Never tell the reviewer what not to flag, or pre-rate a
   finding's severity ("treat as Minor at most", "the AC chose this"). If you
-  think a finding is a false positive, let it surface and adjudicate it in the
-  review loop. The brief's example code is a starting point, not proof its
-  weaknesses were chosen.
+  think a finding is a false positive, let it surface and adjudicate it after the
+  fix wave.
 - **Be specific:** `file:line`, what's wrong, why it matters, and the long-term
   structural fix — never a workaround (HARRY.md §6).
 - A finding that **conflicts with an AC** is the human's call — present the
@@ -72,20 +66,9 @@ never Critical. Acknowledge what was done well before listing issues.
 - **Review it yourself.** Never dispatch a subagent to review part of the diff or
   for a second opinion; every review seat is already provided. A diff too large
   for one pass is reviewed in passes — say so in the report.
-- **Unreadable evidence is a gap, not a failure.** If the report or its test
-  evidence looks truncated, or you cannot locate results it claims, re-read the
-  file at its stated path first; a run of your own does not fill the report's
-  gap — report the gap either way. Where a report was handed (subagent mode),
-  missing or genuinely illegible test evidence in it is at least Important and
-  blocks `pass` for that AC (report it as evidence missing) until the
-  implementer supplies it — even though it is not itself a finding against the
-  code. An AC whose named verification path is missing or unreadable is the same
-  blocker.
-- **Batched briefs are checked file by file.** When the brief lists several
-  files each with its own change, every listed file must have its hunk in the
-  diff; a listed file the diff never touches is a missing-requirement (spec)
-  finding, however clean the rest looks.
-
+- **Unreadable evidence is a gap, not a failure.** An AC whose named verification path is
+  missing or unreadable is at least Important and blocks `pass` for that AC
+  (report it as evidence missing).
 ## Output
 
 ```
@@ -107,8 +90,7 @@ Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 
 Both verdicts (**spec** AND **quality**) are required — a report missing either
 is not a valid review. This binds every review run against this rubric; executing
-states the acceptance rule at both of its review steps — session mode step 4
-(Standard) and subagent mode step 3 (Major).
+states the acceptance rule at its review step (step 3).
 
 **When no acceptance criteria were handed** — a bare `/harry:review` on an
 arbitrary diff, or a legacy item that has none — the spec line says exactly that

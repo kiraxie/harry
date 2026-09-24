@@ -16,7 +16,7 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 // The canonical role set — derived ONCE, compared against all three sources below
 // (hoist closure, HARRY.md §2: no per-assertion re-listing).
-const CANONICAL_ROLES = new Set(["scout", "mech", "writer", "security"]);
+const CANONICAL_ROLES = new Set(["scout", "analyst"]);
 const MODEL_ALIASES = ["haiku", "sonnet", "opus"];
 const CODEX_MODEL_RE = /gpt-\d+(\.\d+)?-[a-z]+/i;
 const CODEX_EFFORTS = new Set(["low", "medium", "high", "xhigh"]);
@@ -32,8 +32,8 @@ function read(rel: string): string {
 test("A1 · HARRY.md §5 'Route by role' bullet names exactly the canonical roles, no model ids", () => {
   const bullet = read("HARRY.md")
     .split("\n")
-    .find((l) => l.includes("**Route by role"));
-  assert.ok(bullet, "HARRY.md: no 'Route by role' bullet found");
+    .find((l) => l.includes("**The session writes"));
+  assert.ok(bullet, "HARRY.md: no dispatch bullet found");
 
   // Extract the COMPLETE routed-role set from the routing clauses: each clause reads
   // "<nature> → `role`", so the role is the backtick token immediately after an arrow.

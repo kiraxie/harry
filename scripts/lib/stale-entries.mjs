@@ -5,7 +5,7 @@
 export const STALE = [
   {
     pattern: /copilot:implement/i,
-    why: "harry removed /copilot:implement; implementer = CC subagents",
+    why: "harry removed /copilot:implement; the session implements",
   },
   {
     pattern: /copilot:status/i,

@@ -41,7 +41,7 @@ Complete these in order:
 3. **Propose 2-3 approaches** — with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here.
 4. **Present the design** — section by section, scaled to complexity; ask after each whether it holds. Cover architecture, components, data flow, error handling, testing. Break the system into small units each with one clear purpose and a defined interface. Follow the codebase's existing patterns; fix in-scope rough edges in the design, propose no unrelated refactoring.
 5. **Get approval** — close the interview per `references/grilling.md`'s exit gate: the residue manifest presented alongside the numbered acceptance criteria. The AC approved here is the contract execution builds and review verdicts are read against, and executing may not change it (`references/doc-types.md`). The manifest's dispositions are *commitments* recorded here but discharged at step 6, because the item file does not exist yet: deferred-in-scope lines land in a `## Follow-ups` section created on the item at step 6; destination-outside lines become new `status: backlog` items (the manifest's approval is the user's nod for each). Revise and re-present until the user approves. Only then proceed.
-6. **Write the item** (template below) → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What` including its `### Acceptance criteria`, set `status: active`. Add `## Dispatch` only when the approved design already splits into 2+ units that will run in parallel; otherwise leave it out — executing writes it at dispatch time, when the write sets are actually known. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
+6. **Write the item** (template below) → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What` including its `### Acceptance criteria`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
 7. **Item self-review** — fix inline (see below).
 8. **User reviews the item** — ask, wait, revise if needed.
 9. **Premise check, then transition** — before handing off, confirm the base is up to date (rebase/refresh from the base branch) and that the premises the design rests on still hold in that base. AC cannot catch a wrong premise: it is built on them. A premise that moved sends you back to step 4 with the user. Then invoke `executing`. It is the ONLY next skill — there is no plan stage.
@@ -88,18 +88,13 @@ something you genuinely expect to revisit later, also add it as a line under
 silently lost the moment this item is archived.
 
 ### 5. Constraints
-Version floors / deps / naming / exact values — binding on every brief and review.
+Version floors / deps / naming / exact values — binding on the build and every review.
 
 ### Acceptance criteria
 AC-1 … AC-n. Each is an **outcome**, never a step ("invalid input returns 400",
 not "add validate()"), and carries its own verification: a command, a test, or a
-named manual check. Numbered, because briefs, subagent reports, review verdicts
-and progress notes all cite AC IDs.
-
-## Dispatch   <!-- ONLY when 2+ units run in parallel; omit otherwise -->
-| Unit | AC | Writes | Reads from other units | Lands |
-|---|---|---|---|---|
-One row per unit; `Lands` is first or last (cross-unit contract tests land last).
+named manual check. Numbered, because review verdicts and progress notes
+cite AC IDs.
 
 ## Progress   <!-- heading only; executing appends the lines -->
 ```

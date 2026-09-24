@@ -113,12 +113,12 @@ test("prose counts the pipeline skills that actually ship", () => {
   assert.deepEqual(offenders, [], `${actual} pipeline skills ship`);
 });
 
-test("the item template carries acceptance criteria, Dispatch and Progress", () => {
+test("the item template carries acceptance criteria and Progress", () => {
   // doc-types.md defines the shape; brainstorming writes it. Both must agree, or a
   // written item and the reference that documents it drift on day one.
   for (const rel of ["references/doc-types.md", path.join("skills", "brainstorming", "SKILL.md")]) {
     const text = read(rel);
-    for (const heading of ["### Acceptance criteria", "## Dispatch", "## Progress"]) {
+    for (const heading of ["### Acceptance criteria", "## Progress"]) {
       assert.ok(text.includes(heading), `${rel} no longer defines ${heading}`);
     }
   }

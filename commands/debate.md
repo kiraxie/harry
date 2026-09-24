@@ -21,7 +21,7 @@ Google subscription via `agy`.
 
 | Voice | How you call it |
 |-------|-----------------|
-| `opus` | Dispatch a subagent via the Agent tool, `model: opus`. Prompt it to "ultrathink". |
+| `opus` | Dispatch `harry:analyst` via the Agent tool; it runs opus at high effort, so pass no `model`. |
 | `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high`, run with `run_in_background: true` (a high-effort `ask` turn — harry sets no timeout of its own on the `codex exec` call it spawns — can run past the 10-min foreground Bash timeout — see below) |
 | `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
 
