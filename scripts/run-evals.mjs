@@ -485,7 +485,7 @@ function runPostSession(payload, jail, env) {
     // untrustedText on the failure path.
     stdout = execFileSync(wrapped.bin, wrapped.args, {
       cwd: jail.tmpDir,
-      env: buildBaseEnv(env, jail.tmpDir),
+      env: buildBaseEnv({ ...env, PATH: jail.path }, jail.tmpDir),
       input: JSON.stringify(payload),
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -1153,7 +1153,8 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, tmpDir, 
   // reads under $HOME, almost no system service (the launchd exception is in the
   // DEBT note on buildSeatbeltProfile).
   const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, bin, args);
-  return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, env, tmpDir);
+  const jailedEnv = { ...env, PATH: jail.path };
+  return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, jailedEnv, tmpDir);
 }
 
 // One trial's jail, shared by the session and by the post-session child that judges
@@ -1165,15 +1166,18 @@ function runAgenticCase(bin, model, prompt, configDir, fixtureDir, env, tmpDir, 
 // so the post-session child can load it from under $HOME.
 function trialJail(sandbox, { configDir, fixtureDir, tmpDir, bin, gitBin, env }) {
   if (!sandbox) return null;
+  const trees = resolveRuntimeTrees(bin, env, gitBin);
   const profile = buildAgenticSandboxProfile({
     home: homedir(),
     allowWrite: [configDir, fixtureDir, tmpDir],
     allowRead: [realpathSync(fileURLToPath(import.meta.url))],
-    bin,
-    gitBin,
+    trees,
     env,
   });
-  return { sandboxExec: sandbox.sandboxExec, profile, tmpDir };
+  // The PATH every jailed child starts from: only the dirs the profile lets it
+  // exec from (see jailedPath), from the same trees the profile was built with.
+  const jailPath = jailedPath(env, jailExecDirs(trees));
+  return { sandboxExec: sandbox.sandboxExec, profile, tmpDir, path: jailPath };
 }
 
 // ---- opt-in OS sandbox (macOS seatbelt) ------------------------------------
@@ -1200,6 +1204,7 @@ export function buildAgenticSandboxProfile({
   bin,
   gitBin,
   env = process.env,
+  trees = resolveRuntimeTrees(bin, env, gitBin),
 }) {
   const home_ = realpathSync(home); // HARD: refuse (throw) rather than un-jail silently.
   const canonicalizeSafe = (p) => {
@@ -1210,7 +1215,6 @@ export function buildAgenticSandboxProfile({
     }
   };
   const writes = allowWrite.map(canonicalizeSafe).filter(Boolean);
-  const trees = resolveRuntimeTrees(bin, env, gitBin);
   return buildSeatbeltProfile({
     home: home_,
     allowWrite: writes,
@@ -1320,7 +1324,7 @@ export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [], al
     '(allow network-outbound (remote ip "*:*"))',
     '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',
     "(allow process-exec",
-    ...subpaths(["/bin", "/usr/bin", ...allowExec]),
+    ...subpaths(jailExecDirs(allowExec)),
     ")",
   ];
   const writes = subpaths(allowWrite);
@@ -1346,6 +1350,41 @@ export function buildSeatbeltProfile({ home, allowWrite = [], allowRead = [], al
     '(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))',
   );
   return `${lines.join("\n")}\n`;
+}
+
+// Every dir a jailed process may exec from: the system shells and tools, then the
+// runtime trees. The one list both the profile's process-exec rule and the jailed
+// PATH (jailedPath) are built from, so the two cannot drift apart.
+export function jailExecDirs(trees = []) {
+  return ["/bin", "/usr/bin", ...trees];
+}
+
+// The PATH for a jailed child: the base PATH (running node's dir first, absolute
+// entries only) cut down to the entries whose canonical path lies inside a dir the
+// jail may exec from, in their original order. A name lookup walks PATH, and
+// libuv's walk (like execvp's) stops at the first entry that fails with anything
+// but ENOENT: an entry the jail denies can answer EPERM, and the lookup then fails
+// although an allowed copy sits further along. Kept entries can only miss (ENOENT)
+// or hit an allowed binary. The binaries runEvals resolved (findOnPath) stay the
+// first match: their dirs are runtime trees, and every entry dropped before them
+// held no match, or findOnPath would have picked it.
+export function jailedPath(env, execDirs) {
+  const canonical = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return null; // missing entry: nothing to find there, drop it
+    }
+  };
+  const allowed = [...new Set(execDirs.map(canonical).filter(Boolean))];
+  const inside = (p) => allowed.some((d) => p === d || p.startsWith(`${d}/`));
+  return buildBaseEnv(env)
+    .PATH.split(delimiter)
+    .filter((entry) => {
+      const real = canonical(entry);
+      return real !== null && inside(real);
+    })
+    .join(delimiter);
 }
 
 // Build the sandbox-exec argv that wraps the original `bin args...` under `profile`.

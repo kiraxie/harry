@@ -35,6 +35,8 @@ import {
   evaluateArtifactCheck,
   evaluateArtifactChecks,
   evaluateChecks,
+  jailExecDirs,
+  jailedPath,
   judgeFixture,
   main,
   materializeFixture,
@@ -3286,6 +3288,101 @@ test(
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "jailedPath under REAL sandbox-exec: an exec-denied PATH entry stops a name lookup; dropped, it cannot",
+  DARWIN_ONLY,
+  () => {
+    // The premise the jailed PATH rests on: libuv's PATH walk gives up at EPERM
+    // instead of trying the next entry, so one denied entry ahead of an allowed
+    // `git` hides it.
+    const stray = realpathSync(tmpDir("harry-evals-stray-"));
+    try {
+      writeFileSync(path.join(stray, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const profile = buildAgenticSandboxProfile({
+        home: os.homedir(),
+        bin: process.execPath,
+        gitBin: "/usr/bin/git",
+      });
+      const lookup = (PATH: string) =>
+        spawnSync(
+          "/usr/bin/sandbox-exec",
+          [
+            "-p",
+            profile,
+            process.execPath,
+            "-e",
+            'const r = require("node:child_process").spawnSync("git", ["--version"]); process.stdout.write(r.error ? r.error.code : "ran");',
+          ],
+          { env: { PATH, GIT_CONFIG_GLOBAL: "/dev/null" }, encoding: "utf8" },
+        ).stdout;
+      const raw = [NODE_DIR, stray, "/usr/bin", "/bin"].join(path.delimiter);
+      assert.equal(lookup(raw), "EPERM", "the denied entry ends the walk");
+      const jailed = jailedPath({ PATH: raw }, jailExecDirs([NODE_DIR]));
+      assert.ok(!jailed.split(path.delimiter).includes(stray), jailed);
+      assert.equal(lookup(jailed), "ran", "with it dropped, the lookup reaches /usr/bin/git");
+    } finally {
+      rmSync(stray, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "runEvals --agentic under EVALS_SANDBOX=1: a jailed child's PATH lists only dirs the jail lets it exec",
+  DARWIN_ONLY,
+  () => {
+    // A lookup by name (a session's `git`, a test runner's `node`) walks PATH, and
+    // libuv's walk stops at the first entry that fails with anything but ENOENT:
+    // a PATH entry the jail denies can answer EPERM, and the name is then not
+    // found at all, although an allowed copy sits further along (macOS CI:
+    // `spawnSync git EPERM`). So the jail's PATH keeps only the dirs its profile
+    // lets a process exec from.
+    const binDir = tmpDir("harry-evals-bin-");
+    const fxRoot = tmpDir("harry-evals-fxroot-");
+    // Not exec-allowed, and holding a `git` of its own after the real one.
+    const stray = realpathSync(tmpDir("harry-evals-stray-"));
+    try {
+      writeFileSync(path.join(stray, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const record = "session-path.json";
+      const script = path.join(binDir, "path-session.mjs");
+      writeFileSync(
+        script,
+        [
+          'import { execFileSync } from "node:child_process";',
+          'import { writeFileSync } from "node:fs";',
+          "let git;",
+          "try {",
+          '  git = execFileSync("git", ["--version"], { encoding: "utf8", stdio: "pipe" }).trim();',
+          "} catch (e) {",
+          '  git = "error " + (e.code ?? e.status);',
+          "}",
+          `writeFileSync(process.env.TMPDIR + "/" + ${JSON.stringify(record)}, JSON.stringify({ PATH: process.env.PATH, git }));`,
+        ].join("\n"),
+      );
+      installFakeClaude(binDir, undefined, { script, callsInConfigDir: true });
+      const denied = path.join(os.homedir(), "Library");
+      const [line] = runJailedTrial(binDir, fxRoot, {
+        PATH: [denied, process.env.PATH, stray].join(path.delimiter),
+      });
+      const seen = JSON.parse(
+        readFileSafe(path.join(String(line.trialDir), "tmp", record)) || "{}",
+      ) as { PATH?: string; git?: string };
+      const entries = (seen.PATH ?? "").split(path.delimiter);
+      assert.equal(entries[0], NODE_DIR, "the running node's dir stays first");
+      assert.ok(!entries.includes(denied), `a $HOME dir the jail denies is dropped: ${seen.PATH}`);
+      assert.ok(
+        !entries.includes(stray),
+        `a dir the jail cannot exec from is dropped: ${seen.PATH}`,
+      );
+      assert.match(String(seen.git), /^git version /, "the session finds git by name");
+      assert.equal(line.error, undefined, String(line.error));
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(fxRoot, { recursive: true, force: true });
+      rmSync(stray, { recursive: true, force: true });
     }
   },
 );

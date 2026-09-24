@@ -57,7 +57,11 @@ never includes a value.
 **Every child gets an allowlisted environment, not a copy of yours.** The runner
 builds each spawned process's env key by key: `PATH` (the running node's
 directory first, then only the absolute entries of yours), `HOME`, `TMPDIR` (the
-runner's own), `LANG` and `LC_*`, `USER`, `LOGNAME`, `SHELL` and `TERM`. The
+runner's own), `LANG` and `LC_*`, `USER`, `LOGNAME`, `SHELL` and `TERM`. Under
+`EVALS_SANDBOX=1`, the jailed children's `PATH` also drops every entry the jail
+does not let them run programs from. A denied entry answers a lookup by name with
+"operation not permitted", and the lookup stops there instead of trying the next
+entry. The
 `claude` child adds its config dir, a pinned git identity with no global or system
 git config, and its **one** credential under the unprefixed name. Nothing else
 from your shell reaches it. That includes a bare `ANTHROPIC_API_KEY` or

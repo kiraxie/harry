@@ -199,7 +199,10 @@ export function buildAgenticSandboxProfile(opts: {
   bin: string;
   gitBin?: string;
   env?: Record<string, string | undefined>;
+  trees?: string[];
 }): string;
+export function jailExecDirs(trees?: string[]): string[];
+export function jailedPath(env: Record<string, string | undefined>, execDirs: string[]): string;
 export function wrapWithSandbox(
   sandboxExec: string,
   profile: string,

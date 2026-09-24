@@ -360,6 +360,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   install it was meant to allow, nothing more. A test pins this with a
   symlinked git prefix, both in the generated profile and under the real
   `sandbox-exec`.
+- **A sandboxed session could fail to find `git` by name.** A lookup by name
+  walks `PATH` and stops at the first entry that fails with anything but "not
+  found". Inside the jail, an entry it denies (on the macOS CI runner, one
+  ahead of Homebrew's `git`) failed with "operation not permitted", so the
+  session's `git` failed with EPERM, and a real session's Bash tool would
+  have hit the same. Jailed children now get a `PATH` holding only the
+  entries the jail lets them run programs from. That list is built from the
+  same directories as the profile's exec rule, so the two cannot drift.
 - **A failed `claude` run's error hid its cause.** The result line's error
   began with the child's whole command line: the prompt and, in a sandboxed
   run, the whole seatbelt profile. With the error capped, that left no room
