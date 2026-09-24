@@ -44,6 +44,7 @@ export function installFakeClaude(
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const tty = require("node:tty");
 
 const CALLS_PATH = ${JSON.stringify(callsPath)};
 const SETTINGS = JSON.parse(fs.readFileSync(${JSON.stringify(settingsPath)}, "utf8"));
@@ -84,6 +85,10 @@ const call = {
   evalsOauthForwarded: "EVALS_CLAUDE_CODE_OAUTH_TOKEN" in process.env,
   // Names only, never values: enough to pin the allowlist on the real spawn.
   envKeys: Object.keys(process.env).sort(),
+  // Whether fds 0, 1 and 2 are a terminal, recorded from inside the session: a
+  // jailed session must hold none (the jail denies opening one, not reading one
+  // it was handed).
+  tty: [0, 1, 2].map((fd) => tty.isatty(fd)),
 };
 const callsPath =
   SETTINGS.callsInConfigDir && configDir ? path.join(configDir, "fake-claude-calls.json") : CALLS_PATH;

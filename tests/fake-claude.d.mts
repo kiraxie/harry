@@ -14,6 +14,7 @@ export interface FakeClaudeCall {
   evalsApiKeyForwarded: boolean;
   evalsOauthForwarded: boolean;
   envKeys: string[];
+  tty: boolean[];
 }
 
 export interface FakeClaudeSettings {
