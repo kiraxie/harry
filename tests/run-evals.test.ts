@@ -2990,143 +2990,153 @@ test(
   },
 );
 
-test("run CLI under a real pty, EVALS_SANDBOX=1: no spawned child holds the terminal on fd 0, 1 or 2", {
-  skip: DARWIN_ONLY.skip || shadowedBy("git").skip,
-}, () => {
-  // The jail denies OPENING a terminal (its last rule), not reading one a process
-  // already holds: a terminal handed over on fd 0, 1 or 2 reads freely under the
-  // jail. So a runner started from a terminal must hand every child pipes or
-  // /dev/null, never "inherit". script(1) gives the runner a real pty on all three
-  // fds, as the operator's shell would, and each spawned child records its own:
-  //   - the sandbox-exec stand-in, which IS the child the session spawn and the
-  //     post-session spawn start (the jailed process keeps its fds);
-  //   - the fake claude, from inside the jail;
-  //   - a git logger on PATH, for the runner's own git spawns. The jailed git
-  //     calls cannot write its log, and hold the post-session child's fds,
-  //     recorded above; so does the model-written test command.
-  const dir = realpathSync(tmpDir("harry-evals-pty-fds-"));
-  try {
-    const binDir = path.join(dir, "bin");
-    const gitDir = path.join(dir, "git");
-    const fxRoot = path.join(dir, "root");
-    for (const d of [binDir, gitDir, fxRoot]) mkdirSync(d);
-    installFakeClaude(binDir, undefined, { callsInConfigDir: true });
-    const { wrapper, ttyLog } = installLoggingSandboxExec(binDir);
-    const gitLog = path.join(gitDir, "git-tty.jsonl");
-    const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
-    writeFileSync(
-      path.join(gitDir, "git"),
-      [
-        "#!/usr/bin/env node",
-        'const { appendFileSync } = require("node:fs");',
-        'const { execFileSync } = require("node:child_process");',
-        'const { isatty } = require("node:tty");',
-        "try {",
-        `  appendFileSync(${JSON.stringify(gitLog)}, JSON.stringify([0, 1, 2].map((fd) => isatty(fd))) + "\\n");`,
-        "} catch {}",
-        "try {",
-        `  execFileSync(${JSON.stringify(realGit)}, process.argv.slice(2), { stdio: "inherit" });`,
-        "} catch (err) {",
-        "  process.exit(err.status ?? 1);",
-        "}",
-      ].join("\n"),
-      { mode: 0o755 },
-    );
-    // script's stdin must be a file (see the terminal-read test above).
-    const typed = path.join(dir, "typed.txt");
-    writeFileSync(typed, "typed\n");
-    const inPty = (argv: string[], env: Record<string, string | undefined>) => {
-      const stdin = openSync(typed, "r");
-      try {
-        spawnSync("/usr/bin/script", ["-q", "/dev/null", ...argv], {
-          stdio: [stdin, "ignore", "ignore"],
-          env,
-          timeout: 120_000,
-          killSignal: "SIGKILL",
-        });
-      } finally {
-        closeSync(stdin);
-      }
-    };
-    const ttyRecords = (file: string) =>
-      readFileSafe(file)
+test(
+  "run CLI under a real pty, EVALS_SANDBOX=1: no spawned child holds the terminal on fd 0, 1 or 2",
+  DARWIN_ONLY,
+  () => {
+    // The jail denies OPENING a terminal (its last rule), not reading one a process
+    // already holds: a terminal handed over on fd 0, 1 or 2 reads freely under the
+    // jail. So a runner started from a terminal must hand every child pipes or
+    // /dev/null, never "inherit". script(1) gives the runner a real pty on all three
+    // fds, as the operator's shell would, and each spawned child records its own:
+    //   - the sandbox-exec stand-in, which IS the child the session spawn and the
+    //     post-session spawn start (the jailed process keeps its fds);
+    //   - the fake claude, from inside the jail;
+    //   - a git logger on PATH, for the runner's own git spawns (skipped alone when
+    //     git sits next to node, where PATH cannot shadow it). The jailed git
+    //     calls cannot write its log, and hold the post-session child's fds,
+    //     recorded above; so does the model-written test command.
+    const dir = realpathSync(tmpDir("harry-evals-pty-fds-"));
+    try {
+      const binDir = path.join(dir, "bin");
+      const gitDir = path.join(dir, "git");
+      const fxRoot = path.join(dir, "root");
+      for (const d of [binDir, gitDir, fxRoot]) mkdirSync(d);
+      installFakeClaude(binDir, undefined, { callsInConfigDir: true });
+      const { wrapper, ttyLog } = installLoggingSandboxExec(binDir);
+      const logGit = !shadowedBy("git").skip;
+      const gitLog = path.join(gitDir, "git-tty.jsonl");
+      const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+      if (logGit)
+        writeFileSync(
+          path.join(gitDir, "git"),
+          [
+            "#!/usr/bin/env node",
+            'const { appendFileSync } = require("node:fs");',
+            'const { execFileSync } = require("node:child_process");',
+            'const { isatty } = require("node:tty");',
+            "try {",
+            `  appendFileSync(${JSON.stringify(gitLog)}, JSON.stringify([0, 1, 2].map((fd) => isatty(fd))) + "\\n");`,
+            "} catch {}",
+            "try {",
+            `  execFileSync(${JSON.stringify(realGit)}, process.argv.slice(2), { stdio: "inherit" });`,
+            "} catch (err) {",
+            "  process.exit(err.status ?? 1);",
+            "}",
+          ].join("\n"),
+          { mode: 0o755 },
+        );
+      // script's stdin must be a file (see the terminal-read test above).
+      const typed = path.join(dir, "typed.txt");
+      writeFileSync(typed, "typed\n");
+      const inPty = (argv: string[], env: Record<string, string | undefined>) => {
+        const stdin = openSync(typed, "r");
+        try {
+          spawnSync("/usr/bin/script", ["-q", "/dev/null", ...argv], {
+            stdio: [stdin, "ignore", "ignore"],
+            env,
+            timeout: 120_000,
+            killSignal: "SIGKILL",
+          });
+        } finally {
+          closeSync(stdin);
+        }
+      };
+      const ttyRecords = (file: string) =>
+        readFileSafe(file)
+          .split("\n")
+          .filter(Boolean)
+          .map((l) => JSON.parse(l) as boolean[]);
+
+      // Not vacuous: the same harness puts a terminal on all three fds, and isatty
+      // reports it from inside the jail as well as outside it.
+      const control = path.join(dir, "control.jsonl");
+      const probe = `require("node:fs").appendFileSync(${JSON.stringify(control)}, JSON.stringify([0, 1, 2].map((fd) => require("node:tty").isatty(fd))) + "\\n")`;
+      const profile = buildAgenticSandboxProfile({
+        home: os.homedir(),
+        allowWrite: [dir],
+        bin: process.execPath,
+      });
+      inPty([process.execPath, "-e", probe], process.env);
+      inPty(["/usr/bin/sandbox-exec", "-p", profile, process.execPath, "-e", probe], process.env);
+      assert.deepEqual(
+        ttyRecords(control),
+        [
+          [true, true, true],
+          [true, true, true],
+        ],
+        "script gives a process the terminal on fds 0-2, and isatty sees it jailed too",
+      );
+
+      const out = path.join(dir, "o.jsonl");
+      const runner = path.join(pluginRoot, "scripts", "run-evals.mjs");
+      inPty(
+        [
+          process.execPath,
+          runner,
+          "run",
+          "--condition",
+          "candidate",
+          "--model",
+          "m",
+          "--cases",
+          "agentic-isolate-branch",
+          "--out",
+          out,
+          "--agentic",
+        ],
+        {
+          ...authFreeEnv(),
+          PATH: logGit ? `${gitDir}:${process.env.PATH}` : process.env.PATH,
+          EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+          EVALS_FIXTURE_ROOT: fxRoot,
+          EVALS_SANDBOX: "1",
+          EVALS_SANDBOX_EXEC: wrapper,
+          EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+        },
+      );
+      const lines = readFileSafe(out)
         .split("\n")
         .filter(Boolean)
-        .map((l) => JSON.parse(l) as boolean[]);
-
-    // Not vacuous: the same harness puts a terminal on all three fds, and isatty
-    // reports it from inside the jail as well as outside it.
-    const control = path.join(dir, "control.jsonl");
-    const probe = `require("node:fs").appendFileSync(${JSON.stringify(control)}, JSON.stringify([0, 1, 2].map((fd) => require("node:tty").isatty(fd))) + "\\n")`;
-    const profile = buildAgenticSandboxProfile({
-      home: os.homedir(),
-      allowWrite: [dir],
-      bin: process.execPath,
-    });
-    inPty([process.execPath, "-e", probe], process.env);
-    inPty(["/usr/bin/sandbox-exec", "-p", profile, process.execPath, "-e", probe], process.env);
-    assert.deepEqual(
-      ttyRecords(control),
-      [
-        [true, true, true],
-        [true, true, true],
-      ],
-      "script gives a process the terminal on fds 0-2, and isatty sees it jailed too",
-    );
-
-    const out = path.join(dir, "o.jsonl");
-    const runner = path.join(pluginRoot, "scripts", "run-evals.mjs");
-    inPty(
-      [
-        process.execPath,
-        runner,
-        "run",
-        "--condition",
-        "candidate",
-        "--model",
-        "m",
-        "--cases",
-        "agentic-isolate-branch",
-        "--out",
-        out,
-        "--agentic",
-      ],
-      {
-        ...authFreeEnv(),
-        PATH: `${gitDir}:${process.env.PATH}`,
-        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
-        EVALS_FIXTURE_ROOT: fxRoot,
-        EVALS_SANDBOX: "1",
-        EVALS_SANDBOX_EXEC: wrapper,
-        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
-      },
-    );
-    const lines = readFileSafe(out)
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as Record<string, string>);
-    assert.equal(lines.length, 1, "the run wrote its one result line");
-    assert.equal(lines[0].error, undefined, String(lines[0].error));
-    assert.deepEqual(
-      ttyRecords(ttyLog),
-      [
-        [false, false, false],
-        [false, false, false],
-      ],
-      "the session spawn and the post-session spawn: no fd is the terminal",
-    );
-    assert.deepEqual(
-      readCalls(lines[0].configDir).map((c) => c.tty),
-      [[false, false, false]],
-      "inside the jail, the session holds no terminal fd",
-    );
-    const gitSpawns = ttyRecords(gitLog);
-    assert.ok(gitSpawns.length >= 5, `the runner's git spawns were logged (${gitSpawns.length})`);
-    for (const fds of gitSpawns) assert.deepEqual(fds, [false, false, false], "a git spawn");
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+        .map((l) => JSON.parse(l) as Record<string, string>);
+      assert.equal(lines.length, 1, "the run wrote its one result line");
+      assert.equal(lines[0].error, undefined, String(lines[0].error));
+      assert.deepEqual(
+        ttyRecords(ttyLog),
+        [
+          [false, false, false],
+          [false, false, false],
+        ],
+        "the session spawn and the post-session spawn: no fd is the terminal",
+      );
+      assert.deepEqual(
+        readCalls(lines[0].configDir).map((c) => c.tty),
+        [[false, false, false]],
+        "inside the jail, the session holds no terminal fd",
+      );
+      if (logGit) {
+        const gitSpawns = ttyRecords(gitLog);
+        assert.ok(
+          gitSpawns.length >= 5,
+          `the runner's git spawns were logged (${gitSpawns.length})`,
+        );
+        for (const fds of gitSpawns) assert.deepEqual(fds, [false, false, false], "a git spawn");
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   "runEvals --agentic under EVALS_SANDBOX=1: model-written tests cannot read the operator's $HOME",
