@@ -28,6 +28,7 @@ function writeExecutable(filePath, source) {
 //   fail      — exit nonzero with the reply on stderr (spawn/crash path)
 //   isError   — exit 0 with an is_error:true JSON result ("Not logged in" shape)
 //   stderr    — text written to stderr on an otherwise normal run
+//   stdoutBytes — write this many bytes to stdout and exit 0 (output-cap path)
 //   callsInConfigDir — log calls into $CLAUDE_CONFIG_DIR instead of binDir: under
 //               the write-allowlist jail the shim may write only its trial's dirs,
 //               so jailed tests read the log back with readCalls(line.configDir)
@@ -120,6 +121,11 @@ if (SETTINGS.script) {
   }
 }
 
+if (SETTINGS.stdoutBytes) {
+  // Output-cap seam: more stdout than the runner's maxBuffer, then a normal exit.
+  fs.writeSync(1, "x".repeat(SETTINGS.stdoutBytes));
+  process.exit(0);
+}
 if (SETTINGS.stderr) process.stderr.write(SETTINGS.stderr);
 if (SETTINGS.fail) {
   process.stderr.write(REPLY + "\\n");

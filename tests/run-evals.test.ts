@@ -2390,6 +2390,35 @@ test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message
   }
 });
 
+test("runEvals: a claude that overflows the output cap is reported as that, not as a signal", () => {
+  // execFileSync kills an over-cap child with SIGTERM and sets code ENOBUFS; the
+  // code is the cause, the signal only its mechanism.
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir, undefined, { stdoutBytes: 33 * 1024 * 1024 });
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      {
+        ...authFreeEnv(),
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      },
+    );
+    assert.match(
+      String(lines[0].error),
+      /^claude failed: ENOBUFS\b/,
+      String(lines[0].error).slice(0, 200),
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
 test("runEvals: a failed claude's error names its exit status and output, never its argv", () => {
   // execFileSync's own message is "Command failed: <the whole argv>" — the prompt,
   // and under the jail the whole seatbelt profile — which crowded the child's

@@ -1058,11 +1058,15 @@ function invokeClaude(bin, args, cwd, configDir, env, tmpDir = tmpdir()) {
       return extractResponse(printed);
     }
     const tail = (s) => (s ? untrustedText(String(s).trim().slice(-800), 800) : "");
-    const ended = Number.isInteger(err?.status)
-      ? `claude exited with status ${err.status}`
-      : err?.signal
-        ? `claude was killed by ${err.signal}`
-        : `claude failed: ${err?.code ?? "unknown error"}`;
+    // code first: an output-cap overflow is ENOBUFS, delivered as a SIGTERM.
+    const ended =
+      typeof err?.code === "string"
+        ? `claude failed: ${err.code}`
+        : Number.isInteger(err?.status)
+          ? `claude exited with status ${err.status}`
+          : err?.signal
+            ? `claude was killed by ${err.signal}`
+            : "claude failed";
     const parts = [untrustedText(ended, 200)];
     const out = tail(err?.stdout);
     const errOut = tail(err?.stderr);

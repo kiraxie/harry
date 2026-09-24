@@ -24,6 +24,7 @@ export interface FakeClaudeSettings {
   fail?: boolean;
   isError?: boolean;
   stderr?: string;
+  stdoutBytes?: number;
   callsInConfigDir?: boolean;
 }
 
