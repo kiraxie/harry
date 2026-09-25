@@ -105,8 +105,8 @@ direct-repo-path import). "Release" = re-run sync — the same resync model as t
 
 The three pipeline skills (`skills/brainstorming`, `skills/executing`, `skills/finishing`)
 auto-trigger (no slash command) and read `HARRY.md`'s tier table (§3) to decide
-how much process a task gets. There is no plan stage: brainstorming closes on numbered
-acceptance criteria inside the item's `## Why / What`, and executing builds against them. `references/` holds on-demand tables/techniques the skills link to
+how much process a task gets. Brainstorming closes on numbered acceptance criteria
+inside the item's `## Why / What`, and executing builds against them. `references/` holds on-demand tables/techniques the skills link to
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
 skill files themselves short.
 
