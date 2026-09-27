@@ -63,7 +63,7 @@ function gateFiles(): string[] {
     "HARRY.md",
     "CLAUDE.md",
     "references/tier-gates.md",
-    ...["skills", "codex-skills", "agents", "commands", ".claude/commands"].flatMap(markdownUnder),
+    ...["skills", "codex-skills", "agents", "commands"].flatMap(markdownUnder),
   ].filter((rel) => !exempt.has(rel));
 }
 

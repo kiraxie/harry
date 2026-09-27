@@ -10,16 +10,15 @@ export type ReleaseState =
   | "version-mismatch-untracked";
 
 export function detectState(facts: {
-  currentVersion: string;
+  latestTag: string | null;
   targetVersion: string;
   tagExists: boolean;
   bumpCommitExists: boolean;
+  fieldHoldsTarget: boolean;
 }): ReleaseState;
 
+export function latestTag(repoRoot: string): string | null;
 export function gitTagExists(repoRoot: string, version: string): boolean;
 export function gitBumpCommitExists(repoRoot: string, version: string): boolean;
-
-// Throws on an unexpected environment/git failure (not a git repo, git missing,
-// package.json unreadable) — a malformed `targetVersion` is NOT such a failure,
-// it classifies cleanly to "invalid-version" instead.
-export function run(targetVersion: string, repoRoot?: string): ReleaseState;
+export function fieldHoldsTarget(repoRoot: string, fields: string[], version: string): boolean;
+export function run(targetVersion: string, fields?: string[], repoRoot?: string): ReleaseState;

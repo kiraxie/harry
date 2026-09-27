@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`/harry:release <version>`** on both builds (`commands/release.md`,
+  `codex-skills/release/SKILL.md`, shared procedure `references/release.md`). Cuts a
+  release in any repo: the repo declares its version fields, build, CHANGELOG and
+  checks in a `## Cutting a release` section of its `CLAUDE.md`, and a repo that
+  declares no fields or build and has no CHANGELOG is tag-only. Phase A bumps, verifies and commits before the merge; Phase B tags the
+  merged result and pushes after asking. `scripts/release-state.mjs` classifies the
+  state from the latest `v` tag, the bump commit and the declared fields.
+- **`/harry:upgrade-deps`** on both builds (`commands/upgrade-deps.md`,
+  `codex-skills/upgrade-deps/SKILL.md`, shared procedure `references/upgrade-deps.md`).
+  Brings dependencies, the package manager and CI setup actions to the latest stable
+  release, one major at a time, then verifies and lands through the merge-vs-PR ask;
+  notes for pnpm/Node, Go and Python (uv).
+
+### Removed
+
+- The repo-local `/release` (`.claude/commands/release.md`,
+  `.claude/scripts/release-state.mjs`), replaced by the shipped command. harry's own
+  release fields now live in `CLAUDE.md`'s `## Cutting a release` section.
+
 ## [0.22.0] - 2026-09-25
 
 ### Added

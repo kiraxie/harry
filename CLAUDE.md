@@ -54,18 +54,25 @@ The opt-in agentic jail (`EVALS_SANDBOX=1`) is for trusted, repo-authored cases 
 belong on an ephemeral machine (see `evals/README.md`).
 Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`.
 
-**Cutting a release:** bump the four hand-maintained version fields in lockstep —
-`package.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, and the **nested**
-`plugins[harry].version` in `.claude-plugin/marketplace.json` — `tests/version-sync.test.ts`
-fails if any one of them disagrees. Add the `CHANGELOG.md` entry, then rebuild `dist/`
-(`build.mjs` inlines `package.json`, so a version bump with no rebuild fails CI's drift
-gate). Finally `git tag vX.Y.Z` and push the tag: without it there is no way to diff what a
-release shipped. Some older releases have a `CHANGELOG.md` entry and no tag; do not backfill
-them — a tag reconstructed from CHANGELOG commits cannot be verified, and a wrong tag is worse
-than a missing one. Audit gaps with `git tag --sort=v:refname`: plain `git tag` sorts
-lexically, filing `v0.10.0` ahead of `v0.2.0`, so a `tail` of it hides the newest tags.
-`/release <version>` (repo-local, `.claude/commands/release.md`) automates the
-bump/build/verify/commit steps above; re-run it after the merge to tag.
+## Cutting a release
+
+`/harry:release <version>` reads this section (`references/release.md`).
+
+- **Version fields**, bumped in lockstep: `package.json`, `.claude-plugin/plugin.json`,
+  `.codex-plugin/plugin.json`, and the **nested** `plugins[harry].version` in
+  `.claude-plugin/marketplace.json`. `tests/version-sync.test.ts` fails if any one of
+  them disagrees.
+- **Build**: `pnpm run build`, committing `dist/companion.cjs` — `build.mjs` inlines
+  `package.json`, so a version bump with no rebuild fails CI's drift gate.
+- **CHANGELOG**: `CHANGELOG.md`.
+- **Verify**: `pnpm test`, `pnpm run typecheck`, `pnpm run lint`.
+
+Tags land on the squash commit on `main`, so a release spans two runs: one before the
+merge, one after. Some older releases have a `CHANGELOG.md` entry and no tag; do not
+backfill them — a tag reconstructed from CHANGELOG commits cannot be verified, and a
+wrong tag is worse than a missing one. Audit gaps with `git tag --sort=v:refname`:
+plain `git tag` sorts lexically, filing `v0.10.0` ahead of `v0.2.0`, so a `tail` of it
+hides the newest tags.
 
 ## Runtime architecture (`src/`)
 
@@ -180,7 +187,7 @@ guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the portable
 `commands/*.md` slash commands (`ask`, `debt`, `review`,
-`sync`, `audit`, `distill`, `wait-what`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
+`sync`, `audit`, `distill`, `wait-what`, `release`, `upgrade-deps`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 

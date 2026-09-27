@@ -74,7 +74,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `debt`,
-`review`, `sync`, `audit`, `grill`, `distill`, `wait-what`); the three pipeline skills and the runtime are
+`review`, `sync`, `audit`, `grill`, `distill`, `wait-what`, `release`, `upgrade-deps`); the three pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -94,6 +94,8 @@ Claude-native or local scripts.
 | `/harry:distill <repo>` | Evaluate an external repo as a distillation candidate — survey it against harry's laws and deviation record, rule pull/adapt/skip per candidate, record the outcome in upstream tracking |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 | `/harry:wait-what` | Re-explain harry's previous message once, in plainer words — one-shot, not a mode |
+| `/harry:release <version>` | Cut a release — bump the version fields the repo declares in its `## Cutting a release` CLAUDE.md section, add a CHANGELOG entry, verify and commit before the merge, then tag and push after it; tag-only repos skip the bump |
+| `/harry:upgrade-deps` | Upgrade every dependency to its latest stable release — the package manager and CI setup actions included — one major at a time, verify, and land through the merge-vs-PR ask; pnpm/Node, Go, Python (uv) |
 
 Cheap-first smoke test: `/harry:ask` → `/harry:review`/`/harry:debate`.
 
@@ -125,11 +127,11 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · executing · finishing (shared, both builds)
-commands/           review · ask · debate · debt · sync · audit · grill · distill · wait-what (Claude Code)
-codex-skills/       ask · debt · review · sync · audit · grill · distill · wait-what (Codex CLI)
+commands/           review · ask · debate · debt · sync · audit · grill · distill · wait-what · release · upgrade-deps (Claude Code)
+codex-skills/       ask · debt · review · sync · audit · grill · distill · wait-what · release · upgrade-deps (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs, shared, both builds)
-scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
+scripts/            install.mjs · init.mjs · install-codex.mjs · release-state.mjs · lib/markers.mjs · lib/stale-entries.mjs
 .claude-plugin/     Claude Code plugin manifest
 .codex-plugin/ + .agents/plugins/   Codex CLI plugin manifest
 upstream.json       tracks the three upstreams by commit (see references/upstream-sync.md)
