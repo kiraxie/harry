@@ -5,6 +5,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **`/harry:release` and `/harry:upgrade-deps`** on both builds (breaking). They are the
+  maintainer's own workflow and did not belong in the plugin; they are now repo-local
+  commands in harry's `.claude/commands/`, and no plugin build loads them. This
+  reverses 0.23.0, which moved them into the plugin. A `## Cutting a release` section
+  written into a repo's `CLAUDE.md` for 0.23.0 has no reader any more and can be deleted.
+
 ## [0.23.0] - 2026-09-28
 
 ### Added

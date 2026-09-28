@@ -13,7 +13,15 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const TOP_LEVEL_FILES = ["HARRY.md", "README.md", "CLAUDE.md"];
-const PROSE_DIRS = ["skills", "commands", "codex-skills", "references", "agents", "evals"];
+const PROSE_DIRS = [
+  "skills",
+  "commands",
+  "codex-skills",
+  "references",
+  "agents",
+  "evals",
+  ".claude/commands",
+];
 
 function listMarkdownFiles(dir: string): string[] {
   const abs = path.join(repoRoot, dir);

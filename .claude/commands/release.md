@@ -1,9 +1,12 @@
-# Release — shared procedure
+---
+description: Cut a harry release — bump the version fields CLAUDE.md declares, add a CHANGELOG entry, verify and commit before the merge, then tag and push after it. Repo-local; resumable across the merge.
+argument-hint: '<version>'
+---
 
-The `/release` procedure used by **both** builds: `commands/release.md` (Claude Code)
-and `codex-skills/release/SKILL.md` (Codex CLI). Each of those files keeps only its
-own shell — frontmatter, title, and where the version comes from — and points here
-for everything below.
+# `/release` — cut a harry release
+
+Raw slash-command arguments: `$ARGUMENTS` — a single required `<version>` (strict
+`x.y.z`, no leading `v`).
 
 A release has two phases because the tag must land on the commit that is on the
 default branch, and with squash merges (HARRY.md §5) that commit exists only after
@@ -64,7 +67,7 @@ would be released with the old version in it. No tag yet → skip this check.
 Run, from the repo root, with one `--field` per declared field file:
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/release-state.mjs" <version> [--field <path>]...
+node .claude/scripts/release-state.mjs <version> [--field <path>]...
 ```
 
 It reads the repo's real state (tags, the bump commit, the declared fields) — never

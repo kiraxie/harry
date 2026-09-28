@@ -150,18 +150,7 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
 // one had none. The cross-check below is that, added when section C started
 // deriving from `PAIRS` too: until then a door pair landing on disk without
 // being listed here was invisible to the WHOLE suite, content guard included.
-const PAIRS = [
-  "ask",
-  "debt",
-  "review",
-  "sync",
-  "audit",
-  "grill",
-  "distill",
-  "wait-what",
-  "release",
-  "upgrade-deps",
-];
+const PAIRS = ["ask", "debt", "review", "sync", "audit", "grill", "distill", "wait-what"];
 
 // CC commands with no Codex twin, each an explicit decision rather than an
 // oversight. An entry here is a conscious exemption, not a silencer.
@@ -316,8 +305,6 @@ const HOISTED: Record<string, string[]> = {
   grill: ["references/grilling.md"],
   distill: ["references/distilling.md", "references/upstream-sync.md"],
   "wait-what": ["references/grilling.md", "references/plain-language.md"],
-  release: ["references/release.md"],
-  "upgrade-deps": ["references/upgrade-deps.md"],
 };
 
 /**

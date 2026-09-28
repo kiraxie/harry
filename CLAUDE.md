@@ -56,7 +56,9 @@ Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`
 
 ## Cutting a release
 
-`/harry:release <version>` reads this section (`references/release.md`).
+`/release <version>` reads this section. It is repo-local (`.claude/commands/release.md`,
+state script `.claude/scripts/release-state.mjs`) and no plugin build loads it, as with
+`/upgrade-deps` (`.claude/commands/upgrade-deps.md`).
 
 - **Version fields**, bumped in lockstep: `package.json`, `.claude-plugin/plugin.json`,
   `.codex-plugin/plugin.json`, and the **nested** `plugins[harry].version` in
@@ -187,7 +189,7 @@ guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the portable
 `commands/*.md` slash commands (`ask`, `debt`, `review`,
-`sync`, `audit`, `distill`, `wait-what`, `release`, `upgrade-deps`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
+`sync`, `audit`, `distill`, `wait-what`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 

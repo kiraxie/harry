@@ -1,10 +1,10 @@
-# Upgrade dependencies — shared procedure
+---
+description: Upgrade every dependency of this repo to its latest stable release — the package manager and CI setup actions included — verify, and land it through the merge-vs-PR ask. Repo-local.
+---
 
-The `/upgrade-deps` procedure used by **both** builds: `commands/upgrade-deps.md`
-(Claude Code) and `codex-skills/upgrade-deps/SKILL.md` (Codex CLI). Each of those
-files keeps only its own shell and points here for everything below.
+# `/upgrade-deps` — upgrade dependencies
 
-It brings every dependency of the current repo to its latest stable release — the
+This command brings every dependency of the current repo to its latest stable release — the
 package manager and the CI setup actions included — verifies the result, and lands
 it through the usual merge-vs-PR ask. It never deploys unless the user asks.
 

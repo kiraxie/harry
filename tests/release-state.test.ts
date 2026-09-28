@@ -12,10 +12,10 @@ import {
   gitTagExists,
   latestTag,
   parseVersion,
-} from "../scripts/release-state.mjs";
+} from "../.claude/scripts/release-state.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const SCRIPT = path.join(repoRoot, "scripts/release-state.mjs");
+const SCRIPT = path.join(repoRoot, ".claude/scripts/release-state.mjs");
 
 const fixtures: string[] = [];
 after(() => {
@@ -281,8 +281,13 @@ describe("a field holds the target only as a whole version token", () => {
   });
 });
 
-test("references/release.md greps with the script's token boundary, never grep -w", () => {
-  const md = readFileSync(path.join(repoRoot, "references/release.md"), "utf8");
+test(".claude/commands/release.md runs the state script at its real path", () => {
+  const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
+  assert.ok(md.includes(`node ${path.relative(repoRoot, SCRIPT)} `));
+});
+
+test(".claude/commands/release.md greps with the script's token boundary, never grep -w", () => {
+  const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
   assert.doesNotMatch(md, /grep -[a-zA-Z]*w/);
   const greps = [...md.matchAll(/`((?:git )?grep [^`]*)`/g)]
     .map((m) => m[1])
@@ -322,7 +327,7 @@ const CANONICAL_STATES = [
 ];
 
 test("release-state.d.mts's ReleaseState union names exactly the six states", () => {
-  const dts = readFileSync(path.join(repoRoot, "scripts/release-state.d.mts"), "utf8");
+  const dts = readFileSync(path.join(repoRoot, ".claude/scripts/release-state.d.mts"), "utf8");
   const union = dts.match(/export type ReleaseState =([\s\S]*?);/);
   assert.ok(union, "no ReleaseState union");
   assert.deepEqual(
@@ -331,11 +336,14 @@ test("release-state.d.mts's ReleaseState union names exactly the six states", ()
   );
 });
 
-test("references/release.md's state section names exactly the six states", () => {
-  const md = readFileSync(path.join(repoRoot, "references/release.md"), "utf8");
+test(".claude/commands/release.md's state section names exactly the six states", () => {
+  const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
   const start = md.indexOf("## Classify the state");
   const end = md.indexOf("## Phase A");
-  assert.ok(start >= 0 && end > start, "references/release.md: no state section before Phase A");
+  assert.ok(
+    start >= 0 && end > start,
+    ".claude/commands/release.md: no state section before Phase A",
+  );
   const names = [...md.slice(start, end).matchAll(/`([a-z-]+)`/g)]
     .map((m) => m[1])
     .filter((n) => /^[a-z]+(-[a-z]+)+$/.test(n));
