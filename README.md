@@ -39,7 +39,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 harry's commands share the `/harry:` namespace. The one whose bare name collides
 with a Claude Code built-in — `/harry:review` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
-(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:distill`, `/harry:wait-what`)
+(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:wait-what`)
 accept the bare name when unambiguous.
 
 `/harry:sync` does three things: deploys harry's resident laws (`HARRY.md`, which
@@ -74,7 +74,7 @@ from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
 install command yet, only the `/plugins` picker.
 
 `codex-skills/` holds the Codex-only conversions (`ask`, `debt`,
-`review`, `sync`, `audit`, `grill`, `distill`, `wait-what`); the three pipeline skills and the runtime are
+`review`, `sync`, `audit`, `grill`, `wait-what`); the three pipeline skills and the runtime are
 shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
@@ -91,7 +91,6 @@ Claude-native or local scripts.
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
-| `/harry:distill <repo>` | Evaluate an external repo as a distillation candidate — survey it against harry's laws and deviation record, rule pull/adapt/skip per candidate, record the outcome in upstream tracking |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 | `/harry:wait-what` | Re-explain harry's previous message once, in plainer words — one-shot, not a mode |
 
@@ -125,21 +124,22 @@ These auto-trigger (no slash command); they are the pipeline:
 ```
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · executing · finishing (shared, both builds)
-commands/           review · ask · debate · debt · sync · audit · grill · distill · wait-what (Claude Code)
-codex-skills/       ask · debt · review · sync · audit · grill · distill · wait-what (Codex CLI)
+commands/           review · ask · debate · debt · sync · audit · grill · wait-what (Claude Code)
+codex-skills/       ask · debt · review · sync · audit · grill · wait-what (Codex CLI)
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs, shared, both builds)
 scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
 .claude-plugin/     Claude Code plugin manifest
 .codex-plugin/ + .agents/plugins/   Codex CLI plugin manifest
-upstream.json       tracks the three upstreams by commit (see references/upstream-sync.md)
+.claude/            repo-local maintainer tooling, not loaded by the plugin: commands (release · upgrade-deps · distill) · references · scripts
+upstream.json       tracks the three upstreams by commit (see .claude/references/upstream-sync.md)
 ```
 
 ## Upstream
 
-harry is distilled from `ponytail`, `mattpocock-skills` (the `grill` family), and `anthropics-skills` (skill-authoring principles) — all three pinned by commit in `upstream.json`; `references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Four more sources are historical influences, not pinned: `superpowers` (origin of the pipeline skills and the TDD/debugging/verification laws; retired as a pinned upstream in 2026-09 once harry's versions had diverged), `codex-plugin-cc` (origin of `review`'s design and of the vendored in-process Codex runtime; retired 2026-09 once that runtime was deleted in favor of spawning the `codex` CLI directly), `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's talk-like-an-engineer and lawful-exit rules).
+harry is distilled from `ponytail`, `mattpocock-skills` (the `grill` family), and `anthropics-skills` (skill-authoring principles) — all three pinned by commit in `upstream.json`; `.claude/references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Four more sources are historical influences, not pinned: `superpowers` (origin of the pipeline skills and the TDD/debugging/verification laws; retired as a pinned upstream in 2026-09 once harry's versions had diverged), `codex-plugin-cc` (origin of `review`'s design and of the vendored in-process Codex runtime; retired 2026-09 once that runtime was deleted in favor of spawning the `codex` CLI directly), `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's talk-like-an-engineer and lawful-exit rules).
 
 ## License
 
-MIT. Parts of `references/skill-authoring.md` are distilled from an
+MIT. Parts of `.claude/references/skill-authoring.md` are distilled from an
 Apache-2.0 source (`anthropics/skills`); see [`NOTICE`](NOTICE).

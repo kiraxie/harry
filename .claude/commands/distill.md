@@ -1,4 +1,11 @@
-# Distilling — evaluating an external repo for principles worth absorbing
+---
+description: Evaluate an external repo as a distillation candidate — clone it, survey its principles against harry's laws and deviation record, rule pull/adapt/skip on each, and record the outcome in upstream tracking. Repo-local.
+argument-hint: '<repo-url | owner/name> [focus]'
+---
+
+# `/distill` — evaluate an external repo for principles worth absorbing
+
+Raw slash-command arguments: `$ARGUMENTS`
 
 A distill session takes a candidate repo (someone else's skills, laws, or plugin),
 surveys it against harry's current laws and skills, rules on every candidate principle,
@@ -29,13 +36,8 @@ execute) as their own units — never inline in a distill session.
 
 ### 1. Route: onboard or re-sync
 
-This procedure maintains harry's upstream tracking and requires the harry checkout
-(`upstream.json` at the repo root). Anywhere else, stop and tell the user: cloning
-would drop an un-ignored `.references/` tree into their project, and there is no
-tracking file to record the survey in.
-
 If the repo is already a source in `upstream.json`, this is a **re-sync**, not an
-onboard: follow `references/upstream-sync.md`'s check procedure (path-scoped diff since
+onboard: follow `.claude/references/upstream-sync.md`'s check procedure (path-scoped diff since
 the pinned commit) and stop here. A repo recorded in `upstream-sync.md`'s intro as a
 historical influence gets a fresh comparison only if the user asks for one.
 
@@ -54,7 +56,7 @@ Before judging anything, read:
 
 - `upstream.json` `derived[].note` entries — each names what harry changed or removed on
   purpose, and why.
-- `references/upstream-sync.md`'s provenance notes — per-source warnings about what not
+- `.claude/references/upstream-sync.md`'s provenance notes — per-source warnings about what not
   to "restore".
 - `HARRY.md` — the laws are the calibration target; every candidate is judged against
   them, not against novelty.
@@ -110,18 +112,18 @@ nothing to track.
   `upstream.json` `sources` (repo URL, version, full SHA, date) plus one `derived[]`
   entry per derived area, with `from` paths literal per step 4 and a `note` naming
   harry's deviations — the note is what protects the NEXT survey (step 3). Add the
-  source's row to `references/upstream-sync.md`'s table and a provenance bullet there.
+  source's row to `.claude/references/upstream-sync.md`'s table and a provenance bullet there.
   Update the source count where prose states it (CLAUDE.md, README.md — grep for the
   spelled-out count; a stale "three upstreams" is drift).
 - **No ports yet** — comparison-only, everything skipped, or pull/adapt rulings still
   awaiting the user's acceptance (every headless run): record the repo in
-  `references/upstream-sync.md`'s intro (the i-have-adhd pattern: date, what was
+  `.claude/references/upstream-sync.md`'s intro (the i-have-adhd pattern: date, what was
   compared, why nothing is pinned), noting any pending proposals. When the first
   proposal is actually ported, that pipeline unit adds the pin and `derived[]` and
   upgrades this record.
 
 Either way the survey leaves a durable trace. A surveyed repo with no record is exactly
-the failure mode this skill exists to close.
+the failure mode this command exists to close.
 
 ### 8. Backlog items — with the user's nod
 

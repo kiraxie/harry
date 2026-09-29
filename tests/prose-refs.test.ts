@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  PROSE_DIRS as INSTRUCTION_DIRS,
+  REPO_LOCAL_DIRS,
+  REPO_LOCAL_PROSE_DIRS,
+  REPO_TOP_LEVEL,
+  SHIPPED_PROSE_DIRS,
+  SHIPPED_TOP_LEVEL,
+} from "./prose-dirs.ts";
 
 // The plugin's real product is ~3,000 lines of markdown that an AI agent follows,
 // full of file-path references (references/tier-gates.md, ${CLAUDE_PLUGIN_ROOT}/...,
@@ -12,16 +21,8 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const TOP_LEVEL_FILES = ["HARRY.md", "README.md", "CLAUDE.md"];
-const PROSE_DIRS = [
-  "skills",
-  "commands",
-  "codex-skills",
-  "references",
-  "agents",
-  "evals",
-  ".claude/commands",
-];
+const TOP_LEVEL_FILES = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
+const PROSE_DIRS = [...INSTRUCTION_DIRS, "evals"];
 
 function listMarkdownFiles(dir: string): string[] {
   const abs = path.join(repoRoot, dir);
@@ -46,8 +47,8 @@ const proseFiles = [
 //    example, say), not real cross-references. A `(?<!\/)` guard also
 //    stops a longer real path like `src/commands/fix.ts` from being mis-sliced into
 //    the shorter bare candidate `commands/fix.ts`.
-// 3. `.claude/commands/…` and `.claude/scripts/…` — the same bare-mention shape as
-//    (2), scoped to exactly those two subdirs (see CLAUDE_DIR_PATH_RE below for why).
+// 3. A path under one of `REPO_LOCAL_DIRS` (`.claude/…`) — the same bare-mention shape
+//    as (2), scoped to exactly those subdirs (see CLAUDE_DIR_PATH_RE below for why).
 const PLUGIN_ROOT_RE = /\$\{CLAUDE_PLUGIN_ROOT\}\/([\w./-]+)/g;
 // Extension whitelist shared by both path regexes below — kept as one constant
 // composed into each pattern's source rather than duplicated literally, after
@@ -65,9 +66,10 @@ const BARE_PATH_RE = new RegExp(
 // above guards with `(?<!\/)`). Deliberately NOT a blanket `\.claude\/` — that
 // would sweep in `.claude/worktrees/…` mentions, which are per-worktree,
 // gitignored, and never meant to resolve against a static path on disk. Only
-// the two subdirs that hold real, checked-in, referenceable content are named.
+// the subdirs that hold real, checked-in, referenceable content are named.
+const REPO_LOCAL_ALT = REPO_LOCAL_DIRS.map((dir) => dir.replaceAll(".", "\\.")).join("|");
 const CLAUDE_DIR_PATH_RE = new RegExp(
-  String.raw`(?<![\w./])\.claude\/(?:commands|scripts)\/[\w./-]+${EXT_SRC}`,
+  String.raw`(?<![\w./])(?:${REPO_LOCAL_ALT})\/[\w./-]+${EXT_SRC}`,
   "g",
 );
 // Markdown fences nest by backtick-run length (CommonMark): a ```` fence isn't
@@ -123,6 +125,62 @@ test("every repo-relative path referenced in prose exists on disk", () => {
   }
 
   assert.deepEqual(failures, []);
+});
+
+// The marketplace installs the whole tree, but no plugin build loads `.claude/`, so a
+// shipped file citing it dangles for every consumer while the check above, which
+// resolves against this checkout, stays green. Deny by default: any `.claude/` fails, so a
+// new repo-local dir is covered before anyone lists it. `~/`, `$HOME/` and `${HOME}/`
+// paths are the user's home, not this repo, and stay allowed.
+const REPO_LOCAL_CITE_RE = /(?<!(?:~|\$HOME|\$\{HOME\})\/)(?<![\w.])\.claude\//;
+
+// Shipped mentions of a CONSUMER project's own `.claude/` dir, not this repo's. Only the
+// named text is exempt, never the rest of its line, and an entry that no longer matches
+// fails. Each needs a stated reason; an entry here is a conscious exemption, not a silencer.
+const REPO_LOCAL_CITE_EXEMPTIONS: ReadonlyArray<{ path: string; text: string; reason: string }> = [
+  {
+    path: "references/sync-migration.md",
+    text: "`.claude/worktrees/`",
+    reason: "names where Claude Code puts worktrees in the consumer's project",
+  },
+];
+
+test("no shipped file cites a repo-local .claude/ path", () => {
+  const shipped = [...SHIPPED_TOP_LEVEL, ...SHIPPED_PROSE_DIRS.flatMap(listMarkdownFiles)];
+  const failures: string[] = [];
+  const used = new Set<(typeof REPO_LOCAL_CITE_EXEMPTIONS)[number]>();
+  for (const relFile of shipped) {
+    readFileSync(path.join(repoRoot, relFile), "utf-8")
+      .split("\n")
+      .forEach((line, idx) => {
+        let rest = line;
+        for (const e of REPO_LOCAL_CITE_EXEMPTIONS) {
+          if (e.path !== relFile || !rest.includes(e.text)) continue;
+          used.add(e);
+          rest = rest.replaceAll(e.text, " ");
+        }
+        if (REPO_LOCAL_CITE_RE.test(rest)) failures.push(`${relFile}:${idx + 1}`);
+      });
+  }
+  assert.deepEqual(failures, []);
+  assert.deepEqual(
+    REPO_LOCAL_CITE_EXEMPTIONS.filter((e) => !used.has(e)).map((e) => `${e.path}: ${e.text}`),
+    [],
+    "a stale exemption matches nothing — delete it",
+  );
+});
+
+// The existence check and every prose scan see a `.claude/` dir only once it is listed,
+// so the lists must equal what git tracks there (untracked `worktrees/` drops out).
+test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
+  const tracked = execFileSync("git", ["ls-files", ".claude"], { cwd: repoRoot, encoding: "utf-8" })
+    .split("\n")
+    .filter((f) => f.split("/").length > 2);
+  const dirOf = (f: string) => f.split("/").slice(0, 2).join("/");
+  const all = [...new Set(tracked.map(dirOf))].sort();
+  const prose = [...new Set(tracked.filter((f) => f.endsWith(".md")).map(dirOf))].sort();
+  assert.deepEqual(all, [...REPO_LOCAL_DIRS].sort());
+  assert.deepEqual(prose, [...REPO_LOCAL_PROSE_DIRS].sort());
 });
 
 // ---------------------------------------------------------------------------

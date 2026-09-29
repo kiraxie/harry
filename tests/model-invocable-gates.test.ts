@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 
 // A gate the model cannot execute is not a gate. `commands/review.md` used to set
 // `disable-model-invocation: true` (inherited from codex-plugin-cc, which sets it on every
@@ -53,17 +54,19 @@ const GATE_SCAN_EXEMPTIONS: ReadonlyArray<{ path: string; names: string[]; reaso
  * the model reads every session), both builds' skill trees (`skills/` is shared, `codex-skills/`
  * is the Codex build's own tree), the role agents, and every command the model can reach.
  *
- * One deliberate exclusion beyond `GATE_SCAN_EXEMPTIONS`: `references/` beyond the tier gates
- * describes the slash commands rather than telling the model to run them
- * (`audit/ORCHESTRATION.md`) — the ban is on instructions, not on mentioning a command exists.
+ * One deliberate exclusion beyond `GATE_SCAN_EXEMPTIONS`, `GATE_PATH_EXEMPTIONS`: both
+ * references trees, beyond the tier gates, and `README.md` describe the slash commands rather
+ * than telling the model to run them (`audit/ORCHESTRATION.md`) — the ban is on instructions,
+ * not on mentioning a command exists.
  */
+const GATE_PATH_EXEMPTIONS = new Set(["references", ".claude/references", "README.md"]);
+
 function gateFiles(): string[] {
   const exempt = new Set(GATE_SCAN_EXEMPTIONS.map((e) => e.path));
   return [
-    "HARRY.md",
-    "CLAUDE.md",
+    ...[...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL].filter((f) => !GATE_PATH_EXEMPTIONS.has(f)),
     "references/tier-gates.md",
-    ...["skills", "codex-skills", "agents", "commands", ".claude/commands"].flatMap(markdownUnder),
+    ...PROSE_DIRS.filter((dir) => !GATE_PATH_EXEMPTIONS.has(dir)).flatMap(markdownUnder),
   ].filter((rel) => !exempt.has(rel));
 }
 

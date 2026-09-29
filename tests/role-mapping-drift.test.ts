@@ -150,7 +150,7 @@ test("A3 · references/codex-role-mapping.md table rows equal canonical set with
 // one had none. The cross-check below is that, added when section C started
 // deriving from `PAIRS` too: until then a door pair landing on disk without
 // being listed here was invisible to the WHOLE suite, content guard included.
-const PAIRS = ["ask", "debt", "review", "sync", "audit", "grill", "distill", "wait-what"];
+const PAIRS = ["ask", "debt", "review", "sync", "audit", "grill", "wait-what"];
 
 // CC commands with no Codex twin, each an explicit decision rather than an
 // oversight. An entry here is a conscious exemption, not a silencer.
@@ -241,9 +241,9 @@ for (const name of PAIRS) {
 // true only while the hoist introduces a NEW path on one side. Measured after
 // every hoist landed, that property is gone for every pair without exception:
 //
-//   ask                                      both sides cite NO reference path
-//   debt, review, sync, audit, grill, distill, wait-what  1 shared path,
-//                                            zero asymmetry
+//   ask                                          both sides cite NO reference path
+//   debt, review, sync, audit, grill, wait-what  1 shared path,
+//                                                zero asymmetry
 //
 // So B passes vacuously against re-inlining on every pair. It still does what
 // its name says — path-set parity, which catches a path added to one side only —
@@ -264,15 +264,15 @@ for (const name of PAIRS) {
 //    protect — its two doors share zero prose lines. Its divergence risk is the
 //    opposite shape — content that was never shared (see the `--context` case) —
 //    and needs its own answer.
-//  - Door↔REFERENCE only, never door↔door. Six of the eight pairs still carry
-//    verbatim cross-build duplication; for most of them it is the pointer
-//    sentences, which are duplicated BY DESIGN — that is what a thin door looks
-//    like. `review` is the live exception, now much reduced: of its 7 shared
-//    lines, ~1 is build-agnostic instruction prose that no reference states (its
-//    Single review + fix section was hoisted). `grill` and
-//    `distill` were the 60-70% cases and are done — what remains shared there is
-//    pointer text only. Unhoisted duplication is a hoist candidate, not a hole
-//    in this guard, which by construction sees only escaped HOISTED content.
+//  - Door↔REFERENCE only, never door↔door. The pairs still carry verbatim
+//    cross-build duplication; for most of them it is the pointer sentences,
+//    which are duplicated BY DESIGN — that is what a thin door looks like.
+//    `review` is the live exception, now much reduced: of its 7 shared lines,
+//    ~1 is build-agnostic instruction prose that no reference states (its
+//    Single review + fix section was hoisted). `grill` was a 60-70% case and is
+//    done — what remains shared there is pointer text only. Unhoisted
+//    duplication is a hoist candidate, not a hole in this guard, which by
+//    construction sees only escaped HOISTED content.
 // Declared per pair as a LIST, and checked against the paths actually shared —
 // not just against which pairs share something. A pair-granular floor (the first
 // version of this) is the same mistake the unit exists to correct: it reads as a
@@ -303,7 +303,6 @@ const HOISTED: Record<string, string[]> = {
     "references/audit/validate-findings.cjs",
   ],
   grill: ["references/grilling.md"],
-  distill: ["references/distilling.md", "references/upstream-sync.md"],
   "wait-what": ["references/grilling.md", "references/plain-language.md"],
 };
 
@@ -319,7 +318,7 @@ const HOISTED: Record<string, string[]> = {
  * audit doors left the whole suite green. Deriving one level down is what makes
  * a hub-and-spoke reference bundle guardable at all — and it is worth more than
  * the audit case, since it also picks up doc-types.md (via debt and sync),
- * review-rubric.md, and upstream-sync.md, all real prose nobody was guarding.
+ * and review-rubric.md, real prose nobody was guarding.
  *
  * FULL closure, not a fixed depth. A depth limit here would be a magic number
  * standing in for the graph's real shape, and the first version of this used
@@ -327,8 +326,8 @@ const HOISTED: Record<string, string[]> = {
  * the graph was "a tree two deep". All of that was wrong, and review measured
  * it: `commands/sync.md` -> `sync-migration.md` -> `doc-types.md` ->
  * `debt-audit.md` is three deep, `doc-types.md` is reached from both debt and
- * sync so it is not a tree, and two cycles exist TODAY
- * (`doc-types.md` <-> `debt-audit.md`, `distilling.md` <-> `upstream-sync.md`).
+ * sync so it is not a tree, and a cycle exists TODAY
+ * (`doc-types.md` <-> `debt-audit.md`).
  * Under that bound, three verbatim `debt-audit.md` prose lines inlined into both
  * sync doors stayed green — the same hole one level further out. A worklist with
  * a `seen` set is the same size as the bounded loop and has no such edge.

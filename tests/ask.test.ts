@@ -23,6 +23,7 @@ import test from "node:test";
 import { ASK_PREAMBLE } from "../src/commands/ask.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 import { pruneRunFiles, reserveRunFiles } from "../src/lib/run-files.ts";
+import { PROSE_DIRS } from "./prose-dirs.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -115,8 +116,9 @@ const ASK_DOORS: readonly AskDoor[] = [
  */
 const ASK_DOORS_EXEMPT: ReadonlyArray<{ path: string; reason: string }> = [];
 
-/** Dirs holding executable doors — prose a consumer follows, not commentary. */
-const DOOR_DIRS = ["commands", "codex-skills", "skills", "references"];
+/** Dirs holding executable doors — prose a model follows, not commentary. */
+const NOT_DOOR_DIRS = new Set(["agents"]); // role cards: nothing there invokes a command
+const DOOR_DIRS = PROSE_DIRS.filter((dir) => !NOT_DOOR_DIRS.has(dir));
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 

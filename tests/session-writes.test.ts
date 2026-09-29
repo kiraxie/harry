@@ -3,11 +3,12 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-function shippedFiles(): string[] {
-  const out: string[] = ["HARRY.md", "README.md"];
+function proseFiles(): string[] {
+  const out: string[] = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
   const walk = (dir: string) => {
     for (const name of readdirSync(path.join(repoRoot, dir))) {
       const rel = path.join(dir, name);
@@ -15,11 +16,11 @@ function shippedFiles(): string[] {
       else if (rel.endsWith(".md")) out.push(rel);
     }
   };
-  for (const dir of ["skills", "commands", "references", "agents", "codex-skills"]) walk(dir);
+  for (const dir of PROSE_DIRS) walk(dir);
   return out;
 }
 
-test("AC-8: shipped text names no retired dispatch concept", () => {
+test("AC-8: no prose names a retired dispatch concept", () => {
   const retired: [RegExp, string][] = [
     [/ultrathink/i, "a dated thinking keyword"],
     [/dispatch cap/i, "the retired dispatch cap"],
@@ -30,7 +31,7 @@ test("AC-8: shipped text names no retired dispatch concept", () => {
     [/subagent execution|per-(task|AC) review/i, "the retired per-task review"],
   ];
   const hits: string[] = [];
-  for (const rel of shippedFiles()) {
+  for (const rel of proseFiles()) {
     const text = readFileSync(path.join(repoRoot, rel), "utf-8");
     for (const [re, why] of retired) if (re.test(text)) hits.push(`${rel}: ${why} (${re})`);
   }

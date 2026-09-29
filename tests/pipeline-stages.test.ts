@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 
 // The pipeline is brainstorm → execute → finish, and an active item carries
 // acceptance criteria instead of a plan. Both halves of that live in prose across
@@ -17,19 +18,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 
-/** Files that instruct the model or describe the product to a consumer. */
-function shippedFiles(): string[] {
-  const files = ["HARRY.md", "README.md", "CLAUDE.md", "NOTICE", "upstream.json"];
-  for (const dir of [
-    "skills",
-    "codex-skills",
-    "commands",
-    "agents",
-    "references",
-    ".claude-plugin",
-    ".codex-plugin",
-    ".agents",
-  ]) {
+/** Files that instruct the model, shipped or repo-local, or describe the product. */
+function proseFiles(): string[] {
+  const files = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, "NOTICE", "upstream.json"];
+  for (const dir of [...PROSE_DIRS, ".claude-plugin", ".codex-plugin", ".agents"]) {
     const abs = path.join(repoRoot, dir);
     if (!existsSync(abs)) continue;
     for (const rel of readdirSync(abs, { recursive: true, encoding: "utf-8" })) {
@@ -50,18 +42,18 @@ const LEGACY_PLAN_READERS = new Set([
   path.join("skills", "executing", "SKILL.md"),
 ]);
 
-test("no shipped file sends the model at the deleted writing-plans skill", () => {
+test("no prose file sends the model at the deleted writing-plans skill", () => {
   assert.ok(
     !existsSync(path.join(repoRoot, "skills/writing-plans")),
     "skills/writing-plans/ is back",
   );
-  const offenders = shippedFiles().filter((rel) => read(rel).includes("writing-plans"));
+  const offenders = proseFiles().filter((rel) => read(rel).includes("writing-plans"));
   assert.deepEqual(offenders, [], "these name a skill that no longer exists");
 });
 
-test("no shipped file still describes a plan stage in the pipeline", () => {
+test("no prose file still describes a plan stage in the pipeline", () => {
   const offenders: string[] = [];
-  for (const rel of shippedFiles()) {
+  for (const rel of proseFiles()) {
     read(rel)
       .split("\n")
       .forEach((line, i) => {
@@ -73,7 +65,7 @@ test("no shipped file still describes a plan stage in the pipeline", () => {
 
 test("`## Plan` survives only where a legacy item has to be read", () => {
   const offenders: string[] = [];
-  for (const rel of shippedFiles()) {
+  for (const rel of proseFiles()) {
     if (LEGACY_PLAN_READERS.has(rel)) continue;
     const lines = read(rel).split("\n");
     lines.forEach((line, i) => {
@@ -99,7 +91,7 @@ test("prose counts the pipeline skills that actually ship", () => {
   ).length;
   const allowed = new Set([words[actual], String(actual)]);
   const offenders: string[] = [];
-  for (const rel of shippedFiles()) {
+  for (const rel of proseFiles()) {
     read(rel)
       .split("\n")
       .forEach((line, i) => {

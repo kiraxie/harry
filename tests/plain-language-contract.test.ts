@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
@@ -213,8 +214,8 @@ test("AC-4: both /wait-what doors are thin pointers that say one-shot, not a mod
   }
 });
 
-const CORPUS_DIRS = ["references", "skills", "commands", "codex-skills", "agents"];
-const CORPUS_TOP_LEVEL = ["HARRY.md", "CLAUDE.md", "README.md"];
+const CORPUS_DIRS = PROSE_DIRS;
+const CORPUS_TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
 
 function corpus(): string[] {
   const files = [...CORPUS_TOP_LEVEL];
@@ -297,7 +298,7 @@ test("AC-5: the cut-term regexes still match the prose they replaced", () => {
   assert.ok(SURVIVING.hoist?.re.test("suggest the hoist and its destination"));
 });
 
-test("AC-5: the terms cut entirely are absent from every shipped file", () => {
+test("AC-5: the terms cut entirely are absent from all prose", () => {
   const files = corpus();
   assert.ok(files.includes("HARRY.md"), "the resident laws dropped out of the jargon scan");
   const offenders: string[] = [];
@@ -309,7 +310,7 @@ test("AC-5: the terms cut entirely are absent from every shipped file", () => {
   assert.deepEqual(
     offenders,
     [],
-    "a term this unit cut is back in the shipped prose with no definition behind it" +
+    "a term this unit cut is back in the prose with no definition behind it" +
       " — " +
       "Whole file, flattened — not line by line: a hard wrap inside `law\\nwiring` would otherwise split the term across two lines that each pass.",
   );
@@ -364,7 +365,7 @@ for (const [term, [rel, re]] of Object.entries(DEFINITIONS)) {
     assert.match(
       plain(read(rel)),
       re,
-      `"${term}" is used across the shipped trees but ${rel} no longer says what it means`,
+      `"${term}" is used across the prose trees but ${rel} no longer says what it means`,
     );
   });
 }

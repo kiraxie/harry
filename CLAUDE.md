@@ -91,15 +91,30 @@ rather than streaming a session turn. Neither passes a model — `~/.codex/confi
 decides which one runs. There is no fix backend or apply path in-runtime; both commands are
 read-only, full stop.
 
-Everything in the repo is MIT except `references/skill-authoring.md`, which distills
+Everything in the repo is MIT except `.claude/references/skill-authoring.md`, which distills
 parts of an Apache-2.0 source (`anthropics/skills`) — see `NOTICE`.
 
 `upstream.json` pins three upstream sources (`ponytail`, `mattpocock-skills`,
 `anthropics-skills`) by commit; `superpowers` (origin of the pipeline skills) and
 `codex-plugin-cc` (origin of the retired vendored runtime) are retired to
 `historical_sources` (attribution only, not synced);
-`references/upstream-sync.md` documents how to diff an upstream's newer philosophy against
-harry's customized version when pulling in changes.
+`.claude/references/upstream-sync.md` documents how to diff an upstream's newer philosophy against
+harry's customized version when pulling in changes; onboarding a new candidate is the
+repo-local `/distill` (`.claude/commands/distill.md`).
+
+## Repo-local tooling (`.claude/`)
+
+`.claude/` is the maintainer's repo-local surface, not plugin content: `.claude/commands/`
+(`/release`, `/upgrade-deps`, `/distill`), `.claude/references/` (`upstream-sync.md`,
+`skill-authoring.md`) and `.claude/scripts/`. The marketplace installs the whole tree, but
+no plugin build loads these, so shipped prose must never cite them. `tests/prose-dirs.ts`
+names both sides of that boundary, and every prose scan derives its corpus from it.
+
+Placement rule: a command or reference is repo-local when it serves only maintaining harry
+itself — its own files, release, dependencies, or the authoring of its own skills and
+commands (`upstream.json`, harry's version fields, `skill-authoring.md`); anything a consumer
+repo's workflow uses ships. When writing or editing a skill or command, follow
+`.claude/references/skill-authoring.md`.
 
 ## Plugin content (`HARRY.md`, `skills/`, `commands/`, `references/`)
 
@@ -189,7 +204,7 @@ guessed from web docs.
 
 `codex-skills/` holds Codex-only conversions of the portable
 `commands/*.md` slash commands (`ask`, `debt`, `review`,
-`sync`, `audit`, `distill`, `wait-what`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
+`sync`, `audit`, `wait-what`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
 field, so these become semantically-triggered Skills instead of explicit slash
 commands. This is a **deliberate partial-parity build**, not full feature parity:
 

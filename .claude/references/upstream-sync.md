@@ -1,7 +1,7 @@
 # Upstream Sync
 
 > Onboarding a NEW candidate repo (clone, survey, rule, record) is `/distill`'s job —
-> see `references/distilling.md`. This file covers re-syncing sources already pinned
+> see `.claude/commands/distill.md`. This file covers re-syncing sources already pinned
 > below.
 
 Harry is distilled from three upstreams (tracked in `upstream.json`, pinned by commit). Four more sources are historical influences that are NOT pinned/synced: `superpowers` (the origin of harry's pipeline, which then had a plan stage and the TDD/debugging/verification laws, retired as a pinned upstream on 2026-09-15 after harry's versions diverged; recorded under `historical_sources` in `upstream.json`, last harvested at v6.3.0 — nothing to sync), `codex-plugin-cc` (origin of `review`'s design and of the vendored in-process Codex runtime; retired as a pinned upstream on 2026-09-17 once that runtime was deleted in favor of spawning the `codex` CLI directly — nothing left to sync), `copilot-plugin-cc` (design influence for `debate`/`ask`/`status`/`result`; dropped when the Copilot backend went away) and `ayghri/i-have-adhd` (a one-time 2026-07-24 philosophy comparison that produced the HARRY.md §0/§6/§7 law edits — no derived files exist to diff, so there is nothing to sync; re-compare on demand if its philosophy evolves). This is how to check whether an upstream's newer philosophy is worth pulling into harry.

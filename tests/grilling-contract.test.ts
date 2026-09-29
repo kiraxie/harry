@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 
 // `references/grilling.md` owns the adversarial interview end to end; four callers
 // point at it (`commands/grill.md`, `codex-skills/grill/SKILL.md`,
@@ -229,8 +230,8 @@ test("AC-5: only the user may defer a question", () => {
  * whole corpus; the context-dependent picker/batch patterns below are scoped to the
  * grill family only (see `PICKER_RE`'s comment).
  */
-const CADENCE_DIRS = ["references", "skills", "commands", "codex-skills", "agents"];
-const CADENCE_TOP_LEVEL = ["CLAUDE.md", "README.md", "upstream.json", "HARRY.md"];
+const CADENCE_DIRS = PROSE_DIRS;
+const CADENCE_TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, "upstream.json"];
 
 function cadenceCorpus(): string[] {
   const files = [...CADENCE_TOP_LEVEL];

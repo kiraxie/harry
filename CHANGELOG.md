@@ -5,6 +5,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **`/harry:distill`** on both builds (breaking). It only records into harry's own
+  upstream tracking (`upstream.json`), so it had nothing to do in another repo; it is
+  now the repo-local `/distill` in harry's `.claude/commands/`. The maintainer-only
+  references `upstream-sync.md` and `skill-authoring.md` move from `references/` to
+  `.claude/references/`; no plugin build loads them.
+
 ## [0.23.1] - 2026-09-28
 
 ### Removed

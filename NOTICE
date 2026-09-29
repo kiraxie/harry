@@ -6,7 +6,7 @@ Licensed under the MIT License (see LICENSE), except as noted below.
 Third-party components — Apache License 2.0
 ------------------------------------------------------------------------
 
-Parts of references/skill-authoring.md are distilled from the
+Parts of .claude/references/skill-authoring.md are distilled from the
 skill-creator skill in anthropics/skills:
 
     Copyright Anthropic, PBC
@@ -43,7 +43,7 @@ Files adapted from superpowers:
     skills/finishing/SKILL.md
     references/red-green.md, references/claim-evidence.md,
     references/root-cause-tracing.md, references/defense-in-depth.md,
-    references/condition-based-waiting.md, references/skill-authoring.md
+    references/condition-based-waiting.md, .claude/references/skill-authoring.md
 
 superpowers license:
 
