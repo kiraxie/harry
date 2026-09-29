@@ -18,6 +18,12 @@
       "synced_version": "none (repo declares no version or tags)",
       "synced_commit": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
       "synced_date": "2026-07-27"
+    },
+    "openclaw": {
+      "repo": "https://github.com/openclaw/openclaw",
+      "synced_version": "2026.9.6",
+      "synced_commit": "4c611618ae4ac940dcacdc89b530f26e46d6106f",
+      "synced_date": "2026-09-29"
     }
   },
   "historical_sources": {
@@ -106,6 +112,11 @@
       "skill": "HARRY.md §0/§6/§7 (harness layer, pre-send check, lawful exit)",
       "from": "i-have-adhd (ayghri/i-have-adhd, one-time comparison)",
       "note": "2026-07-24 philosophy comparison, not a port — three law edits distilled, no derived files to diff, so the source is not pinned or cloned. Re-compare on demand; see .claude/references/upstream-sync.md."
+    },
+    {
+      "skill": "red-green (partial)",
+      "from": "openclaw:.agents/skills/test-audit/SKILL.md",
+      "note": "2026-09-29 distill of the test-audit skill's authoring gate into references/red-green.md: one owner per contract (a regression lives once, at the owner boundary), no test-only production seams, and four junk patterns (borrowed negative, overpromising name, restated flag, fixture doing the owner's work). Rephrased; only short technical phrases are shared. Deviations kept: harry's TDD stays tiered (openclaw gates every test); campaign mode (CAMPAIGN.md) and the Vitest/crabbox/PR-script plumbing are skipped as speculative or upstream-specific. Pending: the pruning-audit method into /audit dimension 9, not a standalone command."
     },
     {
       "skill": "init",

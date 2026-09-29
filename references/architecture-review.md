@@ -28,11 +28,11 @@ handed:
 
 ## Not your job
 
-Line-level code quality and tests are out of scope — `references/review-rubric.md`
-owns both, and executing's own review applies it. Do not report naming, error
-handling inside a function, style, edge cases, test coverage or test hygiene. A
-finding that would read the same with every shape left as it is belongs to that
-rubric, not here.
+Line-level code quality and tests are out of scope — the per-diff review standard
+(`references/review-rubric.md` and the files it declares) owns both, and executing's own
+review applies it. Do not report naming, error handling inside a function, style, edge
+cases, test coverage or test hygiene. A finding that would read the same with every
+shape left as it is belongs to that rubric, not here.
 
 ## Five categories
 

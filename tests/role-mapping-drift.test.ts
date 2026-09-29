@@ -291,6 +291,7 @@ const HOISTED: Record<string, string[]> = {
     "references/architecture-review.md",
     "references/doc-types.md",
     "references/debt-audit.md",
+    "references/red-green.md",
   ],
   sync: ["references/sync-migration.md", "references/doc-types.md", "references/debt-audit.md"],
   audit: [

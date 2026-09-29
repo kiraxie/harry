@@ -4,7 +4,8 @@
  * The Codex CLI rejects a prompt combined with its own target flags
  * (`--base`/`--uncommitted`/`--commit`), so the prompt itself has to name the
  * target: which git command shows the change, and that everything outside it is
- * context only. The review standard is harry's shared rubric, embedded verbatim.
+ * context only. The review standard is the references `STANDARD_FILES` lists for the
+ * review asked for, each embedded verbatim.
  */
 
 import { readFileSync, realpathSync } from "node:fs";
@@ -30,24 +31,27 @@ export function pluginRoot(): string {
  */
 export type ReviewStandard = "review" | "architecture";
 
-/** Each standard's reference file under `references/`. */
-const RUBRIC_FILES: Record<ReviewStandard, string> = {
-  review: "review-rubric.md",
-  architecture: "architecture-review.md",
+/** Each standard's reference files under `references/`, embedded in order under their headings. */
+const STANDARD_FILES: Record<ReviewStandard, ReadonlyArray<{ file: string; heading: string }>> = {
+  review: [
+    { file: "review-rubric.md", heading: "Review standard" },
+    { file: "red-green.md", heading: "Test standard (`references/red-green.md`)" },
+  ],
+  architecture: [{ file: "architecture-review.md", heading: "Review standard" }],
 };
 
-/** Read a review standard from `references/`; a missing one is an install defect, never skipped. */
-function loadReviewRubric(standard: ReviewStandard): string {
-  const rubricPath = join(pluginRoot(), "references", RUBRIC_FILES[standard]);
+/** Read a review reference from `references/`; a missing one is an install defect, never skipped. */
+function loadReference(file: string): string {
+  const refPath = join(pluginRoot(), "references", file);
   let text: string;
   try {
-    text = readFileSync(rubricPath, "utf8");
+    text = readFileSync(refPath, "utf8");
   } catch (err) {
     throw new Error(
-      `Review rubric not found at ${rubricPath} (${(err as Error).message}). Reinstall the harry plugin.`,
+      `Review reference not found at ${refPath} (${(err as Error).message}). Reinstall the harry plugin.`,
     );
   }
-  if (!text.trim()) throw new Error(`Review rubric at ${rubricPath} is empty.`);
+  if (!text.trim()) throw new Error(`Review reference at ${refPath} is empty.`);
   return text.trim();
 }
 
@@ -91,11 +95,13 @@ export interface ReviewPromptInput {
   focusText?: string;
 }
 
-/** Throws when the standard's reference file is missing or empty. */
+/** Throws when a reference file the standard embeds is missing or empty. */
 export function buildReviewPrompt(input: ReviewPromptInput): string {
   const sections = [
     targetSection(input.target, input.standard),
-    `# Review standard\n\n${loadReviewRubric(input.standard)}`,
+    ...STANDARD_FILES[input.standard].map(
+      ({ file, heading }) => `# ${heading}\n\n${loadReference(file)}`,
+    ),
   ];
   const context = input.context?.trim();
   if (context) {

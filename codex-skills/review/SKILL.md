@@ -17,7 +17,8 @@ Run a code review through the harry runtime.
 
 `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review` spawns `codex exec review`
 read-only (`sandbox_mode="read-only"`, `--ephemeral`) with a prompt built from the
-target diff, the full `references/review-rubric.md`, a `## Background` section from
+target diff, every file `references/review-rubric.md` declares as its standard, in full,
+a `## Background` section from
 `--context`, and a `## Focus` section from the focus text. It never passes a
 model — `~/.codex/config.toml` decides which one runs; `--reasoning` overrides
 effort for that one call. Each run writes its findings to its own
@@ -40,7 +41,7 @@ the working tree, stages, or commits.
 ## `--architecture`
 
 `--architecture` changes two things. It swaps the embedded standard: the prompt
-carries `references/architecture-review.md` in place of `references/review-rubric.md`.
+carries `references/architecture-review.md` in place of the per-diff standard.
 And it scopes findings to the shapes the change adds or alters, rather than to
 the diff's lines. Everything else stays the same — target resolution, the
 read-only spawn, the output and failure handling. It is how the finishing

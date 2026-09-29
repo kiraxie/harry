@@ -1,14 +1,17 @@
 # Review Rubric (shared)
 
 The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md`,
-step 3, and its scoped re-review in step 4). This is also the rubric `dist/companion.cjs review`
-embeds verbatim into its `codex exec review` prompt (`src/lib/review-prompts.ts`), so
-the analyst and Codex lanes judge by the same standard even though they run in isolated
-sessions. On the Codex build there is no `analyst` at all, so this
-embedded prompt is what binds that build's single review lane. Hand the
-reviewer the item's `### Acceptance criteria` verbatim, the diff range, and the
-item's Constraints verbatim when it has them. It reviews **read-only** — no
-working-tree, index, or HEAD mutation; its report is its final message.
+step 3, and its scoped re-review in step 4). The review standard is the files listed
+below, and every review lane gets each of them in full: `dist/companion.cjs review` embeds
+them verbatim into its `codex exec review` prompt (`src/lib/review-prompts.ts`), so the
+analyst and Codex lanes judge by the same standard even though they run in isolated
+sessions. On the Codex build there is no `analyst` at all, so this embedded prompt is
+what binds that build's single review lane. Hand the reviewer those files, the item's
+`### Acceptance criteria` verbatim, the diff range, and the item's Constraints verbatim
+when it has them. The reviewer reviews **read-only** — no working-tree, index, or HEAD
+mutation; its report is its final message.
+
+**Standard files:** `references/review-rubric.md`, `references/red-green.md`.
 
 ## Four dimensions
 
@@ -34,10 +37,10 @@ working-tree, index, or HEAD mutation; its report is its final message.
    A cross-boundary contract, trust-boundary validation, or correctness
    infrastructure stays even if currently uncalled (§2). Do not YAGNI away a
    red line.
-4. **Test hygiene** (HARRY.md §6). Tests assert real behavior on real code, not
-   mocks; one behavior per test with a clear name; a bug fix has a failing
-   reproduction test (tier permitting); GREEN is the minimal code that passes.
-   Flag tests that assert nothing.
+4. **Test hygiene** (HARRY.md §6). Judge every test the diff adds or changes
+   against `references/red-green.md` — what a good test is, one owner per
+   contract, and the patterns that pass without guarding anything. Flag tests
+   that assert nothing.
 
 ## Severity
 

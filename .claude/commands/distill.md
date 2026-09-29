@@ -113,8 +113,8 @@ nothing to track.
   entry per derived area, with `from` paths literal per step 4 and a `note` naming
   harry's deviations — the note is what protects the NEXT survey (step 3). Add the
   source's row to `.claude/references/upstream-sync.md`'s table and a provenance bullet there.
-  Update the source count where prose states it (CLAUDE.md, README.md — grep for the
-  spelled-out count; a stale "three upstreams" is drift).
+  Prose states no count of sources — `upstream.json` is the only one
+  (`tests/upstream-count.test.ts`).
 - **No ports yet** — comparison-only, everything skipped, or pull/adapt rulings still
   awaiting the user's acceptance (every headless run): record the repo in
   `.claude/references/upstream-sync.md`'s intro (the i-have-adhd pattern: date, what was
@@ -138,7 +138,7 @@ proposals for future pipeline runs, not commitments.
 ## Boundaries
 
 - Never modify the cloned repo; never commit `.references/` content into harry.
-- The bookkeeping edits (upstream.json, upstream-sync.md, count mentions) are the only
+- The bookkeeping edits (upstream.json, upstream-sync.md) are the only
   writes to tracked files a distill session makes, and they go on a branch like any
   other change — branch-first still applies (HARRY.md §5).
 - Note the upstream's license before porting text or code; anything ported carries

@@ -530,21 +530,24 @@ var import_node_path7 = require("node:path");
 function pluginRoot() {
   return (0, import_node_path7.dirname)((0, import_node_path7.dirname)((0, import_node_fs6.realpathSync)(process.argv[1])));
 }
-var RUBRIC_FILES = {
-  review: "review-rubric.md",
-  architecture: "architecture-review.md"
+var STANDARD_FILES = {
+  review: [
+    { file: "review-rubric.md", heading: "Review standard" },
+    { file: "red-green.md", heading: "Test standard (`references/red-green.md`)" }
+  ],
+  architecture: [{ file: "architecture-review.md", heading: "Review standard" }]
 };
-function loadReviewRubric(standard) {
-  const rubricPath = (0, import_node_path7.join)(pluginRoot(), "references", RUBRIC_FILES[standard]);
+function loadReference(file) {
+  const refPath = (0, import_node_path7.join)(pluginRoot(), "references", file);
   let text;
   try {
-    text = (0, import_node_fs6.readFileSync)(rubricPath, "utf8");
+    text = (0, import_node_fs6.readFileSync)(refPath, "utf8");
   } catch (err) {
     throw new Error(
-      `Review rubric not found at ${rubricPath} (${err.message}). Reinstall the harry plugin.`
+      `Review reference not found at ${refPath} (${err.message}). Reinstall the harry plugin.`
     );
   }
-  if (!text.trim()) throw new Error(`Review rubric at ${rubricPath} is empty.`);
+  if (!text.trim()) throw new Error(`Review reference at ${refPath} is empty.`);
   return text.trim();
 }
 var OUTSIDE_THE_DIFF = "Code outside those changes is context, not a review target: read it to understand the change, but problems that live only outside the changes must not be reported.";
@@ -576,9 +579,11 @@ function targetSection(target, standard) {
 function buildReviewPrompt(input) {
   const sections = [
     targetSection(input.target, input.standard),
-    `# Review standard
+    ...STANDARD_FILES[input.standard].map(
+      ({ file, heading }) => `# ${heading}
 
-${loadReviewRubric(input.standard)}`
+${loadReference(file)}`
+    )
   ];
   const context = input.context?.trim();
   if (context) {

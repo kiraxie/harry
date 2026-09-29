@@ -132,12 +132,16 @@ scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.
 .claude-plugin/     Claude Code plugin manifest
 .codex-plugin/ + .agents/plugins/   Codex CLI plugin manifest
 .claude/            repo-local maintainer tooling, not loaded by the plugin: commands (release · upgrade-deps · distill) · references · scripts
-upstream.json       tracks the three upstreams by commit (see .claude/references/upstream-sync.md)
+upstream.json       tracks the pinned upstreams by commit (see .claude/references/upstream-sync.md)
 ```
 
 ## Upstream
 
-harry is distilled from `ponytail`, `mattpocock-skills` (the `grill` family), and `anthropics-skills` (skill-authoring principles) — all three pinned by commit in `upstream.json`; `.claude/references/upstream-sync.md` is how to diff an upstream's newer philosophy against harry's customized version. Four more sources are historical influences, not pinned: `superpowers` (origin of the pipeline skills and the TDD/debugging/verification laws; retired as a pinned upstream in 2026-09 once harry's versions had diverged), `codex-plugin-cc` (origin of `review`'s design and of the vendored in-process Codex runtime; retired 2026-09 once that runtime was deleted in favor of spawning the `codex` CLI directly), `copilot-plugin-cc` (`debate`'s three-model structure, `ask`/`status`'s original shape; dropped with the Copilot backend) and `ayghri/i-have-adhd` (a one-time law comparison behind HARRY.md's talk-like-an-engineer and lawful-exit rules).
+harry distills principles from other skill and plugin repos. `upstream.json` pins each
+upstream it tracks by commit, and `.claude/references/upstream-sync.md` records each
+source's provenance, the historical influences that are not pinned, and how to diff an
+upstream's newer philosophy against harry's customized version. License attribution for
+adapted text is in [`NOTICE`](NOTICE).
 
 ## License
 

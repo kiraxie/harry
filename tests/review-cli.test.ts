@@ -28,6 +28,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
+import { buildReviewPrompt } from "../src/lib/review-prompts.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -35,6 +36,7 @@ const CLI = path.join(REPO_ROOT, "src/companion.ts");
 const FAKE = path.join(REPO_ROOT, "tests/fake-codex-cli.mjs");
 const RUBRIC = readFileSync(path.join(REPO_ROOT, "references/review-rubric.md"), "utf8");
 const ARCH_RUBRIC = readFileSync(path.join(REPO_ROOT, "references/architecture-review.md"), "utf8");
+const RED_GREEN = readFileSync(path.join(REPO_ROOT, "references/red-green.md"), "utf8");
 
 const cleanup: string[] = [];
 test.after(() => {
@@ -296,6 +298,13 @@ test("A3: branch mode names git diff <base>...HEAD, embeds the full rubric, and 
   assert.ok(standardAt > 0, "review standard section missing");
   assert.ok(prompt.includes(RUBRIC.trim()), "the rubric must be embedded in full");
   assert.ok(prompt.indexOf(RUBRIC.trim()) > standardAt);
+  const testStandardAt = prompt.indexOf("# Test standard (`references/red-green.md`)\n");
+  assert.ok(
+    testStandardAt > prompt.indexOf(RUBRIC.trim()),
+    "test standard heading after the rubric",
+  );
+  assert.ok(prompt.includes(RED_GREEN.trim()), "red-green.md must be embedded in full");
+  assert.ok(prompt.indexOf(RED_GREEN.trim()) > testStandardAt);
 
   assert.ok(!prompt.includes("## Background"), "no --context → no background section");
   assert.ok(!prompt.includes("## Focus"), "no focus text → no focus section");
@@ -379,21 +388,30 @@ test("F2: --context @- with nothing on stdin fails naming stdin and never spawns
   assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
 });
 
-test("A3: a missing rubric fails loudly and never spawns codex", () => {
-  // A plugin copy with src/ and package.json but no references/.
-  const root = tempDir("harry-rcli-plugin-");
-  cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
-  cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
-  const repo = makeRepo();
-  writeFileSync(path.join(repo, "a.txt"), "v2\n");
-  const run = runReview(repo, [], { cli: path.join(root, "src/companion.ts") });
-  assert.notEqual(run.status, 0);
-  assert.match(run.stderr, /review-rubric\.md/);
-  assert.ok(
-    !existsSync(path.join(run.record, "argv.json")),
-    "no prompt may go out without the rubric",
-  );
-});
+for (const { missing, args } of [
+  { missing: "review-rubric.md", args: [] },
+  { missing: "red-green.md", args: [] },
+  { missing: "architecture-review.md", args: ["--architecture"] },
+]) {
+  test(`A3: a missing ${missing} fails loudly and never spawns codex (${args.join(" ") || "review"})`, () => {
+    const root = tempDir("harry-rcli-plugin-");
+    cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
+    cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
+    cpSync(path.join(REPO_ROOT, "references"), path.join(root, "references"), {
+      recursive: true,
+    });
+    rmSync(path.join(root, "references", missing));
+    const repo = makeRepo();
+    writeFileSync(path.join(repo, "a.txt"), "v2\n");
+    const run = runReview(repo, args, { cli: path.join(root, "src/companion.ts") });
+    assert.notEqual(run.status, 0);
+    assert.ok(run.stderr.includes(missing), run.stderr);
+    assert.ok(
+      !existsSync(path.join(run.record, "argv.json")),
+      "no prompt may go out without every reference it embeds",
+    );
+  });
+}
 
 test("A3: --architecture embeds architecture-review.md as the review standard, not the review rubric", () => {
   const repo = makeRepo();
@@ -417,6 +435,7 @@ test("A3: --architecture embeds architecture-review.md as the review standard, n
   assert.ok(prompt.includes(ARCH_RUBRIC.trim()), "architecture-review.md must be embedded in full");
   assert.ok(prompt.indexOf(ARCH_RUBRIC.trim()) > standardAt);
   assert.ok(!prompt.includes(RUBRIC.trim()), "--architecture must not embed review-rubric.md");
+  assert.ok(!prompt.includes(RED_GREEN.trim()), "--architecture must not embed red-green.md");
   // The lens reads one level up and the history on purpose; the per-diff rule that bans
   // reporting anything outside the changes would forbid exactly that.
   assert.ok(
@@ -458,27 +477,6 @@ test("A3: without --architecture the prompt embeds the review rubric and not arc
   assert.ok(
     prompt.includes("must not be reported"),
     "a plain review keeps its outside-the-diff ban",
-  );
-});
-
-test("A3: --architecture with a missing architecture-review.md fails loudly and never spawns codex", () => {
-  // A plugin copy whose references/ holds the review rubric but not the architecture one.
-  const root = tempDir("harry-rcli-plugin-");
-  cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
-  cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
-  mkdirSync(path.join(root, "references"));
-  cpSync(
-    path.join(REPO_ROOT, "references/review-rubric.md"),
-    path.join(root, "references/review-rubric.md"),
-  );
-  const repo = makeRepo();
-  writeFileSync(path.join(repo, "a.txt"), "v2\n");
-  const run = runReview(repo, ["--architecture"], { cli: path.join(root, "src/companion.ts") });
-  assert.notEqual(run.status, 0);
-  assert.match(run.stderr, /architecture-review\.md/);
-  assert.ok(
-    !existsSync(path.join(run.record, "argv.json")),
-    "no architecture prompt may go out without its standard",
   );
 });
 
@@ -932,10 +930,10 @@ test("both review doors document --architecture and the standard it embeds", () 
       `${door} must list --architecture in its synopsis`,
     );
     assert.ok(
-      prose.includes(
-        "`references/architecture-review.md` in place of `references/review-rubric.md`",
-      ),
-      `${door} must say --architecture embeds architecture-review.md instead of the rubric`,
+      prose
+        .replace(/\s+/g, " ")
+        .includes("`references/architecture-review.md` in place of the per-diff standard"),
+      `${door} must say --architecture embeds architecture-review.md instead of the per-diff standard`,
     );
     assert.ok(
       prose
@@ -943,6 +941,16 @@ test("both review doors document --architecture and the standard it embeds", () 
         .includes("scopes findings to the shapes the change adds or alters"),
       `${door} must say --architecture also scopes findings to shapes, not only swaps the standard`,
     );
+    const flat = prose.replace(/\s+/g, " ");
+    assert.ok(
+      flat.includes("every file `references/review-rubric.md` declares as its standard"),
+      `${door} must point at the rubric's declared standard, not list its files`,
+    );
+    for (const file of declaredStandardFiles().filter((f) => f !== "references/review-rubric.md"))
+      assert.ok(
+        !flat.includes(`\`${file}\``),
+        `${door} names ${file} itself — the rubric's declaration is the only list`,
+      );
   }
 });
 
@@ -985,4 +993,27 @@ test("F3: commands/review.md pre-approves only the review invocation, and every 
       `command line does not start with the allowlisted invocation: ${line}`,
     );
   }
+});
+
+function declaredStandardFiles(): string[] {
+  const line = RUBRIC.split("\n").find((l) => l.startsWith("**Standard files:**"));
+  assert.ok(line, "review-rubric.md declares no **Standard files:** line");
+  return [...line.matchAll(/`([^`]+\.md)`/g)].map((m) => m[1]);
+}
+
+test("the per-diff prompt embeds exactly the files the rubric declares as its standard", () => {
+  const declared = declaredStandardFiles();
+  for (const file of declared)
+    assert.ok(file.startsWith("references/"), `${file}: the prompt loads only from references/`);
+  const prompt = buildReviewPrompt({
+    target: { mode: "working-tree", label: "working tree diff" },
+    standard: "review",
+  });
+  const refs = readdirSync(path.join(REPO_ROOT, "references"))
+    .filter((f) => f.endsWith(".md"))
+    .map((f) => `references/${f}`);
+  const embedded = refs.filter((rel) =>
+    prompt.includes(readFileSync(path.join(REPO_ROOT, rel), "utf8").trim()),
+  );
+  assert.deepEqual(embedded.sort(), [...declared].sort());
 });

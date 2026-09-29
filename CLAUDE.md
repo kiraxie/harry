@@ -86,7 +86,8 @@ Both `ask` and `review` spawn the `codex` CLI as a separate, ephemeral, read-onl
 subprocess and read its output back. `ask` runs
 `codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
 with the prompt on stdin. `review` spawns `codex exec review` (`sandbox_mode="read-only"`),
-with the review rubric and context built into its prompt, and writes findings to a file
+with every file `references/review-rubric.md` declares as its standard and the context
+built into its prompt, and writes findings to a file
 rather than streaming a session turn. Neither passes a model — `~/.codex/config.toml`
 decides which one runs. There is no fix backend or apply path in-runtime; both commands are
 read-only, full stop.
@@ -94,13 +95,11 @@ read-only, full stop.
 Everything in the repo is MIT except `.claude/references/skill-authoring.md`, which distills
 parts of an Apache-2.0 source (`anthropics/skills`) — see `NOTICE`.
 
-`upstream.json` pins three upstream sources (`ponytail`, `mattpocock-skills`,
-`anthropics-skills`) by commit; `superpowers` (origin of the pipeline skills) and
-`codex-plugin-cc` (origin of the retired vendored runtime) are retired to
-`historical_sources` (attribution only, not synced);
-`.claude/references/upstream-sync.md` documents how to diff an upstream's newer philosophy against
-harry's customized version when pulling in changes; onboarding a new candidate is the
-repo-local `/distill` (`.claude/commands/distill.md`).
+`upstream.json` pins harry's upstream sources by commit, lists retired ones under
+`historical_sources` (attribution only, not synced), and is the authoritative record of
+both; `.claude/references/upstream-sync.md` documents how to diff an upstream's newer
+philosophy against harry's customized version when pulling in changes; onboarding a new
+candidate is the repo-local `/distill` (`.claude/commands/distill.md`).
 
 ## Repo-local tooling (`.claude/`)
 
