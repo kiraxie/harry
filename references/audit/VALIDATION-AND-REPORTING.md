@@ -43,6 +43,16 @@ Your job is to DISPROVE this finding. Read the actual source at every cited loca
 6. SEVERITY TEST: Is blast_radius × change_likelihood consistent with the claim? A real problem
    in cold, never-touched code is LOW, not HIGH.
 
+7. RETENTION TEST (low-value-tests findings): Read the test and its retention_check. Does the
+   test truly guard none of the retained contracts report-schema.json lists for
+   retention_check.contract? Does it pass on the current code — if it fails, it is a product
+   bug to report, not a deletion. For proof kind `owner-proves`: does the keeper really prove the
+   contract once this test is gone, and would the named mutation turn it red? For
+   `guards-nothing`: name the most obvious owner mutation the test claims to guard and decide,
+   by reading its assertions, whether that mutation would turn it red — if it would, the test
+   guards something. Nothing is run; the audit is read-only. Any "no", or a
+   test that would go red -> REJECT.
+
 Return one of:
 - "CONFIRMED: [why it's real, with code evidence and the surviving concrete_cost]"
 - "REJECTED: [which test it failed, with code evidence]"
@@ -61,7 +71,7 @@ For every finding that survived Round 3, write a structured object to `<output-d
 
 1. Read `report-schema.json`. `additionalProperties: false` is enforced — extra fields fail validation.
 2. The schema has two verdicts via `oneOf`: `confirmed` (full finding) and `rejected` (investigated and dropped — keep these so a later run doesn't re-derive them). Populate every required field. If you can't fill `evidence` with real `file:line` verified against source, the finding isn't ready — verify or reject it.
-3. Run `node <skill-dir>/validate-findings.cjs <output-dir>/findings.json`. It checks required fields, enums, `additionalProperties`, and the semantic rules (a confirmed finding needs a non-empty `concrete_cost` and evidence; a hoist finding needs ≥2 evidence sites). This is a **structural** check only — it confirms the JSON is well-formed, not that findings are correct (that's Round 5). Fix failures before proceeding.
+3. Run `node <skill-dir>/validate-findings.cjs <output-dir>/findings.json`. It checks the schema keywords and the semantic rules its header comment lists. This is a **structural** check only — it confirms the JSON is well-formed, not that findings are correct (that's Round 5). Fix failures before proceeding.
 
 ---
 
@@ -83,6 +93,10 @@ whether it's worth fixing — only whether its factual claims are TRUE. Read the
    in the current code? Is the churn rank cited correctly against substrate/churn.txt?
 3. For hoist findings: do the cited implementations actually exist and actually differ as the
    drift delta claims?
+   For low-value-tests findings of proof kind `owner-proves`: does the
+   retention_check.proof.keeper test exist at the cited file, under that name, and
+   exercise the contract it is said to keep proving? For `guards-nothing`: does the test
+   at the evidence location assert what `detects` says it does?
 4. Does the remediation reference real destinations (the shared package/path actually exists or
    is the stated intended location)?
 
@@ -112,9 +126,10 @@ Write the human-readable deliverables **last**, so verification (Round 5) never 
   - **fix-now** — cheap and in the blast radius of active work; do it in the next PR touching that area (the "clean legacy in the scope you touch" case).
   - **tracked-debt** — real cost, needs its own effort; belongs in a ticket/debt ledger with the concrete_cost as justification.
   - **accepted** — noted, but the cost is low enough to live with; recorded so it isn't re-litigated next run.
+- **low-value-tests findings**, at any severity — the deletion evidence the deleting unit needs, from the `retention_check`: its proof's `kind`, the `keeper` and the `mutation` (or, for `guards-nothing`, the `reason`), and the `seams_unlocked`.
 - **What the codebase does well** — solid patterns, clean boundaries. This calibrates trust in the findings.
 - **Coverage & next run** — what this run focused on, what it deliberately or accidentally left (cite the substrate README's known gaps, e.g. drifted-beyond-recognition hoist candidates), and a recommendation to re-run weighted toward the gaps.
 
 **`FINDINGS-DETAIL.md`** — for each MODERATE+ finding: the full evidence set with every `file:line`, the drift delta (hoist findings), the traced future-change that demonstrates the cost, and the concrete remediation. Keep it proportional — if the detail is longer than the code deserves, you're padding.
 
-If the target uses a debt ledger convention (e.g. `DEBT:` markers, a debt command), emit the **tracked-debt** findings in that format too, so they flow into the team's existing process instead of dying in a report.
+If the target uses a debt ledger convention (e.g. `DEBT:` markers, a debt command), emit the **tracked-debt** findings in that format too, so they flow into the team's existing process instead of dying in a report. A low-value-tests finding carries its `retention_check` fields there too.

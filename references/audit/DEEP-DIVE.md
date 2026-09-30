@@ -10,7 +10,7 @@ Every Round 2 agent prompt MUST establish, either by pasting the content inline 
 
 1. **`intended-architecture.md`** — including its "framework idioms — DO NOT flag" list.
 2. The **substrate facts** relevant to the agent's scope (the dead-code lines for its package, the cycles it's in, its duplication hits, its churn rank) — these are usually short enough to paste inline.
-3. The agent's **scope and dimension(s)**, with the dimension's *bar* from SCAN-DIMENSIONS.md.
+3. The agent's **scope and dimension(s)**, with the dimension's *bar* from SCAN-DIMENSIONS.md. An agent given dimension 11 also reads `references/red-green.md` (under the plugin root, like the audit references) first — its "What a good test is" section is the standard that dimension judges tests by.
 4. The **hunting methodology** below.
 5. The **finding contract** below.
 
@@ -82,6 +82,13 @@ Return ONLY findings that clear the cost bar. For each, provide:
   two (or more) sites.
 - drift_test (for reuse/duplication/hoist findings): "bug if they diverge" or "normal to
   diverge", with one sentence why. If "normal", you should not be reporting it.
+- retention_check (for low-value-tests findings): what the test checks and can detect;
+  the retained contract it guards, or "none" (anything else means keep it — do not
+  report it; a test that guards nothing is always "none"); the test-only seams deleting
+  it unlocks; and a proof of one of two kinds. `owner-proves`: a stronger test proves the
+  same contract — name that keeper, and the owner mutation to run at deletion, which
+  must turn the keeper red. `guards-nothing`: no bug can turn the test red, so there is
+  no contract to keep proving — give the reason instead.
 - remediation: the smallest change that removes the cost. For hoist findings, name the
   canonical version and the designated shared destination. Do NOT propose new abstraction
   beyond what the cost justifies.

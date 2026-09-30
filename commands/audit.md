@@ -1,5 +1,5 @@
 ---
-description: Whole-codebase structure & architecture-fitness audit — a multi-round, multi-language (TypeScript/JavaScript, Go, Python) workflow that finds design-pattern mismatches, missed reuse / hoist candidates (same-intent code that drifted apart), layering violations, dead code, coupling/circular dependencies, error-handling & observability gaps, and structural test-coverage holes. This is the macro/structural counterpart to a diff-level code review — reach for it for the whole repo or a whole subsystem, not a single change.
+description: Whole-codebase structure & architecture-fitness audit — a multi-round, multi-language (TypeScript/JavaScript, Go, Python) workflow that finds design-pattern mismatches, missed reuse / hoist candidates (same-intent code that drifted apart), layering violations, dead code, coupling/circular dependencies, error-handling & observability gaps, structural test-coverage holes, and low-value tests. This is the macro/structural counterpart to a diff-level code review — reach for it for the whole repo or a whole subsystem, not a single change.
 argument-hint: '[path...] [--output <dir>]'
 allowed-tools: Read, Write, Glob, Grep, Agent, AskUserQuestion, Bash(npx:*), Bash(uvx:*), Bash(go:*), Bash(semgrep:*), Bash(git log:*), Bash(git grep:*), Bash(git ls-files:*), Bash(node:*), Bash(ls:*)
 ---

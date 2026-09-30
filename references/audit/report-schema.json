@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for findings.json structure (see VALIDATION-AND-REPORTING.md Round 4). validate-findings.cjs reads this file directly and interprets it — there is no second copy of these rules to keep in sync. Two constraints can't be expressed in this JSON-Schema subset and live in the validator's semantic layer: (1) a confirmed finding needs a non-empty concrete_cost; (2) reusability-hoist and copy-paste findings both need >=2 evidence sites (duplication is inherently multi-site) and a drift_test, and no confirmed reuse/duplication finding may have drift_test.verdict == 'normal-to-diverge'.",
+  "$comment": "Single source of truth for findings.json structure (see VALIDATION-AND-REPORTING.md Round 4). validate-findings.cjs reads this file directly and interprets it — there is no second copy of these rules to keep in sync. A few rules are cross-field or conditional on the dimension, which this JSON-Schema subset cannot express; they live in the validator's semantic layer, listed in its header comment.",
   "output_schema": {
     "oneOf": [
       {
@@ -20,7 +20,8 @@
               "error-handling",
               "observability",
               "test-coverage",
-              "over-engineering"
+              "over-engineering",
+              "low-value-tests"
             ]
           },
           "description": {
@@ -29,6 +30,7 @@
           },
           "concrete_cost": {
             "type": "string",
+            "pattern": "\\S",
             "description": "THE ANCHOR. The specific future change this structure makes expensive/dangerous, OR the bug it has already caused. If this is a taste statement ('cleaner', 'violates SRP') with no named change and no bug, the finding is invalid — reject it instead."
           },
           "evidence": {
@@ -59,6 +61,51 @@
               "reason": { "type": "string" }
             },
             "required": ["verdict", "reason"],
+            "additionalProperties": false
+          },
+          "retention_check": {
+            "type": "object",
+            "description": "Required for low-value-tests findings. The evidence that deleting the test is safe; a finding missing it is not ready for deletion.",
+            "properties": {
+              "detects": { "type": "string", "pattern": "\\S", "description": "What the test checks, and the failure it can actually detect, if any." },
+              "contract": {
+                "type": "string",
+                "enum": ["none", "public-api", "protocol", "config", "migration", "storage", "security", "platform", "package", "release"],
+                "description": "The retained contract this test independently guards, or 'none'. Anything but 'none' means keep the test."
+              },
+              "seams_unlocked": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Test-only production seams (exports, flags, wrappers, hooks) that deleting this test lets go. May be empty."
+              },
+              "proof": {
+                "description": "Why deleting the test loses nothing, as one of two kinds.",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "description": "A stronger test (the keeper) already proves the contract this test replays.",
+                    "properties": {
+                      "kind": { "const": "owner-proves" },
+                      "keeper": { "type": "string", "pattern": "\\S", "description": "The stronger test that keeps proving the contract once this one is gone: file and test name." },
+                      "mutation": { "type": "string", "pattern": "\\S", "description": "The owner mutation to run when the test is deleted: it must turn the keeper red." }
+                    },
+                    "required": ["kind", "keeper", "mutation"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "description": "The test guards nothing, so there is no contract to keep proving and no keeper to turn red.",
+                    "properties": {
+                      "kind": { "const": "guards-nothing" },
+                      "reason": { "type": "string", "pattern": "\\S", "description": "Why no bug can turn the test red." }
+                    },
+                    "required": ["kind", "reason"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": ["detects", "contract", "seams_unlocked", "proof"],
             "additionalProperties": false
           },
           "remediation": {

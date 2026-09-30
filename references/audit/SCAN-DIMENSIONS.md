@@ -80,6 +80,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 **Bar:** Name the class of bug that ships undetected: "no test drives the `PENDING→FAILED` transition, so a regression there passes CI." A single missing edge-case test is not a structural hole.
 
+A test that exists but guards nothing is not a hole — it belongs to dimension 11.
+
 ## 10. Over-engineering / unearned abstraction
 
 **What:** The mirror image of dimensions 1 and 2 — code that carries *more*
@@ -103,10 +105,38 @@ cross-boundary contracts, input validation at trust boundaries, error handling
 that prevents data loss, security/access checks, or a single smoke test — apply
 the drift test before recommending any deletion.
 
+## 11. Low-value tests
+
+**What:** Tests that exist but guard nothing — they pass whether or not the behavior
+they name still works. Judge each against the "What a good test is" section of
+`references/red-green.md`: a mirror assertion, a change detector, a borrowed pass, an
+overpromising name, a restated flag, a fixture doing the owner's work. Also: a second
+layer replaying a contract its owner already proves, and a test whose only job is
+keeping a test-only production seam (an export, flag, wrapper or hook nothing else
+calls) alive.
+
+**Seed:** test files that exercise the same production owner as a stronger suite;
+exports whose only callers are test files (grep the callers — dead-code tools usually
+count a test import as a use); assertions whose expected value comes from the code under
+test.
+
+**Bar:** A deletion needs evidence, recorded as the finding's `retention_check`: what
+the test can actually detect, the retained contract it guards (or "none"), the test-only
+seams the deletion unlocks, and a proof of one of two kinds. `owner-proves`: a keeper test keeps proving the contract once this one
+is gone, and an owner mutation, run when the test is deleted, must turn the keeper red.
+`guards-nothing`: no bug can turn the test red, so there is no contract to keep proving
+— give the reason instead. A test that independently guards a retained contract
+("public-api", "protocol", "config", "migration", "storage", "security", "platform",
+"package", "release") stays — that is a rejected finding, not a deletion. Static or slow
+is never a reason. A test that fails on the current code is a product-bug report, not a
+deletion. Report the few candidates you are sure of, not the most: confidence beats
+count. The remediation names the keeper and the mutation (or, for `guards-nothing`, the
+reason); the audit is read-only, so the unit that deletes runs the mutation.
+
 ---
 
 ### Choosing dimensions and shaping agents
 
-- Weight toward dimensions the substrate lit up (many cycles → dimension 4; a recent repo merge → dimension 2; a repo with a lot of unused-but-maintained flexibility → dimension 10) and toward high-churn areas.
+- Weight toward dimensions the substrate lit up (many cycles → dimension 4; a recent repo merge → dimension 2; a repo with a lot of unused-but-maintained flexibility → dimension 10; a large test suite that rarely catches a regression → dimension 11) and toward high-churn areas.
 - One agent may own one dimension across a subsystem, or two related dimensions (4+5, 7+8) in one scope — but don't hand an agent everything, or it goes shallow.
 - Every agent's scope is a *focus, not a fence*: if a coupling agent trips over a swallowed error, it reports it. Attackers-of-badness don't respect category lines.

@@ -116,7 +116,12 @@
     {
       "skill": "red-green (partial)",
       "from": "openclaw:.agents/skills/test-audit/SKILL.md",
-      "note": "2026-09-29 distill of the test-audit skill's authoring gate into references/red-green.md: one owner per contract (a regression lives once, at the owner boundary), no test-only production seams, and four junk patterns (borrowed negative, overpromising name, restated flag, fixture doing the owner's work). Rephrased; only short technical phrases are shared. Deviations kept: harry's TDD stays tiered (openclaw gates every test); campaign mode (CAMPAIGN.md) and the Vitest/crabbox/PR-script plumbing are skipped as speculative or upstream-specific. Pending: the pruning-audit method into /audit dimension 9, not a standalone command."
+      "note": "2026-09-29 distill of the test-audit skill's authoring gate into references/red-green.md: one owner per contract (a regression lives once, at the owner boundary), no test-only production seams, and four junk patterns (borrowed negative, overpromising name, restated flag, fixture doing the owner's work). Rephrased; only short technical phrases are shared. Deviations kept: harry's TDD stays tiered (openclaw gates every test); campaign mode (CAMPAIGN.md) and the Vitest/crabbox/PR-script plumbing are skipped as speculative or upstream-specific. The pruning method is its own derived entry (audit dimension 11)."
+    },
+    {
+      "skill": "audit (partial)",
+      "from": "openclaw:.agents/skills/test-audit/SKILL.md",
+      "note": "2026-09-29 port of the test-audit skill's pruning method into references/audit dimension 11 (low-value tests), not a standalone command: retention bar (contract tests stay; static or slow is no reason; a failing test is a bug report), per-candidate evidence enforced as the findings schema's retention_check by validate-findings.cjs, confidence over count, and the owner mutation recorded in retention_check. Deviations kept: /audit stays read-only, so the preservation mutation runs in the unit that deletes, not in the audit; campaign mode (CAMPAIGN.md: lanes, R/F/C/D ledger) skipped as speculative at harry's scale."
     },
     {
       "skill": "init",

@@ -302,6 +302,7 @@ const HOISTED: Record<string, string[]> = {
     "references/audit/VALIDATION-AND-REPORTING.md",
     "references/audit/report-schema.json",
     "references/audit/validate-findings.cjs",
+    "references/red-green.md",
   ],
   grill: ["references/grilling.md"],
   "wait-what": ["references/grilling.md", "references/plain-language.md"],
