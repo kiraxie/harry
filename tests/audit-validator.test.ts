@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
@@ -180,20 +180,27 @@ test("a confirmed finding with a blank concrete_cost fails for that reason", () 
 // biome-ignore lint/suspicious/noExplicitAny: the tests edit arbitrary nodes of a parsed JSON schema
 type Schema = Record<string, any>;
 
-function validateAgainst(editSchema: (doc: Schema) => void): {
+function validateAgainst(
+  editSchema: (doc: Schema) => void,
+  editSource: (src: string) => string = (src) => src,
+  findingsList: object[] = [lowValueFinding(RETENTION)],
+): {
   status: number | null;
   out: string;
 } {
   const copy = path.join(dir, Math.random().toString(36).slice(2));
   mkdirSync(copy);
-  copyFileSync(VALIDATOR, path.join(copy, "validate-findings.cjs"));
+  writeFileSync(
+    path.join(copy, "validate-findings.cjs"),
+    editSource(readFileSync(VALIDATOR, "utf8")),
+  );
   const doc = JSON.parse(
     readFileSync(path.join(path.dirname(VALIDATOR), "report-schema.json"), "utf8"),
   );
   editSchema(doc);
   writeFileSync(path.join(copy, "report-schema.json"), JSON.stringify(doc));
   const findings = path.join(copy, "findings.json");
-  writeFileSync(findings, JSON.stringify([lowValueFinding(RETENTION)]));
+  writeFileSync(findings, JSON.stringify(findingsList));
   const run = spawnSync(process.execPath, [path.join(copy, "validate-findings.cjs"), findings], {
     encoding: "utf8",
   });
@@ -322,6 +329,22 @@ for (const { name, edit, reason } of [
     reason: /concrete_cost: pattern must be a string/,
   },
   {
+    name: "a bad minItems on a field that is not an array",
+    edit: (doc: Schema) => {
+      confirmed(doc).title.minItems = -1;
+    },
+    reason: /title: minItems applies only to type "array"/,
+  },
+  {
+    name: "a type beside an empty oneOf",
+    edit: (doc: Schema) => {
+      const proof = confirmed(doc).retention_check.properties.proof;
+      proof.type = "object";
+      proof.oneOf = [];
+    },
+    reason: /proof: type cannot sit beside oneOf/,
+  },
+  {
     name: "a negative minItems",
     edit: (doc: Schema) => {
       confirmed(doc).evidence.minItems = -1;
@@ -408,6 +431,23 @@ for (const { name, edit, reason } of [
   });
 }
 
+test("a registry keyword with no apply step is refused at load, even with no findings", () => {
+  let edited = false;
+  const run = validateAgainst(
+    () => {},
+    (src) => {
+      const out = src.replace(/(\n\tminItems: \{[\s\S]*?\n\t\t)apply\(/, "$1unapplied(");
+      edited = out !== src;
+      return out;
+    },
+    [],
+  );
+  assert.ok(edited, "minItems is declared in the keyword registry with an apply step");
+  assert.notEqual(run.status, 0, run.out);
+  assert.match(run.out, /KEYWORDS\.minItems has no apply step/);
+  assert.doesNotMatch(run.out, /\n\s+at /, "a refusal is a message, not a stack trace");
+});
+
 test("the validator reports a malformed schema pattern without a stack trace", () => {
   const run = validateAgainst((doc) => {
     confirmed(doc).concrete_cost.pattern = "(";
@@ -424,6 +464,20 @@ test("a pattern failure says why the field matters", () => {
     /retention_check\.detects: must match pattern \/\\S\/, got " " — What the test checks/,
   );
 });
+
+for (const remediation of ["delete the test", null]) {
+  test(`a remediation of ${JSON.stringify(remediation)} fails only for its type`, () => {
+    const run = validate({ ...lowValueFinding(RETENTION), remediation });
+    assert.equal(run.status, 1, run.out);
+    assert.match(
+      run.out,
+      new RegExp(
+        `remediation: expected object, got ${typeof remediation === "string" ? "string" : "null"}`,
+      ),
+    );
+    assert.match(run.out, /FAIL: 1 error\(s\)/);
+  });
+}
 
 test("a field named like a built-in object property is still an unexpected field", () => {
   const run = validate({ ...lowValueFinding(RETENTION), toString: "x" });
