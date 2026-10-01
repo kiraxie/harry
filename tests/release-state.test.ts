@@ -6,6 +6,7 @@ import path from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  bumpSubject,
   compareVersions,
   detectState,
   gitBumpCommitExists,
@@ -121,6 +122,28 @@ describe("detectState", () => {
     assert.equal(detectState({ ...base, targetVersion: "0.18.0" }), "invalid-target");
     assert.equal(detectState({ ...base, targetVersion: "0.19.0" }), "invalid-target");
   });
+  for (const [name, facts, state] of [
+    ["already-tagged outranks waiting-for-merge", { tagExists: true }, "already-tagged"],
+    ["invalid-target outranks waiting-for-merge", { targetVersion: "0.18.0" }, "invalid-target"],
+    [
+      "bumped-not-tagged outranks waiting-for-merge",
+      { bumpCommitExists: true },
+      "bumped-not-tagged",
+    ],
+    [
+      "version-mismatch-untracked outranks waiting-for-merge",
+      { fieldHoldsTarget: true },
+      "version-mismatch-untracked",
+    ],
+    ["waiting-for-merge outranks not-bumped", {}, "waiting-for-merge"],
+  ] as const) {
+    test(name, () => {
+      assert.equal(
+        detectState({ ...base, targetVersion: "0.20.0", startHasBumpCommit: true, ...facts }),
+        state,
+      );
+    });
+  }
   test("invalid-target even when a field holds a version behind the latest tag", () => {
     assert.equal(
       detectState({ ...base, targetVersion: "0.18.0", fieldHoldsTarget: true }),
@@ -140,28 +163,48 @@ describe("detectState", () => {
   });
 });
 
-describe("an untracked older bump below a newer tag", () => {
-  const { dir, git, write } = fixture();
-  write("package.json", '{ "version": "1.1.0" }\n');
-  git("add", ".");
-  git("commit", "-qm", "init");
-  git("tag", "v1.1.0");
-  write("package.json", '{ "version": "1.2.0" }\n');
-  git("commit", "-qam", "chore(release): bump version to 1.2.0");
-  write("package.json", '{ "version": "1.3.0" }\n');
-  git("commit", "-qam", "chore(release): bump version to 1.3.0");
-  git("tag", "v1.3.0");
+function olderBumpRepo() {
+  const f = fixture();
+  f.write("package.json", '{ "version": "1.1.0" }\n');
+  f.git("add", ".");
+  f.git("commit", "-qm", "init");
+  f.git("tag", "v1.1.0");
+  f.write("package.json", '{ "version": "1.2.0" }\n');
+  f.git("commit", "-qam", "chore(release): bump version to 1.2.0");
+  f.write("package.json", '{ "version": "1.3.0" }\n');
+  f.git("commit", "-qam", "chore(release): bump version to 1.3.0");
+  f.git("tag", "v1.3.0");
+  return f;
+}
 
+describe("an untracked older bump below a newer tag", () => {
   test("the older version is invalid-target, never tagged onto the newer head", () => {
+    const { dir } = olderBumpRepo();
     assert.equal(cli(dir, "1.2.0", "--field", "package.json").stdout, "invalid-target");
   });
   test("a squash subject with GitHub's (#n) suffix still counts as the bump commit", () => {
+    const { dir, git, write } = olderBumpRepo();
     write("package.json", '{ "version": "1.4.0" }\n');
     git("commit", "-qam", "chore(release): bump version to 1.4.0 (#12)");
     assert.equal(gitBumpCommitExists(dir, "1.4.0"), true);
     assert.equal(cli(dir, "1.4.0", "--field", "package.json").stdout, "bumped-not-tagged");
   });
+  test("a body line equal to the bump subject does not count", () => {
+    const { dir, git } = olderBumpRepo();
+    git(
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "docs: explain the release flow",
+      "-m",
+      "chore(release): bump version to 1.4.0",
+    );
+    assert.equal(gitBumpCommitExists(dir, "1.4.0"), false);
+    assert.equal(cli(dir, "1.4.0", "--field", "package.json").stdout, "not-bumped");
+  });
   test("any other trailing text does not count", () => {
+    const { dir, git } = olderBumpRepo();
     git("commit", "-q", "--allow-empty", "-m", "chore(release): bump version to 1.5.0 and more");
     assert.equal(gitBumpCommitExists(dir, "1.5.0"), false);
   });
@@ -214,68 +257,174 @@ describe("a repo with no tag yet", () => {
   });
 });
 
-describe("a repo that declares a version field", () => {
-  const { dir, git, write } = fixture();
-  write("package.json", '{ "version": "0.2.0" }\n');
-  git("add", ".");
-  git("commit", "-qm", "init");
-  git("tag", "v0.2.0");
+function fieldRepo() {
+  const f = fixture();
+  f.write("package.json", '{ "version": "0.2.0" }\n');
+  f.git("add", ".");
+  f.git("commit", "-qm", "init");
+  f.git("tag", "v0.2.0");
+  return f;
+}
 
+describe("a repo that declares a version field", () => {
   test("before the bump, the next version is not-bumped", () => {
+    const { dir } = fieldRepo();
     assert.equal(cli(dir, "0.3.0", "--field", "package.json").stdout, "not-bumped");
   });
   test("a field edited to the target with no bump commit is version-mismatch-untracked", () => {
+    const { dir, write } = fieldRepo();
     write("package.json", '{ "version": "0.3.0" }\n');
     assert.equal(cli(dir, "0.3.0", "--field", "package.json").stdout, "version-mismatch-untracked");
   });
   test("after the bump commit, it is bumped-not-tagged", () => {
+    const { dir, git, write } = fieldRepo();
+    write("package.json", '{ "version": "0.3.0" }\n');
     git("commit", "-qam", "chore(release): bump version to 0.3.0");
     assert.equal(gitBumpCommitExists(dir, "0.3.0"), true);
     assert.equal(cli(dir, "0.3.0", "--field", "package.json").stdout, "bumped-not-tagged");
   });
   test("after the tag, it is already-tagged", () => {
+    const { dir, git, write } = fieldRepo();
+    write("package.json", '{ "version": "0.3.0" }\n');
+    git("commit", "-qam", "chore(release): bump version to 0.3.0");
     git("tag", "v0.3.0");
     assert.equal(gitTagExists(dir, "0.3.0"), true);
     assert.equal(cli(dir, "0.3.0", "--field", "package.json").stdout, "already-tagged");
   });
   test("a declared field that does not exist is an environment error, exit 1", () => {
+    const { dir } = fieldRepo();
     const r = cli(dir, "0.4.0", "--field", "missing.json");
     assert.equal(r.code, 1);
     assert.match(r.stderr, /missing\.json/);
   });
   test("with a field declared, an older version is still invalid-target", () => {
+    const { dir } = fieldRepo();
     assert.equal(cli(dir, "0.1.0", "--field", "package.json").stdout, "invalid-target");
   });
   test("with a field declared, a malformed version is still invalid-version", () => {
+    const { dir } = fieldRepo();
     assert.equal(cli(dir, "0.4", "--field", "package.json").stdout, "invalid-version");
   });
 });
 
-describe("a field holds the target only as a whole version token", () => {
-  const { dir, git, write } = fixture();
-  write(
+function waitingRepo() {
+  const f = fieldRepo();
+  f.git("checkout", "-q", "-b", "release");
+  f.write("package.json", '{ "version": "0.3.0" }\n');
+  f.git("commit", "-qam", "chore(release): bump version to 0.3.0");
+  f.git("checkout", "-q", "main");
+  return f;
+}
+
+describe("a release waiting for its merge", () => {
+  test("with --start on the bump branch, it is waiting-for-merge", () => {
+    const { dir } = waitingRepo();
+    assert.equal(
+      cli(dir, "0.3.0", "--field", "package.json", "--start", "release").stdout,
+      "waiting-for-merge",
+    );
+  });
+  test("without --start, it is not-bumped", () => {
+    const { dir } = waitingRepo();
+    assert.equal(cli(dir, "0.3.0", "--field", "package.json").stdout, "not-bumped");
+  });
+  test("with --start on the default branch, it is not-bumped", () => {
+    const { dir } = waitingRepo();
+    assert.equal(
+      cli(dir, "0.3.0", "--field", "package.json", "--start", "main").stdout,
+      "not-bumped",
+    );
+  });
+  test("once squash-merged, it is bumped-not-tagged whatever --start says", () => {
+    const { dir, git } = waitingRepo();
+    git("merge", "-q", "--squash", "release");
+    git("commit", "-qm", "chore(release): bump version to 0.3.0 (#7)");
+    assert.equal(
+      cli(dir, "0.3.0", "--field", "package.json", "--start", "release").stdout,
+      "bumped-not-tagged",
+    );
+  });
+  test("squash-merged under another subject, it is version-mismatch-untracked whatever --start says", () => {
+    const { dir, git } = waitingRepo();
+    git("merge", "-q", "--squash", "release");
+    git("commit", "-qm", "Release 0.3.0 (#5)");
+    assert.equal(
+      cli(dir, "0.3.0", "--field", "package.json", "--start", "release").stdout,
+      "version-mismatch-untracked",
+    );
+  });
+  test("a --start value that looks like an option is a revision, not a git option", () => {
+    const { dir } = waitingRepo();
+    const r = cli(dir, "0.3.0", "--field", "package.json", "--start", "--all");
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stderr, /release-state:.*--all/);
+  });
+  test("a --start ref that is also a file name resolves to the ref", () => {
+    const { dir, write } = waitingRepo();
+    write("release", "a file named like the branch\n");
+    assert.equal(
+      cli(dir, "0.3.0", "--field", "package.json", "--start", "release").stdout,
+      "waiting-for-merge",
+    );
+  });
+  test("a repeated --start says so", () => {
+    const { dir } = waitingRepo();
+    const r = cli(dir, "0.3.0", "--start", "main", "--start", "release");
+    assert.equal(r.code, 1);
+    assert.match(r.stderr, /--start given twice/);
+  });
+  test("a history whose subjects pass git's 1 MiB output buffer still classifies", () => {
+    const { dir, git } = fieldRepo();
+    const long = path.join(dir, ".subject");
+    writeFileSync(long, `fix: ${"x".repeat(100_000)}\n`);
+    for (let i = 0; i < 12; i++) git("commit", "-q", "--allow-empty", "-F", long);
+    assert.deepEqual(cli(dir, "0.3.0", "--field", "package.json", "--start", "main"), {
+      code: 0,
+      stdout: "not-bumped",
+      stderr: "",
+    });
+  });
+  test("an unknown --start ref is an environment error, exit 1", () => {
+    const { dir } = waitingRepo();
+    const r = cli(dir, "0.3.0", "--start", "no-such-ref");
+    assert.equal(r.code, 1);
+    assert.match(r.stderr, /release-state:.*no-such-ref/);
+  });
+});
+
+function tokenRepo() {
+  const f = fixture();
+  f.write(
     "package.json",
     '{ "version": "0.9.0", "engines": { "node": ">=26.0.0" }, "dependencies": { "x": "^10.10.0" } }\n',
   );
-  git("add", ".");
-  git("commit", "-qm", "init");
-  git("tag", "v0.9.0");
+  f.git("add", ".");
+  f.git("commit", "-qm", "init");
+  f.git("tag", "v0.9.0");
+  return f;
+}
 
+describe("a field holds the target only as a whole version token", () => {
   test("a longer version that ends in the target's digits does not count", () => {
+    const { dir } = tokenRepo();
     assert.equal(cli(dir, "0.10.0", "--field", "package.json").stdout, "not-bumped");
   });
   test("a range bound that ends in the target's digits does not count", () => {
+    const { dir } = tokenRepo();
     assert.equal(cli(dir, "6.0.0", "--field", "package.json").stdout, "not-bumped");
   });
   test("a bump subject matches its version exactly, dots included", () => {
+    const { dir, git } = tokenRepo();
     git("commit", "-q", "--allow-empty", "-m", "chore(release): bump version to 1x2x3");
     assert.equal(gitBumpCommitExists(dir, "1.2.3"), false);
   });
   test("a v-prefixed field counts as holding the version", () => {
+    const { dir, write } = tokenRepo();
     write("version.go", 'const Version = "v0.12.0"\n');
     assert.equal(cli(dir, "0.12.0", "--field", "version.go").stdout, "version-mismatch-untracked");
   });
   test("a longer dotted number does not count", () => {
+    const { dir, write } = tokenRepo();
     write("build.txt", "1.2.3.4\n");
     assert.equal(cli(dir, "2.3.4", "--field", "build.txt").stdout, "not-bumped");
   });
@@ -284,6 +433,35 @@ describe("a field holds the target only as a whole version token", () => {
 test(".claude/commands/release.md runs the state script at its real path", () => {
   const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
   assert.ok(md.includes(`node ${path.relative(repoRoot, SCRIPT)} `));
+});
+
+test(".claude/commands/release.md passes --start and leaves the bump-commit rule to the script", () => {
+  const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
+  assert.match(md, /release-state\.mjs <version> .*--start <starting-commit>/);
+  assert.doesNotMatch(md, /git log <starting-commit>/);
+});
+
+test("the subject release.md's Phase A commits under is the script's bump subject", () => {
+  const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
+  const start = md.indexOf("5. **Commit**");
+  const end = md.indexOf("6. **Hand off**");
+  assert.ok(
+    start >= 0 && end > start,
+    'release.md has no "5. **Commit**" step before "6. **Hand off**"',
+  );
+  const step = md.slice(start, end);
+  assert.equal(
+    md.split("bump version to <version>").length - 1,
+    1,
+    "release.md writes the bump subject only in its commit step",
+  );
+  const written = step.match(/`([^`]*<version>[^`]*)`/);
+  assert.ok(written, `no subject with <version> in the commit step: ${step}`);
+  const subject = written[1].replace("<version>", "9.8.7");
+  assert.equal(subject, bumpSubject("9.8.7"));
+  const { dir, git } = fieldRepo();
+  git("commit", "-q", "--allow-empty", "-m", subject);
+  assert.equal(gitBumpCommitExists(dir, "9.8.7"), true);
 });
 
 test(".claude/commands/release.md greps with the script's token boundary, never grep -w", () => {
@@ -316,17 +494,18 @@ test("this repo's own released version classifies as already-tagged", () => {
   assert.equal(cli(repoRoot, "0.22.0", "--field", "package.json").stdout, "already-tagged");
 });
 
-// The six state names are written in three places; divergence is a bug.
+// The seven state names are written in three places; divergence is a bug.
 const CANONICAL_STATES = [
   "invalid-version",
   "invalid-target",
   "not-bumped",
   "bumped-not-tagged",
+  "waiting-for-merge",
   "already-tagged",
   "version-mismatch-untracked",
 ];
 
-test("release-state.d.mts's ReleaseState union names exactly the six states", () => {
+test("release-state.d.mts's ReleaseState union names exactly the seven states", () => {
   const dts = readFileSync(path.join(repoRoot, ".claude/scripts/release-state.d.mts"), "utf8");
   const union = dts.match(/export type ReleaseState =([\s\S]*?);/);
   assert.ok(union, "no ReleaseState union");
@@ -336,7 +515,7 @@ test("release-state.d.mts's ReleaseState union names exactly the six states", ()
   );
 });
 
-test(".claude/commands/release.md's state section names exactly the six states", () => {
+test(".claude/commands/release.md's state section names exactly the seven states", () => {
   const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
   const start = md.indexOf("## Classify the state");
   const end = md.indexOf("## Phase A");

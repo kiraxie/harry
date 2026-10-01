@@ -50,8 +50,42 @@ CHANGELOG is **tag-only**.
 the **Verify** entry; the test, typecheck and lint commands the repo's `CLAUDE.md`
 names; otherwise ask the user which commands to run, and do not guess.
 
-**Check for an undeclared field.** Before classifying, take the latest tag's version
-— the highest strict `v<x.y.z>` tag, the rule the state script uses:
+## Classify the state
+
+Run, from the repo root, with one `--field` per declared field file and the commit
+you started on:
+
+```
+node .claude/scripts/release-state.mjs <version> [--field <path>]... --start <starting-commit>
+```
+
+It reads the repo's real state (tags, the bump commit on the default branch and in
+the starting commit's history, the declared fields) — never guess which phase you are
+in. A non-zero exit is an environment or git problem, not a version problem: report
+its stderr and stop. On exit 0 it prints one state:
+
+- `already-tagged` — this version is already released. Report it and stop.
+- `invalid-version` — the version is not `x.y.z`. Ask for a corrected one.
+- `invalid-target` — the version is at or behind the latest tag and has no tag of its
+  own, even when an old bump commit for it exists. A later version is already
+  tagged, so tagging this one would release it out of order. Ask for a corrected one;
+  never proceed as if it were new.
+- `waiting-for-merge` — the bump commit is in the starting commit's history but not
+  on the default branch: the release was cut and is waiting for its merge. Switch
+  back to where you started, say so, and stop; do not start it again. After the
+  merge, a re-run reads `bumped-not-tagged`. A declared field that already holds
+  this version outranks it: that reads `version-mismatch-untracked`.
+- `version-mismatch-untracked` — a declared field already holds this version but no
+  bump commit is reachable: someone changed it outside this flow, or a release
+  branch was merged under a subject other than the bump subject. The check
+  matches the version as a whole token, so a dependency pinned at exactly the same
+  version also trips it. **Stop and ask the user how to proceed.**
+- `not-bumped` → **Phase A**; for a tag-only repo, straight to **Phase B**.
+- `bumped-not-tagged` → **Phase B**.
+
+**Check for an undeclared field** before entering Phase A or Phase B; every other
+state has stopped by now. Take the latest tag's version — the highest strict
+`v<x.y.z>` tag, the rule the state script uses:
 `git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1` —
 and list the tracked files that contain it as a whole version:
 `git grep -lE '(^|[^0-9.])<latest>($|[^0-9.])'`. In this pattern and in every
@@ -61,40 +95,6 @@ the state script's own: no digit or dot on either side, so `v0.22.0` counts and
 does not declare, leaving out the CHANGELOG, and ask them to confirm none of those
 holds the repo's version. If one does, stop: it goes into the section first, or it
 would be released with the old version in it. No tag yet → skip this check.
-
-## Classify the state
-
-Run, from the repo root, with one `--field` per declared field file:
-
-```
-node .claude/scripts/release-state.mjs <version> [--field <path>]...
-```
-
-It reads the repo's real state (tags, the bump commit, the declared fields) — never
-guess which phase you are in. A non-zero exit is an environment or git problem, not a
-version problem: report its stderr and stop. On exit 0 it prints one state:
-
-- `already-tagged` — this version is already released. Report it and stop.
-- `invalid-version` — the version is not `x.y.z`. Ask for a corrected one.
-- `invalid-target` — the version is at or behind the latest tag and has no tag of its
-  own, even when an old bump commit for it exists. A later version is already
-  tagged, so tagging this one would release it out of order. Ask for a corrected one;
-  never proceed as if it were new.
-- `version-mismatch-untracked` — a declared field already holds this version but no
-  bump commit is reachable, so someone changed it outside this flow. The check
-  matches the version as a whole token, so a dependency pinned at exactly the same
-  version also trips it. **Stop and ask the user how to proceed.**
-- `not-bumped` → first check whether this release is **waiting for its merge**: you
-  did not start on the default branch, and the starting commit's history holds the
-  bump subject:
-  `git log <starting-commit> --format=%s | grep -E '^chore\(release\): bump version to <version>( \(#[0-9]+\))?$'`.
-  - If so, switch back to where you started, say the release is waiting for its
-    merge, and stop; do not start it again.
-  - Otherwise → **Phase A**; for a tag-only repo, straight to **Phase B**.
-
-  After the merge the bump is on the default branch, so a re-run from the kept
-  branch reads `bumped-not-tagged` instead.
-- `bumped-not-tagged` → **Phase B**.
 
 ## Phase A — bump, verify, commit (before the merge)
 
@@ -123,9 +123,8 @@ comes up.
 5. **Commit** exactly the CHANGELOG, the field files and the build's generated files,
    as `chore(release): bump version to <version>`.
 6. **Hand off** to the finishing skill for merge-vs-PR (HARRY.md §5 — always ask).
-   The state script finds Phase B by the subject
-   `chore(release): bump version to <version>` on the default branch, and a squash
-   rewrites the subject, so a release overrides finishing's usual wording:
+   The state script finds Phase B by step 5's subject on the default branch, and a
+   squash rewrites the subject, so a release overrides finishing's usual wording:
    - **Local merge:** the squash commit's subject is exactly that subject.
    - **PR:** the PR title and `gh pr merge --squash --subject` are exactly that
      subject. A squash merged from GitHub's web page appends ` (#<n>)`, which the

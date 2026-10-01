@@ -29,6 +29,7 @@ export function detectState({
   targetVersion,
   tagExists,
   bumpCommitExists,
+  startHasBumpCommit = false,
   fieldHoldsTarget,
 }) {
   try {
@@ -40,6 +41,7 @@ export function detectState({
   if (latestTag !== null && compareVersions(targetVersion, latestTag) <= 0) return "invalid-target";
   if (bumpCommitExists) return "bumped-not-tagged";
   if (fieldHoldsTarget) return "version-mismatch-untracked";
+  if (startHasBumpCommit) return "waiting-for-merge";
   return "not-bumped";
 }
 
@@ -60,17 +62,27 @@ export function gitTagExists(repoRoot, version) {
   return git(repoRoot, ["tag", "-l", `v${version}`]).trim().length > 0;
 }
 
-// --basic-regexp is pinned: under grep.patternType=extended, "(release)" becomes a group and never matches.
-export function gitBumpCommitExists(repoRoot, version) {
-  const out = git(repoRoot, [
+export function bumpSubject(version) {
+  return `chore(release): bump version to ${version}`;
+}
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export function gitBumpCommitExists(repoRoot, version, ref = "HEAD") {
+  const literal = bumpSubject(version);
+  const subject = new RegExp(`^${escapeRegExp(literal)}( \\(#\\d+\\))?$`);
+  return git(repoRoot, [
     "log",
-    "--basic-regexp",
+    "-F",
     "--grep",
-    `^chore(release): bump version to ${version.replaceAll(".", "\\.")}\\( (#[0-9][0-9]*)\\)\\{0,1\\}$`,
-    "--format=%H",
-    "-1",
-  ]);
-  return out.trim().length > 0;
+    literal,
+    "--format=%s",
+    "--end-of-options",
+    ref,
+    "--",
+  ])
+    .split("\n")
+    .some((line) => subject.test(line));
 }
 
 export function fieldHoldsTarget(repoRoot, fields, version) {
@@ -78,7 +90,7 @@ export function fieldHoldsTarget(repoRoot, fields, version) {
   return fields.some((field) => token.test(readFileSync(resolve(repoRoot, field), "utf8")));
 }
 
-export function run(targetVersion, fields = [], repoRoot) {
+export function run(targetVersion, fields = [], repoRoot, start) {
   if (typeof targetVersion !== "string" || !SEMVER_RE.test(targetVersion)) return "invalid-version";
   const root = repoRoot ?? git(process.cwd(), ["rev-parse", "--show-toplevel"]).trim();
   return detectState({
@@ -86,6 +98,7 @@ export function run(targetVersion, fields = [], repoRoot) {
     targetVersion,
     tagExists: gitTagExists(root, targetVersion),
     bumpCommitExists: gitBumpCommitExists(root, targetVersion),
+    startHasBumpCommit: start !== undefined && gitBumpCommitExists(root, targetVersion, start),
     fieldHoldsTarget: fieldHoldsTarget(root, fields, targetVersion),
   });
 }
@@ -93,19 +106,27 @@ export function run(targetVersion, fields = [], repoRoot) {
 function parseArgs(argv) {
   const [target, ...rest] = argv;
   const fields = [];
+  let start;
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] !== "--field" || rest[i + 1] === undefined) {
-      throw new Error(`unexpected argument: ${rest[i]} (usage: <version> [--field <path>]...)`);
+    const flag = rest[i];
+    const value = rest[i + 1];
+    if (flag === "--field" && value !== undefined) fields.push(value);
+    else if (flag === "--start" && start !== undefined) throw new Error("--start given twice");
+    else if (flag === "--start" && value !== undefined) start = value;
+    else {
+      throw new Error(
+        `unexpected argument: ${flag} (usage: <version> [--field <path>]... [--start <ref>])`,
+      );
     }
-    fields.push(rest[++i]);
+    i++;
   }
-  return { target, fields };
+  return { target, fields, start };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   try {
-    const { target, fields } = parseArgs(process.argv.slice(2));
-    console.log(run(target, fields));
+    const { target, fields, start } = parseArgs(process.argv.slice(2));
+    console.log(run(target, fields, undefined, start));
   } catch (err) {
     process.stderr.write(`release-state: ${err.message}\n`);
     process.exit(1);
