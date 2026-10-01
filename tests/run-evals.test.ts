@@ -6,7 +6,7 @@
 // and the model-pinning refusal.
 
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
@@ -1314,6 +1314,203 @@ test("runEvals --agentic: a hung model-written test is cut off by the post-sessi
   } finally {
     rmSync(binDir, { recursive: true, force: true });
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("evaluateArtifactCheck: a file check on a FIFO fails at once instead of blocking", () => {
+  const dir = realpathSync(tmpDir("harry-evals-fifo-"));
+  try {
+    const fifo = path.join(dir, "notes.txt");
+    execFileSync("mkfifo", [fifo]);
+    // A detached holder releases the FIFO after 3s, so a reader that blocks on it
+    // fails this test on the clock instead of hanging it.
+    const holder =
+      'const fs = require("node:fs"); const fd = fs.openSync(process.argv[1], "r+"); ' +
+      "setTimeout(() => { fs.rmSync(process.argv[1], { force: true }); fs.closeSync(fd); }, 3000);";
+    spawn(process.execPath, ["-e", holder, fifo], { detached: true, stdio: "ignore" }).unref();
+    const state = {
+      fixtureDir: dir,
+      initialBranch: "main",
+      initialCommit: "x",
+      branches: ["main"],
+      newCommitMessages: [],
+      newCommitsOnInitial: 0,
+      files: ["notes.txt"],
+    };
+    const started = Date.now();
+    for (const check of [
+      { type: "file_contains", path: "notes.txt", pattern: "." },
+      { type: "file_not_contains", path: "notes.txt", pattern: "secret" },
+      { type: "repo_grep", pattern: "." },
+      { type: "repo_grep_absent", pattern: "secret" },
+    ]) {
+      const outcome = evaluateArtifactCheck(check, state);
+      assert.equal(outcome.ok, false, check.type);
+      assert.match(outcome.detail, /notes\.txt is not a regular file/, check.type);
+    }
+    assert.ok(Date.now() - started < 2000, "no check waited on the FIFO");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("evaluateArtifactCheck: a file check on a socket fails", () => {
+  const dir = realpathSync(tmpDir("harry-evals-sock-"));
+  try {
+    execFileSync(process.execPath, [
+      "-e",
+      'require("node:net").createServer().listen(process.argv[1], () => process.exit(0))',
+      path.join(dir, "notes.txt"),
+    ]);
+    const state = {
+      fixtureDir: dir,
+      initialBranch: "main",
+      initialCommit: "x",
+      branches: ["main"],
+      newCommitMessages: [],
+      newCommitsOnInitial: 0,
+      files: ["notes.txt"],
+    };
+    for (const check of [
+      { type: "file_contains", path: "notes.txt", pattern: "." },
+      { type: "file_not_contains", path: "notes.txt", pattern: "secret" },
+      { type: "repo_grep", pattern: "." },
+      { type: "repo_grep_absent", pattern: "secret" },
+    ]) {
+      const outcome = evaluateArtifactCheck(check, state);
+      assert.equal(outcome.ok, false, check.type);
+      assert.match(outcome.detail, /notes\.txt is not a regular file/, check.type);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --agentic: a session that wedges git on a FIFO is cut off by git's own timeout", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
+  try {
+    // The session turns a file git must read into a FIFO. A detached holder keeps it
+    // open for 25s, then removes it and closes, so a runner with no git timeout ends
+    // up failing this test instead of hanging it, and no git outlives the test.
+    const holder =
+      'const fs = require("node:fs"); const fd = fs.openSync(process.argv[1], "r+"); ' +
+      "setTimeout(() => { fs.rmSync(process.argv[1], { force: true }); fs.closeSync(fd); }, 25000);";
+    const script = path.join(binDir, "wedge.mjs");
+    writeFileSync(
+      script,
+      'import { execFileSync, spawn } from "node:child_process";\n' +
+        'const fifo = ".git/objects/info/alternates";\n' +
+        'execFileSync("mkfifo", [fifo]);\n' +
+        `spawn(process.execPath, ["-e", ${JSON.stringify(holder)}, fifo], ` +
+        '{ detached: true, stdio: "ignore" }).unref();\n',
+    );
+    installFakeClaude(binDir, undefined, { script });
+    const started = Date.now();
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+        postSessionTimeoutMs: 1000,
+      },
+      {
+        ...authFreeEnv(),
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_FIXTURE_ROOT: root,
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      },
+    );
+    assert.match(String(lines[0].error), /git [a-z-]+ timed out after \d+ms/);
+    assert.ok(Date.now() - started < 15000, "the runner did not wait on the wedged git");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runEvals --agentic: git and the test command share one post-session deadline", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
+  try {
+    // git holds 2s of a 3s budget, so a 2s test only passes with a fresh per-call limit.
+    const holder =
+      'const fs = require("node:fs"); const fd = fs.openSync(process.argv[1], "r+"); ' +
+      'fs.writeFileSync(".git/held", ""); ' +
+      "setTimeout(() => { fs.rmSync(process.argv[1], { force: true }); fs.closeSync(fd); }, 2000);";
+    const slow =
+      'import test from "node:test";\ntest("slow", () => new Promise((r) => setTimeout(r, 2000)));\n';
+    const script = path.join(binDir, "slow.mjs");
+    writeFileSync(
+      script,
+      'import { execFileSync, spawn } from "node:child_process";\n' +
+        'import { existsSync, writeFileSync } from "node:fs";\n' +
+        `writeFileSync("slow.test.mjs", ${JSON.stringify(slow)});\n` +
+        'const fifo = ".git/objects/info/alternates";\n' +
+        'execFileSync("mkfifo", [fifo]);\n' +
+        `spawn(process.execPath, ["-e", ${JSON.stringify(holder)}, fifo], ` +
+        '{ detached: true, stdio: "ignore" }).unref();\n' +
+        'while (!existsSync(".git/held")) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);\n',
+    );
+    installFakeClaude(binDir, undefined, { script });
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+        postSessionTimeoutMs: 3000,
+      },
+      {
+        ...authFreeEnv(),
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_FIXTURE_ROOT: root,
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      },
+    );
+    const outcomes = lines[0].checkOutcomes as {
+      check: { type: string };
+      ok: boolean;
+      detail: string;
+    }[];
+    const run = outcomes?.find((o) => o.check.type === "test_command_passes");
+    assert.equal(run?.ok, false, JSON.stringify(lines[0]));
+    assert.match(run?.detail ?? "", /timed out/);
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("evaluateArtifactCheck: a directory at a file-check path reads as missing", () => {
+  const dir = realpathSync(tmpDir("harry-evals-dirpath-"));
+  try {
+    mkdirSync(path.join(dir, "sub"));
+    writeFileSync(path.join(dir, "a.txt"), "DEBT: noted\n");
+    const state = {
+      fixtureDir: dir,
+      initialBranch: "main",
+      initialCommit: "x",
+      branches: ["main"],
+      newCommitMessages: [],
+      newCommitsOnInitial: 0,
+      files: ["sub/", "a.txt"],
+    };
+    const verdict = (check: object) => evaluateArtifactCheck(check as never, state).ok;
+    assert.equal(verdict({ type: "repo_grep", pattern: "DEBT:" }), true);
+    assert.equal(verdict({ type: "repo_grep_absent", pattern: "secret" }), true);
+    assert.equal(verdict({ type: "file_not_contains", path: "sub", pattern: "secret" }), true);
+    const contains = evaluateArtifactCheck(
+      { type: "file_contains", path: "sub", pattern: "." } as never,
+      state,
+    );
+    assert.equal(contains.ok, false);
+    assert.equal(contains.detail, "missing file sub");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -3158,7 +3355,7 @@ function runJailedTrial(
 }
 
 test(
-  "runEvals --agentic under EVALS_SANDBOX=1: a post-session step wedged past its grace is cut off",
+  "runEvals --agentic under EVALS_SANDBOX=1: a session that wedges git on a FIFO is cut off by git's own timeout",
   DARWIN_ONLY,
   () => {
     const binDir = tmpDir("harry-evals-bin-");
@@ -3184,8 +3381,8 @@ test(
       installFakeClaude(binDir, undefined, { script, callsInConfigDir: true });
       const started = Date.now();
       const lines = runJailedTrial(binDir, fxRoot, {}, { postSessionTimeoutMs: 1000 });
-      assert.match(String(lines[0].error), /the jailed post-session step timed out after 16000ms/);
-      assert.ok(Date.now() - started < 24000, "the runner did not wait on the wedged git");
+      assert.match(String(lines[0].error), /git [a-z-]+ timed out after \d+ms/);
+      assert.ok(Date.now() - started < 15000, "the runner did not wait on the wedged git");
     } finally {
       rmSync(binDir, { recursive: true, force: true });
       rmSync(fxRoot, { recursive: true, force: true });

@@ -54,6 +54,8 @@ export interface RepoState {
   newCommitsOnInitial: number;
   files: string[];
   env?: Record<string, string | undefined>;
+  // Epoch ms by which judging must finish; test_command_passes gets the time left.
+  deadline?: number;
 }
 
 // One (case id, condition) group: all its trial lines pooled (from a --trials N
@@ -153,6 +155,7 @@ export function collectRepoState(
   initialCommit: string,
   env?: Record<string, string | undefined>,
   gitBin?: string,
+  deadline?: number,
 ): RepoState;
 export function evaluateArtifactCheck(check: CheckInput, state: RepoState): ArtifactCheckOutcome;
 export function evaluateArtifactChecks(

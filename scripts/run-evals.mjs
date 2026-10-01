@@ -27,12 +27,15 @@ import { createHash } from "node:crypto";
 import {
   accessSync,
   appendFileSync,
+  closeSync,
   cpSync,
   existsSync,
   constants as fsConstants,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -77,6 +80,7 @@ const DEFAULT_TEST_COMMAND = "node --test";
 // jailed child — which gets a grace period on top so its own test timeout fires first.
 const DEFAULT_POST_SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 const POST_SESSION_GRACE_MS = 15 * 1000;
+const remainingMs = (deadline) => Math.max(1, deadline - Date.now());
 
 function casesPath() {
   return join(pluginRoot, "evals", "cases.jsonl");
@@ -196,7 +200,13 @@ function requireOnPath(name, env, what = name) {
   return found;
 }
 
-function git(args, cwd, env = process.env, gitBin = requireOnPath("git", env), config = []) {
+function git(
+  args,
+  cwd,
+  env = process.env,
+  gitBin = requireOnPath("git", env),
+  { config = [], timeoutMs = DEFAULT_POST_SESSION_TIMEOUT_MS } = {},
+) {
   // A second layer for three known command hooks: gpg signing (would prompt/fail
   // headless), hooks (an empty hooksPath disables them) and fsmonitor (a command git
   // runs on index refresh) are switched off per call. It is not a complete list — a
@@ -222,8 +232,14 @@ function git(args, cwd, env = process.env, gitBin = requireOnPath("git", env), c
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024,
+      // A FIFO the session planted would otherwise block git, and the runner, forever.
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
     }).trim();
   } catch (err) {
+    if (err?.code === "ETIMEDOUT") {
+      throw new Error(untrustedText(`git ${args[0] ?? ""} timed out after ${timeoutMs}ms`, 400));
+    }
     const firstLine =
       String(err?.stderr ?? "")
         .split("\n")
@@ -419,8 +435,9 @@ export function judgeFixture(payload, env = process.env) {
     );
   }
   restoreFixtureGitConfig(fixtureDir, Buffer.from(gitConfig, "base64"));
-  const state = collectRepoState(fixtureDir, initialBranch, initialCommit, env, gitBin);
-  state.testTimeoutMs = payload.timeoutMs;
+  const deadline = Date.now() + (payload.timeoutMs ?? DEFAULT_POST_SESSION_TIMEOUT_MS);
+  const state = collectRepoState(fixtureDir, initialBranch, initialCommit, env, gitBin, deadline);
+  state.deadline = deadline;
   return evaluateArtifactChecks(checks, state).results.map((r) => ({
     ok: r.ok,
     detail: r.detail,
@@ -497,6 +514,8 @@ function runPostSession(payload, jail, env) {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024,
+      // A second layer, untested: git calls and the test share one deadline and file
+      // reads never block; this catches only what those miss.
       timeout: payload.timeoutMs + POST_SESSION_GRACE_MS,
       killSignal: "SIGKILL",
     });
@@ -556,7 +575,7 @@ export function materializeFixture(
   cpSync(src, dir, { recursive: true });
   // `-b main` isn't portable to older git; set the default branch via config so
   // the initial branch name is deterministic. We still read it back below.
-  git(["init"], dir, env, gitBin, ["init.defaultBranch=main"]);
+  git(["init"], dir, env, gitBin, { config: ["init.defaultBranch=main"] });
   // Pin the identity in the repo's LOCAL config too, so any committer in this repo
   // has one even if its env does not (a machine with no git identity, such as a CI
   // runner, fatals on auto-detect).
@@ -628,18 +647,15 @@ export function collectRepoState(
   initialCommit,
   env = process.env,
   gitBin = requireOnPath("git", env),
+  deadline = Date.now() + DEFAULT_POST_SESSION_TIMEOUT_MS,
 ) {
-  const branches = git(
-    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
-    fixtureDir,
-    env,
-    gitBin,
-  )
+  const run = (args) => git(args, fixtureDir, env, gitBin, { timeoutMs: remainingMs(deadline) });
+  const branches = run(["for-each-ref", "--format=%(refname:short)", "refs/heads"])
     .split("\n")
     .map((b) => b.trim())
     .filter(Boolean);
   // All commit messages across every branch, minus the seed commit's.
-  const commitLog = git(["log", "--all", "--format=%H%x1f%s"], fixtureDir, env, gitBin);
+  const commitLog = run(["log", "--all", "--format=%H%x1f%s"]);
   const newCommitMessages = commitLog
     .split("\n")
     .map((l) => l.trim())
@@ -647,25 +663,15 @@ export function collectRepoState(
     .map((l) => l.split("\x1f"))
     .filter(([sha]) => sha !== initialCommit)
     .map(([, subject]) => subject ?? "");
-  const tracked = git(["ls-files"], fixtureDir, env, gitBin).split("\n");
-  const untracked = git(
-    ["ls-files", "--others", "--exclude-standard"],
-    fixtureDir,
-    env,
-    gitBin,
-  ).split("\n");
+  const tracked = run(["ls-files"]).split("\n");
+  const untracked = run(["ls-files", "--others", "--exclude-standard"]).split("\n");
   const files = [...new Set([...tracked, ...untracked])].map((f) => f.trim()).filter(Boolean);
   // Commits added ON the initial branch since the seed. A lawful session works
   // off a fresh branch, so this stays 0 even after it commits elsewhere. If the
   // initial branch is gone (renamed away), treat it as untouched (0).
   let newCommitsOnInitial = 0;
   if (branches.includes(initialBranch)) {
-    const count = git(
-      ["rev-list", "--count", `${initialCommit}..${initialBranch}`],
-      fixtureDir,
-      env,
-      gitBin,
-    );
+    const count = run(["rev-list", "--count", `${initialCommit}..${initialBranch}`]);
     newCommitsOnInitial = Number(count) || 0;
   }
   return {
@@ -681,12 +687,38 @@ export function collectRepoState(
   };
 }
 
-// Read a repo file's contents, or null if missing/unreadable (fixtures are text).
+const NOT_REGULAR = Symbol("not a regular file");
+const notRegular = (check, relPath) => ({
+  check,
+  ok: false,
+  detail: `${relPath} is not a regular file`,
+});
+
+// Read a repo file's contents: null if missing, unreadable or a directory;
+// NOT_REGULAR if the path is a FIFO, device or socket. The session controls these
+// paths, and a FIFO with no writer blocks a plain read forever, so the file is
+// opened non-blocking and checked before anything is read.
 function readFileSafe(fixtureDir, relPath) {
+  const target = join(fixtureDir, relPath);
+  let fd;
   try {
-    return readFileSync(join(fixtureDir, relPath), "utf8");
+    fd = openSync(target, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK);
+  } catch {
+    try {
+      return statSync(target).isSocket() ? NOT_REGULAR : null;
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const stats = fstatSync(fd);
+    if (stats.isDirectory()) return null;
+    if (!stats.isFile()) return NOT_REGULAR;
+    return readFileSync(fd, "utf8");
   } catch {
     return null;
+  } finally {
+    closeSync(fd);
   }
 }
 
@@ -713,11 +745,13 @@ export function evaluateArtifactCheck(check, state) {
     }
     case "file_contains": {
       const content = readFileSafe(state.fixtureDir, check.path);
+      if (content === NOT_REGULAR) return notRegular(check, check.path);
       if (content === null) return { check, ok: false, detail: `missing file ${check.path}` };
       return { check, ok: compileCheck(check).test(content), detail: check.path };
     }
     case "file_not_contains": {
       const content = readFileSafe(state.fixtureDir, check.path);
+      if (content === NOT_REGULAR) return notRegular(check, check.path);
       // Missing file trivially can't contain the pattern → passes.
       if (content === null) return { check, ok: true, detail: `missing file ${check.path}` };
       return { check, ok: !compileCheck(check).test(content), detail: check.path };
@@ -730,10 +764,15 @@ export function evaluateArtifactCheck(check, state) {
       // satisfy a grep meant for, say, test files.
       const pathRe = check.pathPattern ? new RegExp(check.pathPattern) : null;
       const scoped = pathRe ? state.files.filter((f) => pathRe.test(f)) : state.files;
-      const hit = scoped.find((f) => {
-        const content = readFileSafe(state.fixtureDir, f);
-        return content !== null && re.test(content);
-      });
+      const matched = new Map(
+        scoped.map((f) => {
+          const content = readFileSafe(state.fixtureDir, f);
+          return [f, content === NOT_REGULAR || content === null ? content : re.test(content)];
+        }),
+      );
+      const special = scoped.find((f) => matched.get(f) === NOT_REGULAR);
+      if (special) return notRegular(check, special);
+      const hit = scoped.find((f) => matched.get(f) === true);
       const present = Boolean(hit);
       const ok = check.type === "repo_grep" ? present : !present;
       return { check, ok, detail: hit ? `matched ${hit}` : "no match" };
@@ -746,7 +785,7 @@ export function evaluateArtifactCheck(check, state) {
     case "test_command_passes": {
       const command = (check.command ?? DEFAULT_TEST_COMMAND).trim();
       const [cmd, ...args] = command.split(/\s+/);
-      const timeoutMs = state.testTimeoutMs ?? DEFAULT_POST_SESSION_TIMEOUT_MS;
+      const timeoutMs = remainingMs(state.deadline ?? Date.now() + DEFAULT_POST_SESSION_TIMEOUT_MS);
       // Model-written code: the credential-free base env, never the runner's own;
       // `node` is the running node by absolute path, not a PATH lookup; output is
       // discarded; and a hung test is killed at the timeout.
