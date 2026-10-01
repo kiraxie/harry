@@ -1018,7 +1018,12 @@ function swapFixtureScript(binDir: string, target: string): string {
     [
       'import { renameSync, symlinkSync } from "node:fs";',
       "const here = process.cwd();",
-      'renameSync(here, here + "-moved");',
+      "try {",
+      '  renameSync(here, here + "-moved");',
+      "} catch (e) {",
+      "  console.error(`swap failed: ${e.code} ${e.syscall}`);",
+      "  process.exit(1);",
+      "}",
       `symlinkSync(${JSON.stringify(target)}, here);`,
     ].join("\n"),
   );
@@ -3802,7 +3807,7 @@ test(
       assert.equal(readFileSync(path.join(victim.dir, ".git", "config"), "utf8"), victim.config);
       // The jail does not let the session write its fixture's parent, so the rename
       // itself is denied and the trial errors before anything is judged.
-      assert.match(String(lines[0].error), /code: 'EPERM',\s+syscall: 'rename'/);
+      assert.match(String(lines[0].error), /swap failed: EPERM rename$/);
       assert.equal(lines[0].checkOutcomes, undefined, "nothing was judged");
     } finally {
       rmSync(binDir, { recursive: true, force: true });
