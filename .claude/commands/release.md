@@ -84,10 +84,9 @@ its stderr and stop. On exit 0 it prints one state:
 - `bumped-not-tagged` → **Phase B**.
 
 **Check for an undeclared field** before entering Phase A or Phase B; every other
-state has stopped by now. Take the latest tag's version — the highest strict
-`v<x.y.z>` tag, the rule the state script uses:
-`git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1` —
-and list the tracked files that contain it as a whole version:
+state has stopped by now. Take the latest tag's version from the state script,
+`node .claude/scripts/release-state.mjs latest-tag` (it prints `none` when there is
+no tag yet), and list the tracked files that contain it as a whole version:
 `git grep -lE '(^|[^0-9.])<latest>($|[^0-9.])'`. In this pattern and in every
 other version pattern below, write each dot of the version as `\.`. The boundary is
 the state script's own: no digit or dot on either side, so `v0.22.0` counts and
@@ -111,11 +110,11 @@ comes up.
    `git log v<latest>..HEAD --oneline` (the whole history when there is no tag yet).
    Draft a `## [<version>] - <YYYY-MM-DD>` entry in the file's existing style, show it,
    and **wait for approval or edits before writing it**.
-2. **Fields.** The current version is the latest tag's version (with no tag yet, the
-   version the field holds now). For each declared field, count the lines holding it
-   as a whole version first: `grep -cE '(^|[^0-9.])<current>($|[^0-9.])' <file>`.
-   Replace it only when the count is
-   **exactly 1**; any other count means a plain replace would also touch something
+2. **Fields.** The current version is the latest tag's version (`latest-tag`; with
+   no tag yet, the version the field holds now). For each declared field, count the
+   lines holding it as a whole version first:
+   `grep -cE '(^|[^0-9.])<current>($|[^0-9.])' <file>`. Replace it only when the count
+   is **exactly 1**; any other count means a plain replace would also touch something
    else (a dependency range, a history note), so stop and resolve that file by hand.
 3. **Build**, when one is declared.
 4. **Verify** with the checks (see **The checks** above). Any failure → stop, do not
@@ -145,5 +144,5 @@ so — the tag must point at a commit the default branch holds.
 3. **Ask before pushing** — it is outward-facing. On approval:
    `git push origin <default-branch> --follow-tags`, which sends the branch and the
    new annotated tag together, never a tag for a commit the remote lacks.
-4. **Report:** `git tag --sort=-v:refname | head -1` now reads `v<version>`. If CI
-   runs on tags, watch that run to completion and report it.
+4. **Report:** `node .claude/scripts/release-state.mjs latest-tag` now prints
+   `<version>`. If CI runs on tags, watch that run to completion and report it.

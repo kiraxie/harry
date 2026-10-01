@@ -1021,7 +1021,7 @@ function swapFixtureScript(binDir: string, target: string): string {
       "try {",
       '  renameSync(here, here + "-moved");',
       "} catch (e) {",
-      "  console.error(`swap failed: ${e.code} ${e.syscall}`);",
+      '  console.error("swap failed: " + e.code + " " + e.syscall);',
       "  process.exit(1);",
       "}",
       `symlinkSync(${JSON.stringify(target)}, here);`,

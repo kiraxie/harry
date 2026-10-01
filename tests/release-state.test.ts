@@ -223,6 +223,17 @@ describe("a tag-only repo (no fields, no CHANGELOG)", () => {
   test("latestTag picks the highest semver v-tag, ignoring other tags", () => {
     assert.equal(latestTag(dir), "0.3.1");
   });
+  test("latest-tag prints the version latestTag picks", () => {
+    assert.deepEqual(cli(dir, "latest-tag"), { code: 0, stdout: "0.3.1", stderr: "" });
+  });
+  test("latest-tag with any argument is a usage error, never a printed state", () => {
+    for (const extra of [["extra"], ["--field", "main.go"], ["--start", "HEAD"]]) {
+      const r = cli(dir, "latest-tag", ...extra);
+      assert.equal(r.code, 1, extra.join(" "));
+      assert.equal(r.stdout, "", extra.join(" "));
+      assert.match(r.stderr, /latest-tag takes no arguments/, extra.join(" "));
+    }
+  });
   test("a newer version is not-bumped", () => {
     assert.deepEqual(cli(dir, "0.3.2"), { code: 0, stdout: "not-bumped", stderr: "" });
   });
@@ -251,6 +262,9 @@ describe("a tag-only repo (no fields, no CHANGELOG)", () => {
 describe("a repo with no tag yet", () => {
   const { dir, git } = fixture();
   git("commit", "-q", "--allow-empty", "-m", "init");
+  test("latest-tag prints none", () => {
+    assert.deepEqual(cli(dir, "latest-tag"), { code: 0, stdout: "none", stderr: "" });
+  });
   test("any valid version is not-bumped", () => {
     assert.equal(latestTag(dir), null);
     assert.equal(cli(dir, "0.1.0").stdout, "not-bumped");
@@ -471,6 +485,12 @@ test("the subject release.md's Phase A commits under is the script's bump subjec
   const { dir, git } = fieldRepo();
   git("commit", "-q", "--allow-empty", "-m", subject);
   assert.equal(gitBumpCommitExists(dir, "9.8.7"), true);
+});
+
+test(".claude/commands/release.md takes the latest tag from the script, not a git tag pipeline", () => {
+  const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
+  assert.ok(md.includes(`node ${path.relative(repoRoot, SCRIPT)} latest-tag`));
+  assert.doesNotMatch(md, /git tag (-l|--list|--sort)|git describe/);
 });
 
 test(".claude/commands/release.md greps with the script's token boundary, never grep -w", () => {

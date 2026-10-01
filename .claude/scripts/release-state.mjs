@@ -90,9 +90,11 @@ export function fieldHoldsTarget(repoRoot, fields, version) {
   return fields.some((field) => token.test(readFileSync(resolve(repoRoot, field), "utf8")));
 }
 
+const repoRootOfCwd = () => git(process.cwd(), ["rev-parse", "--show-toplevel"]).trim();
+
 export function run(targetVersion, fields = [], repoRoot, start) {
   if (typeof targetVersion !== "string" || !SEMVER_RE.test(targetVersion)) return "invalid-version";
-  const root = repoRoot ?? git(process.cwd(), ["rev-parse", "--show-toplevel"]).trim();
+  const root = repoRoot ?? repoRootOfCwd();
   return detectState({
     latestTag: latestTag(root),
     targetVersion,
@@ -115,7 +117,7 @@ function parseArgs(argv) {
     else if (flag === "--start" && value !== undefined) start = value;
     else {
       throw new Error(
-        `unexpected argument: ${flag} (usage: <version> [--field <path>]... [--start <ref>])`,
+        `unexpected argument: ${flag} (usage: <version> [--field <path>]... [--start <ref>] | latest-tag)`,
       );
     }
     i++;
@@ -125,8 +127,14 @@ function parseArgs(argv) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   try {
-    const { target, fields, start } = parseArgs(process.argv.slice(2));
-    console.log(run(target, fields, undefined, start));
+    const argv = process.argv.slice(2);
+    if (argv[0] === "latest-tag") {
+      if (argv.length > 1) throw new Error("latest-tag takes no arguments");
+      console.log(latestTag(repoRootOfCwd()) ?? "none");
+    } else {
+      const { target, fields, start } = parseArgs(argv);
+      console.log(run(target, fields, undefined, start));
+    }
   } catch (err) {
     process.stderr.write(`release-state: ${err.message}\n`);
     process.exit(1);
