@@ -5,7 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.24.0] - 2026-10-01
+
+### Added
+
+- **`/audit` dimension 11, low-value tests.** It flags tests that guard nothing, or that
+  replay a contract a stronger test already proves. Each finding carries a
+  `retention_check`: what the test detects, any retained contract it guards (a test
+  that guards one stays), the test-only seams deleting it lets go, and a proof of one
+  of two kinds — `owner-proves` (a keeper test plus the mutation that must turn it
+  red) or `guards-nothing` (the reason). The audit stays read-only; the report hands
+  this evidence to whoever deletes the test.
+- **Test-ownership rules in `references/red-green.md`**: one owner per contract, no
+  test-only production seams, and four patterns that pass without guarding anything.
+  `executing` reads them before writing a test, and both review lanes judge tests by
+  them.
+
+### Changed
+
+- **The `/audit` findings validator is stricter.** It refuses, at load, a schema using
+  a keyword, value or placement it does not interpret, and one missing a name its
+  semantic layer reads. Each keyword it supports is declared once, so a keyword cannot
+  be declared without being enforced.
 
 ### Removed
 
