@@ -415,7 +415,16 @@ describe("a field holds the target only as a whole version token", () => {
   });
   test("a bump subject matches its version exactly, dots included", () => {
     const { dir, git } = tokenRepo();
-    git("commit", "-q", "--allow-empty", "-m", "chore(release): bump version to 1x2x3");
+    // The body line gets the commit past git's literal prefilter, so the subject regex decides.
+    git(
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "chore(release): bump version to 1x2x3",
+      "-m",
+      "chore(release): bump version to 1.2.3",
+    );
     assert.equal(gitBumpCommitExists(dir, "1.2.3"), false);
   });
   test("a v-prefixed field counts as holding the version", () => {
