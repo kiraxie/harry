@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] - 2026-10-01
+
+### Fixed
+
+- **Behavioral eval runner (`scripts/run-evals.mjs`): a session can no longer wedge
+  judging.** Judging runs under one post-session deadline that every git call and the
+  test command share, and file checks fail on a FIFO, device or socket instead of
+  blocking on it; a directory still reads as missing. A failing `git -c … init` now
+  names `init` rather than `-c`.
+- **Repo-local `/release`.** The state script owns the waiting-for-merge state
+  (`--start <ref>`) and the bump subject, defined once and matched on commit subjects
+  only; a field that already holds the target outranks waiting-for-merge. The latest
+  tag comes only from a new `latest-tag` subcommand, and the undeclared-field check
+  runs after classification.
+
 ## [0.24.0] - 2026-10-01
 
 ### Added
