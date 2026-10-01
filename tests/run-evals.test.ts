@@ -1382,6 +1382,24 @@ test("runEvals --agentic: a session that adds .git/commondir gets the trial refu
   }
 });
 
+test("materializeFixture: a failing git init names the subcommand, not -c", () => {
+  const root = tmpDir("harry-evals-fxroot-");
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    const failingGit = path.join(binDir, "git");
+    writeFileSync(failingGit, "#!/bin/sh\necho 'fatal: no init today' >&2\nexit 7\n", {
+      mode: 0o755,
+    });
+    assert.throws(
+      () => materializeFixture("tiny-node", root, process.env, failingGit),
+      /^Error: git init failed \(exit 7\): fatal: no init today$/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
 test("materializeFixture: refuses an unknown fixture name", () => {
   assert.throws(() => materializeFixture("no-such-fixture", os.tmpdir()), /unknown fixture/);
 });
@@ -3116,6 +3134,7 @@ function runJailedTrial(
   binDir: string,
   fxRoot: string,
   extraEnv: Record<string, string> = {},
+  extraOpts: Record<string, unknown> = {},
 ): Record<string, unknown>[] {
   const env = {
     ...authFreeEnv(),
@@ -3132,10 +3151,47 @@ function runJailedTrial(
       cases: ["agentic-isolate-branch"],
       out: path.join(binDir, "o.jsonl"),
       agentic: true,
+      ...extraOpts,
     },
     env,
   ).lines;
 }
+
+test(
+  "runEvals --agentic under EVALS_SANDBOX=1: a post-session step wedged past its grace is cut off",
+  DARWIN_ONLY,
+  () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const fxRoot = tmpDir("harry-evals-fxroot-");
+    try {
+      // The session turns a file git must read into a FIFO, so the jailed step's git
+      // calls block until the runner kills the step. A detached holder keeps the FIFO
+      // open for 25s, then removes it and closes: a blocked git reads EOF and a later one
+      // finds no FIFO, so nothing outlives the test, and a runner with no timeout fails
+      // this test instead of hanging it.
+      const holder =
+        'const fs = require("node:fs"); const fd = fs.openSync(process.argv[1], "r+"); ' +
+        "setTimeout(() => { fs.rmSync(process.argv[1], { force: true }); fs.closeSync(fd); }, 25000);";
+      const script = path.join(binDir, "wedge.mjs");
+      writeFileSync(
+        script,
+        'import { execFileSync, spawn } from "node:child_process";\n' +
+          'const fifo = ".git/objects/info/alternates";\n' +
+          'execFileSync("mkfifo", [fifo]);\n' +
+          `spawn(process.execPath, ["-e", ${JSON.stringify(holder)}, fifo], ` +
+          '{ detached: true, stdio: "ignore" }).unref();\n',
+      );
+      installFakeClaude(binDir, undefined, { script, callsInConfigDir: true });
+      const started = Date.now();
+      const lines = runJailedTrial(binDir, fxRoot, {}, { postSessionTimeoutMs: 1000 });
+      assert.match(String(lines[0].error), /the jailed post-session step timed out after 16000ms/);
+      assert.ok(Date.now() - started < 24000, "the runner did not wait on the wedged git");
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(fxRoot, { recursive: true, force: true });
+    }
+  },
+);
 
 function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -3547,9 +3603,9 @@ test(
       });
       const lines = runJailedTrial(binDir, fxRoot);
       assert.equal(readFileSync(path.join(victim.dir, ".git", "config"), "utf8"), victim.config);
-      // The jail no longer lets the session write its fixture's parent, so the rename
-      // itself is denied; either way the trial errors and nothing is judged.
-      assert.ok(lines[0].error, "the trial errored");
+      // The jail does not let the session write its fixture's parent, so the rename
+      // itself is denied and the trial errors before anything is judged.
+      assert.match(String(lines[0].error), /code: 'EPERM',\s+syscall: 'rename'/);
       assert.equal(lines[0].checkOutcomes, undefined, "nothing was judged");
     } finally {
       rmSync(binDir, { recursive: true, force: true });

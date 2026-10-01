@@ -196,7 +196,7 @@ function requireOnPath(name, env, what = name) {
   return found;
 }
 
-function git(args, cwd, env = process.env, gitBin = requireOnPath("git", env)) {
+function git(args, cwd, env = process.env, gitBin = requireOnPath("git", env), config = []) {
   // A second layer for three known command hooks: gpg signing (would prompt/fail
   // headless), hooks (an empty hooksPath disables them) and fsmonitor (a command git
   // runs on index refresh) are switched off per call. It is not a complete list — a
@@ -210,6 +210,7 @@ function git(args, cwd, env = process.env, gitBin = requireOnPath("git", env)) {
     "core.hooksPath=",
     "-c",
     "core.fsmonitor=false",
+    ...config.flatMap((setting) => ["-c", setting]),
     ...args,
   ];
   try {
@@ -500,6 +501,12 @@ function runPostSession(payload, jail, env) {
       killSignal: "SIGKILL",
     });
   } catch (err) {
+    // DEBT: SIGKILL reaches only the direct child; a process the step started (a git
+    // call, or a test the session wrote) is orphaned, and one blocked on a FIFO the
+    // session planted never exits. Ceiling: a trusted, maintainer-run gate, where a
+    // stuck process costs the operator a kill, not a leak. Upgrade path: spawn the child
+    // detached and kill its process group on timeout; a setsid'd test still escapes
+    // the group (see judgeFixture), so pair it with a per-trial reaper.
     if (err?.code === "ETIMEDOUT") {
       throw new Error(
         `the jailed post-session step timed out after ${payload.timeoutMs + POST_SESSION_GRACE_MS}ms`,
@@ -549,7 +556,7 @@ export function materializeFixture(
   cpSync(src, dir, { recursive: true });
   // `-b main` isn't portable to older git; set the default branch via config so
   // the initial branch name is deterministic. We still read it back below.
-  git(["-c", "init.defaultBranch=main", "init"], dir, env, gitBin);
+  git(["init"], dir, env, gitBin, ["init.defaultBranch=main"]);
   // Pin the identity in the repo's LOCAL config too, so any committer in this repo
   // has one even if its env does not (a machine with no git identity, such as a CI
   // runner, fatals on auto-detect).
@@ -959,7 +966,9 @@ export function resolveAuth(env) {
 //              baseline an empty dir (no CLAUDE.md);
 //   work/    — the text child's cwd, empty, so no project CLAUDE.md is found above it;
 //   fixture/ — the parent a fixture is materialized under (agentic);
-//   tmp/     — the TMPDIR every child of this trial gets.
+//   tmp/     — the TMPDIR of this trial's claude sessions and, when jailed, of its
+//              post-session step and the git and tests it runs; unjailed, the
+//              runner's own git and test-command calls keep the runner's TMPDIR.
 // Nothing is shared between trials, so a jailed session — which may write only its
 // own trial's config, fixture and tmp dirs — can never reach a dir a later trial or
 // an unjailed text case reads.
