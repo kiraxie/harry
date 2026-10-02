@@ -23,12 +23,15 @@ A red line hit (HARRY.md §2) auto-promotes to Major. **Tier sets the interview'
 depth, never its cadence:** both paths ask one question per round, per
 `references/grilling.md`, and both close on the reference's exit gate unabridged — the
 gate itself is never a "lite" version. **Compressed depth** (Standard) still runs the
-interview, just shorter: divergence is brief, since a 2-5-file task's destination is
-usually already legible from the request, so skip extensive adversarial probing unless
-something looks wrong; convergence covers only the frontier this task's scope actually
-raises. **Full depth** (Major) is the complete divergence/convergence in step 2 below.
+interview, just shorter: the opening divergence is brief, since a 2-5-file task's
+destination is usually already legible from the request, so skip extensive adversarial
+probing of the request unless something looks wrong;
+convergence covers only the frontier this task's scope actually raises. The reference's re-walk after every answer
+and design draft, and its design-draft probe, run at every depth — depth sets how far
+each question is pushed, never whether either one runs. **Full depth** (Major) is the
+complete divergence/convergence in step 2 below.
 
-**`/grill` handoff — nothing settled is asked twice.** If a `/grill` session already ran on this idea, its settled decisions and residue manifest replace the interview (Full Flow step 2 / the compressed path's interview-at-compressed-depth step) — do not re-ask what it settled; proceed from its manifest (per `references/grilling.md`'s Handoff). The loop still applies to what the manifest left open: a design pass here that moves the destination fails the reference's third termination condition, and you go back into the interview for the questions that move raises — those only.
+**`/grill` handoff — nothing settled is asked twice without cause.** If a `/grill` session already ran on this idea, its settled decisions and residue manifest replace the interview (Full Flow step 2 / the compressed path's interview-at-compressed-depth step) — do not re-ask what it settled; proceed from its manifest (per `references/grilling.md`'s Handoff). The loop still applies to what the manifest left open: a design pass here that moves the destination fails the reference's third termination condition, and you go back into the interview for the questions that move raises, plus any settled decision a re-walk reopens with its cause (per the reference's Re-walk).
 
 ## Full Flow (Major)
 

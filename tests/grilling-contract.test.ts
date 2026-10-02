@@ -103,6 +103,7 @@ test("AC-1: both /grill doors stay thin pointers", () => {
       /residue manifest/i,
       /one question per round/i,
       /termination condition/i,
+      /re-walk/i,
     ])
       assert.doesNotMatch(
         text,
@@ -405,4 +406,96 @@ test("AC-7: tier gates set depth, and no tier row sets cadence", () => {
     [],
     "a tier row is prescribing interview cadence; only depth belongs here",
   );
+});
+
+// ---------------------------------------------------------------------------
+// AC-8 — the loop re-walks the tree until a pass adds nothing
+//
+// The loop used to run once in practice: the frontier was recomputed from the tree
+// built up front, so an answer that spawned new questions or undercut a settled
+// decision never put anything back on the open list, and condition 1 read as met.
+// The re-walk is what refills the list; "a re-walk that adds nothing" is what
+// condition 1 means; the one-line report is what keeps the user from having to ask.
+
+test("AC-8: grilling.md re-walks the tree after every answer and design draft", () => {
+  const text = read(GRILLING);
+  const rewalk = section(text, GRILLING, "### Re-walk", "### Assumption gate");
+  const pins: [RegExp, string][] = [
+    [
+      /after\s+every\s+answer[^.]*after\s+every\s+design\s+draft/i,
+      "the re-walk no longer fires after every answer and every design draft",
+    ],
+    [/from\s+the\s+destination\s+down/i, "the re-walk no longer starts at the top"],
+    [/reopen that decision[^.]*announce it/i, "a reopened decision is no longer announced"],
+    [
+      /withdraws any AC drafted from that\s+decision/i,
+      "reopening no longer withdraws the AC drafted from the decision",
+    ],
+    [/assumptions\s+list/i, "the re-walk no longer feeds the assumptions list"],
+    [
+      /report every re-walk[^.]*one\s+line/i,
+      "every re-walk is no longer reported to the user in one line",
+    ],
+    [
+      /exit\s+check is itself a re-walk[^.]*before the residue manifest/i,
+      "the exit check is no longer a re-walk run right before the manifest",
+    ],
+    [
+      /design-draft probe both run at every\s+depth/i,
+      "depth may now skip the re-walk or the design-draft probe",
+    ],
+  ];
+  for (const [re, msg] of pins) assert.match(rewalk, re, msg);
+
+  const loop = section(text, GRILLING, "## The loop and its close", "### Re-walk");
+  assert.match(
+    loop,
+    /re-walk that adds\s+nothing/i,
+    "condition 1 no longer requires a re-walk that adds nothing — an open list the " +
+      "agent never refills is empty without anything being settled",
+  );
+  assert.doesNotMatch(
+    rewalk,
+    /adds\s+nothing/i,
+    "the Re-walk section restates condition 1; keep the exit rule in one place",
+  );
+});
+
+test("AC-8: the handoff lets a re-walk reopen a settled decision", () => {
+  // Handoff's "nothing settled is asked again" used to be absolute, which forbade the
+  // reopen the Re-walk section requires — on the /grill → brainstorming path the more
+  // specific rule would win and the one-round bug would survive there.
+  const handoff = read(GRILLING).slice(read(GRILLING).indexOf("## Handoff"));
+  assert.match(
+    handoff,
+    /asked again\*\*\s+unless a re-walk reopens it/i,
+    "the handoff no longer carves out the re-walk reopen",
+  );
+  assert.doesNotMatch(
+    handoff,
+    /never the settled ones again/i,
+    "the handoff forbids the reopen again",
+  );
+  assert.doesNotMatch(read(BRAINSTORMING), /those only/i, `${BRAINSTORMING} forbids the reopen`);
+});
+
+test("AC-8: brainstorming and tier-gates run the re-walk at every depth, by citation", () => {
+  for (const rel of [BRAINSTORMING, TIER_GATES]) {
+    const text = read(rel);
+    assert.match(
+      text,
+      /re-walk[^.]*every\s+depth|every\s+depth[^.]*re-walk/i,
+      `${rel} no longer says the re-walk runs at every depth`,
+    );
+    const uncited = paragraphs(text).filter(
+      (p) => /re-walk/i.test(p) && !p.includes("references/grilling.md"),
+    );
+    assert.deepEqual(uncited, [], `a ${rel} paragraph names the re-walk without citing it`);
+    for (const restated of [/adds\s+nothing/i, /Re-walk:/])
+      assert.doesNotMatch(
+        text,
+        restated,
+        `${rel} restates the re-walk's mechanics; cite ${GRILLING} instead`,
+      );
+  }
 });

@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Grilling no longer stops after one round.** After every answer and every design
+  draft, `references/grilling.md` now re-walks the decision tree from the destination
+  down: new questions go on the open list, a settled decision an answer undercuts is
+  reopened and announced (withdrawing any AC drafted from it), and each re-walk is
+  reported in one line. Termination condition 1 now means an empty open list right
+  after a re-walk that adds nothing, and that last re-walk opens the residue manifest.
+  The re-walk and the design-draft probe run at every depth, Standard included, and
+  a `/grill` handoff no longer forbids reopening what it settled.
+
 ## [0.24.1] - 2026-10-01
 
 ### Fixed

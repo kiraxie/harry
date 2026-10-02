@@ -95,9 +95,9 @@ Two phases, same cadence, different stance.
 
 - Track the **frontier**: every question whose prerequisites are already settled.
   Dependency order already puts parents before children within it.
-- Ask the next frontier question, wait for the answer, **recompute the frontier**, ask
-  the next. A question that depends on one still open stays off the frontier until it
-  resolves.
+- Ask the next frontier question, wait for the answer, **re-walk the tree** (see
+  Re-walk), recompute the frontier, ask the next. A question that depends on one
+  still open stays off the frontier until it resolves.
 
 ## The ledger
 
@@ -127,9 +127,10 @@ own step (see Callers), not this ledger writing itself out.
 
 The session is a loop: **interview → design → re-interview.** One **pass** is one
 trip around that loop — one interview, one design attempt, one re-interview on what
-the design surfaced. A design pass surfaces gaps the interview missed — an
-underspecified interface, a case the design forces a choice on — and each gap sends
-the session back into the interview before the design continues. This is not a
+the design surfaced. A design draft is probed with the divergence stance, not just
+presented: hunt for the gaps the interview missed — an underspecified interface, a
+case the design forces a choice on — and each gap sends the session back into the
+interview before the design continues. This is not a
 fallback path; it is how the loop is expected to run. A non-code session, or one
 settled before any design pass runs, still owes all three conditions below —
 condition 3 is trivially satisfied when no pass has run to move the destination in
@@ -137,8 +138,9 @@ the first place.
 
 **All three termination conditions must hold before the loop exits:**
 
-1. **No open questions** — the open list is empty; a question leaves it by being
-   answered, or by being moved to Deferred.
+1. **No open questions** — the open list is empty right after a re-walk that adds
+   nothing (see Re-walk); a question leaves it by being answered, or by being moved
+   to Deferred. An open list nobody refilled is unchecked, not empty.
 2. **Every silent assumption has a disposition** — every entry on the assumptions list
    carries one of the three dispositions below, not merely a written-down statement.
 3. **The destination did not move during the most recent pass, nor after it** — a pass
@@ -147,6 +149,34 @@ the first place.
    ran leaves that design measured against the old destination, so one more pass runs
    on the new one before the loop may exit. A session that has run no pass satisfies
    this trivially.
+
+### Re-walk — how the open list refills
+
+The decision tree is not fixed once drawn. An answer can spawn questions that did not
+exist before, or undercut a parent that was already settled. So after every answer and
+after every design draft, re-walk the tree from the destination down — the whole tree,
+not just the frontier — and ask of what just changed:
+
+- Does it raise a new question? It goes on the open list.
+- Does it undercut a settled decision? Reopen that decision: move it from Decided back
+  to Open and announce it, the way a destination change is announced: *"reopening X:
+  your answer on Y changes it."* Reopening also withdraws any AC drafted from that
+  decision, and any assumption pinned to that AC goes back to having no disposition.
+  This is the only way a settled decision comes back: never re-asked without a named
+  cause.
+- Does it rest on something nobody asked? It goes on the assumptions list.
+- Does it move the destination? Announce it (see Destination pinning); condition 3
+  then applies.
+
+Report every re-walk to the user in one line, beside the next question, the design
+draft, or the residue manifest: *"Re-walk: 2 new (A, B), reopened C"* or *"Re-walk:
+nothing new."* That line is what keeps the loop running; the user never has to ask for
+another round. New questions still go to the user one per round, per Cadence. The exit
+check is itself a re-walk, run right before the residue manifest, and the manifest
+opens with its line.
+
+The re-walk and the design-draft probe both run at every depth: tier sets how far
+each question is pushed, never whether either one runs.
 
 ### Assumption gate
 
@@ -193,8 +223,9 @@ raised may evaporate.
 When a grilling session produced buildable work, **offer** the handoff rather than
 waiting to be asked. On the user's agreement the settled decisions and the residue
 manifest **carry into the brainstorming pipeline**, where **nothing the manifest settled
-is asked again**. The settled decisions carry over restated as the numbered acceptance
+is asked again** unless a re-walk reopens it (see Re-walk). The settled decisions carry over restated as the numbered acceptance
 criteria; the pipeline builds the item around them rather than deriving them again. The
 loop still runs there on what the manifest did *not* settle: a design pass that moves the
 destination fails termination condition 3, and the session goes back into the interview
-for the questions that move raises — those only, never the settled ones again.
+for the questions that move raises. A settled decision returns only through a re-walk
+reopen, announced with what undercut it.
