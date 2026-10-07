@@ -22,8 +22,8 @@ handed:
 - **The last 20 commits touching the changed paths** — for the history pass below.
 - **Read access to the whole repo** — read callers, neighbours and older code
   freely; the diff alone never shows how a shape fits.
-- **On a later round, the rulings recorded so far** — each **leave as is** with
-  the user's reason, and each **backlog**. Do not raise a ruled finding again
+- **On a later round, the rulings recorded so far** — each **leave as is**
+  record as Output below defines it, and each **backlog**. Do not raise a ruled finding again
   unless the fix changed the shape it concerns.
 
 ## Not your job
@@ -98,8 +98,8 @@ of the same three:
   this review then re-checks the shapes the fix changed.
 - **backlog** — real, but not for this merge. It becomes a new backlog item and
   the merge goes ahead.
-- **leave as is** — the shape stays as it is. The user's reason is recorded, and
-  the finding is not raised again.
+- **leave as is** — the shape stays as it is. Its location, its gist and the user's
+  reason are recorded, and the finding is not raised again.
 
 ```
 ### Shapes reviewed

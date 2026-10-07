@@ -25,8 +25,10 @@ test fail — and would that change be a *bug* or a *decision*? A test only a de
 break guards nothing, yet passes every other gate in this file (it fails when watched,
 uses real code, has a clear name). Corollaries:
 
-- **No mirror assertions** — an expected value computed by the code under test always
-  passes; hard-code the expectation.
+- **No mirror assertions** — an expected value computed by the code under test, or
+  re-derived the way the code derives it (the same formula in the test, a snapshot built by
+  the same steps), always passes. Take it from an independent source: a known-good literal,
+  a worked example, the spec.
 - **No change detectors** — `expect(MAX_RETRIES).toBe(5)` fires on redesign and sleeps
   through bugs; test the behavior the constant controls, not the constant.
 - **Behavior, not text** — never grep a script's or skill's source as a substitute for
@@ -41,8 +43,14 @@ uses real code, has a clear name). Corollaries:
 - **Exercise the promise, not the flag** — a capability test drives the delivery or
   acknowledgement a flag promises; asserting the declared flag restates the config.
 - **Let the owner produce it** — a fixture never supplies the result, ordering or
-  callback the code under test is meant to produce, and persistence is asserted against
-  the store the path actually writes.
+  callback the code under test is meant to produce.
+- **Persistence: read it back through the owner** — assert a write through the module's
+  own read path, so the test survives a storage refactor. Query the store directly in two
+  cases: when the stored shape is itself a contract others read (another service, a
+  migration, a report), since a write and a read that share one bug cancel out through the
+  interface while those readers see the bad data; and when the module has no read path.
+  Either way, assert against the store the path actually writes, never one the fixture
+  filled.
 
 | Quality | Good | Bad |
 |---------|------|-----|
@@ -135,6 +143,9 @@ mutation must make at least one test fail. A mutation no test notices is unteste
 - Test added after implementation
 - Test passes immediately (you never saw it catch anything)
 - Can't explain *why* the test failed
+- All tests written first, then all the code (horizontal slicing) — bulk tests pin the
+  behavior you imagined before building. Work in vertical slices: one test, its minimal
+  code, repeat, each test a tracer bullet aimed by what the last one taught.
 - "I already manually tested it" — a manual run checks one input, once, with your own bias
   about where it works, and nothing re-runs it tomorrow. The suite is what keeps the claim
   true after the next change; ad-hoc poking is not a weaker test, it is the absence of one.

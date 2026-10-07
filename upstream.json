@@ -3,27 +3,27 @@
   "sources": {
     "ponytail": {
       "repo": "https://github.com/DietrichGebert/ponytail",
-      "synced_version": "4.8.4",
-      "synced_commit": "16f29800fd2681bdf24f3eb4ccffe38be3baec6b",
-      "synced_date": "2026-07-27"
+      "synced_version": "4.13.0",
+      "synced_commit": "552acd5efd0aeae2583a12efe39373d2f076f25e",
+      "synced_date": "2026-10-07"
     },
     "mattpocock-skills": {
       "repo": "https://github.com/mattpocock/skills",
-      "synced_version": "1.1.0",
-      "synced_commit": "ed37663cc5fbef691ddfecd080dff42f7e7e350d",
-      "synced_date": "2026-07-27"
+      "synced_version": "1.3.1",
+      "synced_commit": "7a030a8b0dcaa601bb0dda9aaf174affb3d61145",
+      "synced_date": "2026-10-07"
     },
     "anthropics-skills": {
       "repo": "https://github.com/anthropics/skills",
       "synced_version": "none (repo declares no version or tags)",
-      "synced_commit": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
-      "synced_date": "2026-07-27"
+      "synced_commit": "683bc88e56f3e09ba94f7055977f3d3aa499f202",
+      "synced_date": "2026-10-07"
     },
     "openclaw": {
       "repo": "https://github.com/openclaw/openclaw",
-      "synced_version": "2026.9.6",
-      "synced_commit": "4c611618ae4ac940dcacdc89b530f26e46d6106f",
-      "synced_date": "2026-09-29"
+      "synced_version": "2026.9.8",
+      "synced_commit": "f19013d9deec97c8f1d6b4b48c6b05978505ea0a",
+      "synced_date": "2026-10-07"
     }
   },
   "historical_sources": {
@@ -90,12 +90,12 @@
     },
     {
       "skill": "grill",
-      "from": "mattpocock-skills:skills/productivity/grilling + productivity/grill-me + in-progress/batch-grill-me",
-      "note": "references/grilling.md is the single source; commands/grill.md + codex-skills/grill are thin doors; brainstorming points at the same file. Harry SHARES upstream's one-question-at-a-time cadence canon (line 8 of the upstream grilling skill named in `from`) — nothing to restore there. HARRY-AUTHORED, with no upstream counterpart: the residue-manifest exit gate, the assumption dispositions (confirmed fact / returned as an open question / pinned by an AC), and the ledger (decided/open/deferred/assumptions) it reads out from; also no question caps (upstream's own out-of-scope ruling). batch-grill-me sits under in-progress/ — its path may move when upstream graduates it."
+      "from": "mattpocock-skills:skills/productivity/grilling + productivity/grill-me",
+      "note": "references/grilling.md is the single source; commands/grill.md + codex-skills/grill are thin doors; brainstorming points at the same file. DELIBERATE CADENCE DEVIATION: upstream's grilling (v1.3.x) asks the whole frontier per round and folded its former batch-grill-me into that default; harry keeps one question per round, because the user runs several sessions at once and returns to a thread cold, where one question is answerable and a round of four is not. Upstream's round layout (numbered question, recommendation, rule between) is borrowed only for a batch the user explicitly asks for — don't 'restore' the batched default. HARRY-AUTHORED, with no upstream counterpart: the residue-manifest exit gate, the assumption dispositions (confirmed fact / returned as an open question / pinned by an AC), and the ledger (decided/open/deferred/assumptions) it reads out from; also no question caps (upstream's own out-of-scope ruling)."
     },
     {
       "skill": "root-cause-tracing / skill-authoring / red-green / brainstorming (partial)",
-      "from": "mattpocock-skills:skills/engineering/diagnosing-bugs + productivity/writing-great-skills + engineering/prototype (seams)",
+      "from": "mattpocock-skills:skills/engineering/diagnosing-bugs + productivity/writing-for-agents (formerly writing-great-skills) + engineering/prototype (seams)",
       "note": "Secondary distills from the same 2026-07 survey: loop-first debugging discipline into references/root-cause-tracing.md; authoring vocabulary into .claude/references/skill-authoring.md; prototype decision aid into brainstorming; seam pre-agreement into references/red-green.md."
     },
     {
@@ -122,6 +122,21 @@
       "skill": "audit (partial)",
       "from": "openclaw:.agents/skills/test-audit/SKILL.md",
       "note": "2026-09-29 port of the test-audit skill's pruning method into references/audit dimension 11 (low-value tests), not a standalone command: retention bar (contract tests stay; static or slow is no reason; a failing test is a bug report), per-candidate evidence enforced as the findings schema's retention_check by validate-findings.cjs, confidence over count, and the owner mutation recorded in retention_check. Deviations kept: /audit stays read-only, so the preservation mutation runs in the unit that deletes, not in the audit; campaign mode (CAMPAIGN.md: lanes, R/F/C/D ledger) skipped as speculative at harry's scale."
+    },
+    {
+      "skill": "root-cause-tracing / red-green / audit / brainstorming / skill-authoring (partial, 2026-10 re-sync)",
+      "from": "mattpocock-skills:skills/engineering/diagnosing-bugs + engineering/tdd + engineering/codebase-design + engineering/prototype + productivity/writing-for-agents + engineering/retro",
+      "note": "v1.3.1 re-sync adaptations: redact-before-showing section (root-cause-tracing.md); independent expected values, horizontal-slicing red flag, read-back persistence with its two direct-store exceptions (red-green.md — the exceptions are harry's: upstream bans the direct query outright, which lets symmetric write/read bugs through); deletion test in /audit dimension 10; HTML-file prototype (brainstorming); context-pointer wording, environment-as-cache, completion-criterion demand, scope widened to always-loaded docs, and retro's mechanical-violation-to-deterministic-check row in (c) (skill-authoring.md). Skipped: co-location, router skills, the codebase-design vocabulary itself (its own backlog item), the GLOSSARY.md convention."
+    },
+    {
+      "skill": "pr-body / plain-language (show the structure)",
+      "from": "mattpocock-skills:skills/engineering/pr (its Summary visual menu credits Dex Horthy's show-me, humanlayer/humanlayer, MIT)",
+      "note": "2026-10 adaptation: references/pr-body.md holds the Summary / Evidence / Merge Danger template that finishing's PR draft follows; the visual principle lives once as plain-language's 'Show the structure' bullet and pr-body.md points to it. Rephrased; the GLOSSARY.md line is dropped (harry keeps no glossary)."
+    },
+    {
+      "skill": "review numbering",
+      "from": "ponytail:skills/ponytail-review + ponytail-audit",
+      "note": "2026-10: findings numbered straight across severities (references/review-rubric.md) and finishing's rulings list numbered, so a ruling cites a number. Skipped: the reuse: tag (audit dimension 2 covers it) and grep-before-delete (dimension 6 + the SUBSTRATE TEST cover it)."
     },
     {
       "skill": "init",

@@ -74,7 +74,20 @@ picker and no numbering, so there is nothing for a harness to do differently.
 **Batching is opt-in only**, on the user's explicit request, never a default. The
 reason: the user runs several agent sessions at once and returns to a thread after
 being away — a round of four unanswered questions is unanswerable cold, one question
-is not.
+is not. When the user does ask for a batch, the round is every frontier question at
+once, each numbered and carrying its recommendation, separated by a rule:
+
+```
+❓ **Q1** - **<question title>**: <question body, with any choices>
+
+➡️ <recommended answer>
+
+---
+
+❓ **Q2** - **<question title>**: <question body, with any choices>
+
+➡️ <recommended answer>
+```
 
 **No question-count caps** on the interview as a whole. Too many questions is a quality
 problem, not a quantity problem; the user steering in natural language ("wrap up") is

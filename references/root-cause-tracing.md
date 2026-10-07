@@ -9,6 +9,23 @@ caller still broken.
 source.** The lazy fix *is* the root-cause fix — one guard in the shared function is a smaller
 diff than a guard in every caller.
 
+## Mask at the source
+
+A debugging session runs commands, prints outputs and opens captured artifacts, and an
+agent reads each one the moment it runs: a secret in that output is already in the
+transcript, and a secret there is a secret to rotate (HARRY.md §5). Redacting it later in a
+reply is too late, so mask before you look:
+
+- Loops take credentials from environment variables; the command names the variable, never
+  the value.
+- Outputs and logs pass through a masking filter (`sed`, `jq`, a header-stripping step)
+  that swaps every secret for `<REDACTED>` before anything reaches the screen.
+- From a HAR, log dump or request capture, `grep` out just the status, error and timing
+  lines you need — never open the whole file, whose headers and cookies hold live tokens.
+
+When the masked view hides what you need to diagnose, stop and tell the user which part is
+missing; let them read that part and pass on what matters.
+
 ## Before you trace: build a red loop
 
 Tracing to that source is *downstream* of a feedback loop that goes red on the bug. **The gate:
@@ -51,8 +68,8 @@ keep raising the rate until it is.
 ### When you genuinely cannot build a loop
 
 **Stop and say so.** List what you tried, then ask for one of: the environment that reproduces
-it, a captured artifact (HAR, log dump, core dump, timestamped recording), or permission for
-temporary instrumentation. Never hypothesise without a loop.
+it, a redacted captured artifact (HAR, log dump, core dump, timestamped recording), or
+permission for temporary instrumentation. Never hypothesise without a loop.
 
 ## When to use
 

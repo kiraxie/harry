@@ -357,6 +357,58 @@ test("AC-4: CLAUDE.md's grill bullet describes the shipped cadence", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Opt-in batch: the round format lives inside the opt-in rule and nowhere else
+//
+// Upstream's grilling skill made a round of every frontier question its default. Harry
+// keeps one question per round and lends upstream's round layout only to a batch the user
+// asked for. The layout appearing anywhere else — a caller, a door, the laws — is a
+// default batch returning under a format instead of a word, which the cadence scan above
+// cannot see.
+
+/** A question line of the round layout, with or without its emoji: `❓ **Q1** - **title**`. */
+const ROUND_FORMAT_RE = /(?:❓\s*)?\*\*Q\d+\*\*\s*[-–—:]\s*\*\*/;
+const OPT_IN_START = "**Batching is opt-in only**";
+const OPT_IN_END = "**No question-count caps**";
+
+test("round format: the pattern matches upstream's layout", () => {
+  assert.ok(ROUND_FORMAT_RE.test("❓ **Q1** - **<question title>**: <question body>"));
+  assert.ok(ROUND_FORMAT_RE.test("**Q2** - **<question title>**: <question body>"));
+  assert.ok(ROUND_FORMAT_RE.test("**Q3** — **<question title>**: <question body>"));
+  assert.ok(!ROUND_FORMAT_RE.test("Ask one question at a time"));
+  assert.ok(!ROUND_FORMAT_RE.test("**Q&A** notes"));
+});
+
+test("round format: grilling.md's opt-in rule shows the layout for a requested batch", () => {
+  const optIn = section(read(GRILLING), GRILLING, OPT_IN_START, OPT_IN_END);
+  assert.match(optIn, ROUND_FORMAT_RE, "the opt-in rule no longer shows a numbered question");
+  assert.match(optIn, /➡️/, "the layout no longer pairs each question with a recommendation");
+  assert.match(optIn, /^---$/m, "the layout no longer separates questions with a rule");
+});
+
+test("round format: no other model-instructing file carries the layout", () => {
+  const offenders: string[] = [];
+  for (const rel of cadenceCorpus()) {
+    const text = read(rel);
+    // Lines of grilling.md's opt-in rule are skipped, not cut, so every offender
+    // keeps its real line number.
+    let allowed = [0, 0];
+    if (rel === GRILLING) {
+      // trimEnd: the section runs up to the end marker, so its last newline would
+      // otherwise stretch the range onto the marker's own line.
+      const optIn = section(text, rel, OPT_IN_START, OPT_IN_END).trimEnd();
+      const first = text.slice(0, text.indexOf(optIn)).split("\n").length;
+      allowed = [first, first + optIn.split("\n").length - 1];
+    }
+    text.split("\n").forEach((line, i) => {
+      const n = i + 1;
+      if (n >= allowed[0] && n <= allowed[1]) return;
+      if (ROUND_FORMAT_RE.test(line)) offenders.push(`${rel}:${n}`);
+    });
+  }
+  assert.deepEqual(offenders, [], "the round layout outside grilling.md's opt-in rule");
+});
+
+// ---------------------------------------------------------------------------
 // AC-7 — tier sets the interview's DEPTH, never its cadence
 //
 // Compressed depth is defined in two files, and these three phrases are the contract

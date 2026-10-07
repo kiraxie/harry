@@ -159,7 +159,7 @@ test("AC-3: the reviewer is handed every input", () => {
     ],
     [/and read access to the whole repo\./, "read access to the whole repo"],
     [
-      /On a later round, also hand it every ruling recorded so far — each leave as is with the user's reason, and each backlog/,
+      /On a later round, also hand it every ruling recorded so far — each leave as is record as references\/architecture-review\.md's Output defines it, and each backlog/,
       "the prior rulings on a later round",
     ],
   ];
@@ -219,7 +219,7 @@ test("AC-3: the architecture-review reference lists the same inputs the step han
     [/The last 20 commits touching the changed paths/, "the last 20 commits"],
     [/Read access to the whole repo/, "the whole repo"],
     [
-      /On a later round, the rulings recorded so far.*?Do not raise a ruled finding again unless the fix changed the shape it concerns\./,
+      /On a later round, the rulings recorded so far — each leave as is record as Output below defines it, and each backlog\. Do not raise a ruled finding again unless the fix changed the shape it concerns\./,
       "the prior rulings, and not re-raising them",
     ],
   ];
@@ -466,8 +466,8 @@ test("AC-5: backlog opens a new item quoting the finding", () => {
 test("AC-5: leave as is records the reason and is not raised again", () => {
   assert.match(
     step2("Rulings."),
-    /- leave as is → the ruling and the user's reason go to ## Progress; handed to the reviewer on any later round, so the finding is not raised again\./,
-    "leave as is no longer records the reason, or the finding may be raised again",
+    /- leave as is → the ruling goes to ## Progress as the record references\/architecture-review\.md's Output defines — a number names a finding in one list only; handed to the reviewer on any later round, so the finding is not raised again\./,
+    "leave as is no longer records the reason and the finding's location and gist, or the finding may be raised again",
   );
 });
 
@@ -533,5 +533,20 @@ test("AC-6: the CHANGELOG records the architecture review", () => {
     changelog,
     /references\/architecture-review\.md/,
     "the CHANGELOG no longer names the architecture-review reference",
+  );
+});
+
+test("the leave-as-is record's fields are listed once, in the architecture-review Output", () => {
+  const plainText = (rel: string): string => read(rel).replace(/\s+/g, " ").replace(/\*+|`/g, "");
+  for (const rel of ["references/architecture-review.md", "skills/finishing/SKILL.md"])
+    assert.doesNotMatch(
+      plainText(rel),
+      /leave as is (?:as recorded — location|with the user's reason|→ the ruling, the user's reason)/,
+      `${rel} re-lists the leave-as-is record's fields instead of citing the Output definition`,
+    );
+  assert.match(
+    plainText("references/architecture-review.md"),
+    /leave as is — the shape stays as it is\. Its location, its gist and the user's reason are recorded/,
+    "the Output no longer defines the leave-as-is record's fields",
   );
 });

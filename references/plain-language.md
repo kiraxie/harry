@@ -61,6 +61,11 @@ same violation as an undefined term, just wearing plain words.
 - **Audience: a capable adult who has not read this codebase.** Assume competence,
   not context — never assume they know this project's structure, only what a
   competent generalist already knows walking in.
+- **Show the structure.** When the point is a structure — a call flow, a file layout, a
+  state change, what a change adds to one of them — the smallest visual that answers
+  the reader's current question says it faster than prose: a short tree, a few lines
+  of pseudocode, a diff of the structure. Put it beside the sentence it supports, and keep
+  only the calls, files and states that question needs.
 
 ### Applying it — a worked example
 

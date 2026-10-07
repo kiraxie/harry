@@ -95,6 +95,11 @@ dimension 6) cross-referenced with low fan-in counts from the dependency graph;
 churn (an abstraction nobody has touched since it was added is a stronger signal
 than one under active use).
 
+**Deletion test** for a module that may be shallow: picture the codebase without it.
+When nothing it does has to be rewritten elsewhere, it was only passing calls through —
+a candidate, which still needs the Bar's named cost below. When each caller would have to
+take back the work it hides, it pays for itself — no finding.
+
 **Bar:** Same falsifiability anchor as every other dimension — a deletion
 recommendation still needs a named cost, or it's taste. "This `Strategy` interface
 has had exactly one implementation for 8 months; the next reader has to trace an

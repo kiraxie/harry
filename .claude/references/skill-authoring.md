@@ -55,6 +55,7 @@ first:
 | Complies, but output has the wrong shape (bloated, buried verdict, restated spec) | Positive recipe/contract: state what the output IS — its parts, in order | Prohibition list ("don't restate", "never narrate") |
 | Omits a required element it already produces | Structural: a REQUIRED field/slot in the template | Prose reminders near the template |
 | Behavior should depend on a condition | Conditional keyed to an observable predicate | Unconditional rule + exemption clauses |
+| Violation is mechanical (a fixed syntactic pattern, banned API, import shape, file location) | Deterministic check: a lint rule, hook, or test | A prose rule of any form |
 
 **Prohibitions backfire on output-shape problems.** Under a competing incentive, agents
 negotiate with "don't X" and produce *more* of the unwanted content — a recipe leaves nothing to
@@ -91,11 +92,22 @@ should-not-trigger queries. A negative sharing no surface with the skill ("write
 against a PDF skill) tests nothing — negatives must be near-misses. A simple one-step task
 won't load a skill however good the description, so don't spend eval budget there.
 
+A description is one kind of **context pointer**: a line held in context that names material
+outside it and says when to reach it. A line in `CLAUDE.md` naming a reference is the same
+object. The pointer's wording, not its target, decides when the agent reaches the material.
+Write **one trigger per branch** — synonyms that rename one case are one branch written twice,
+so collapse them — and cut identity the body already carries. When the agent misses a target it
+must reach, sharpen the pointer's wording first; inline the material only if that fails.
+
 ## (e) Editorial vocabulary — how the prose is written
 
 Sections (a)–(d) verify a skill like code; this axis governs how its text is *written*. Both
 serve one end — **predictability**, the agent taking the same process every run. Sharpen the
 words *after* the baseline test is green, not instead of it.
+
+The same levers apply to every document an agent consumes, not only skills: `HARRY.md`,
+`CLAUDE.md`, `AGENTS.md`, a reference reached by a pointer. An always-loaded one pays context
+load on every word, every turn, so it earns the hardest pruning.
 
 - **Invocation is a cost choice, not a default.** A model-invoked skill spends **context load** —
   its description sits in the window every turn so the agent (or another skill) can reach it on
@@ -113,6 +125,14 @@ words *after* the baseline test is green, not instead of it.
   weak leading word (*be thorough*, when the agent is already thorough-ish) is a no-op — you pay
   load to say nothing. Fix it with a stronger word (*relentless*), not more prose; when a sentence
   fails the test, delete the whole sentence rather than trim words from it.
+- **The environment is a source of truth.** Anything the agent can look up — a command's
+  `--help`, the scripts a manifest defines, how the tree is laid out — goes stale once a
+  document copies it, so let the lookup answer. Spend the words on what no lookup returns: a
+  convention nobody wrote down, why a choice was made, a trap the config files never mention.
+- **Completion criteria carry demand.** Every step ends on a criterion the agent can check, and
+  its wording sets how much work the step forces: "every modified model accounted for" drives
+  digging that "produce a change list" does not. The strongest criteria are checkable and
+  exhaustive.
 - **Negation names the elephant.** *Don't think of an elephant* makes it more available, not less —
   steering by prohibition backfires. Prompt the **positive**: state the target behaviour so the
   banned one is never spoken. Keep a prohibition only as a hard guardrail you can't phrase

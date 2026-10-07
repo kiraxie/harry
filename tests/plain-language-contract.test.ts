@@ -413,3 +413,29 @@ test("AC-6: squash and ledger are pinned in their own contract tests, cited here
     "ledger's defining sentence lost its pin; re-pinning it here would put two regexes on one sentence (HARRY.md §2)",
   );
 });
+
+test("plain-language and pr-body never use 'shape', finishing's term for an API, schema or boundary", () => {
+  for (const rel of [PLAIN_LANGUAGE, "references/pr-body.md"]) {
+    const hits = read(rel)
+      .split("\n")
+      .map((l, i) => [i + 1, l] as const)
+      .filter(([, l]) => /shape/i.test(l))
+      .map(([n, l]) => `${rel}:${n}: ${l.trim()}`);
+    assert.deepEqual(
+      hits,
+      [],
+      "'shape' is finishing's defined term for an API, schema or boundary",
+    );
+  }
+});
+
+test("the visual rule is named 'Show the structure' in plain-language and pr-body", () => {
+  assert.ok(
+    read(PLAIN_LANGUAGE).includes("**Show the structure.**"),
+    "plain-language lost the bullet",
+  );
+  assert.ok(
+    read("references/pr-body.md").includes("**Show the structure**"),
+    "pr-body no longer points to the bullet",
+  );
+});

@@ -82,7 +82,7 @@ never Critical. Acknowledge what was done well before listing issues.
 #### Critical (must fix)
 #### Important (should fix)
 #### Minor (nice to have — item's `## Follow-ups` for final triage)
-[each: file:line · what's wrong · why it matters · structural fix · short-term fix, only when the structural one is not simple]
+[each, numbered 1, 2, 3 … straight across all three severities, so a finding is cited by its number: file:line · what's wrong · why it matters · structural fix · short-term fix, only when the structural one is not simple. A number holds inside one report only; a finding's identity is where it is plus what is wrong]
 
 ### Assessment
 Spec (one line per AC): AC-1 pass / fail / partial / superseded by AC-<m> · evidence read

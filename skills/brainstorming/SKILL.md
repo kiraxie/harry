@@ -54,7 +54,8 @@ The compressed Standard path runs steps 1 → (2 at compressed depth (above) ⇄
 - **`/debate`** — for a Major or genuinely-contested architecture decision at the "propose approaches" step, you MAY suggest convening `/debate` (3 frontier models, surfaces disagreement). User opts in; reserve it for hard calls.
 - **Throwaway prototype** — when a state-model or logic question resists paper
   discussion (the answer needs to be *run*, not argued), offer a minimal throwaway
-  prototype: one command to run, no polish, state printed after every action. It
+  prototype: one command to run (or a single HTML file opened by double-click, which a
+  non-developer can drive and you can share), no polish, state shown after every action. It
   lives on a throwaway branch — main keeps only the validated decision — and is
   exploration under the gate, never grown into the implementation.
 
