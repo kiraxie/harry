@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const ROLES = ["scout", "analyst"];
-const MODEL_ALIASES = new Set(["haiku", "sonnet", "opus"]);
+const ROLES = ["scout", "analyst", "referee"];
+const MODEL_ALIASES = new Set(["haiku", "sonnet", "opus", "fable"]);
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
 // Flat `key: value` YAML frontmatter (all agent frontmatter is flat scalars).
@@ -34,15 +34,17 @@ test("AC-2: every role agent binds an alias model and effort, and neither has ed
     assert.ok(fm.description, `${role}: description required`);
     assert.ok(
       MODEL_ALIASES.has(fm.model ?? ""),
-      `${role}: model must be an alias (haiku|sonnet|opus), got "${fm.model}" — no pinned IDs`,
+      `${role}: model must be an alias (haiku|sonnet|opus|fable), got "${fm.model}" — no pinned IDs`,
     );
     assert.ok(EFFORTS.has(fm.effort ?? ""), `${role}: effort must be one of ${[...EFFORTS]}`);
     if (role === "analyst") {
       assert.equal(fm.model, "opus", "analyst: judgment runs on opus");
       assert.equal(fm.effort, "high", "analyst: judgment runs at high effort");
+    }
+    if (role === "analyst" || role === "referee") {
       const denied = (fm.disallowedTools ?? "").split(",").map((t) => t.trim());
       for (const tool of ["Edit", "Write", "NotebookEdit", "Agent", "Workflow"])
-        assert.ok(denied.includes(tool), `analyst: disallowedTools must include ${tool}`);
+        assert.ok(denied.includes(tool), `${role}: disallowedTools must include ${tool}`);
     } else {
       assert.ok(fm.tools, `${role}: read-only recon must declare a tools allowlist`);
       const granted = (fm.tools ?? "").split(",").map((s) => s.trim());
@@ -72,7 +74,24 @@ test("no role's final-message contract caps its length in lines", () => {
   }
 });
 
-test("AC-2: agents/ holds exactly the two roles", () => {
+test("agents/ holds exactly the three roles", () => {
   const files = readdirSync(ccDir).filter((f) => f.endsWith(".md"));
   assert.deepEqual(files.sort(), ROLES.map((r) => `${r}.md`).sort());
+});
+
+test("referee checks fixes on fable, a different model from the reviewer, by the fix-check reference", () => {
+  const file = path.join(ccDir, "referee.md");
+  assert.ok(existsSync(file), "missing CC agent: agents/referee.md");
+  const fm = readFrontmatter(file);
+  assert.equal(
+    fm.model,
+    "fable",
+    "referee: runs on fable, so its blind spots differ from the opus reviewer's",
+  );
+  assert.equal(fm.effort, "high", "referee: checks at high effort");
+  assert.match(
+    readFileSync(file, "utf-8"),
+    /references\/fix-check\.md/,
+    "referee: no longer points to the fix-check reference that defines its job",
+  );
 });

@@ -1,6 +1,6 @@
 # Codex Role Map — model + effort bindings for HARRY.md §5
 
-HARRY.md §5 dispatches two roles: `scout` reads, `analyst` judges. This table is
+HARRY.md §5 dispatches three roles: `scout` reads, `analyst` judges, `referee` checks fixes. This table is
 Codex's binding of them to a model + reasoning effort. Codex has no per-subagent
 dispatch, so the map is **advisory**: pick the row's model/effort for the work at
 hand via a session profile or `-m` / reasoning-effort config.
@@ -9,8 +9,9 @@ hand via a session profile or `-m` / reasoning-effort config.
 |---|---|---|---|
 | scout | recon / lookup, read-only | `gpt-5.6-luna` | low |
 | analyst | independent judgment: review, debate, audit analysis | `gpt-5.6-luna` | high |
+| referee | fix check before a finding's fix is built | `gpt-5.6-luna` | high |
 
-Writing is the session's own work; run it on the analyst row's model.
+Writing is the session's own work; run it on the analyst row's model. On Codex the referee shares the analyst's model, so its check is independent by process (a separate `codex exec`), not by model.
 
 **Why not `gpt-5.6-sol`:** it is not supported on a ChatGPT login — the run fails
 with a 400 (*"The 'gpt-5.6-sol' model is not supported when using Codex with a

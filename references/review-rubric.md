@@ -92,11 +92,11 @@ Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 ```
 
 **Re-review** (executing step 4) — handed the fix range, the open findings under
-their numbers and the last number in use, the reviewer reports in this form instead — no Strengths section, since it judges only the fix:
+their numbers, the fix check's verdicts and the last number in use, the reviewer reports in this form instead — no Strengths section, since it judges only the fix:
 
 ```
 ### Open findings
-[one line per handed finding, under its handed number: ADDRESSED / NOT ADDRESSED · evidence read — attempted is not addressed]
+[one line per handed finding, under its handed number: ADDRESSED / NOT ADDRESSED · evidence read — attempted is not addressed; ADDRESSED means the cause is gone, not only this instance, judged at the levels the handed verdicts name]
 
 ### New issues
 #### Critical (must fix)

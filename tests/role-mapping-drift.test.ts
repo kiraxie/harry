@@ -16,8 +16,8 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 // The canonical role set — derived ONCE, compared against all three sources below
 // (hoist closure, HARRY.md §2: no per-assertion re-listing).
-const CANONICAL_ROLES = new Set(["scout", "analyst"]);
-const MODEL_ALIASES = ["haiku", "sonnet", "opus"];
+const CANONICAL_ROLES = new Set(["scout", "analyst", "referee"]);
+const MODEL_ALIASES = ["haiku", "sonnet", "opus", "fable"];
 const CODEX_MODEL_RE = /gpt-\d+(\.\d+)?-[a-z]+/i;
 const CODEX_EFFORTS = new Set(["low", "medium", "high", "xhigh"]);
 

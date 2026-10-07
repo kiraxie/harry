@@ -89,10 +89,10 @@ test("the both-verdicts rule names the re-review as its one exception", () => {
 });
 
 test("executing hands the re-review the numbered open list and cites the rubric's form", () => {
-  const wave = line("skills/executing/SKILL.md", "**One fix wave.**");
+  const wave = line("skills/executing/SKILL.md", "exactly one scoped re-review");
   assert.match(
     wave,
-    /handed the open-findings list under its merged-list numbers and the merged list's last number; it reports in the rubric's re-review form \(`references\/review-rubric\.md`\)/,
+    /handed the open-findings list under its merged-list numbers, the fix check's verdicts and the merged list's last number; it reports in the rubric's re-review form \(`references\/review-rubric\.md`\)/,
     "executing no longer hands the numbered open list or cites the rubric's re-review form",
   );
   assert.doesNotMatch(
@@ -104,7 +104,7 @@ test("executing hands the re-review the numbered open list and cites the rubric'
 
 test("two re-review lanes' new issues are merged into one numbering", () => {
   assert.match(
-    line("skills/executing/SKILL.md", "**One fix wave.**"),
+    line("skills/executing/SKILL.md", "exactly one scoped re-review"),
     /When two lanes re-reviewed, merge their new issues as in step 3/,
     "two re-review lanes each number new issues from the same point, and nothing merges them",
   );
@@ -112,8 +112,8 @@ test("two re-review lanes' new issues are merged into one numbering", () => {
 
 test("the Codex lane's re-review is handed the step-3 head and the numbered open list", () => {
   assert.match(
-    line("skills/executing/SKILL.md", "**One fix wave.**"),
-    /The Codex lane's re-review runs with `--base <the head step 3 reviewed>`, its context file carrying the numbered open list and the merged list's last number as facts/,
+    line("skills/executing/SKILL.md", "exactly one scoped re-review"),
+    /The Codex lane's re-review runs with `--base <the head step 3 reviewed>`, its context file carrying, as facts, everything the re-review is handed above/,
     "the Codex re-review lane gets no open list, so it falls back to the fresh form",
   );
 });

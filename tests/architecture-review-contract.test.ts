@@ -403,7 +403,7 @@ test("AC-5: fix now drafts a new AC that supersedes, if any, and never edits app
   const p = step2("Rulings.");
   assert.match(
     p,
-    /fix now → draft a new AC, appended to the item's ### Acceptance criteria and naming the AC it supersedes, if any/,
+    /→ draft a new AC, appended to the item's ### Acceptance criteria and naming the AC it supersedes, if any/,
     "fix now no longer drafts a new AC naming the one it supersedes, if any",
   );
   assert.match(p, /approved AC text is never edited/, "approved AC text may now be edited");
@@ -484,7 +484,7 @@ test("AC-5: with no item (Trivial) rulings go to the reply and fix now fixes in 
   );
   assert.match(
     p,
-    /A fix now ruling means fix it in place, re-run step 1, and re-check the shapes that changed — no AC is drafted\./,
+    /A fix now ruling means fix it in place, with no fix check, re-run step 1, and re-check the shapes that changed — no AC is drafted\./,
     "a Trivial fix now no longer fixes in place without drafting an AC",
   );
   assert.match(p, /backlog still opens a new item\./, "a Trivial backlog no longer opens an item");

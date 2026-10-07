@@ -133,13 +133,16 @@ inside the item's `## Why / What`, and executing builds against them. `reference
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
 skill files themselves short.
 
-`agents/` holds two **role agents**: `scout` (recon, haiku/low, read-only tools) and
+`agents/` holds three **role agents**: `scout` (recon, haiku/low, read-only tools),
 `analyst` (independent judgment — review, architecture review, the debate's opus voice,
-audit analysis — opus/high, no edit or spawn tools). The session writes everything
-itself; it dispatches only these two (HARRY.md §5). The Agent tool takes a model but no
-effort, so a fixed effort needs an agent file. CC namespaces plugin agents, so they
-dispatch as `harry:scout` and `harry:analyst`. `tests/agents.test.ts` enforces the
-invariants (alias models only, no edit or spawn tools; `analyst` keeps Bash and is read-only by instruction).
+audit analysis — opus/high, no edit or spawn tools) and `referee` (fix check, fable/high,
+no edit or spawn tools: checks a finding's fix at three levels before it is built, per
+`references/fix-check.md`, on a different model from the reviewer that proposed it). The
+session writes everything itself; it dispatches only these three (HARRY.md §5). The Agent
+tool takes a model but no effort, so a fixed effort needs an agent file. CC namespaces
+plugin agents, so they dispatch as `harry:scout`, `harry:analyst` and `harry:referee`.
+`tests/agents.test.ts` enforces the invariants (alias models only, no edit or spawn tools;
+`analyst` and `referee` keep Bash and are read-only by instruction).
 
 **Dispatch mechanism is Claude Code only — verified against live Codex 0.144.4.** Codex has
 no per-subagent model/effort mechanism: `codex --help` exposes no subagent dispatch, its

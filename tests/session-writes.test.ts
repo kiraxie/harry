@@ -43,7 +43,7 @@ const plain = (rel: string): string =>
 const EXECUTING = path.join("skills", "executing", "SKILL.md");
 const FINISHING = path.join("skills", "finishing", "SKILL.md");
 
-test("AC-1: HARRY.md has the session write and dispatches only analyst and scout", () => {
+test("AC-1: HARRY.md has the session write and dispatches only its named roles", () => {
   const harry = plain("HARRY.md");
   assert.match(harry, /\| Tier \| Trigger \| brainstorm \| item \| TDD \| review \|/);
   assert.doesNotMatch(harry, /\| execution \|/i);
@@ -106,7 +106,7 @@ test("AC-6: finishing handles no task refs and reviews with analyst", () => {
   assert.match(text, /dispatch ONE harry:analyst/);
 });
 
-test("AC-7: debate, audit, brainstorming and the Codex role map follow the two roles", () => {
+test("AC-7: debate, audit, brainstorming and the Codex role map follow the three roles", () => {
   assert.match(plain(path.join("commands", "debate.md")), /\| opus \| Dispatch harry:analyst/);
   assert.match(
     plain(path.join("references", "audit", "ORCHESTRATION.md")),
@@ -117,7 +117,7 @@ test("AC-7: debate, audit, brainstorming and the Codex role map follow the two r
     .split("\n")
     .filter((l) => /^\| [a-z]+ \|/.test(l) && !l.startsWith("| role"))
     .map((l) => l.split("|")[1]?.trim());
-  assert.deepEqual(rows, ["scout", "analyst"]);
+  assert.deepEqual(rows, ["scout", "analyst", "referee"]);
 });
 
 test("AC-13: the audit hunter prompt says what to do with a thread it cannot finish", () => {
