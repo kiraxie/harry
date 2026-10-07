@@ -52,7 +52,7 @@ mutation; its report is its final message.
   item's `## Follow-ups` for final triage; do not block on these.
 
 Categorize by *actual* severity — not everything is Critical, and a nitpick is
-never Critical. Acknowledge what was done well before listing issues.
+never Critical. In a fresh review, acknowledge what was done well before listing issues.
 
 ## Rules
 
@@ -82,7 +82,7 @@ never Critical. Acknowledge what was done well before listing issues.
 #### Critical (must fix)
 #### Important (should fix)
 #### Minor (nice to have — item's `## Follow-ups` for final triage)
-[each, numbered 1, 2, 3 … straight across all three severities, so a finding is cited by its number: file:line · what's wrong · why it matters · structural fix · short-term fix, only when the structural one is not simple. A number holds inside one report only; a finding's identity is where it is plus what is wrong]
+[each, numbered 1, 2, 3 … straight across all three severities, so a finding is cited by its number: file:line · what's wrong · why it matters · structural fix · short-term fix, only when the structural one is not simple. A number holds inside one report only, except the handed numbers a re-review carries; a finding's identity is where it is plus what is wrong]
 
 ### Assessment
 Spec (one line per AC): AC-1 pass / fail / partial / superseded by AC-<m> · evidence read
@@ -91,9 +91,29 @@ Quality: Approved / Changes requested
 Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 ```
 
+**Re-review** (executing step 4) — handed the fix range, the open findings under
+their numbers and the last number in use, the reviewer reports in this form instead — no Strengths section, since it judges only the fix:
+
+```
+### Open findings
+[one line per handed finding, under its handed number: ADDRESSED / NOT ADDRESSED · evidence read — attempted is not addressed]
+
+### New issues
+#### Critical (must fix)
+#### Important (should fix)
+#### Minor (nice to have — item's `## Follow-ups` for final triage)
+[numbered on from the last number handed — the merged list's last, Minors included — same fields as above]
+
+### Assessment
+Quality: Approved / Changes requested
+Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
+```
+
 Both verdicts (**spec** AND **quality**) are required — a report missing either
 is not a valid review. This binds every review run against this rubric; executing
-states the acceptance rule at its review step (step 3).
+states the acceptance rule at its review step (step 3). The re-review is the one
+exception: its spec was judged by the review it follows, so its Assessment carries
+Quality and Verdict only.
 
 **When no acceptance criteria were handed** — a bare `/harry:review` on an
 arbitrary diff, or a legacy item that has none — the spec line says exactly that
