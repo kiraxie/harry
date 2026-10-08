@@ -41,14 +41,15 @@ path; don't "fix" it by lowering the floor without restoring a transpile step fo
 Use pnpm 12 natively (corepack, or a pnpm 12 install) — a pre-12 global pnpm hands off to 12 and
 rewrites `pnpm-lock.yaml`'s package-manager document in the process, dirtying the lockfile.
 
-**Lint scope** (`biome.json` `files.includes`): `src/**/*.ts`, `tests/**/*.ts`, `scripts/**/*.mts`,
-`scripts/**/*.mjs`, `build.mjs`, `*.json` — no excludes; `pnpm run lint` exits 0. `pnpm run typecheck`
-covers `src/`, `tests/` and `scripts/`, and each module has one type source: the evals runner and its
-`scripts/lib/evals-*` modules are `.mts` (maintainer-only, run by Node's type stripping; `.mts`
-because it is ESM by its extension, so the jailed post-session child never has to read the
-`package.json` the jail denies); the scripts
-that ship to consumers (`install`, `install-codex`, `init` and their `scripts/lib` helpers) stay
-`.mjs`, typed with JSDoc and checked through `checkJs`, so `/sync` needs no type-stripping Node.
+**Lint and typecheck scope**: `biome.json` `files.includes` and `tsconfig.json` `include` are the
+authority; `pnpm run lint` and `pnpm run typecheck` exit 0. Each module has one type source.
+Maintainer-only scripts (the evals runner and its `scripts/lib/evals-*` modules,
+`.claude/scripts/`) are `.mts`, run by Node's type stripping. For the evals modules `.mts` is
+required, not a style choice: it is ESM by its extension, so the jailed post-session child never
+has to read the `package.json` the jail denies.
+The scripts that ship to consumers (`install`, `install-codex`, `init` and their `scripts/lib`
+helpers) stay `.mjs`, typed with JSDoc and checked through `checkJs`, so `/sync` needs no
+type-stripping Node; a test keeps them off any `.mts` module.
 
 **Behavioral evals** (`evals/`, `scripts/run-evals.mts`) measure whether the resident laws actually
 change a model's first-response behavior — each case runs the same prompt twice, once with an empty
@@ -62,7 +63,7 @@ Conditions, isolation, auth, trials, and the scoring model → `evals/README.md`
 ## Cutting a release
 
 `/release <version>` reads this section. It is repo-local (`.claude/commands/release.md`,
-state script `.claude/scripts/release-state.mjs`) and no plugin build loads it, as with
+state script `.claude/scripts/release-state.mts`) and no plugin build loads it, as with
 `/upgrade-deps` (`.claude/commands/upgrade-deps.md`).
 
 - **Version fields**, bumped in lockstep: `package.json`, `.claude-plugin/plugin.json`,

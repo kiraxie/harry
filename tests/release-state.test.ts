@@ -13,10 +13,11 @@ import {
   gitTagExists,
   latestTag,
   parseVersion,
-} from "../.claude/scripts/release-state.mjs";
+  RELEASE_STATES,
+} from "../.claude/scripts/release-state.mts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const SCRIPT = path.join(repoRoot, ".claude/scripts/release-state.mjs");
+const SCRIPT = path.join(repoRoot, ".claude/scripts/release-state.mts");
 
 const fixtures: string[] = [];
 after(() => {
@@ -460,7 +461,7 @@ test(".claude/commands/release.md runs the state script at its real path", () =>
 
 test(".claude/commands/release.md passes --start and leaves the bump-commit rule to the script", () => {
   const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
-  assert.match(md, /release-state\.mjs <version> .*--start <starting-commit>/);
+  assert.match(md, /release-state\.mts <version> .*--start <starting-commit>/);
   assert.doesNotMatch(md, /git log <starting-commit>/);
 });
 
@@ -523,28 +524,7 @@ test("this repo's own released version classifies as already-tagged", () => {
   assert.equal(cli(repoRoot, "0.22.0", "--field", "package.json").stdout, "already-tagged");
 });
 
-// The seven state names are written in three places; divergence is a bug.
-const CANONICAL_STATES = [
-  "invalid-version",
-  "invalid-target",
-  "not-bumped",
-  "bumped-not-tagged",
-  "waiting-for-merge",
-  "already-tagged",
-  "version-mismatch-untracked",
-];
-
-test("release-state.d.mts's ReleaseState union names exactly the seven states", () => {
-  const dts = readFileSync(path.join(repoRoot, ".claude/scripts/release-state.d.mts"), "utf8");
-  const union = dts.match(/export type ReleaseState =([\s\S]*?);/);
-  assert.ok(union, "no ReleaseState union");
-  assert.deepEqual(
-    new Set([...union[1].matchAll(/"([a-z-]+)"/g)].map((m) => m[1])),
-    new Set(CANONICAL_STATES),
-  );
-});
-
-test(".claude/commands/release.md's state section names exactly the seven states", () => {
+test(".claude/commands/release.md's state section names exactly the script's states", () => {
   const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
   const start = md.indexOf("## Classify the state");
   const end = md.indexOf("## Phase A");
@@ -555,5 +535,5 @@ test(".claude/commands/release.md's state section names exactly the seven states
   const names = [...md.slice(start, end).matchAll(/`([a-z-]+)`/g)]
     .map((m) => m[1])
     .filter((n) => /^[a-z]+(-[a-z]+)+$/.test(n));
-  assert.deepEqual(new Set(names), new Set(CANONICAL_STATES));
+  assert.deepEqual(new Set(names), new Set(RELEASE_STATES));
 });

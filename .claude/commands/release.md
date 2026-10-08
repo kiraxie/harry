@@ -56,7 +56,7 @@ Run, from the repo root, with one `--field` per declared field file and the comm
 you started on:
 
 ```
-node .claude/scripts/release-state.mjs <version> [--field <path>]... --start <starting-commit>
+node .claude/scripts/release-state.mts <version> [--field <path>]... --start <starting-commit>
 ```
 
 It reads the repo's real state (tags, the bump commit on the default branch and in
@@ -85,7 +85,7 @@ its stderr and stop. On exit 0 it prints one state:
 
 **Check for an undeclared field** before entering Phase A or Phase B; every other
 state has stopped by now. Take the latest tag's version from the state script,
-`node .claude/scripts/release-state.mjs latest-tag` (it prints `none` when there is
+`node .claude/scripts/release-state.mts latest-tag` (it prints `none` when there is
 no tag yet), and list the tracked files that contain it as a whole version:
 `git grep -lE '(^|[^0-9.])<latest>($|[^0-9.])'`. In this pattern and in every
 other version pattern below, write each dot of the version as `\.`. The boundary is
@@ -144,5 +144,5 @@ so — the tag must point at a commit the default branch holds.
 3. **Ask before pushing** — it is outward-facing. On approval:
    `git push origin <default-branch> --follow-tags`, which sends the branch and the
    new annotated tag together, never a tag for a commit the remote lacks.
-4. **Report:** `node .claude/scripts/release-state.mjs latest-tag` now prints
+4. **Report:** `node .claude/scripts/release-state.mts latest-tag` now prints
    `<version>`. If CI runs on tags, watch that run to completion and report it.
