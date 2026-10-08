@@ -50,11 +50,23 @@ shape left as it is belongs to that rubric, not here.
    Dependencies point one way — toward the more stable side, never back up from a
    lower layer. Logic sits in the layer that owns it: no business rule in a
    transport handler, no presentation choice in the data layer.
-4. **Abstraction timing** — only for abstractions that form a listed shape or
-   sit on one; a helper inside one function is the rubric's call. Too early: a
-   public interface or module boundary with one implementation behind it, drawn
-   before a second caller exists. Too late: the same knowledge copied into three
-   modules or services, which now has to change in three places.
+4. **Abstraction timing** — in this review, apply it only to abstractions that form
+   a listed shape or sit on one; a helper inside one function is the rubric's call.
+   The definitions below hold for any module. Too early, by callers: a public
+   interface or module boundary shaped for callers that do not exist yet. Too early,
+   by implementations: a seam — the place where one implementation can be swapped
+   for another without editing the callers — with one implementation behind it. A
+   seam is real once two sit behind it. A test adapter is the second only when the
+   dependency behind the seam is a remote service, yours over a network or a third
+   party's, which the suite does not run for real. Otherwise the seam is
+   indirection. See **Seams and what sits behind them** in `references/red-green.md`.
+   Too late: the same knowledge copied into three modules or services, which now
+   has to change in three places. Too thin: a **shallow module**, whose interface —
+   everything a caller must know to use it, invariants and error modes included — is
+   nearly as large as what it hides. Run the **deletion test** on it: picture the
+   codebase without the module. When nothing it does has to be rewritten elsewhere,
+   it only passes calls through and fails the test — a candidate finding. When each
+   caller would have to take back the work it hides, it passes — no finding.
 5. **System level (across services).** Should this live in an existing service, or
    does it justify a new one? Who owns each piece of data — and is any data now
    shared by two services, each writing it? Is a synchronous call the right

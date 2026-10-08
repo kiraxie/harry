@@ -86,7 +86,8 @@ A test that exists but guards nothing is not a hole — it belongs to dimension 
 
 **What:** The mirror image of dimensions 1 and 2 — code that carries *more*
 abstraction, flexibility, or indirection than its current call sites earn:
-single-implementation interfaces, factories with one product, config for a value
+single-implementation interfaces (see `references/architecture-review.md` category 4
+for when one implementation is too early), factories with one product, config for a value
 that never changes, dead feature flags, speculative "for later" scaffolding,
 wrappers that only delegate, reinvented stdlib/native functionality.
 
@@ -95,10 +96,8 @@ dimension 6) cross-referenced with low fan-in counts from the dependency graph;
 churn (an abstraction nobody has touched since it was added is a stronger signal
 than one under active use).
 
-**Deletion test** for a module that may be shallow: picture the codebase without it.
-When nothing it does has to be rewritten elsewhere, it was only passing calls through —
-a candidate, which still needs the Bar's named cost below. When each caller would have to
-take back the work it hides, it pays for itself — no finding.
+A module that may be shallow gets the deletion test in `references/architecture-review.md`
+(category 4): one that fails it is a candidate, which still needs the Bar's named cost below.
 
 **Bar:** Same falsifiability anchor as every other dimension — a deletion
 recommendation still needs a named cost, or it's taste. "This `Strategy` interface

@@ -61,6 +61,7 @@ test("red-green.md sorts every section under an every-test or a Major group", ()
     "### What a good test is",
     "**One owner per contract.**",
     "**Exercise the real thing**",
+    "### Seams and what sits behind them",
   ])
     assert.ok(inEvery.includes(s), `${s} belongs to every test`);
   for (const s of [

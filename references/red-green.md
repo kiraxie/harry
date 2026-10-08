@@ -63,7 +63,9 @@ boundary that can see it. Another layer earns its own test only for a risk the o
 cannot reach — a transport or lifecycle failure, say — never to replay the same scenario
 one level down. Extend the existing table-driven case or shared fixture before writing a
 near-duplicate. A bug's regression test lives once, at the owner boundary where the fix
-lands, not at every layer the bug passed through.
+lands, not at every layer the bug passed through. When several shallow modules — each
+with an interface nearly as large as what it hides — merge into one, the merged module's
+interface becomes the owner: its tests replace theirs, never sit on top of them.
 
 Use real code, not mocks (mocks only when unavoidable — must-mock-everything means the code is
 too coupled; use dependency injection instead). GREEN is the minimal code that passes — an
@@ -83,6 +85,28 @@ over-engineered "general" solution is a YAGNI violation, not thoroughness.
   lives in test utilities, never as production methods.
 - When mock setup outgrows the test logic, stop mocking — switch to an integration test
   with real components.
+
+### Seams and what sits behind them
+
+A **seam** is the place where a module's interface lives: where its behavior can be
+swapped without editing its callers. The **interface** is everything a caller must know
+to use the module — signature, invariants, ordering, error modes — and it is also the
+test surface: callers and tests cross the same seam. A test that has to reach past it
+means the module is the wrong shape.
+
+Code that takes its dependencies as parameters and returns its results, rather than
+building its dependencies or changing state it does not own, is testable at its
+interface.
+
+How to test across a seam depends on what sits behind it. A **port** is the interface
+declared at a seam; an **adapter** is one implementation plugged into it.
+
+| Dependency | Test it with |
+|------------|--------------|
+| In-process — pure logic, in-memory state, no I/O | the real code, directly |
+| Local with a stand-in — a database with an in-memory or local engine, a temp filesystem | the stand-in, run in the suite; no port needed |
+| Remote, owned by you — your own service over a network | a port at the seam; an in-memory adapter in tests |
+| Remote, third-party — a payment or messaging API | an injected port; a mock adapter in tests |
 
 ## Major / red line
 
@@ -123,6 +147,8 @@ and confirm them with the user up front — testing effort lands on critical pat
 and complex logic, not every edge; an unconfirmed seam gets no test. When no
 correct seam exists for a needed test, that absence is itself the finding to
 report — it never waives the mandatory reproduction test.
+
+What a seam is, and how to test across one, is in **Seams and what sits behind them** above.
 
 ### Regression test verification (the proof)
 
