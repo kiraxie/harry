@@ -18,7 +18,7 @@ handed:
 - **The branch diff**, as a file — on a later round, only the diff since the head
   the previous round reviewed. On the Codex build you are told the base instead and
   run the diff yourself.
-- **This file.**
+- **This file, in full.**
 - **The last 20 commits touching the changed paths** — for the history pass below.
 - **Read access to the whole repo** — read callers, neighbours and older code
   freely; the diff alone never shows how a shape fits.

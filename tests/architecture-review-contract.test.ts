@@ -152,7 +152,10 @@ test("AC-3: the reviewer is handed every input", () => {
     [/Hand it: the shape list;/, "the shape list"],
     [/the item's ## Why \/ What and its ### Acceptance criteria/, "the item's design and AC"],
     [/the diff file, by its absolute path;/, "the diff, by absolute path"],
-    [/; references\/architecture-review\.md;/, "the architecture-review reference"],
+    [
+      /; references\/architecture-review\.md itself, in full — its rules bind only a reviewer that has read them;/,
+      "the architecture-review reference, in full",
+    ],
     [
       /the last 20 commits touching the changed paths \(git log -n 20 /,
       "the last 20 commits touching the changed paths",
@@ -537,16 +540,23 @@ test("AC-6: the CHANGELOG records the architecture review", () => {
 });
 
 test("the leave-as-is record's fields are listed once, in the architecture-review Output", () => {
-  const plainText = (rel: string): string => read(rel).replace(/\s+/g, " ").replace(/\*+|`/g, "");
-  for (const rel of ["references/architecture-review.md", "skills/finishing/SKILL.md"])
+  for (const rel of [ARCH_REVIEW, FINISHING])
     assert.doesNotMatch(
-      plainText(rel),
+      plain(read(rel)),
       /leave as is (?:as recorded — location|with the user's reason|→ the ruling, the user's reason)/,
       `${rel} re-lists the leave-as-is record's fields instead of citing the Output definition`,
     );
   assert.match(
-    plainText("references/architecture-review.md"),
+    archReview(),
     /leave as is — the shape stays as it is\. Its location, its gist and the user's reason are recorded/,
     "the Output no longer defines the leave-as-is record's fields",
+  );
+});
+
+test("the architecture-review reference says its reviewer gets it in full", () => {
+  assert.match(
+    archReview(),
+    /- This file, in full\./,
+    "the reference's hand-off list no longer says the reviewer gets this file in full",
   );
 });
