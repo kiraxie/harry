@@ -29,6 +29,7 @@ function globalPath() {
   return process.env.HARRY_CODEX_GLOBAL || join(homedir(), ".codex", "AGENTS.md");
 }
 
+/** @param {string} existing @param {{ remove?: boolean; root?: string }} [opts] @returns {string} */
 export function applyImport(existing, { remove = false, root = pluginRoot } = {}) {
   let body = "";
   if (!remove) {
@@ -44,6 +45,7 @@ export function applyImport(existing, { remove = false, root = pluginRoot } = {}
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
 }
 
+/** @param {{ remove?: boolean }} [opts] @returns {string} */
 export function run({ remove = false } = {}) {
   const path = globalPath();
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
@@ -54,6 +56,7 @@ export function run({ remove = false } = {}) {
 }
 
 function selftest() {
+  /** @param {unknown} c @param {string} m */
   const assert = (c, m) => {
     if (!c) throw new Error(`selftest failed: ${m}`);
   };

@@ -1,6 +1,6 @@
 // The eval runner backs a regression harness that measures whether HARRY.md
 // changes model behavior. These tests never call the real `claude` binary — a
-// fake shim (tests/fake-claude.mjs) is wired via EVALS_CLAUDE_BIN — and never
+// fake shim (tests/fake-claude.ts) is wired via EVALS_CLAUDE_BIN — and never
 // run a real eval. They cover: schema validation, run-time env isolation
 // (baseline dir has no laws, candidate dir does), scoring pass/fail + exit code,
 // and the model-pinning refusal.
@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   closeSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -24,36 +25,28 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { CheckInput, RepoState } from "../scripts/run-evals.mjs";
+import type { CheckInput } from "../scripts/lib/evals-cases.mts";
+import { evaluateChecks, parseCasesJsonl, validateCases } from "../scripts/lib/evals-cases.mts";
+import { buildBaseEnv, buildGitEnv } from "../scripts/lib/evals-env.mts";
+import { trialJail } from "../scripts/lib/evals-jail.mts";
+import { scoreResults } from "../scripts/lib/evals-score.mts";
+import type { RepoState } from "../scripts/run-evals.mts";
 import {
-  buildAgenticSandboxProfile,
-  buildBaseEnv,
   buildChildEnv,
-  buildGitEnv,
-  buildSeatbeltProfile,
   collectRepoState,
   evaluateArtifactCheck,
   evaluateArtifactChecks,
-  evaluateChecks,
-  findOnPath,
-  jailExecDirs,
-  jailedPath,
   judgeFixture,
   main,
   materializeFixture,
-  parseCasesJsonl,
   parsePostSessionOutput,
-  requireSandboxSupport,
   resolveAuth,
   resolveModel,
   resolveTrials,
   restoreFixtureGitConfig,
   runEvals,
-  scoreResults,
-  validateCases,
-  wrapWithSandbox,
-} from "../scripts/run-evals.mjs";
-import { installFakeClaude, readCalls } from "./fake-claude.mjs";
+} from "../scripts/run-evals.mts";
+import { installFakeClaude, readCalls } from "./fake-claude.ts";
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -615,7 +608,7 @@ test("score table: an all-errored group reads FAIL (0/N, N error), not a bare 0/
     // The rendered table surfaces the error count.
     const stdout = execFileSync(
       process.execPath,
-      [path.join(pluginRoot, "scripts", "run-evals.mjs"), "score", "--results", results],
+      [path.join(pluginRoot, "scripts", "run-evals.mts"), "score", "--results", results],
       { encoding: "utf8" },
     ).toString();
     assert.match(stdout, /FAIL \(0\/3, 3 error\)/, "verdict shows the error count when nonzero");
@@ -664,7 +657,7 @@ test("score table: a long informative id does not overflow the condition column"
     // Graded candidate passes → exit 0, so execFileSync does not throw.
     const stdout = execFileSync(
       process.execPath,
-      [path.join(pluginRoot, "scripts", "run-evals.mjs"), "score", "--results", results],
+      [path.join(pluginRoot, "scripts", "run-evals.mts"), "score", "--results", results],
       { encoding: "utf8" },
     ).toString();
 
@@ -1092,6 +1085,7 @@ test("judgeFixture: refuses a fixture path that no longer leads to the materiali
       initialBranch: fx.initialBranch,
       initialCommit: fx.initialCommit,
       checks: [{ type: "git_created_branch" }],
+      timeoutMs: 60_000,
     };
     assert.deepEqual(judgeFixture(payload), [{ ok: false, detail: "(none)" }], "untouched: judged");
     // Same path, a different directory: moved aside and recreated.
@@ -1099,6 +1093,48 @@ test("judgeFixture: refuses a fixture path that no longer leads to the materiali
     mkdirSync(fx.dir);
     assert.throws(() => judgeFixture(payload), /refusing to judge fixture .* replaced/);
   });
+});
+
+test("judgeFixture: the test command's env is built from the env the step was handed", () => {
+  withFixture((fx) => {
+    // The model-written test records the names of the env vars it was handed.
+    writeFileSync(
+      path.join(fx.dir, "probe.mjs"),
+      'import { writeFileSync } from "node:fs";\n' +
+        'writeFileSync("env-keys.json", JSON.stringify(Object.keys(process.env)));\n',
+    );
+    const payload = {
+      fixtureDir: fx.dir,
+      fixtureId: fx.id,
+      gitConfig: fx.gitConfig.toString("base64"),
+      initialBranch: fx.initialBranch,
+      initialCommit: fx.initialCommit,
+      checks: [{ type: "test_command_passes", command: "node probe.mjs" }],
+      timeoutMs: 60_000,
+    };
+    const handed = { PATH: process.env.PATH ?? "", LC_HARRY_EVALS_MARKER: "1" };
+    const [outcome] = judgeFixture(payload, handed);
+    assert.equal(outcome?.ok, true, outcome?.detail);
+    const keys = JSON.parse(readFileSync(path.join(fx.dir, "env-keys.json"), "utf8"));
+    assert.ok(keys.includes("LC_HARRY_EVALS_MARKER"), "the handed env reached the test command");
+  });
+});
+
+test("scoreResults: a group whose trials ran under two law texts is marked mixed", () => {
+  const trial = (lawSha256: string) => ({
+    id: "c",
+    condition: "candidate",
+    mode: "text",
+    law: "§1",
+    checks: [{ type: "regex_must", pattern: "ok" }],
+    response: "ok",
+    lawSha256,
+  });
+  const [mixed] = scoreResults([trial("aaaa"), trial("bbbb"), trial("aaaa")]).groups;
+  assert.deepEqual(mixed?.lawShas, ["aaaa", "bbbb"]);
+  assert.equal(mixed?.mixedLaw, true);
+  const [single] = scoreResults([trial("aaaa"), trial("aaaa")]).groups;
+  assert.equal(single?.mixedLaw, false);
 });
 
 test("runEvals: every trial gets its own config, work and temp dirs, never another trial's", () => {
@@ -1211,7 +1247,7 @@ test("run CLI: control characters in a child's stderr never reach the operator's
     const result = spawnSync(
       process.execPath,
       [
-        path.join(pluginRoot, "scripts", "run-evals.mjs"),
+        path.join(pluginRoot, "scripts", "run-evals.mts"),
         "run",
         "--condition",
         "candidate",
@@ -1250,8 +1286,8 @@ test(
     try {
       const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
       installEnvLogger(fake, "git", realGit, "\u001b[2Jgit-noise\n");
-      const runner = pathToFileURL(path.join(pluginRoot, "scripts", "run-evals.mjs")).href;
-      const call = `collectRepoState(${JSON.stringify(dir)}, ${JSON.stringify(initialBranch)}, ${JSON.stringify(initialCommit)}, { PATH: ${JSON.stringify(`${fake}:${NODE_DIR}:/usr/bin:/bin`)} });`;
+      const runner = pathToFileURL(path.join(pluginRoot, "scripts", "run-evals.mts")).href;
+      const call = `collectRepoState(${JSON.stringify(dir)}, ${JSON.stringify(initialBranch)}, ${JSON.stringify(initialCommit)}, { env: { PATH: ${JSON.stringify(`${fake}:${NODE_DIR}:/usr/bin:/bin`)} } });`;
       const result = spawnSync(
         process.execPath,
         [
@@ -2268,17 +2304,17 @@ test("test_command_passes: model-written tests run with the credential-free allo
       'import { writeFileSync } from "node:fs";\n' +
         'writeFileSync("env-keys.json", JSON.stringify(Object.keys(process.env).sort()));\n',
     );
-    const state = {
-      fixtureDir: dir,
-      env: {
-        ...syntheticOperatorEnv(),
-        EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
-        EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
-      },
-    } as unknown as RepoState;
+    const state = { fixtureDir: dir } as unknown as RepoState;
     const outcome = evaluateArtifactCheck(
       { type: "test_command_passes", command: "node probe.mjs" },
       state,
+      {
+        env: {
+          ...syntheticOperatorEnv(),
+          EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+          EVALS_CLAUDE_CODE_OAUTH_TOKEN: FAKE_EVALS_OAUTH,
+        },
+      },
     );
     assert.equal(outcome.ok, true, outcome.detail);
     const keys = spawnedKeys(JSON.parse(readFileSync(path.join(dir, "env-keys.json"), "utf8")));
@@ -2361,8 +2397,7 @@ test(
       const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
       const { readKeys } = installEnvLogger(fake, "git", realGit);
       collectRepoState(dir, initialBranch, initialCommit, {
-        ...syntheticOperatorEnv(),
-        PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin`,
+        env: { ...syntheticOperatorEnv(), PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin` },
       });
       const spawns = readKeys();
       assert.ok(spawns.length >= 5, "each of collectRepoState's git calls went through the logger");
@@ -2375,17 +2410,23 @@ test(
 );
 
 test(
-  "buildAgenticSandboxProfile: resolves a bare claude in-process, never by spawning `which`",
+  "trialJail: resolves a bare claude in-process, never by spawning `which`",
   shadowedBy("which"),
   () => {
     const fake = tmpDir("harry-evals-fakebin-");
     try {
       const { readKeys } = installEnvLogger(fake, "which", null);
-      buildAgenticSandboxProfile({
-        home: os.homedir(),
-        bin: "claude",
-        env: { ...syntheticOperatorEnv(), PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin` },
-      });
+      trialJail(
+        { sandboxExec: "/usr/bin/sandbox-exec" },
+        {
+          home: os.homedir(),
+          configDir: fake,
+          fixtureDir: fake,
+          tmpDir: fake,
+          bin: "claude",
+          env: { ...syntheticOperatorEnv(), PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin` },
+        },
+      );
       assert.deepEqual(readKeys(), [], "`which` was never spawned");
     } finally {
       rmSync(fake, { recursive: true, force: true });
@@ -2434,12 +2475,17 @@ test(
   },
 );
 
-test("collectRepoState: the state carries the allowlisted env, never the runner's own", () => {
+test("collectRepoState: the state carries no run settings", () => {
   const { dir, initialBranch, initialCommit } = buildSimulatedRepo();
   try {
     const env = { ...syntheticOperatorEnv(), PATH: process.env.PATH ?? "" };
-    const state = collectRepoState(dir, initialBranch, initialCommit, env);
-    assert.deepEqual(state.env, buildBaseEnv(env));
+    const state = collectRepoState(dir, initialBranch, initialCommit, {
+      env,
+      deadline: Date.now() + 60_000,
+    });
+    for (const setting of ["env", "gitBin", "deadline"]) {
+      assert.ok(!(setting in state), `the repo state carries the run setting ${setting}`);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -2455,7 +2501,7 @@ test("collectRepoState: a repo-local core.fsmonitor never runs, even with no res
       path.join(dir, ".git", "config"),
       `${readFileSync(path.join(dir, ".git", "config"), "utf8")}[core]\n\tfsmonitor = ${hook}\n`,
     );
-    collectRepoState(dir, initialBranch, initialCommit, { PATH: process.env.PATH });
+    collectRepoState(dir, initialBranch, initialCommit, { env: { PATH: process.env.PATH } });
     assert.ok(!existsSync(marker), "the repo-local fsmonitor hook never ran");
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -2468,7 +2514,9 @@ test("collectRepoState: the runner's git calls ignore the operator's global git 
   try {
     const { hook, marker } = plantHook(home);
     writeFileSync(path.join(home, ".gitconfig"), `[core]\n\tfsmonitor = ${hook}\n`);
-    collectRepoState(dir, initialBranch, initialCommit, { PATH: process.env.PATH, HOME: home });
+    collectRepoState(dir, initialBranch, initialCommit, {
+      env: { PATH: process.env.PATH, HOME: home },
+    });
     assert.ok(!existsSync(marker), "a hook in ~/.gitconfig never ran under the runner's git");
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -2695,476 +2743,6 @@ const DARWIN_ONLY = { skip: process.platform !== "darwin" ? "macOS-only (seatbel
 const AGENTIC_TOOLS =
   "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*)," +
   "Bash(git branch:*),Bash(git checkout:*),Bash(git switch:*),Bash(node:*)";
-
-// The whole profile, pinned as fixed text for fixed inputs: any rule added,
-// removed, widened or reordered is an edit here that review sees, not only a
-// change to the names or paths some narrower check extracts. SBPL is
-// last-match-wins, so the order is policy too: `(deny default)` first, the broad
-// read allow, then the $HOME deny, the narrow allows, and the terminal deny LAST so
-// no read allow (of /dev, say) can re-open it. Literal on purpose: never build the
-// expectation from the code's own constants.
-test("buildSeatbeltProfile: the whole profile is exactly this text (golden)", () => {
-  const profile = buildSeatbeltProfile({
-    home: "/Users/op",
-    // Deduped, in order of first appearance.
-    allowWrite: [
-      "/private/var/folders/t/trial/config",
-      "/private/var/folders/t/trial/fixture/repo",
-      "/private/var/folders/t/trial/tmp",
-      "/private/var/folders/t/trial/tmp",
-    ],
-    // An empty path is dropped, never emitted as a (subpath "").
-    allowRead: [
-      "/Users/op/.local/share/claude/versions",
-      "/opt/homebrew/Cellar/node/26.9.0/bin",
-      "",
-      "/Users/op/Projects/harry/scripts/run-evals.mjs",
-    ],
-    // /usr/bin, the xcrun git shim's tree, is already allowed and is not repeated.
-    allowExec: [
-      "/Users/op/.local/share/claude/versions",
-      "/opt/homebrew/Cellar/node/26.9.0/bin",
-      "/usr/bin",
-    ],
-  });
-  assert.equal(
-    profile,
-    `(version 1)
-;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
-;; Deny everything, then allow back only what node, claude and git need:
-;; no mach-lookup service can start a program outside this jail (launchd's
-;; bootstrap port is a separate, narrower exception; see the DEBT note).
-(deny default)
-(allow process-fork)
-(allow signal (target same-sandbox))
-(allow sysctl-read)
-(allow file-read*)
-(deny file-read* (subpath "/Users/op"))
-(allow file-read* file-write* (literal "/dev/null"))
-(allow mach-lookup
-  (global-name "com.apple.system.opendirectoryd.libinfo")
-)
-(allow network-outbound (remote ip "*:*"))
-(allow network-outbound (literal "/private/var/run/mDNSResponder"))
-(allow process-exec
-  (subpath "/bin")
-  (subpath "/usr/bin")
-  (subpath "/Users/op/.local/share/claude/versions")
-  (subpath "/opt/homebrew/Cellar/node/26.9.0/bin")
-)
-;; read+write: this trial's config dir, fixture repo and temp dir only.
-(allow file-read* file-write*
-  (subpath "/private/var/folders/t/trial/config")
-  (subpath "/private/var/folders/t/trial/fixture/repo")
-  (subpath "/private/var/folders/t/trial/tmp")
-)
-;; read-only: claude + node runtime install trees, and the runner script.
-(allow file-read*
-  (subpath "/Users/op/.local/share/claude/versions")
-  (subpath "/opt/homebrew/Cellar/node/26.9.0/bin")
-  (subpath "/Users/op/Projects/harry/scripts/run-evals.mjs")
-)
-;; no terminal reads (what the operator types); last, so no allow above re-opens it.
-(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))
-`,
-  );
-});
-
-test("buildSeatbeltProfile: with no trial dirs or runtime trees, those sections are left out (golden)", () => {
-  assert.equal(
-    buildSeatbeltProfile({ home: "/Users/op" }),
-    `(version 1)
-;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
-;; Deny everything, then allow back only what node, claude and git need:
-;; no mach-lookup service can start a program outside this jail (launchd's
-;; bootstrap port is a separate, narrower exception; see the DEBT note).
-(deny default)
-(allow process-fork)
-(allow signal (target same-sandbox))
-(allow sysctl-read)
-(allow file-read*)
-(deny file-read* (subpath "/Users/op"))
-(allow file-read* file-write* (literal "/dev/null"))
-(allow mach-lookup
-  (global-name "com.apple.system.opendirectoryd.libinfo")
-)
-(allow network-outbound (remote ip "*:*"))
-(allow network-outbound (literal "/private/var/run/mDNSResponder"))
-(allow process-exec
-  (subpath "/bin")
-  (subpath "/usr/bin")
-)
-;; no terminal reads (what the operator types); last, so no allow above re-opens it.
-(deny file-read* (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))
-`,
-  );
-});
-
-test("buildSeatbeltProfile: escapes quotes/backslashes so a path can't break the literal", () => {
-  const profile = buildSeatbeltProfile({ home: '/Users/o"p\\x', allowWrite: [], allowRead: [] });
-  assert.match(profile, /\(subpath "\/Users\/o\\"p\\\\x"\)/, "quote and backslash are escaped");
-});
-
-test(
-  "buildSeatbeltProfile jails $HOME under REAL sandbox-exec: canary denied, exception overrides",
-  DARWIN_ONLY,
-  () => {
-    // Self-contained: point the profile's `home` at a throwaway dir standing in for
-    // $HOME (realpath'd — seatbelt matches the kernel-canonical path and macOS
-    // symlinks /var → /private/var; the real homedir() is already canonical). A
-    // canary sits directly under it; an exception subdir sits INSIDE it. Prove
-    // sandbox-exec denies the canary yet allows the exception (last-match-wins allow
-    // overriding the broad $HOME deny) — the exact policy the real run applies.
-    const jail = realpathSync(tmpDir("harry-sb-jail-"));
-    try {
-      const exception = path.join(jail, "fixture");
-      mkdirSync(exception);
-      const canary = path.join(jail, "secret.txt");
-      writeFileSync(canary, "SECRET\n");
-      const okFile = path.join(exception, "ok.txt");
-      writeFileSync(okFile, "OK\n");
-      const profile = buildSeatbeltProfile({ home: jail, allowWrite: [exception], allowRead: [] });
-
-      const catUnder = (file: string): boolean => {
-        try {
-          execFileSync("sandbox-exec", ["-p", profile, "cat", file], {
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "ignore"],
-          });
-          return true;
-        } catch {
-          return false;
-        }
-      };
-      assert.equal(catUnder(canary), false, "a canary directly under the jailed $HOME is denied");
-      assert.equal(catUnder(okFile), true, "the exception subdir allow overrides the $HOME deny");
-      // Writes: denied everywhere but the allowed dirs, OUTSIDE $HOME too (a
-      // user-writable PATH dir such as /opt/homebrew/bin is outside $HOME).
-      const outside = realpathSync(tmpDir("harry-sb-outside-"));
-      try {
-        const touchUnder = (file: string): boolean => {
-          try {
-            execFileSync("sandbox-exec", ["-p", profile, "touch", file], { stdio: "ignore" });
-            return true;
-          } catch {
-            return false;
-          }
-        };
-        assert.equal(
-          touchUnder(path.join(outside, "planted")),
-          false,
-          "write outside $HOME denied",
-        );
-        assert.equal(
-          touchUnder(path.join(exception, "made")),
-          true,
-          "write to an allowed dir works",
-        );
-      } finally {
-        rmSync(outside, { recursive: true, force: true });
-      }
-    } finally {
-      rmSync(jail, { recursive: true, force: true });
-    }
-  },
-);
-
-test("wrapWithSandbox: wraps `bin args...` as `sandbox-exec -p <profile> bin args...`", () => {
-  const wrapped = wrapWithSandbox("/usr/bin/sandbox-exec", "PROFILE", "claude", [
-    "-p",
-    "hi",
-    "--model",
-    "m",
-  ]);
-  assert.equal(wrapped.bin, "/usr/bin/sandbox-exec", "sandbox-exec becomes the executed binary");
-  assert.deepEqual(
-    wrapped.args,
-    ["-p", "PROFILE", "claude", "-p", "hi", "--model", "m"],
-    "the profile is passed via -p, then the original bin and its args unchanged",
-  );
-});
-
-test("buildAgenticSandboxProfile: a symlinked $HOME is canonicalized (I-1: jails the real path)", () => {
-  // I-1 regression lock: seatbelt matches the kernel-canonical path. If the jail
-  // root is left un-normalized, a symlinked $HOME's deny rule silently fails to
-  // match — $HOME is un-jailed with no error while the run reports "sandboxed".
-  // buildAgenticSandboxProfile must realpath the root so the deny lands on the REAL
-  // path (and thus holds through the symlink).
-  const real = realpathSync(tmpDir("harry-sb-realhome-"));
-  const linkParent = tmpDir("harry-sb-link-");
-  const link = path.join(linkParent, "homelink");
-  try {
-    symlinkSync(real, link);
-    const profile = buildAgenticSandboxProfile({
-      home: link,
-      allowWrite: [],
-      bin: process.execPath,
-    });
-    assert.ok(
-      profile.includes(`(deny file-read* (subpath "${real}"))`),
-      "the deny root is the canonical (realpath) home, not the symlink",
-    );
-    assert.ok(
-      !profile.includes(`(subpath "${link}")`),
-      "the un-normalized symlink path never appears (it would silently fail to match)",
-    );
-
-    if (process.platform === "darwin") {
-      // The deny holds THROUGH the symlink: a canary opened via the symlinked home
-      // path canonicalizes to the jailed real path and is denied by the kernel.
-      writeFileSync(path.join(real, "secret.txt"), "SECRET\n");
-      let denied = false;
-      try {
-        execFileSync("sandbox-exec", ["-p", profile, "cat", path.join(link, "secret.txt")], {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        });
-      } catch {
-        denied = true;
-      }
-      assert.ok(denied, "reading the canary through the symlinked home path is denied");
-    }
-  } finally {
-    rmSync(link, { force: true });
-    rmSync(linkParent, { recursive: true, force: true });
-    rmSync(real, { recursive: true, force: true });
-  }
-});
-
-test("buildAgenticSandboxProfile refuses a runtime tree that would re-open $HOME or cover a writable dir", () => {
-  // Trees are readable and executable, and come after the $HOME deny (last match
-  // wins): a tree at /, at $HOME or above it re-opens every read under $HOME, and
-  // one overlapping a trial dir would let a session run what it writes.
-  const root = realpathSync(tmpDir("harry-sb-trees-"));
-  try {
-    const home = path.join(root, "users", "me");
-    const trial = path.join(root, "trial");
-    const tool = path.join(root, "tool");
-    for (const d of [home, path.join(trial, "fixture"), tool]) mkdirSync(d, { recursive: true });
-    const build =
-      (trees: string[], allowWrite: string[] = []) =>
-      () =>
-        buildAgenticSandboxProfile({ home, allowWrite, trees });
-    const refuses = (label: string, run: () => string, tree: string) =>
-      assert.throws(run, (err: Error) => err.message.includes(`runtime tree ${tree}`), label);
-    refuses("the filesystem root", build(["/"]), "/");
-    refuses("$HOME itself", build([home]), home);
-    refuses("an ancestor of $HOME", build([path.join(root, "users")]), path.join(root, "users"));
-    refuses(
-      "a tree containing a writable dir",
-      build([trial], [path.join(trial, "fixture")]),
-      trial,
-    );
-    refuses(
-      "a tree inside a writable dir",
-      build([path.join(trial, "fixture")], [trial]),
-      path.join(trial, "fixture"),
-    );
-    // The ordinary shape still builds: disjoint trees and trial dirs.
-    assert.match(build([tool], [path.join(trial, "fixture")])(), /\(subpath "[^"]*\/tool"\)/);
-
-    // The route through git: an exec path of / made both rules cover everything.
-    const fakeGit = path.join(tool, "git");
-    writeFileSync(fakeGit, "#!/bin/sh\necho /\n", { mode: 0o755 });
-    refuses(
-      "git reporting / as its exec path",
-      () => buildAgenticSandboxProfile({ home, bin: process.execPath, gitBin: fakeGit }),
-      "/",
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("jailedPath: keeps an entry by where it resolves, not how it is spelled, in PATH order", () => {
-  const root = realpathSync(tmpDir("harry-jailedpath-"));
-  try {
-    const allowed = path.join(root, "allowed");
-    const outside = path.join(root, "outside");
-    const sibling = `${allowed}2`; // shares the prefix, not the dir
-    for (const d of [allowed, outside, sibling]) mkdirSync(d);
-    const toAllowed = path.join(root, "to-allowed");
-    const toOutside = path.join(root, "to-outside");
-    symlinkSync(allowed, toAllowed);
-    symlinkSync(outside, toOutside);
-    const PATH = [toOutside, path.join(root, "missing"), toAllowed, sibling, outside, allowed].join(
-      path.delimiter,
-    );
-    assert.deepEqual(
-      jailedPath({ PATH }, jailExecDirs([NODE_DIR, allowed])).split(path.delimiter),
-      [NODE_DIR, toAllowed, allowed],
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("buildAgenticSandboxProfile: git's exec path is canonicalized, so a symlinked prefix still lets git's helpers run", () => {
-  // Homebrew's git reports its exec path through the `opt` symlink
-  // (/opt/homebrew/opt/git/libexec/git-core -> Cellar/git/<v>/...). Seatbelt matches
-  // the kernel-canonical path, so an exec-path rule spelled through that symlink never
-  // matches: git's helpers, and its own bin reached through a PATH launcher that is
-  // not git itself, stay unexecutable. Same shape here: a launcher that is not the
-  // real git reports an exec path through a symlinked prefix.
-  const root = realpathSync(tmpDir("harry-sb-gitprefix-"));
-  try {
-    const keg = path.join(root, "Cellar", "git", "9.9.9");
-    const libexec = path.join(keg, "libexec", "git-core");
-    const kegBin = path.join(keg, "bin");
-    const launcherDir = path.join(root, "bin");
-    for (const d of [libexec, kegBin, launcherDir, path.join(root, "opt")]) {
-      mkdirSync(d, { recursive: true });
-    }
-    const optGit = path.join(root, "opt", "git");
-    symlinkSync(keg, optGit);
-    const probe = '#!/bin/sh\necho "$0 ran"\n';
-    writeFileSync(path.join(libexec, "git-probe"), probe, { mode: 0o755 });
-    writeFileSync(path.join(kegBin, "git"), probe, { mode: 0o755 });
-    const launcher = path.join(launcherDir, "git");
-    writeFileSync(
-      launcher,
-      `#!/bin/sh\necho ${JSON.stringify(path.join(optGit, "libexec", "git-core"))}\n`,
-      { mode: 0o755 },
-    );
-    const profile = buildAgenticSandboxProfile({
-      home: os.homedir(),
-      bin: process.execPath,
-      gitBin: launcher,
-    });
-    const exec = profile.slice(profile.indexOf("(allow process-exec"));
-    const execRules = exec.slice(0, exec.indexOf("\n)"));
-    for (const dir of [libexec, kegBin]) {
-      assert.ok(execRules.includes(`(subpath "${dir}")`), `exec allows the canonical ${dir}`);
-    }
-    assert.ok(
-      !profile.includes(`(subpath "${optGit}`),
-      "no rule is spelled through the symlinked prefix (it would silently fail to match)",
-    );
-
-    if (process.platform === "darwin") {
-      // Reached through the symlinked prefix, both run under the real jail.
-      for (const target of [
-        path.join(optGit, "libexec", "git-core", "git-probe"),
-        path.join(optGit, "bin", "git"),
-      ]) {
-        const r = spawnSync("/usr/bin/sandbox-exec", ["-p", profile, target], {
-          encoding: "utf8",
-        });
-        assert.equal(r.status, 0, `jailed exec of ${target}: ${r.stderr}`);
-      }
-    }
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test(
-  "buildAgenticSandboxProfile under REAL sandbox-exec: a jailed process cannot read the terminal it runs in",
-  DARWIN_ONLY,
-  () => {
-    // A real pty: script(1) runs the command with a fresh pty slave as its
-    // controlling terminal and copies its own stdin into it, standing in for the
-    // operator typing during a run. script's stdin must be one tcgetattr fails on
-    // with ENOTTY (a file); node's own stdio pipes are sockets, which script rejects.
-    const dir = realpathSync(tmpDir("harry-sb-tty-"));
-    try {
-      const profile = buildAgenticSandboxProfile({
-        home: os.homedir(),
-        allowWrite: [dir],
-        bin: process.execPath,
-      });
-      const typed = path.join(dir, "typed.txt");
-      writeFileSync(typed, "typed-secret\n");
-      const result = path.join(dir, "result.json");
-      // Opens the controlling tty by both names, records each outcome, then reads
-      // what was typed from the first one that opened.
-      const reader = [
-        'const fs = require("node:fs");',
-        "const dir = process.argv[1];",
-        "const r = { open: {}, read: null };",
-        "const fds = [];",
-        'for (const p of ["/dev/tty", fs.readFileSync(dir + "/ttyname", "utf8").trim()]) {',
-        '  try { fds.push(fs.openSync(p, "r")); r.open[p] = "ok"; } catch (e) { r.open[p] = e.code; }',
-        "}",
-        'const save = () => fs.writeFileSync(dir + "/result.json", JSON.stringify(r));',
-        "save();",
-        "if (fds.length) {",
-        '  let text = ""; const b = Buffer.alloc(256);',
-        '  for (let i = 0; i < 5 && !text.includes("typed-secret"); i++)',
-        "    text += b.subarray(0, fs.readSync(fds[0], b)).toString();",
-        "  r.read = text; save();",
-        "}",
-      ].join("\n");
-      const inner =
-        '/usr/bin/tty > "$1/ttyname"; ' +
-        'if [ -n "$5" ]; then exec /usr/bin/sandbox-exec -p "$2" "$3" -e "$4" "$1"; fi; ' +
-        'exec "$3" -e "$4" "$1"';
-      const inPty = (jailed: boolean) => {
-        rmSync(result, { force: true });
-        const stdin = openSync(typed, "r");
-        try {
-          const shArgs = [dir, profile, process.execPath, reader, jailed ? "1" : ""];
-          spawnSync(
-            "/usr/bin/script",
-            ["-q", "/dev/null", "/bin/sh", "-c", inner, "sh", ...shArgs],
-            {
-              stdio: [stdin, "ignore", "ignore"],
-              timeout: 10_000,
-              killSignal: "SIGKILL",
-            },
-          );
-        } finally {
-          closeSync(stdin);
-        }
-        return JSON.parse(readFileSafe(result) || "{}") as {
-          open?: Record<string, string>;
-          read?: string | null;
-        };
-      };
-      const ttyOf = () => readFileSync(path.join(dir, "ttyname"), "utf8").trim();
-
-      // Not vacuous: unjailed, the same process opens the terminal by both names and
-      // reads what was typed into it.
-      const free = inPty(false);
-      assert.match(ttyOf(), /^\/dev\/ttys[0-9]+$/, "script gave the child a real pty slave");
-      assert.deepEqual(free.open, { "/dev/tty": "ok", [ttyOf()]: "ok" }, "unjailed: both open");
-      assert.match(String(free.read), /typed-secret/, "unjailed: the typed text is readable");
-
-      const jailed = inPty(true);
-      assert.deepEqual(
-        jailed.open,
-        { "/dev/tty": "EPERM", [ttyOf()]: "EPERM" },
-        "jailed: the terminal cannot be opened for reading by either name",
-      );
-      assert.equal(jailed.read, null, "jailed: nothing typed was read");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  },
-);
-
-test("requireSandboxSupport: refuses non-macOS and a missing sandbox-exec; passes on both present", () => {
-  assert.throws(
-    () => requireSandboxSupport("linux", "/usr/bin/sandbox-exec"),
-    /macOS-only/,
-    "non-darwin is a hard refusal (never silently unsandboxed)",
-  );
-  assert.throws(
-    () => requireSandboxSupport("freebsd", "/x"),
-    /refusing to run an agentic session unsandboxed/,
-    "any non-darwin platform is refused",
-  );
-  assert.throws(
-    () => requireSandboxSupport("darwin", null),
-    /sandbox-exec was not found/,
-    "darwin without sandbox-exec is a hard refusal",
-  );
-  assert.equal(
-    requireSandboxSupport("darwin", "/usr/bin/sandbox-exec"),
-    "/usr/bin/sandbox-exec",
-    "darwin + sandbox-exec present → the resolved path is returned",
-  );
-});
 
 test("runEvals: EVALS_SANDBOX=1 with an agentic case but no sandbox-exec is a hard refusal", () => {
   const binDir = tmpDir("harry-evals-bin-");
@@ -3399,6 +2977,62 @@ function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+test("runEvals --agentic under EVALS_SANDBOX=1: git's exec path reaches the jail, canonicalized, on any git install", {
+  skip: DARWIN_ONLY.skip || shadowedBy("git").skip,
+}, () => {
+  // A git on PATH that reports its exec path through a symlinked prefix, as
+  // Homebrew's does through `opt`, and forwards every other call to the real git.
+  // The jail can let git's helpers run only if runEvals asks git for that path and
+  // hands it to the jail, which must name it by its canonical spelling.
+  const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
+  const root = realpathSync(tmpDir("harry-evals-gitprefix-"));
+  try {
+    const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+    const realExecPath = realpathSync(
+      execFileSync(realGit, ["--exec-path"], { encoding: "utf8" }).trim(),
+    );
+    const prefixLink = path.join(root, "opt", "git");
+    mkdirSync(path.dirname(prefixLink), { recursive: true });
+    symlinkSync(path.resolve(realExecPath, "..", ".."), prefixLink);
+    const gitDir = path.join(root, "bin");
+    mkdirSync(gitDir);
+    writeFileSync(
+      path.join(gitDir, "git"),
+      [
+        "#!/bin/sh",
+        'for a in "$@"; do',
+        `  [ "$a" = "--exec-path" ] && { echo ${JSON.stringify(path.join(prefixLink, "libexec", "git-core"))}; exit 0; }`,
+        "done",
+        `exec ${JSON.stringify(realGit)} "$@"`,
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+    installFakeClaude(binDir, undefined, { callsInConfigDir: true });
+    const { wrapper, log } = installLoggingSandboxExec(binDir);
+    const [line] = runJailedTrial(binDir, fxRoot, {
+      EVALS_SANDBOX_EXEC: wrapper,
+      PATH: `${gitDir}${path.delimiter}${process.env.PATH ?? ""}`,
+    });
+    const [session] = readFileSync(log, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as string[]);
+    const profile = String(session?.[1]);
+    const exec = profile.slice(profile.indexOf("(allow process-exec"));
+    const execRules = exec.slice(0, exec.indexOf("\n)"));
+    for (const dir of [realExecPath, path.resolve(realExecPath, "..", "..", "bin")]) {
+      assert.ok(execRules.includes(`(subpath "${dir}")`), `exec allows git's canonical ${dir}`);
+    }
+    assert.ok(!profile.includes(prefixLink), "no rule is spelled through the symlinked prefix");
+    assert.equal(line?.error, undefined, String(line?.error));
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test(
   "runEvals --agentic under EVALS_SANDBOX=1: the post-session step is ONE child under the session's profile",
   DARWIN_ONLY,
@@ -3488,8 +3122,11 @@ test(
       for (const d of [binDir, gitDir, fxRoot, path.join(plugin, "scripts"), fixture]) {
         mkdirSync(d, { recursive: true });
       }
-      const runner = path.join(plugin, "scripts", "run-evals.mjs");
-      writeFileSync(runner, readFileSync(path.join(pluginRoot, "scripts", "run-evals.mjs")));
+      const runner = path.join(plugin, "scripts", "run-evals.mts");
+      writeFileSync(runner, readFileSync(path.join(pluginRoot, "scripts", "run-evals.mts")));
+      cpSync(path.join(pluginRoot, "scripts", "lib"), path.join(plugin, "scripts", "lib"), {
+        recursive: true,
+      });
       writeFileSync(
         path.join(plugin, "evals", "cases.jsonl"),
         `${JSON.stringify({
@@ -3562,11 +3199,19 @@ test(
       // reports it from inside the jail as well as outside it.
       const control = path.join(dir, "control.jsonl");
       const probe = `require("node:fs").appendFileSync(${JSON.stringify(control)}, JSON.stringify([0, 1, 2].map((fd) => require("node:tty").isatty(fd))) + "\\n")`;
-      const profile = buildAgenticSandboxProfile({
-        home: os.homedir(),
-        allowWrite: [dir],
-        bin: process.execPath,
-      });
+      const jail = trialJail(
+        { sandboxExec: "/usr/bin/sandbox-exec" },
+        {
+          home: os.homedir(),
+          configDir: dir,
+          fixtureDir: dir,
+          tmpDir: dir,
+          bin: process.execPath,
+          env: { PATH: "/usr/bin:/bin" },
+        },
+      );
+      assert.ok(jail, "a sandbox context yields a jail");
+      const { profile } = jail;
       assert.equal(
         inPty([process.execPath, "-e", probe], process.env),
         EXITED_0,
@@ -3666,44 +3311,6 @@ test(
 );
 
 test(
-  "jailedPath under REAL sandbox-exec: an exec-denied PATH entry stops a name lookup; dropped, it cannot",
-  DARWIN_ONLY,
-  () => {
-    // The premise the jailed PATH rests on: libuv's PATH walk gives up at EPERM
-    // instead of trying the next entry, so one denied entry ahead of an allowed
-    // `git` hides it.
-    const stray = realpathSync(tmpDir("harry-evals-stray-"));
-    try {
-      writeFileSync(path.join(stray, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-      const profile = buildAgenticSandboxProfile({
-        home: os.homedir(),
-        bin: process.execPath,
-        gitBin: "/usr/bin/git",
-      });
-      const lookup = (PATH: string) =>
-        spawnSync(
-          "/usr/bin/sandbox-exec",
-          [
-            "-p",
-            profile,
-            process.execPath,
-            "-e",
-            'const r = require("node:child_process").spawnSync("git", ["--version"]); process.stdout.write(r.error ? r.error.code : "ran");',
-          ],
-          { env: { PATH, GIT_CONFIG_GLOBAL: "/dev/null" }, encoding: "utf8" },
-        ).stdout;
-      const raw = [NODE_DIR, stray, "/usr/bin", "/bin"].join(path.delimiter);
-      assert.equal(lookup(raw), "EPERM", "the denied entry ends the walk");
-      const jailed = jailedPath({ PATH: raw }, jailExecDirs([NODE_DIR]));
-      assert.ok(!jailed.split(path.delimiter).includes(stray), jailed);
-      assert.equal(lookup(jailed), "ran", "with it dropped, the lookup reaches /usr/bin/git");
-    } finally {
-      rmSync(stray, { recursive: true, force: true });
-    }
-  },
-);
-
-test(
   "runEvals --agentic under EVALS_SANDBOX=1: a jailed child's PATH lists only dirs the jail lets it exec",
   DARWIN_ONLY,
   () => {
@@ -3756,6 +3363,50 @@ test(
       rmSync(binDir, { recursive: true, force: true });
       rmSync(fxRoot, { recursive: true, force: true });
       rmSync(stray, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "runEvals --agentic under EVALS_SANDBOX=1: the session's TMPDIR is the jail's canonical temp dir",
+  DARWIN_ONLY,
+  () => {
+    // The post-session child already runs in the jail's canonical temp dir; the
+    // session must see the same spelling, not the raw path the trial was created by.
+    // The trials root is reached through a symlink the test makes, whatever the
+    // host's TMPDIR looks like.
+    const binDir = tmpDir("harry-evals-bin-");
+    const realRoot = realpathSync(tmpDir("harry-evals-fxroot-"));
+    const linkParent = tmpDir("harry-evals-fxlink-");
+    const fxRoot = path.join(linkParent, "root");
+    symlinkSync(realRoot, fxRoot);
+    try {
+      const record = "session-tmpdir.json";
+      const script = path.join(binDir, "tmpdir-session.mjs");
+      writeFileSync(
+        script,
+        [
+          'import { writeFileSync } from "node:fs";',
+          `writeFileSync(process.env.TMPDIR + "/" + ${JSON.stringify(record)}, JSON.stringify({ TMPDIR: process.env.TMPDIR }));`,
+        ].join("\n"),
+      );
+      installFakeClaude(binDir, undefined, { script, callsInConfigDir: true });
+      const [line] = runJailedTrial(binDir, fxRoot, { PATH: process.env.PATH ?? "" });
+      const trialTmp = path.join(String(line.trialDir), "tmp");
+      const seen = JSON.parse(readFileSafe(path.join(trialTmp, record)) || "{}") as {
+        TMPDIR?: string;
+      };
+      assert.notEqual(
+        trialTmp,
+        realpathSync(trialTmp),
+        "the trial dir is reached through a symlink",
+      );
+      assert.equal(seen.TMPDIR, realpathSync(trialTmp));
+      assert.equal(line.error, undefined, String(line.error));
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(linkParent, { recursive: true, force: true });
+      rmSync(realRoot, { recursive: true, force: true });
     }
   },
 );
@@ -4084,13 +3735,14 @@ test("every text case REJECTS a degenerate reply corpus", () => {
 test("a test command killed by a signal is reported as killed, not timed out", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "evals-kill-"));
   try {
-    const state = { fixtureDir: dir, env: syntheticOperatorEnv() } as unknown as RepoState;
+    const state = { fixtureDir: dir } as unknown as RepoState;
     const outcome = evaluateArtifactCheck(
       {
         type: "test_command_passes",
         command: "node -e process.kill(process.pid,'SIGKILL')",
       },
       state,
+      { env: syntheticOperatorEnv() },
     );
     assert.equal(outcome.ok, false);
     assert.doesNotMatch(outcome.detail, /timed out/);
@@ -4100,16 +3752,29 @@ test("a test command killed by a signal is reported as killed, not timed out", (
   }
 });
 
-test("findOnPath refuses a path that is not an executable file", () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "evals-find-"));
+test("runEvals refuses an EVALS_CLAUDE_BIN that is not an executable file, before any session", () => {
+  const binDir = tmpDir("harry-evals-bin-");
   try {
-    const plain = path.join(dir, "plain");
+    installFakeClaude(binDir);
+    const plain = path.join(binDir, "plain");
     writeFileSync(plain, "");
-    assert.equal(findOnPath(path.join(dir, "missing")), null);
-    assert.equal(findOnPath(plain), null);
-    assert.equal(findOnPath(dir), null);
-    assert.equal(findOnPath(process.execPath), process.execPath);
+    const envFor = (bin: string) => ({
+      ...syntheticOperatorEnv(),
+      EVALS_CLAUDE_BIN: bin,
+      EVALS_ANTHROPIC_API_KEY: FAKE_EVALS_API_KEY,
+    });
+    for (const bin of [path.join(binDir, "missing"), plain, binDir]) {
+      assert.match(
+        refusalOf(() => runOne(envFor(bin), binDir)),
+        /cannot find the claude CLI on PATH; refusing to start the run/,
+        bin,
+      );
+    }
+    assert.equal(readCalls(binDir).length, 0, "no session was launched");
+    // Not vacuous: the executable shim at the same kind of path is accepted.
+    runOne(envFor(path.join(binDir, "claude")), binDir);
+    assert.equal(readCalls(binDir).length, 1, "the executable claude ran");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(binDir, { recursive: true, force: true });
   }
 });

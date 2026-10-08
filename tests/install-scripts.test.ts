@@ -484,3 +484,28 @@ test("safeWrite: a failed write cleans up its temp file and rethrows", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// The shipped scripts run on the consumer's Node through /sync, with no type
+// stripping assumed, so nothing they load may be a .mts or .ts module. Typecheck
+// accepts such an import and this repo's own Node runs it, so only this walk sees it.
+test("the shipped scripts reach only .mjs modules through their relative imports", () => {
+  const entries = ["install.mjs", "install-codex.mjs", "init.mjs"].map((f) =>
+    path.join(pluginRoot, "scripts", f),
+  );
+  const seen = new Set<string>();
+  const queue = [...entries];
+  const offenders: string[] = [];
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const source = readFileSync(file, "utf8");
+    for (const m of source.matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s+"(\.\.?\/[^"]+)"/gms)) {
+      const target = path.resolve(path.dirname(file), m[1] as string);
+      if (!target.endsWith(".mjs")) offenders.push(`${path.relative(pluginRoot, file)} → ${m[1]}`);
+      else queue.push(target);
+    }
+  }
+  assert.ok(seen.size > entries.length, "the walk followed the scripts' lib imports");
+  assert.deepEqual(offenders, [], "a shipped script reaches a module that needs type stripping");
+});

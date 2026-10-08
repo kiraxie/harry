@@ -16,6 +16,7 @@ export const STALE = [
 
 // Warn about superseded entries found in `text` (the user's global instructions).
 // Reports only — harry never edits the user's hand-written rules.
+/** @param {string} text */
 export function warnStale(text) {
   const hits = STALE.filter((s) => s.pattern.test(text));
   if (hits.length) {

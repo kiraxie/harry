@@ -271,7 +271,7 @@ test("every §N citation names a section HARRY.md actually has", () => {
 
   const failures: string[] = [];
   // `evals/cases.jsonl`'s `law` field is a §N citation that a MACHINE reads, and
-  // `scripts/run-evals.mjs` validates it only as a non-empty string, so `law:
+  // `scripts/run-evals.mts` validates it only as a non-empty string, so `law:
   // "§9"` passes there today. Two cases legitimately use a non-§ value, hence the
   // prefix test rather than a blanket one.
   //

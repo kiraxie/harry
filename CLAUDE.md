@@ -30,7 +30,7 @@ pnpm run format                 # biome format --write .
 pnpm run install-laws           # scripts/install.mjs — wire HARRY.md into a global CLAUDE.md via @-import
 pnpm run install-laws-codex     # scripts/install-codex.mjs — inline HARRY.md into ~/.codex/AGENTS.md (Codex build)
 pnpm run init-ignore            # scripts/init.mjs — add harry's .gitignore block to a project
-pnpm run evals <validate|run|score> [options]   # scripts/run-evals.mjs — behavioral evals
+pnpm run evals <validate|run|score> [options]   # scripts/run-evals.mts — behavioral evals
 ```
 
 Node **>= 26** is required, deliberately — it is the floor for running `.test.ts` files directly
@@ -41,11 +41,16 @@ path; don't "fix" it by lowering the floor without restoring a transpile step fo
 Use pnpm 12 natively (corepack, or a pnpm 12 install) — a pre-12 global pnpm hands off to 12 and
 rewrites `pnpm-lock.yaml`'s package-manager document in the process, dirtying the lockfile.
 
-**Lint scope** (`biome.json` `files.includes`): `src/**/*.ts`, `tests/**/*.ts`, `scripts/**/*.mjs`,
-`build.mjs`, `*.json` — no excludes; `pnpm run lint` exits 0. `pnpm run typecheck` covers the whole
-TS source.
+**Lint scope** (`biome.json` `files.includes`): `src/**/*.ts`, `tests/**/*.ts`, `scripts/**/*.mts`,
+`scripts/**/*.mjs`, `build.mjs`, `*.json` — no excludes; `pnpm run lint` exits 0. `pnpm run typecheck`
+covers `src/`, `tests/` and `scripts/`, and each module has one type source: the evals runner and its
+`scripts/lib/evals-*` modules are `.mts` (maintainer-only, run by Node's type stripping; `.mts`
+because it is ESM by its extension, so the jailed post-session child never has to read the
+`package.json` the jail denies); the scripts
+that ship to consumers (`install`, `install-codex`, `init` and their `scripts/lib` helpers) stay
+`.mjs`, typed with JSDoc and checked through `checkJs`, so `/sync` needs no type-stripping Node.
 
-**Behavioral evals** (`evals/`, `scripts/run-evals.mjs`) measure whether the resident laws actually
+**Behavioral evals** (`evals/`, `scripts/run-evals.mts`) measure whether the resident laws actually
 change a model's first-response behavior — each case runs the same prompt twice, once with an empty
 global `CLAUDE.md` (baseline) and once with `HARRY.md` inlined (candidate), and the delta is the
 laws' effect. Run them after any material `HARRY.md` change. `validate` (schema-check the cases) and

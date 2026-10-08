@@ -681,7 +681,7 @@ var package_default = {
     "install-laws": "node scripts/install.mjs",
     "install-laws-codex": "node scripts/install-codex.mjs",
     "init-ignore": "node scripts/init.mjs",
-    evals: "node scripts/run-evals.mjs"
+    evals: "node scripts/run-evals.mts"
   },
   dependencies: {},
   devDependencies: {

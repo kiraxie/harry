@@ -15,6 +15,7 @@ const SEP = "\n";
 // separator newline harry inserted before it — never the user's content or the
 // user's own trailing whitespace. Used to recover the user-owned base before
 // re-applying or dedup-checking.
+/** @param {string} existing @param {{ begin: string; end: string }} markers @returns {string} */
 export function stripMarkerBlock(existing, { begin, end }) {
   const text = existing ?? "";
   const bi = text.indexOf(begin);
@@ -35,6 +36,11 @@ export function stripMarkerBlock(existing, { begin, end }) {
 // run produces identical output. Harry owns only the block and the single
 // separator newline before it — the user's bytes outside the block, including
 // their trailing whitespace/newlines, are preserved exactly.
+/**
+ * @param {string} existing
+ * @param {{ begin: string; end: string; body: string; remove?: boolean }} block
+ * @returns {string}
+ */
 export function applyMarkerBlock(existing, { begin, end, body, remove = false }) {
   const base = stripMarkerBlock(existing, { begin, end });
   if (remove) return base;

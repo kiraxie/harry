@@ -11,7 +11,37 @@
 import fs from "node:fs";
 import path from "node:path";
 
-function writeExecutable(filePath, source) {
+export interface FakeClaudeCall {
+  prompt?: string;
+  model?: string;
+  allowedTools?: string;
+  permissionMode?: string;
+  configDir: string | null;
+  cwd: string;
+  cwdHasClaudeMd: boolean;
+  hasClaudeMd: boolean;
+  lawsPresent: boolean;
+  hasCredentials: boolean;
+  apiKey: string | null;
+  oauthToken: string | null;
+  evalsApiKeyForwarded: boolean;
+  evalsOauthForwarded: boolean;
+  envKeys: string[];
+  tty: boolean[];
+}
+
+export interface FakeClaudeSettings {
+  failOnNth?: number[];
+  failReply?: string;
+  script?: string;
+  fail?: boolean;
+  isError?: boolean;
+  stderr?: string;
+  stdoutBytes?: number;
+  callsInConfigDir?: boolean;
+}
+
+function writeExecutable(filePath: string, source: string) {
   fs.writeFileSync(filePath, source, { encoding: "utf8", mode: 0o755 });
 }
 
@@ -33,10 +63,10 @@ function writeExecutable(filePath, source) {
 //               the write-allowlist jail the shim may write only its trial's dirs,
 //               so jailed tests read the log back with readCalls(line.configDir)
 export function installFakeClaude(
-  binDir,
+  binDir: string,
   reply = "A neutral reply with no tier or debt marker.",
-  settings = {},
-) {
+  settings: FakeClaudeSettings = {},
+): { scriptPath: string; callsPath: string } {
   const callsPath = path.join(binDir, "fake-claude-calls.json");
   const settingsPath = path.join(binDir, "fake-claude-settings.json");
   const scriptPath = path.join(binDir, "claude");
@@ -145,7 +175,7 @@ process.stdout.write(
   return { scriptPath, callsPath };
 }
 
-export function readCalls(binDir) {
+export function readCalls(binDir: string): FakeClaudeCall[] {
   const callsPath = path.join(binDir, "fake-claude-calls.json");
   if (!fs.existsSync(callsPath)) return [];
   return JSON.parse(fs.readFileSync(callsPath, "utf8"));

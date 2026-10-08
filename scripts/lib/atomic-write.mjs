@@ -30,10 +30,12 @@ import { copyFileSync, existsSync, renameSync, rmSync, writeFileSync } from "nod
 // no code). A per-call name is also why safeWrite must clean up after a failed
 // write: there is no next run to reclaim a fixed path, so the debris would
 // accumulate beside the user's global instructions.
+/** @param {string} targetPath @returns {string} */
 export function tempPathFor(targetPath) {
   return `${targetPath}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
+/** @param {string} targetPath @param {string} content @returns {void} */
 export function safeWrite(targetPath, content) {
   const backupPath = `${targetPath}.bak`;
   if (existsSync(targetPath) && !existsSync(backupPath)) {

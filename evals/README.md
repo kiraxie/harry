@@ -91,7 +91,7 @@ mkdir -p ~/.config/harry
 # Paste the token into that file with your editor; do not `echo` it into place.
 
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
-  node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+  node scripts/run-evals.mts run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 ```
 
@@ -138,7 +138,7 @@ looking like three genuine non-compliances.
 ```sh
 # Run each case three times; the majority verdict rides out one-off noise.
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
-node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+node scripts/run-evals.mts run --condition candidate --model claude-sonnet-4-5 \
   --trials 3 --out evals/results/run.jsonl
 ```
 
@@ -280,40 +280,29 @@ launchd is an exception: `launchctl` reaches it over the task's bootstrap
 port rather than a mach-lookup name, so this profile does not gate it at all
 (see "What it does NOT contain" below).
 
-**What it does:** the generated profile's first rule is `(deny default)`. It then
-allows back only this list:
+**What it blocks.** The profile's first rule is `(deny default)`; it then allows
+back only what `node`, `claude` and `git` need. A jailed process cannot:
 
-- **processes:** fork; exec from `/bin`, `/usr/bin` and the resolved `node`,
-  `claude` and `git` install trees (including git's helper dir and the real
-  binary behind Apple's `/usr/bin/git` shim), never from a trial dir; signals to
-  processes in the same jail only; sysctl reads;
-- **reads:** everything outside `$HOME` except a terminal: `/dev/tty` and the
-  pty devices `/dev/ttysN` are denied, so the session cannot read what you type
-  while it runs. Under `$HOME`, only the trial dirs, the
-  `claude`, `node` and `git` install trees (a runtime under `$HOME`, such as nvm
-  node or the `~/.local` claude install, must stay readable for the child to
-  start), and `scripts/run-evals.mjs` itself (for the post-session child). Each
-  runtime tree is its whole **containing directory**, so sibling files there are
-  readable and executable too: a coarse allow, not a single-file grant — an nvm
-  `node` install makes that whole node-version directory exec-able, and a
-  `claude` installed as `~/.local/bin/claude` (a common location) makes the
-  whole of `~/.local/bin` readable and exec-able, other binaries there included;
-- **writes:** exactly this trial's own config dir, fixture repo and temp dir (the
-  trial's `TMPDIR`), plus `/dev/null`. Not the fixture's parent, not the shared
-  temp root, not another trial's dirs, and not a user-writable directory such as
-  `/opt/homebrew/bin`;
-- **system services:** one *mach-lookup* name allowed, by exact match:
-  `com.apple.system.opendirectoryd.libinfo`, for user and group lookup — nothing
-  else reachable that way can start or drive a program. launchd is reached
-  through a different channel this allowlist does not cover at all; see "What it
-  does NOT contain" below. A test pins the whole generated profile as fixed
-  text, so adding a name, or changing any other rule, means editing that test
-  too;
-- **network:** outbound IP to any host and port, and the DNS resolver's socket.
-  No other unix socket, so a local daemon listening on one (a Docker socket, for
-  example) is unreachable.
+- read anything under your `$HOME` except its own trial's dirs, the `node`,
+  `claude` and `git` install trees and the runner's own files, and cannot read
+  the terminal you type in (`/dev/tty`, `/dev/ttysN`);
+- write anywhere but its own trial's config dir, fixture repo and temp dir (and
+  `/dev/null`): not another trial's dirs, not the shared temp root, not a
+  user-writable directory such as `/opt/homebrew/bin`;
+- run a program from a trial dir;
+- ask a system service to start or drive a program outside the jail, such as
+  LaunchServices (`open`) or Apple Events (`osascript`) — launchd is the
+  exception, below;
+- reach a local daemon over a unix socket (a Docker socket, for example).
 
-This allowlist was derived with the fake `claude` shim: the jail tests pass with
+**The full allowlist is a test, not this page.** `tests/evals-jail.test.ts` pins
+the whole generated profile as fixed text ("buildSeatbeltProfile: the whole
+profile is exactly this text (golden)") and the paths `trialJail` fills it with
+("trialJail hands the profile builder each path once, by its canonical spelling
+(golden)"). Adding or widening a rule means editing that test too, so the change
+is visible in review.
+
+The allowlist was derived with the fake `claude` shim: the jail tests pass with
 nothing more, and the real `claude --version` and an HTTPS request from `node`
 also run under it. A live run with the real `claude` still has to confirm it
 needs nothing else. If it does, the trial fails closed, never open: its `error`
@@ -344,7 +333,7 @@ processes also log denials they run fine without; never add these:
 `file-read-data ~/.CFUserTextEncoding`, `file-write-data /dev/dtracehelper`,
 `system-info vfs.disk-space`, and `file-read-data` or `file-read-metadata` of
 `/dev/tty` or a `/dev/ttysN`. That last one is the terminal deny, on purpose
-(see **reads** above), and a jailed `bash` can log it just by starting. The log
+(see "What it blocks" above), and a jailed `bash` can log it just by starting. The log
 is not complete: the kernel folds repeats
 into `N duplicate reports` lines and does not report every denial (a jailed
 `claude` started from a directory under `$HOME`, which it may not read, failed
@@ -354,8 +343,8 @@ failing process hit, by its exact name, after checking by hand that it cannot
 start, drive or act for you as a program outside the jail (a keychain,
 preferences or login-item service can). Never add a prefix or a broad rule.
 
-So the session keeps working in its fixture. The kernel denies anything the list
-does not allow: reads of ssh keys, other credentials and documents under
+So the session keeps working in its fixture. The kernel denies anything the
+profile does not allow: reads of ssh keys, other credentials and documents under
 `$HOME`, writes anywhere but its own trial's dirs, and mach-lookup requests to a
 service that would start a program as you, outside the jail — with the launchd
 exception below ("What it does NOT contain"). The post-session step (above) runs
@@ -390,11 +379,11 @@ re-open `~/.gitconfig`.
 - **Reads outside `$HOME`** — the session can read anything outside your home
   that your user can read, a terminal excepted: system dirs, `/opt`, and the
   temp root, including other trials' dirs. It cannot write them.
-
-These four broad allowances (outbound IP, exec of whole system and runtime
-dirs, reads outside `$HOME`, and the launchd residual above) are recorded, with
-their upgrade path, in the `DEBT:` note on `buildSeatbeltProfile` in
-`scripts/run-evals.mjs`.
+- **Whole runtime directories** — each `node`, `claude` and `git` install tree
+  is allowed as its whole containing directory, not a single file: an nvm
+  `node` install makes that whole node-version directory readable and
+  exec-able, and a `claude` installed as `~/.local/bin/claude` does the same for
+  the whole of `~/.local/bin`, other binaries there included.
 - **The session's own credential** — the child's env is allowlisted, so nothing
   else from your shell reaches it. But it must hold its one credential to reach
   the API, and no OS sandbox can hide an env var from the session's own
@@ -409,10 +398,15 @@ their upgrade path, in the `DEBT:` note on `buildSeatbeltProfile` in
   unjailed step reads. But nothing stops it, and it can still change its own
   fixture while the post-session step judges it, so the verdict can describe a
   repo the session did not leave. See the `DEBT:` note on `judgeFixture` in
-  `scripts/run-evals.mjs`.
+  `scripts/run-evals.mts`.
 - **`sandbox-exec` itself** is deprecated by Apple (still shipped and honored). It is
   accepted here for a local maintainer tool rather than taking on a container/VM
   dependency.
+
+The broad allowances (outbound IP, exec of whole system and runtime dirs, reads
+outside `$HOME`, and the launchd residual) are recorded, with their upgrade
+path, in the `DEBT:` note on `buildSeatbeltProfile` in
+`scripts/lib/evals-jail.mts`.
 
 **Refusal (never silently unsandboxed):** if `EVALS_SANDBOX=1` is set and an agentic
 case is queued to run but the platform is not macOS, or `sandbox-exec` is not found,
@@ -425,7 +419,7 @@ flag on a text-only run is a no-op, not a refusal.
 ```sh
 # Release gate, sandboxed: each agentic trial jailed, token read from a file.
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" EVALS_SANDBOX=1 \
-  node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+  node scripts/run-evals.mts run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
 ```
 
@@ -489,14 +483,14 @@ rather than a silent skip, so you never spend on one by accident.
 ```sh
 # Text cases only (agentic ones are skipped with a notice):
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
-node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+node scripts/run-evals.mts run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
 # Release gate: include agentic cases AND repeat each 3× so the majority verdict
 # rides out one-off noise (real, heavier spend — this is the gate you run before
 # shipping a HARRY.md change):
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
-node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+node scripts/run-evals.mts run --condition candidate --model claude-sonnet-4-5 \
   --agentic --trials 3 --out evals/results/run.jsonl
 ```
 
@@ -587,25 +581,25 @@ exact phrases.
 
 ```sh
 # Free: schema-check the cases file.
-node scripts/run-evals.mjs validate
+node scripts/run-evals.mts validate
 
 # Real spend: run BOTH conditions into the SAME --out file (run appends, so
 # score can contrast baseline against candidate in one table). Every `run` needs
 # exactly one credential (see Authentication); these read the token from its file.
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
-node scripts/run-evals.mjs run --condition baseline  --model claude-sonnet-4-5 \
+node scripts/run-evals.mts run --condition baseline  --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
-node scripts/run-evals.mjs run --condition candidate --model claude-sonnet-4-5 \
+node scripts/run-evals.mts run --condition candidate --model claude-sonnet-4-5 \
   --out evals/results/run.jsonl
 
 # A subset by id, or set the model via env:
 EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
-EVALS_MODEL=claude-sonnet-4-5 node scripts/run-evals.mjs run \
+EVALS_MODEL=claude-sonnet-4-5 node scripts/run-evals.mts run \
   --condition candidate --cases tier-small-feature,debt-shortcut --out evals/results/run.jsonl
 
 # Free: score the results file (exit non-zero if any candidate check fails).
-node scripts/run-evals.mjs score --results evals/results/run.jsonl
+node scripts/run-evals.mts score --results evals/results/run.jsonl
 ```
 
 `run` **appends** — point both conditions at one `--out` file to get a

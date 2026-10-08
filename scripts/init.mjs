@@ -26,6 +26,7 @@ const ENTRIES = [".local/", "*worktrees/", "CLAUDE.local.md"];
 // Returns the .gitignore content with harry's entries appended (or removed).
 // Per-entry dedupe: an entry already present anywhere in the file is skipped,
 // so it never duplicates a line the user already has.
+/** @param {string} existing @param {{ remove?: boolean }} [opts] @returns {string} */
 export function applyBlock(existing, { remove = false } = {}) {
   const text = existing ?? "";
   const endsWithNewline = text.endsWith("\n");
@@ -50,6 +51,7 @@ export function applyBlock(existing, { remove = false } = {}) {
   return `${merged.join("\n")}\n`;
 }
 
+/** @param {string} targetDir @param {{ remove?: boolean }} [opts] @returns {string} */
 export function run(targetDir, { remove = false } = {}) {
   const path = join(targetDir, ".gitignore");
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
@@ -58,6 +60,7 @@ export function run(targetDir, { remove = false } = {}) {
 }
 
 function selftest() {
+  /** @param {unknown} cond @param {string} msg */
   const assert = (cond, msg) => {
     if (!cond) {
       throw new Error(`selftest failed: ${msg}`);

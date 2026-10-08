@@ -5,6 +5,7 @@
     "includes": [
       "src/**/*.ts",
       "tests/**/*.ts",
+      "scripts/**/*.mts",
       "scripts/**/*.mjs",
       ".claude/scripts/**/*.mjs",
       "build.mjs",

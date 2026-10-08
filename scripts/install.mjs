@@ -50,6 +50,7 @@ function snapshotPath() {
   return join(dirname(globalPath()), "harry", "HARRY.md");
 }
 
+/** @param {string} existing @param {{ remove?: boolean; importPath?: string }} [opts] @returns {string} */
 export function applyImport(existing, { remove = false, importPath = snapshotPath() } = {}) {
   const body = `@${importPath}`;
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
@@ -110,6 +111,7 @@ export function run({ remove = false, explore = false } = {}) {
 }
 
 function selftest() {
+  /** @param {unknown} c @param {string} m */
   const assert = (c, m) => {
     if (!c) throw new Error(`selftest failed: ${m}`);
   };
