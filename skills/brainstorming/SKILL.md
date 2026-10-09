@@ -101,7 +101,7 @@ nests under it; sections 1-5 are what is skipped.
 
 `## Progress` is written here as an empty heading only — its lines are `executing`'s to append. `## Follow-ups`
 MAY be created here at step 6 to hold the residue manifest's deferred-in-scope lines;
-otherwise it is `executing`'s to add during the build.
+its other sources are listed in `references/doc-types.md`.
 
 ## Item Self-Review (fix inline, no re-review)
 

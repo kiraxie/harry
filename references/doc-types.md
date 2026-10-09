@@ -30,7 +30,7 @@ milestone: <slug>      # optional key — omit entirely if standalone
 ## Why / What      <!-- filled when promoted to active — the design and its acceptance criteria -->
 ### Acceptance criteria  <!-- last subsection of Why / What; approved with the design -->
 ## Progress        <!-- append-only, filled during execution -->
-## Follow-ups      <!-- filled at brainstorming step 6 or during execution; flushed to new backlog items at finish -->
+## Follow-ups      <!-- sources: the Follow-ups flush, below; flushed to new backlog items at finish -->
 ```
 
 Sections accumulate — never delete an earlier section when filling a later
@@ -124,12 +124,13 @@ milestone edit.
 - **Follow-ups flush**: before archiving, every line under the item's
   `## Follow-ups` becomes its own new `status: backlog` item in
   `.local/items/` (title + a `## Notes` line quoting the follow-up), then
-  the source item's `## Follow-ups` section is cleared. This is the only
-  place new backlog items get created from execution output; brainstorming's
-  residue manifest also creates backlog items directly, at design time.
-  `## Follow-ups` entries come from two sources — brainstorming's residue
-  manifest (deferred discussion items) and executing (follow-on work found
-  mid-build) — and the flush treats both identically.
+  the source item's `## Follow-ups` section is cleared. Backlog items
+  are also created directly by brainstorming's residue manifest, at design
+  time, and by finishing's **backlog** ruling on an architecture finding.
+  `## Follow-ups` entries come from brainstorming's residue manifest
+  (deferred discussion items), executing (follow-on work found mid-build),
+  and finishing's architecture review from round 2 on (its Minor findings) —
+  and the flush treats them all identically.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.

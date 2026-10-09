@@ -136,7 +136,7 @@ test("AC-2: a bug fix that alters a shape is not exempt", () => {
 test("AC-2: with no item (Trivial) the skip line is written in the reply", () => {
   assert.match(
     step2("No item (Trivial)."),
-    /There is no ## Progress: the round's head line, the skip line.*?are written in the reply instead\./,
+    /There is no ## Progress: every line this step would write there is written in the reply instead\./,
     "a Trivial unit's skip line no longer goes to the reply",
   );
 });
@@ -164,6 +164,10 @@ test("AC-3: the reviewer is handed every input", () => {
     [
       /On a later round, also hand it every ruling recorded so far — each leave as is record as references\/architecture-review\.md's Output defines it, and each backlog/,
       "the prior rulings on a later round",
+    ],
+    [
+      /and every Minor finding sent to ## Follow-ups from round 2 on, so neither is raised again unless the fix changed its shape\./,
+      "the Minors sent to Follow-ups on a later round",
     ],
   ];
   for (const [re, what] of inputs) assert.match(p, re, `the reviewer is no longer handed ${what}`);
@@ -222,8 +226,8 @@ test("AC-3: the architecture-review reference lists the same inputs the step han
     [/The last 20 commits touching the changed paths/, "the last 20 commits"],
     [/Read access to the whole repo/, "the whole repo"],
     [
-      /On a later round, the rulings recorded so far — each leave as is record as Output below defines it, and each backlog\. Do not raise a ruled finding again unless the fix changed the shape it concerns\./,
-      "the prior rulings, and not re-raising them",
+      /On a later round, the rulings recorded so far — each leave as is record as Output below defines it, and each backlog — and the Minor findings sent to ## Follow-ups from round 2 on\. Do not raise a ruled finding or one of those Minor findings again unless the fix changed the shape it concerns\./,
+      "the prior rulings and Follow-ups Minors, and not re-raising them",
     ],
   ];
   for (const [re, what] of inputs)
@@ -244,7 +248,7 @@ test("AC-3: on the Codex build the review runs out of session through companion 
   );
   assert.match(
     p,
-    /context file .*? — the shape list, the item's ## Why \/ What and its AC, the git log -n 20 --stat -- <changed paths> output, and on a later round the rulings recorded so far\./,
+    /context file .*? — the shape list, the item's ## Why \/ What and its AC, the git log -n 20 --stat -- <changed paths> output, and on a later round the rulings recorded so far and the Minor findings sent to ## Follow-ups\./,
     "the Codex build's context file no longer carries the items the CC reviewer is handed",
   );
 });
@@ -342,16 +346,34 @@ test("AC-4: a finding that depends on missing context is a question", () => {
   );
 });
 
-test("AC-4: every finding carries where, why, structural fix and recommended ruling", () => {
+test("AC-4: every finding carries where, why, severity, structural fix and recommended ruling", () => {
   const out = section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "```");
   assert.match(
     plain(out),
-    /Every finding carries four things: where .*?, why it matters, the structural fix, and your recommended ruling\./,
-    "a finding no longer carries all four fields",
+    /Every finding carries five things: where .*?, why it matters, its severity, the structural fix, and your recommended ruling\./,
+    "a finding no longer carries all five fields",
   );
   const template = section(read(ARCH_REVIEW), ARCH_REVIEW, "### Findings", "```\n\nA finding");
-  for (const field of ["Where:", "Why:", "Structural fix:", "Recommended ruling:"])
+  for (const field of ["Where:", "Why:", "Severity:", "Structural fix:", "Recommended ruling:"])
     assert.ok(template.includes(field), `the output template lost "${field}"`);
+});
+
+// review-round-cap: the cap keys on severity, and the Codex build's reviewer sees only
+// architecture-review.md, so the three names are defined there, in shape terms.
+test("review-round-cap: architecture-review.md defines each severity in shape terms", () => {
+  const out = plain(section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "```"));
+  for (const [name, re] of [
+    [
+      "Critical",
+      /- Critical — the shape breaks a caller already deployed, loses data, or leaves an acceptance criterion unmet\./,
+    ],
+    [
+      "Important",
+      /- Important — merged as is, the shape costs a migration or a boundary rewrite later\./,
+    ],
+    ["Minor", /- Minor — real, but nothing in this unit builds on it; it can wait\./],
+  ] as const)
+    assert.match(out, re, `architecture-review.md no longer defines ${name}`);
 });
 
 test("AC-4: no findings is said plainly", () => {
@@ -372,7 +394,7 @@ test("AC-5: findings never reach an automatic fixer and go to the user as one li
   assert.match(p, /Put them to the user as one list/, "findings are no longer one list");
   assert.match(
     archReview(),
-    /you do not fix anything; what you find goes to the user, who rules on each finding\./,
+    /you do not fix anything; what you find goes to the user, who rules on each finding, except a Minor finding from round 2 on, which goes to the item's ## Follow-ups without a ruling\./,
     "the architecture-review reference no longer forbids the reviewer from fixing",
   );
 });
@@ -393,7 +415,7 @@ test("AC-5: exactly three rulings — fix now, backlog, leave as is", () => {
   );
   assert.deepEqual(bullets(rulings, "→"), ["fix now", "backlog", "leave as is"]);
 
-  const out = section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "```");
+  const out = section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "Severity is judged");
   assert.match(
     plain(out),
     /The user rules each finding one of three ways/,
@@ -428,14 +450,14 @@ test("AC-5: after a fix, only the shapes the fix changed are re-checked", () => 
 test("AC-5: every round records the head it reviews", () => {
   assert.match(
     step2("Shape gate."),
-    /Every round records the head it reviews — architecture review at <sha7> \(git rev-parse --short HEAD\) — in ## Progress\./,
+    /Every round records the head it reviews in ## Progress \(git rev-parse --short HEAD\): a main-loop round, round 1 included, writes architecture review round <n> at <sha7>; an Option 2 follow-up round writes architecture review follow-up at <sha7>\./,
     "a round no longer records the head it reviewed, so the next round has no range to start from" +
       " — " +
       "The fix-now bullet alone does not narrow a later round: the shape gate and the diff packaging run every round, so each must say how it narrows, and to what range. The range is anchored on the head the previous round reviewed, not on AC completion lines: the review's fix wave commits after those lines are written, and a range built from them would let a shape that fixer altered merge unreviewed.",
   );
   assert.match(
     step2("No item (Trivial)."),
-    /There is no ## Progress: the round's head line, the skip line/,
+    /There is no ## Progress: every line this step would write there is written in the reply instead\./,
     "a Trivial unit's head line no longer goes to the reply",
   );
 });
@@ -474,15 +496,145 @@ test("AC-5: leave as is records the reason and is not raised again", () => {
   );
 });
 
-test("AC-5: there is no round cap", () => {
-  assert.match(step2("No findings →"), /There is no round cap:/, "a round cap was introduced");
+// review-round-cap: the loop stops at round 3, and the stop says why it may be stuck.
+test("review-round-cap AC-1: round 1 plus at most two more, then a stop with a status report", () => {
+  assert.doesNotMatch(step2Raw(), /There is no round cap/, "step 2 still says there is no cap");
+  const p = step2("Round cap.");
+  const claims: [RegExp, string][] = [
+    [
+      /rounds 2 and 3 start on their own, and none after round 3 does/i,
+      "the cap: round 1 plus at most two more",
+    ],
+    [
+      /Round 3[^.]*that still has a Critical or Important finding open stops/i,
+      "round 3 with C/I open stops",
+    ],
+    [/the rounds run/i, "the report names the rounds run"],
+    [/the findings still open/i, "the report names the open findings"],
+    [/the area or rule that kept returning/i, "the report names the recurring area or rule"],
+    [/the unit's goal/i, "the report names the unit's goal"],
+    [/wrong direction/i, "the report warns of a possibly wrong direction"],
+    [/no further round starts on its own/i, "no round after a stop on its own"],
+    [
+      /The report comes first, then the same numbered list/i,
+      "the report precedes the rulings list",
+    ],
+    [
+      /backlog as the recommended ruling on every open finding/i,
+      "open findings default to backlog",
+    ],
+    [/nothing is filed before the user's reply/i, "no backlog item before the user rules"],
+    [/the user's explicit choice of another round/i, "another round only on the user's choice"],
+  ];
+  for (const [re, what] of claims) assert.match(p, re, `the round cap lost: ${what}`);
+});
+
+test("review-round-cap AC-5(b): every main-loop round is numbered and counted for the whole unit", () => {
+  const p = step2("Round cap.");
+  const claims: [RegExp, string][] = [
+    [
+      /Every main-loop round carries its number in the head line the shape gate sets, a round the user chooses after a stop included/i,
+      "every main-loop round records its number",
+    ],
+    [/a return to the design does not restart it/i, "the count runs for the whole unit"],
+    [
+      /Round 3, or any later main-loop round, that still has a Critical or Important finding open stops/i,
+      "a round after round 3 with C/I open stops too",
+    ],
+    [
+      /Option 2's follow-up rounds[^.]*carry no number and sit outside the cap/i,
+      "PR follow-up rounds sit outside the cap",
+    ],
+  ];
+  for (const [re, what] of claims) assert.match(p, re, `the round cap lost: ${what}`);
+  assert.doesNotMatch(
+    p,
+    /architecture review round <n> at/,
+    "the cap restates the head-line format",
+  );
+  assert.match(
+    plain(read(FINISHING)),
+    /run step 2's shape gate as a later round outside the round cap/,
+    "Option 2's follow-up round no longer says it sits outside the cap",
+  );
+});
+
+test("review-round-cap AC-2: from round 2 on, Minor findings go to Follow-ups without a ruling", () => {
+  assert.match(
+    step2("Round cap."),
+    /From round 2 on, each Minor finding goes to the item's ## Follow-ups without a ruling/i,
+  );
+});
+
+test("review-round-cap AC-5(c): a later round's Minors are traceable, and a Minors-only round records its outcome", () => {
+  const p = step2("Round cap.");
+  assert.match(
+    p,
+    /goes to the item's ## Follow-ups without a ruling, as architecture review round <n>: <where> · <gist>/i,
+    "a later round's Minor no longer lands in Follow-ups as one traceable line",
+  );
+  assert.match(
+    p,
+    /a round whose findings are all Minor records architecture review round <n>: <m> Minor to Follow-ups in ## Progress and goes to step 3/i,
+    "a Minors-only round no longer records its outcome",
+  );
+  assert.match(
+    p,
+    /Option 2's follow-up rounds rule their Minor findings as usual/i,
+    "a follow-up round's Minor routing is unstated",
+  );
+});
+
+test("review-round-cap AC-5: doc-types lists finishing's later rounds as a Follow-ups source", () => {
+  assert.match(
+    plain(read(DOC_TYPES)),
+    /## Follow-ups entries come from brainstorming's residue manifest[^.]*executing[^.]*and finishing's architecture review from round 2 on/,
+    "doc-types no longer names finishing's architecture review as a Follow-ups source",
+  );
+});
+
+test("review-round-cap AC-5(c): only doc-types lists the Follow-ups sources", () => {
+  const template = read(DOC_TYPES)
+    .split("\n")
+    .find((l) => l.startsWith("## Follow-ups"));
+  assert.ok(template, "doc-types' item template no longer has a ## Follow-ups line");
+  assert.doesNotMatch(
+    template,
+    /brainstorming|execut|finishing/i,
+    "doc-types' template comment re-lists the Follow-ups sources",
+  );
+  const brainstorming = plain(read(path.join("skills", "brainstorming", "SKILL.md")));
+  assert.doesNotMatch(
+    brainstorming,
+    /otherwise it is executing's to add/,
+    "brainstorming re-lists the Follow-ups sources",
+  );
+  assert.match(
+    brainstorming,
+    /its other sources are listed in references\/doc-types\.md/,
+    "brainstorming no longer points at doc-types for the Follow-ups sources",
+  );
+});
+
+test("review-round-cap: doc-types names every direct backlog source", () => {
+  const d = plain(read(DOC_TYPES));
+  assert.doesNotMatch(
+    d,
+    /the only place new backlog items get created/,
+    "doc-types still claims the flush is the only source of backlog items from execution",
+  );
+  assert.match(
+    d,
+    /Backlog items are also created directly by brainstorming's residue manifest, at design time, and by finishing's backlog ruling on an architecture finding\./,
+    "doc-types no longer names the direct backlog sources",
+  );
 });
 
 test("AC-5: with no item (Trivial) rulings go to the reply and fix now fixes in place", () => {
   const p = step2("No item (Trivial).");
   assert.match(
     p,
-    /and every ruling are written in the reply instead\./,
+    /every line this step would write there is written in the reply instead\./,
     "Trivial rulings left the reply",
   );
   assert.match(

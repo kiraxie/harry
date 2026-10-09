@@ -15,7 +15,12 @@ level at a time, and stop at the first level where it fails.
 1. Finding site — does the fix resolve what the finding names, at the code it points to?
 2. Data flow — trace where the data comes from and goes. Is the fix at the right point
    on that path, or downstream of the cause? Do other callers, producers or copies of
-   the same knowledge keep the same problem?
+   the same knowledge keep the same problem? When an earlier findings file holds a
+   finding with the same cause in the same area — same file or same rule — whose fix was
+   built, whether or not the finding under check says so, or when the finding says a previous fix left
+   something incomplete, the fix holds only if it adds a check that catches the whole
+   class (a test, a lint rule or a scan); patching only the instances in view fails at
+   this level.
 3. System — does the fix fit the unit's goal, the neighbouring modules and the
    conventions already in the codebase? Would someone reading the whole change see it
    as the natural place, or as a patch?
@@ -25,7 +30,7 @@ level at a time, and stop at the first level where it fails.
 - This file, in full.
 - Level 1: each finding, its proposed fix and the code at its site.
 - Level 2: the unit's full diff and read access to the whole repo — trace the flow
-  yourself.
+  yourself — and the earlier findings files listed under level 3, to see a cause returning.
 - Level 3: the item's Why / What and its acceptance criteria; every ruling so far, with
   its reason; every earlier findings file of the unit, so a cause that keeps returning
   in one area is visible; and the area's recent git history.

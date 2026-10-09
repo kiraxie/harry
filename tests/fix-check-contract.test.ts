@@ -25,6 +25,27 @@ test("AC-1: fix-check names the three levels and what each checks", () => {
     assert.match(text, re, `fix-check no longer defines what level "${what}" checks`);
 });
 
+test("review-round-cap AC-3: a returning cause needs a fix that adds a class-wide check", () => {
+  const text = fixCheck();
+  const [two, three] = [text.indexOf("2. Data flow —"), text.indexOf("3. System —")];
+  assert.ok(two !== -1 && three > two, "fix-check no longer has level 2 followed by level 3");
+  const level2 = text.slice(two, three);
+  assert.match(
+    level2,
+    /a previous fix left (?:something )?incomplete.*?adds a check that catches the whole class.*?fails at this level/i,
+  );
+});
+
+test("review-round-cap AC-5(a): the referee's own comparison with earlier findings triggers the class rule", () => {
+  const text = fixCheck();
+  const level2 = text.slice(text.indexOf("2. Data flow —"), text.indexOf("3. System —"));
+  assert.match(
+    level2,
+    /an earlier findings file holds a finding with the same cause in the same area — same file or same rule — whose fix was built, whether or not the finding under check says so/i,
+    "the class rule keys only on what the finding says, which a later reviewer cannot know",
+  );
+});
+
 test("AC-1: fix-check lists every input the check is handed", () => {
   const text = fixCheck();
   const inputs: [RegExp, string][] = [

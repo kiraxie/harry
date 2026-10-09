@@ -4,7 +4,8 @@ What a reviewer applies when finishing's architecture-review step
 (`skills/finishing/SKILL.md`, step 2) dispatches it: a lead reading the whole
 change for its shape, before anything merges or is pushed. You are that reviewer.
 You review **read-only** — no working-tree, index, or HEAD mutation — and you do
-not fix anything; what you find goes to the user, who rules on each finding.
+not fix anything; what you find goes to the user, who rules on each finding, except a
+Minor finding from round 2 on, which goes to the item's `## Follow-ups` without a ruling.
 
 A **shape** is the outward form other code depends on: an API, a DB schema, a
 public interface, or a module or service boundary. You judge only shapes. You are
@@ -23,8 +24,9 @@ handed:
 - **Read access to the whole repo** — read callers, neighbours and older code
   freely; the diff alone never shows how a shape fits.
 - **On a later round, the rulings recorded so far** — each **leave as is**
-  record as Output below defines it, and each **backlog**. Do not raise a ruled finding again
-  unless the fix changed the shape it concerns.
+  record as Output below defines it, and each **backlog** — and the Minor findings sent to
+  `## Follow-ups` from round 2 on. Do not raise a ruled finding or one of those Minor
+  findings again unless the fix changed the shape it concerns.
 
 ## Not your job
 
@@ -100,9 +102,9 @@ shape left as it is belongs to that rubric, not here.
 
 ## Output
 
-Every finding carries four things: **where** (`file:line`, or the shape's name
-when it spans files), **why** it matters, the **structural fix**, and your
-**recommended ruling**. The structural fix is the long-term one, never a workaround
+Every finding carries five things: **where** (`file:line`, or the shape's name
+when it spans files), **why** it matters, its **severity**, the **structural fix**,
+and your **recommended ruling**. The structural fix is the long-term one, never a workaround
 (HARRY.md §6). The user rules each finding one of three ways, and you recommend one
 of the same three:
 
@@ -113,6 +115,13 @@ of the same three:
 - **leave as is** — the shape stays as it is. Its location, its gist and the user's
   reason are recorded, and the finding is not raised again.
 
+Severity is judged on the shape, one of three:
+
+- **Critical** — the shape breaks a caller already deployed, loses data, or leaves an
+  acceptance criterion unmet.
+- **Important** — merged as is, the shape costs a migration or a boundary rewrite later.
+- **Minor** — real, but nothing in this unit builds on it; it can wait.
+
 ```
 ### Shapes reviewed
 [each shape from the list, one line: what it is · unseen side, if any]
@@ -121,6 +130,7 @@ of the same three:
 1. <shape> · <category> [· seen only one level up] [· question]
    Where: <file:line or shape name>
    Why: <what goes wrong, and for whom>
+   Severity: Critical / Important / Minor
    Structural fix: <the long-term change>
    [Short-term fix: <only when the structural one is not simple>]
    Recommended ruling: fix now / backlog / leave as is · <one-line reason>
