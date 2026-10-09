@@ -8,29 +8,25 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string =>
   readFileSync(path.join(repoRoot, rel), "utf-8").replace(/\s+/g, " ");
 
-test("HARRY.md §5 ties worktree isolation to concurrent writers, not tier", () => {
-  const section = read("HARRY.md").split("## §5")[1]?.split("## §6")[0] ?? "";
-  assert.match(section, /isolation follows concurrent writers, not tier/);
-  assert.match(
-    section,
-    /single session working sequentially takes a fresh branch in place, at any tier/,
-  );
-  assert.match(section, /each writer gets its own isolated worktree and branch;/);
-  assert.match(section, /Parallel writing is separate units, each in its own worktree/);
-  assert.doesNotMatch(section, /git worktree add/);
-  assert.doesNotMatch(section, /any Standard\/Major task[^.]*worktree/);
-});
-
-test("executing cites §5's concurrent writers and branches in place otherwise", () => {
+test("executing ties worktree isolation to concurrent writers, not tier", () => {
   const executing = read("skills/executing/SKILL.md");
-  assert.match(executing, /one writer needs no worktree/);
+  const branch = executing.split("1. **Branch.**")[1]?.split("2. **Paths.**")[0] ?? "";
+  assert.match(branch, /Isolation follows concurrent writers, not tier/);
   assert.match(
-    executing,
-    /concurrent writers, exactly as HARRY\.md §5 lists them/,
+    branch,
+    /two or more writers at once — several units in flight, or the user editing alongside/,
     'a subset that drops "the user editing alongside" branches in place on top of the user\'s uncommitted edits',
   );
-  assert.match(executing, /the user included/);
-  assert.match(read("HARRY.md"), /the user editing alongside/);
+  assert.match(
+    branch,
+    /single session working sequentially takes a fresh branch in place, at any tier/,
+  );
+  assert.match(branch, /each writer gets its own isolated worktree and branch;/);
+  assert.match(branch, /one writer needs no worktree/);
+  assert.match(branch, /the user included/);
+  assert.match(executing, /Parallel writing is separate units, each in its own worktree/);
+  assert.doesNotMatch(branch, /git worktree add/);
+  assert.doesNotMatch(branch, /any Standard\/Major task[^.]*worktree/);
   assert.doesNotMatch(read("references/tier-gates.md"), /\| Execution \|/);
 });
 

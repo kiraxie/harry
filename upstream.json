@@ -66,7 +66,7 @@
     {
       "skill": "lean",
       "from": "ponytail:skills/ponytail-review + ponytail-audit",
-      "note": "merged; default whole-project, --diff for diff-only; §2 contract carve-out (don't flag contracts as over-engineering). Retired as its own command 2026-07 — absorbed into /audit dimension 10 (whole-repo, iterative) and /review --simplify's new lane (quick per-diff); do not re-add a standalone /lean."
+      "note": "merged; default whole-project, --diff for diff-only; the cross-boundary contract red line in HARRY.md Tiers (don't flag contracts as over-engineering). Retired as its own command 2026-07 — absorbed into /audit dimension 10 (whole-repo, iterative) and /review --simplify's new lane (quick per-diff); do not re-add a standalone /lean."
     },
     {
       "skill": "debt",
@@ -109,7 +109,7 @@
       "note": "2026-07 distills into .claude/references/skill-authoring.md: reinvented-helpers bundling signal (e), trigger widening + trigger-eval discipline (d), scoped why-over-MUST + REFACTOR anti-overfit guard (a/e). Deviations kept: WHEN-only descriptions (upstream wants what+when) and (b)/(c) prohibition forms for discipline skills — don't restore either. Scaffolding/packaging/optimization tooling stays delegated to the installed official skill-creator. Licensing is per-skill: port only from Apache-2.0 paths (skills/skill-creator); the document skills are proprietary."
     },
     {
-      "skill": "HARRY.md §0/§6/§7 (harness layer, pre-send check, lawful exit)",
+      "skill": "HARRY.md Priority / Talk / Tiers (harness layer, pre-send check, lawful exit)",
       "from": "i-have-adhd (ayghri/i-have-adhd, one-time comparison)",
       "note": "2026-07-24 philosophy comparison, not a port — three law edits distilled, no derived files to diff, so the source is not pinned or cloned. Re-compare on demand; see .claude/references/upstream-sync.md."
     },
@@ -131,7 +131,7 @@
     {
       "skill": "red-green / architecture-review / audit / brainstorming (codebase-design, 2026-10)",
       "from": "mattpocock-skills:skills/engineering/codebase-design (SKILL.md + DEEPENING.md)",
-      "note": "Folded into the files reviewers already get in full, not a separate reference: seam, interface as test surface, port/adapter, the four dependency categories and how each is tested, accept-dependencies/return-results, and replace-don't-layer attached to one owner per contract (red-green.md \"Seams and what sits behind them\", under Every test); shallow module, the deletion test (moved here from /audit dimension 10, which now points at it) and the one-adapter rule, narrowed: a test adapter counts as the second implementation only where the dependency cannot run in the suite (architecture-review.md category 4); brainstorming step 4 points at both. Skipped: DESIGN-IT-TWICE.md (parallel sub-agents writing interface proposals — quota cost, and HARRY.md §5 lets dispatch only judge; /debate covers hard calls), the exact-terms glossary and its banned words (harry keeps \"boundary\" and \"shape\"), the relationships list, the rejected-framings section, internal versus external seams, the small-surface-area advice and the interface-design questions (fewer methods, simpler parameters, hide more)."
+      "note": "Folded into the files reviewers already get in full, not a separate reference: seam, interface as test surface, port/adapter, the four dependency categories and how each is tested, accept-dependencies/return-results, and replace-don't-layer attached to one owner per contract (red-green.md \"Seams and what sits behind them\", under Every test); shallow module, the deletion test (moved here from /audit dimension 10, which now points at it) and the one-adapter rule, narrowed: a test adapter counts as the second implementation only where the dependency cannot run in the suite (architecture-review.md category 4); brainstorming step 4 points at both. Skipped: DESIGN-IT-TWICE.md (parallel sub-agents writing interface proposals — quota cost, and skills/executing/SKILL.md \"Who writes\" lets dispatch only judge; /debate covers hard calls), the exact-terms glossary and its banned words (harry keeps \"boundary\" and \"shape\"), the relationships list, the rejected-framings section, internal versus external seams, the small-surface-area advice and the interface-design questions (fewer methods, simpler parameters, hide more)."
     },
     {
       "skill": "pr-body / plain-language (show the structure)",

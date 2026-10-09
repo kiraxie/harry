@@ -10,7 +10,7 @@ import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 // `skills/brainstorming/SKILL.md`, and `references/tier-gates.md` for depth). That
 // single-source arrangement is only real while the callers keep *citing* it instead of
 // restating it: a second copy of the exit gate or of the cadence rule gives the model
-// two instructions that drift apart, which is HARRY.md §2's drift test answering "bug",
+// two instructions that drift apart, which is the drift test in `references/review-rubric.md` answering "bug",
 // not "normal evolution". These tests pin the load-bearing words on each side of that
 // boundary and tolerate rewording around them.
 //
@@ -80,7 +80,7 @@ test("AC-1: brainstorming cites the exit gate without restating it", () => {
       skill,
       restated,
       `${BRAINSTORMING} restates the residue manifest's contents; it must cite ` +
-        `${GRILLING}'s exit gate instead (two copies of a gate drift, HARRY.md §2)`,
+        `${GRILLING}'s exit gate instead (two copies of a gate drift — the drift test)`,
     );
 
   // Citing is the other half: every paragraph that invokes the exit gate names the

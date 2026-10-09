@@ -18,6 +18,10 @@ export interface ScoreGroup {
   // mixedLaw is true when there is more than one, so the verdict spans law texts.
   lawShas: string[];
   mixedLaw: boolean;
+  pluginShas: string[];
+  mixedPlugin: boolean;
+  toolSetups: string[];
+  mixedTools: boolean;
   pass: boolean;
 }
 
@@ -32,10 +36,13 @@ export interface ScoreSummary {
     candidateTotal: number;
     baselinePass: number;
     baselineTotal: number;
+    pluginPass: number;
+    pluginTotal: number;
     informativePass: number;
     informativeTotal: number;
   };
   candidateFailed: boolean;
+  pluginFailed: boolean;
 }
 
 // Score one result line to a single-trial pass. Each result carries its own
@@ -65,8 +72,8 @@ function scoreTrial(line: EvalRecord) {
 // several appended runs of the same condition (that is the documented way to
 // add trials post-hoc). A group's verdict is a STRICT MAJORITY of its trials:
 // it passes iff more than half passed (2/3, 2/2 — a 1/2 tie FAILS). An errored
-// trial counts as a failing trial. candidateFailed (the CLI exit code) derives
-// only from graded (non-informative) candidate GROUP verdicts; informative
+// trial counts as a failing trial. candidateFailed and pluginFailed (the CLI exit code) derive
+// only from graded (non-informative) candidate and plugin GROUP verdicts; informative
 // groups are tallied separately and never gate.
 export function scoreResults(lines: EvalRecord[]): ScoreSummary {
   const groupMap = new Map();
@@ -88,10 +95,16 @@ export function scoreResults(lines: EvalRecord[]): ScoreSummary {
         // Every distinct law text this group's trials were taken under. More than
         // one means the group's verdict averages ACROSS law versions, which is the
         // one thing a law-effect measurement must never do silently: on 2026-07-30
-        // a §3 probe read 3/3 twice on one text and 1/3 on the next, and pooling
+        // a tiers probe read 3/3 twice on one text and 1/3 on the next, and pooling
         // them into a single "weak" hid both numbers. Legacy lines predate the
         // stamp and contribute no hash rather than a false one.
         lawShas: new Set(),
+        // The same guard for the plugin condition, whose result also depends on the
+        // plugin copy it ran against.
+        pluginShas: new Set(),
+        // And the tool flags: a trial taken with Read available is not the same
+        // measurement as one taken with no tools.
+        toolSetups: new Set(),
       };
       groupMap.set(key, g);
     }
@@ -99,6 +112,8 @@ export function scoreResults(lines: EvalRecord[]): ScoreSummary {
     if (t.pass) g.passCount += 1;
     if (t.error) g.errors += 1;
     if (line.lawSha256) g.lawShas.add(line.lawSha256);
+    if (line.pluginSha256) g.pluginShas.add(line.pluginSha256);
+    g.toolSetups.add(typeof line.toolSetup === "string" ? line.toolSetup : "(unrecorded)");
     // Backfill law/informative from any trial that carries them (a legacy line
     // may omit law; a later trial may supply it).
     if (!g.law && t.law) g.law = t.law;
@@ -111,6 +126,10 @@ export function scoreResults(lines: EvalRecord[]): ScoreSummary {
     // either text. Surfaced per group so the table can say so; the verdict is
     // still computed (refusing to score would lose the run) but it is marked.
     mixedLaw: g.lawShas.size > 1,
+    pluginShas: [...g.pluginShas].sort(),
+    mixedPlugin: g.pluginShas.size > 1,
+    toolSetups: [...g.toolSetups].sort(),
+    mixedTools: g.toolSetups.size > 1,
     // Strict majority: passCount > trials/2  ⇔  2*passCount > trials.
     pass: g.passCount * 2 > g.trials,
   }));
@@ -120,6 +139,7 @@ export function scoreResults(lines: EvalRecord[]): ScoreSummary {
   const graded = groups.filter((g) => !g.informative);
   const candidate = graded.filter((g) => g.condition === "candidate");
   const baseline = graded.filter((g) => g.condition === "baseline");
+  const plugin = graded.filter((g) => g.condition === "plugin");
   const informative = groups.filter((g) => g.informative);
   return {
     rows: groups,
@@ -131,9 +151,12 @@ export function scoreResults(lines: EvalRecord[]): ScoreSummary {
       candidateTotal: candidate.length,
       baselinePass: baseline.filter((g) => g.pass).length,
       baselineTotal: baseline.length,
+      pluginPass: plugin.filter((g) => g.pass).length,
+      pluginTotal: plugin.length,
       informativePass: informative.filter((g) => g.pass).length,
       informativeTotal: informative.length,
     },
     candidateFailed: candidate.some((g) => !g.pass),
+    pluginFailed: plugin.some((g) => !g.pass),
   };
 }

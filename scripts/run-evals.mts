@@ -2,11 +2,14 @@
 // harry behavioral-evals runner — measure whether the resident laws (HARRY.md)
 // actually change a model's FIRST-RESPONSE behavior, as a regression harness.
 //
-// Two conditions per case, same prompt, same pinned model:
+// Three conditions, each case run under one per run, same prompt, same pinned model:
 //   baseline  — a fresh, empty CLAUDE_CONFIG_DIR (no global CLAUDE.md → no laws).
 //   candidate — a CLAUDE_CONFIG_DIR whose CLAUDE.md inlines this repo's HARRY.md.
 // The delta between them is the laws' effect. baseline is informative contrast;
 // candidate is what must pass.
+// A third, plugin, is candidate plus a frozen copy of this plugin loaded with
+// --plugin-dir, with Skill and a Read denied under the home allowed: a rule that
+// lives in a skill or reference is measured the way a real session meets it.
 //
 // Isolation is the whole point: we NEVER read or touch the operator's real
 // ~/.claude config. Each condition gets its own mkdtemp config dir, so the
@@ -35,7 +38,9 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -121,7 +126,7 @@ type ExecError = Error & {
   stderr?: string | Buffer;
 };
 
-const CONDITIONS = new Set(["baseline", "candidate"]);
+const CONDITIONS = new Set(["baseline", "candidate", "plugin"]);
 const DEFAULT_TEST_COMMAND = "node --test";
 // How long the post-session step may take (runEvals opts.postSessionTimeoutMs
 // overrides it). It bounds a hung model-written test, and, sandboxed, the whole
@@ -781,7 +786,7 @@ function prepareTrialDirs(condition: string, lawsText: string, root: string = tm
   };
   for (const key of ["configDir", "workDir", "fixtureParent", "tmpDir"] as const)
     mkdirSync(dirs[key]);
-  if (condition === "candidate") {
+  if (condition !== "baseline") {
     writeFileSync(join(dirs.configDir, "CLAUDE.md"), lawsText);
   }
   return dirs;
@@ -897,11 +902,10 @@ function invokeClaude(
 
 // Invoke the claude CLI for one text case under one condition.
 //
-// `--allowedTools ""` disables tools by relying on `-p`'s deny-by-default: it is
-// an ALLOWLIST (an empty allowlist auto-approves nothing), not an explicit
-// kill-switch. `claude --help` also exposes `--tools`/`--permission-mode`, but
-// their exact `-p` semantics can't be confirmed without spending API, so we keep
-// the brief's allowlist form. We measure first-response prose, not actions.
+// `--tools ""` removes every tool, so a text case measures first-response prose,
+// not actions. `--allowedTools ""` alone does not: it only auto-approves nothing,
+// and Read needs no approval, so a session could still read host files (seen on
+// 2026-10-09 with a probe of a file outside the plugin copy).
 //
 // `cwd` MUST be an empty dir with no CLAUDE.md above it: claude reads project
 // memory by walking up from cwd, so running from the repo root would leak this
@@ -916,8 +920,20 @@ function runTextCase(
   workDir: string,
   env: Env,
   tmpDir: string,
+  pluginDir: string | null = null,
 ): string {
-  const args = ["-p", prompt, "--model", model, "--output-format", "json", "--allowedTools", ""];
+  const args = [
+    "-p",
+    prompt,
+    "--model",
+    model,
+    "--output-format",
+    "json",
+    "--allowedTools",
+    pluginDir ? "Skill" : "",
+    ...textToolArgs(Boolean(pluginDir)),
+    ...(pluginDir ? ["--plugin-dir", pluginDir] : []),
+  ];
   return invokeClaude(bin, args, workDir, configDir, env, tmpDir);
 }
 
@@ -953,6 +969,76 @@ const AGENTIC_ALLOWED_TOOLS = [
   "Bash(node:*)",
 ].join(",");
 
+// What the plugin condition copies: only what a session loads from the plugin. Left
+// out on purpose: scripts/ and dist/ (a trial could run the installer against the
+// operator's ~/.claude, or Codex), and evals/, tests/, .local/ (the cases' own
+// grading patterns, and the operator's notes).
+const PLUGIN_PAYLOAD = [".claude-plugin", "HARRY.md", "skills", "commands", "agents", "references"];
+
+// Freeze the plugin once per run: every trial loads the same copy, so a checkout that
+// changes mid-run cannot change later trials, and the copy's content hash names the
+// tree a result was taken under. Realpath'd because the permission rule is matched
+// against canonical paths, and macOS's tmpdir is a symlink.
+export function snapshotPlugin(
+  root: string,
+  from: string = pluginRoot,
+): { dir: string; sha: string } {
+  const dir = realpathSync(mkdtempSync(join(root, "harry-evals-plugin-")));
+  for (const entry of PLUGIN_PAYLOAD)
+    cpSync(join(from, entry), join(dir, entry), { recursive: true });
+  const hash = createHash("sha256");
+  const walk = (rel: string): void => {
+    const abs = join(dir, rel);
+    if (statSync(abs).isDirectory()) {
+      for (const name of readdirSync(abs).sort()) walk(rel ? join(rel, name) : name);
+    } else {
+      hash.update(rel).update("\0").update(readFileSync(abs)).update("\0");
+    }
+  };
+  walk("");
+  return { dir, sha: hash.digest("hex").slice(0, 16) };
+}
+
+// Read needs no permission, so an allowlist never withholds it, and restricted mode,
+// which would confine it, also drops the laws (CLAUDE.md is not loaded; probed
+// 2026-10-09). So a plugin session is denied Read under the operator's home, where
+// the checkout and its grading patterns live; the copy and the trial dirs sit outside
+// it (runEvals refuses a trial root under the home).
+const HOME_READ_DENY = ["--disallowedTools", "Read(~/**)"];
+
+// The tool flags a text session runs with: none at all outside the plugin condition
+// (`--allowedTools ""` alone would still leave Read), Skill and Read inside it. A
+// result line records them, so score can flag trials taken under different setups.
+function textToolArgs(withPlugin: boolean): string[] {
+  return withPlugin ? ["--tools", "Skill,Read", ...HOME_READ_DENY] : ["--tools", ""];
+}
+// The CLI's version, once per run and before any trial. It runs with the base env, no
+// credential and a throwaway config dir, so it touches neither the operator's
+// ~/.claude nor the API; a failure refuses the run like a missing binary.
+function claudeVersion(bin: string, env: Env): string {
+  const configDir = mkdtempSync(join(tmpdir(), "harry-evals-version-"));
+  try {
+    return execFileSync(bin, ["--version"], {
+      env: {
+        ...buildBaseEnv(env),
+        CLAUDE_CONFIG_DIR: configDir,
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+        DISABLE_TELEMETRY: "1",
+        DISABLE_AUTOUPDATER: "1",
+      },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 30_000,
+    }).trim();
+  } catch (err) {
+    throw new Error(`could not read the claude CLI version: ${(err as Error).message}`);
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+}
+
+const toolSetup = (args: string[]): string => args.map((a) => (a === "" ? '""' : a)).join(" ");
+
 // Invoke the claude CLI for one AGENTIC case: a full headless session in the
 // fixture repo. `--permission-mode acceptEdits` auto-approves file edits; the
 // `--allowedTools` allowlist additionally auto-approves the git subcommands and
@@ -969,6 +1055,7 @@ function runAgenticCase(
   env: Env,
   tmpDir: string,
   jail: Jail | null = null,
+  pluginDir: string | null = null,
 ): string {
   const args = [
     "-p",
@@ -980,7 +1067,10 @@ function runAgenticCase(
     "--permission-mode",
     "acceptEdits",
     "--allowedTools",
-    AGENTIC_ALLOWED_TOOLS,
+    pluginDir ? `${AGENTIC_ALLOWED_TOOLS},Skill` : AGENTIC_ALLOWED_TOOLS,
+    // The same home deny as text cases; the session's node commands can still read
+    // the host, which only the sandbox contains.
+    ...(pluginDir ? [...HOME_READ_DENY, "--plugin-dir", pluginDir] : []),
   ];
   if (!jail) {
     return invokeClaude(bin, args, fixtureDir, configDir, env, tmpDir);
@@ -1044,6 +1134,14 @@ export function runEvals(
   // Only agentic cases are jailed: text mode has no exec surface, so a text-only run
   // ignores the flag entirely.
   const agenticWillRun = runnable.some((c) => c.mode === "agentic");
+  // The jail's read allowlist does not include the plugin copy, and it jails no text
+  // case, while plugin text cases have Read: so the flag is refused for every plugin
+  // run rather than silently ignored for a text-only one.
+  if (condition === "plugin" && env.EVALS_SANDBOX === "1") {
+    throw new Error(
+      "the plugin condition is not wired into the sandbox: the jail is not allowed to read the plugin copy, and it covers no text case while plugin text cases have Read. Unset EVALS_SANDBOX.",
+    );
+  }
   const sandbox = sandboxContext(env, agenticWillRun);
 
   // Same "before any dir/session starts" timing as the sandbox refusal above: with
@@ -1069,30 +1167,46 @@ export function runEvals(
     }
   }
 
-  const lawsText = condition === "candidate" ? readFileSync(lawsPath(), "utf8") : "";
+  // Each trial gets its own dirs under this root (prepareTrialDirs), left in place
+  // for post-hoc inspection. EVALS_FIXTURE_ROOT names it; default the OS temp dir.
+  const trialsRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
+  if (condition === "plugin") {
+    const home = realpathSync(homedir());
+    const rootAbs = resolve(trialsRoot);
+    const real = existsSync(rootAbs) ? realpathSync(rootAbs) : rootAbs;
+    if (real === home || real.startsWith(`${home}/`) || rootAbs.startsWith(`${homedir()}/`)) {
+      throw new Error(
+        `the plugin condition denies Read under the home directory, so its trial root ${trialsRoot} cannot sit under the home directory; point EVALS_FIXTURE_ROOT elsewhere.`,
+      );
+    }
+  }
+  const plugin = condition === "plugin" ? snapshotPlugin(trialsRoot) : null;
+  // Under the plugin condition the laws come from the copy, so law and tree agree.
+  const lawsText =
+    condition === "baseline"
+      ? ""
+      : readFileSync(plugin ? join(plugin.dir, "HARRY.md") : lawsPath(), "utf8");
   // Provenance stamped onto every result line. Without it a results file cannot be
   // attributed to a law text at all: on 2026-07-30 a probe's failure was read as a
   // regression, two law edits were made on that reading, and the only way anyone
   // could later recover WHICH text each run used was that the throwaway mkdtemp
   // config dirs happened not to have been reaped yet. That is luck, not a record.
   // `lawSha256` is what lets `score` refuse to pool trials across different texts.
-  // The `claude` CLI version is deliberately NOT probed: it would cost one extra
-  // invocation of the binary per run, and the tests count invocations because that
-  // count IS the spend contract. A CLI change therefore remains indistinguishable
-  // from a model-alias change after the fact — a known gap, not an oversight.
+  // The `claude` CLI version is read once per run with `--version`: no session, no
+  // credential, a throwaway config dir. The CLI enforces the tool limits a trial ran
+  // under, so a result names the CLI that held them. Recorded, not pooled by score.
   const provenance = {
+    claudeVersion: claudeVersion(claudeBin, env),
     lawBytes: Buffer.byteLength(lawsText),
     lawSha256: lawsText ? createHash("sha256").update(lawsText).digest("hex").slice(0, 16) : null,
     sandbox: Boolean(sandbox),
+    ...(plugin ? { pluginDir: plugin.dir, pluginSha256: plugin.sha } : {}),
   };
   const outPath =
     opts.out ||
     join(pluginRoot, "evals", "results", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
   mkdirSync(dirname(outPath), { recursive: true });
 
-  // Each trial gets its own dirs under this root (prepareTrialDirs), left in place
-  // for post-hoc inspection. EVALS_FIXTURE_ROOT names it; default the OS temp dir.
-  const trialsRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
   const written = [];
   for (const c of runnable) {
     if (!SUPPORTED_MODES.has(c.mode)) throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
@@ -1110,6 +1224,10 @@ export function runEvals(
         informative: c.informative === true,
         prompt: c.prompt,
         checks: expandChecks(c.checks),
+        toolSetup:
+          c.mode === "agentic"
+            ? toolSetup(plugin ? ["agentic", ...HOME_READ_DENY] : ["agentic"])
+            : toolSetup(textToolArgs(Boolean(plugin))),
         trialDir: dirs.trialDir,
         configDir: dirs.configDir,
         workDir: dirs.workDir,
@@ -1148,6 +1266,7 @@ export function runEvals(
             env,
             dirs.tmpDir,
             jail,
+            plugin?.dir ?? null,
           );
           // Judge now, while the fixture dir exists — inside the jail when there is
           // one — and record per-check outcomes so `score` can judge offline
@@ -1181,6 +1300,7 @@ export function runEvals(
             dirs.workDir,
             env,
             dirs.tmpDir,
+            plugin?.dir ?? null,
           );
           // Record per-check outcomes (same shape as agentic lines) so an
           // inspector can see WHICH check failed without re-scoring. Scoring
@@ -1286,7 +1406,7 @@ function cmdScore(opts: CliOpts) {
     for (const e of errors) console.error(`  - ${e}`);
     return 1;
   }
-  const { groups, summary, candidateFailed } = scoreResults(lines);
+  const { groups, summary, candidateFailed, pluginFailed } = scoreResults(lines);
   const pad = (s: unknown, n: number) => String(s).padEnd(n);
   // A group is one (case, condition): its verdict is a strict majority of its
   // pooled trials, shown as a tally, e.g. PASS (2/3) / FAIL (1/3). Graded groups
@@ -1305,14 +1425,22 @@ function cmdScore(opts: CliOpts) {
       g.mixedLaw
         ? `  ⚠ MIXED LAW TEXT (${g.lawShas.length} versions — verdict describes neither)`
         : ""
+    }${
+      g.mixedTools
+        ? `  ⚠ MIXED TOOL SETUP (${g.toolSetups.length} setups — verdict describes neither)`
+        : ""
+    }${
+      g.mixedPlugin
+        ? `  ⚠ MIXED PLUGIN COPY (${g.pluginShas.length} versions — verdict describes neither)`
+        : ""
     }`;
   // Column width spans EVERY printed id — graded AND informative — plus the
   // "case" header, so a long informative id can't overflow into the condition
   // column of either section (both use the same width). +2 for breathing room.
   const idWidth = Math.max(4, ...groups.map((g) => g.id.length), "case".length) + 2;
   const row = (g: ScoreGroup) =>
-    `${pad(g.id, idWidth)}${pad(g.condition, 12)}${pad(g.law ?? "", 8)}${verdict(g)}`;
-  console.log(`${pad("case", idWidth)}${pad("condition", 12)}${pad("law", 8)}result`);
+    `${pad(g.id, idWidth)}${pad(g.condition, 12)}${pad(g.law ?? "", 14)}${verdict(g)}`;
+  console.log(`${pad("case", idWidth)}${pad("condition", 12)}${pad("law", 14)}result`);
   for (const g of graded) {
     console.log(row(g));
   }
@@ -1330,10 +1458,13 @@ function cmdScore(opts: CliOpts) {
   console.log(
     `\ncandidate: ${summary.candidatePass}/${summary.candidateTotal} groups passed` +
       ` · baseline (contrast): ${summary.baselinePass}/${summary.baselineTotal} groups passed` +
+      (summary.pluginTotal
+        ? ` · plugin: ${summary.pluginPass}/${summary.pluginTotal} groups passed`
+        : "") +
       informativeLine +
       ` · (${summary.trials} trial line(s) pooled)`,
   );
-  return candidateFailed ? 1 : 0;
+  return candidateFailed || pluginFailed ? 1 : 0;
 }
 
 export function main(argv: string[], env: Env = process.env): number {

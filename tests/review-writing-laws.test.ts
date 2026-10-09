@@ -22,18 +22,19 @@ function between(text: string, start: string, end: string): string {
   return text.slice(from, to);
 }
 
-const lawSection = (n: number): string => between(plain(HARRY), `## §${n}`, `## §${n + 1}`);
+const lawSection = (name: string, next: string): string =>
+  between(plain(HARRY), `## ${name}`, `## ${next}`);
 
 function lawBullet(label: string): string {
   const text = plain(HARRY);
   const from = text.indexOf(`- ${label}`);
   assert.ok(from !== -1, `HARRY.md has no "${label}" bullet`);
-  const ends = [text.indexOf(" - ", from + 2), text.indexOf("## §", from)].filter((i) => i !== -1);
+  const ends = [text.indexOf(" - ", from + 2), text.indexOf("## ", from)].filter((i) => i !== -1);
   return text.slice(from, ends.length ? Math.min(...ends) : undefined);
 }
 
-test("AC-1: HARRY.md §4 makes code comments the exception", () => {
-  const s4 = lawSection(4);
+test("AC-1: HARRY.md Code makes code comments the exception", () => {
+  const s4 = lawSection("Code", "Talk");
   assert.match(s4, /Code carries no comment by default/i);
   assert.match(s4, /no comment by default, however densely nearby code is commented/i);
   assert.match(s4, /one kept kind is a trade-off in one short, neutral line/i);
@@ -42,17 +43,17 @@ test("AC-1: HARRY.md §4 makes code comments the exception", () => {
   assert.match(
     s4,
     /tool directives \(biome-ignore, @ts-expect-error\) are not comments/i,
-    "§4 would strip directives a toolchain needs",
+    "Code would strip directives a toolchain needs",
   );
 });
 
-test("AC-4/AC-12: the rubric cites §4 for tool directives instead of restating it", () => {
+test("AC-4/AC-12: the rubric cites HARRY.md Code for tool directives instead of restating it", () => {
   const dims = between(plain(RUBRIC), "## Four dimensions", "## Severity");
-  assert.doesNotMatch(dims, /A directive a tool reads/i, "the rubric restates §4's carve-out");
-  assert.match(dims, /HARRY\.md §4/);
+  assert.doesNotMatch(dims, /A directive a tool reads/i, "the rubric restates Code's carve-out");
+  assert.match(dims, /HARRY\.md Code/);
 });
 
-test("AC-2: HARRY.md §6 binds plain writing to every text written for people", () => {
+test("AC-2: HARRY.md Talk binds plain writing to every text written for people", () => {
   const bullet = lawBullet("Plain language.");
   assert.match(bullet, /Every text written for people is plain, short and to the point/i);
   for (const kind of [
@@ -79,8 +80,12 @@ test("AC-2: plain-language.md puts commit messages and code comments on the peop
   assert.doesNotMatch(modelSide, /commit message|code comment/i);
 });
 
-test("AC-3: HARRY.md §6 answers every review finding with a structural fix", () => {
-  const bullet = lawBullet("Honesty & evidence.");
+test("AC-3: the review standard answers every review finding with a structural fix", () => {
+  const bullet = between(
+    plain(RUBRIC),
+    "Findings carry their structural fix.",
+    "Automated findings",
+  );
   assert.match(bullet, /Every review finding reaches the user with its long-term structural fix/i);
   assert.match(bullet, /a short-term one only when that is not simple/i);
   assert.match(bullet, /a workaround \(treats the symptom, leaves the cause\) never/i);
@@ -109,9 +114,13 @@ test("AC-4: the architecture review's findings carry a structural fix", () => {
   assert.doesNotMatch(out, /Suggested change/i);
 });
 
-test("AC-12: HARRY.md §3 tiers a fix like a task, small only when Trivial and no test weakens", () => {
-  const s3 = lawSection(3);
-  const rule = /A fix inside a unit is tiered like a task[^.]*\./i.exec(s3)?.[0] ?? "";
+test("AC-12: tier-gates tiers a fix like a task, small only when Trivial and no test weakens", () => {
+  const s3 = between(
+    plain(path.join("references", "tier-gates.md")),
+    "Fixes inside a unit.",
+    "## ",
+  );
+  const rule = /A fix inside a unit is tiered like a task[^;]*;[^.]*\./i.exec(s3)?.[0] ?? "";
   assert.match(
     rule,
     /one that is Trivial and weakens no test/i,
@@ -121,20 +130,28 @@ test("AC-12: HARRY.md §3 tiers a fix like a task, small only when Trivial and n
   assert.match(rule, /any other is re-reviewed/i, "a non-Trivial fix is no longer re-reviewed");
   assert.doesNotMatch(
     s3,
-    /changes no behavior|no §2 red line/i,
-    "§3 restates what the Trivial row and the red-line promotion already cover",
+    /changes no behavior|no red line/i,
+    "tier-gates restates what the Trivial trigger and the red-line promotion already cover",
   );
 });
 
 test("AC-5: executing's one fix wave applies the fix tier", () => {
   const wave = between(plain(EXECUTING), "4. One fix wave.", "Codex build.");
-  assert.match(wave, /small fix \(HARRY\.md §3\)/i, "the wave lost the fix tier");
+  assert.match(
+    wave,
+    /small fix \(references\/tier-gates\.md, Fixes inside a unit\)/i,
+    "the wave lost the fix tier",
+  );
   assert.doesNotMatch(
     wave,
     /no branching|one-glance|weakens no test|changes no behavior/i,
-    "the wave restates §3's definition instead of citing it",
+    "the wave restates tier-gates' definition instead of citing it",
   );
-  assert.equal(wave.match(/HARRY\.md §3/g)?.length, 1, "the wave should cite §3 exactly once");
+  assert.equal(
+    wave.match(/Fixes inside a unit/g)?.length,
+    1,
+    "the wave should cite the fix tier exactly once",
+  );
   assert.match(wave, /When a wave has both kinds, its small fixes are re-reviewed with the rest/);
   assert.match(wave, /same file or same rule/, 'the wave leaves "same area" undefined');
   assert.match(
@@ -147,13 +164,8 @@ test("AC-5: executing's one fix wave applies the fix tier", () => {
   assert.match(wave, /review clean after small fixes/);
 });
 
-test("AC-6: HARRY.md §6 states the scope brake beside the three-failed-fixes rule", () => {
-  const bullet = lawBullet("Root cause before any fix.");
-  assert.match(bullet, /After 3 failed fixes/i);
-  assert.match(
-    bullet,
-    /New findings in the same area in two consecutive review rounds → stop and ask the user whether the scope still serves the unit's goal; name the goal\./i,
-  );
+test("AC-6: HARRY.md Root cause keeps the three-failed-fixes rule", () => {
+  assert.match(lawSection("Root cause", "Evidence"), /After three failed fixes of one hypothesis/i);
 });
 
 test("AC-6: executing applies the scope brake to the re-review", () => {
@@ -164,18 +176,18 @@ test("AC-6: executing applies the scope brake to the re-review", () => {
   );
 });
 
-test("AC-5: tier-gates cites §3's small-fix rule and gives examples only", () => {
+test("AC-5: tier-gates owns the small-fix rule and gives examples", () => {
   const gates = plain(path.join("references", "tier-gates.md"));
   const fixes = between(gates, "Fixes inside a unit.", "## ");
-  assert.match(fixes, /whatever the unit's tier, a fix is small or not by HARRY\.md §3/i);
+  assert.match(fixes, /A fix inside a unit is tiered like a task, whatever the unit's tier/i);
   assert.match(
     fixes,
     /mechanical rename or move the typecheck covers/i,
-    "a mechanical rename is small whatever its file span (§3)",
+    "a mechanical rename is small whatever its file span",
   );
   assert.match(fixes, /refactor that restructures logic or adds a decision/i);
   assert.match(fixes, /for example/i);
-  assert.doesNotMatch(fixes, /changes no behavior/i, "tier-gates restates §3's definition");
+  assert.doesNotMatch(fixes, /changes no behavior/i, "tier-gates restates the Trivial trigger");
   assert.match(
     fixes,
     /rewording a sentence without changing what it asks of a model/i,
@@ -191,7 +203,7 @@ test("AC-5: tier-gates cites §3's small-fix rule and gives examples only", () =
 
 test("AC-12: plain-language.md's dense example is not labelled as law or skill prose", () => {
   const text = plain(PLAIN_LANGUAGE);
-  assert.doesNotMatch(text, /HARRY\.md §5, model-side/, "the example calls law prose model-side");
+  assert.doesNotMatch(text, /HARRY\.md \S+, model-side/, "the example calls law prose model-side");
   assert.match(text, /Before \(a subagent brief/i);
 });
 

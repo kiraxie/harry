@@ -63,7 +63,7 @@ function withGlobal(file: string, fn: () => void): void {
 
 // The stale-entry WARNING is one piece of knowledge split across two installers:
 // the STALE list (scripts/lib/stale-entries.mjs) was single-sourced precisely so
-// the two could not drift (HARRY.md §2), but the renderer that turns that list
+// the two could not drift (the drift test in `references/review-rubric.md`), but the renderer that turns that list
 // into the user-facing warning must be single-sourced for the same reason — a
 // second copy re-opens the drift the module header claims to have closed.
 //

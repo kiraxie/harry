@@ -4,9 +4,9 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// HARRY.md §2's red-line list and references/tier-gates.md's promotion-trigger list
+// HARRY.md's red-line list (in **Tiers**) and references/tier-gates.md's promotion-trigger list
 // encode the SAME nine domains that auto-promote a task to Major. tier-gates.md itself
-// declares "§2 is authoritative: if this list and §2 diverge, §2 wins" — so the two
+// declares "HARRY.md is authoritative: if this list and HARRY.md diverge, HARRY.md wins" — so the two
 // must not drift, and nothing else enforces that. This test does: nine wording-tolerant
 // probes, each asserted present in BOTH files' marked regions (a dropped or renamed
 // domain fails its probe), plus a count lock on each region (a 10th domain added to one
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 
-// The canonical nine promotion-trigger domains, derived ONCE (HARRY.md §2 hoist-closure:
+// The canonical nine promotion-trigger domains, derived ONCE (the drift test's hoist closure:
 // no per-assertion re-listing). Each regex is tolerant of wording — it targets the concept
 // as it appears in BOTH files, not a fixed phrase, and is derived from their actual text.
 const DOMAIN_PROBES: Record<string, RegExp> = {
@@ -34,14 +34,13 @@ const N = Object.keys(DOMAIN_PROBES).length; // 9 — the locked domain count
 
 // --- region extractors (no markdown parser; the structure is stable and simple) ---
 
-// HARRY.md §2 body: the "## §2 …" heading through just before the next "## " heading.
-function harrySection2(): string {
-  const lines = read("HARRY.md").split("\n");
-  const start = lines.findIndex((l) => l.startsWith("## ") && l.includes("§2"));
-  assert.ok(start >= 0, "HARRY.md: no '## §2' heading found");
-  let end = lines.findIndex((l, i) => i > start && l.startsWith("## "));
-  if (end < 0) end = lines.length;
-  return lines.slice(start, end).join("\n");
+// HARRY.md's red-line sentence, in **Tiers**: the domains after its colon.
+function harryRedLines(): string {
+  const line = read("HARRY.md")
+    .split("\n")
+    .find((l) => l.startsWith("**Red lines**"));
+  assert.ok(line, "HARRY.md: no '**Red lines**' sentence found");
+  return line.slice(line.indexOf(":") + 1);
 }
 
 // tier-gates.md promotion-domain list: from "If the task touches any of:" through just
@@ -58,14 +57,10 @@ function tierGatesDomainList(): string {
 
 // --- probes: every domain present in BOTH files (catches a dropped/renamed domain) ---
 
-test("HARRY.md §2 red-line list names all nine promotion-trigger domains", () => {
-  const region = harrySection2();
+test("HARRY.md's red-line list names all nine promotion-trigger domains", () => {
+  const region = harryRedLines();
   for (const [name, probe] of Object.entries(DOMAIN_PROBES)) {
-    assert.match(
-      region,
-      probe,
-      `HARRY.md §2 missing the "${name}" red-line domain (probe ${probe})`,
-    );
+    assert.match(region, probe, `HARRY.md's red lines miss the "${name}" domain (probe ${probe})`);
   }
 });
 
@@ -92,32 +87,16 @@ test("tier-gates.md promotion list has exactly N domain bullets", () => {
   );
 });
 
-test("HARRY.md §2 encodes exactly N domains (N-1 inline + cross-boundary bullet)", () => {
-  const region = harrySection2();
-  // The first "- " item after "Never simplify these away" is the inline red-line bullet:
-  // one line of semicolon-separated domains. The ninth domain — cross-boundary contract —
-  // is its own named bullet (asserted by its probe above). The remaining named bullet in
-  // §2 (user-requested; the extract-it-now rules live inside the cross-boundary bullet) is NOT
-  // a promotion trigger and is deliberately excluded, so a bare bullet count is not lockable here — we lock the
-  // honestly-lockable inline list instead.
-  // The lock is also brittle toward false POSITIVES: a semicolon added inside one
-  // domain's phrasing, or a reorder changing which bullet comes first, trips it.
-  // That loudness is acceptable — adjust the split if §2's phrasing legitimately changes.
-  const firstBullet = region.split("\n").find((l) => /^-\s+\S/.test(l));
-  assert.ok(firstBullet, "HARRY.md §2: no red-line list bullet found");
-  const inline = firstBullet
-    .replace(/^-\s+/, "")
+test("HARRY.md's red-line sentence lists exactly N domains", () => {
+  // One sentence of semicolon-separated domains. A semicolon added inside one
+  // domain's phrasing trips this too; that loudness is acceptable.
+  const domains = harryRedLines()
     .replace(/\.\s*$/, "")
     .split(/;\s*/)
     .filter(Boolean);
   assert.equal(
-    inline.length,
-    N - 1,
-    `HARRY.md §2 inline red-line bullet must list ${N - 1} domains, found ${inline.length}: ${inline.join(" | ")}`,
-  );
-  assert.match(
-    region,
-    DOMAIN_PROBES["cross-boundary contract"] as RegExp,
-    "HARRY.md §2 must carry cross-boundary contract as the ninth domain (its own bullet)",
+    domains.length,
+    N,
+    `HARRY.md's red-line sentence must list ${N} domains, found ${domains.length}: ${domains.join(" | ")}`,
   );
 });

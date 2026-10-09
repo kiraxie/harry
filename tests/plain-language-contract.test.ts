@@ -23,11 +23,11 @@ function lawBullet(): string {
   const bullet = read("HARRY.md")
     .split("\n")
     .find((l) => l.includes("**Plain language.**"));
-  assert.ok(bullet, "HARRY.md §6 no longer has a 'Plain language' bullet");
+  assert.ok(bullet, "HARRY.md Talk no longer has a 'Plain language' bullet");
   return flat(bullet);
 }
 
-test("AC-1: HARRY.md §6 carries the plain-language rule for user-facing prose", () => {
+test("AC-1: HARRY.md Talk carries the plain-language rule for user-facing prose", () => {
   const bullet = lawBullet();
   assert.match(
     bullet,
@@ -91,7 +91,7 @@ test("AC-2: model-to-model artifacts stay precision-first and coin no new term",
   assert.doesNotMatch(
     modelSide,
     /commit message|code comment/i,
-    "commit messages and code comments are written for people (HARRY.md §6)",
+    "commit messages and code comments are written for people (HARRY.md Talk)",
   );
   assert.match(
     bullet,
@@ -114,13 +114,13 @@ test("AC-2: a PR body is user-facing, not a model-to-model artifact", () => {
     modelSide,
     "the law no longer lists which artifacts are model-to-model" +
       " — " +
-      "Ruled by the user: people read a PR body, and §5 has the user approve the draft before the PR is opened, so it follows the user-facing pacing rules. The law's model-side list is checked on its own — a later sentence may well name PR bodies on the user side, and a whole-bullet ban would fail on that.",
+      "Ruled by the user: people read a PR body, and HARRY.md Ask first has the user approve the draft before the PR is opened, so it follows the user-facing pacing rules. The law's model-side list is checked on its own — a later sentence may well name PR bodies on the user side, and a whole-bullet ban would fail on that.",
   );
   assert.doesNotMatch(
     modelSide,
     /PR bod(?:y|ies)/i,
     "the law counts a PR body as model-to-model again — the user approves that draft " +
-      "and people read it, so it is user-facing prose (HARRY.md §5)",
+      "and people read it, so it is user-facing prose (HARRY.md Ask first)",
   );
   assert.match(
     plain(read(PLAIN_LANGUAGE)),
@@ -130,7 +130,7 @@ test("AC-2: a PR body is user-facing, not a model-to-model artifact", () => {
   assert.match(
     plain(read(PLAIN_LANGUAGE)),
     /the user approve the draft before the PR is opened/i,
-    `${PLAIN_LANGUAGE} no longer says why a PR body is the user's — the §5 approval step ` +
+    `${PLAIN_LANGUAGE} no longer says why a PR body is the user's — the Ask first approval step ` +
       "is the reason, and without it the classification reads as a bare assertion",
   );
 });
@@ -171,7 +171,7 @@ test("AC-3: plain-language.md carries the grounding rule, both principles, and t
     /re-explain it once/i,
     "the deeper level no longer says a stated message is re-explained once" +
       " — " +
-      "The deeper level is defined here, not in the doors — a door that had to state it would be a second copy of it (HARRY.md §2).",
+      "The deeper level is defined here, not in the doors — a door that had to state it would be a second copy of it (the drift test).",
   );
   assert.match(
     text,
@@ -325,7 +325,7 @@ for (const [term, { re, allowed, gloss }] of Object.entries(SURVIVING)) {
       offenders,
       [],
       `"${term}" is used in a file that does not define it. Either gloss it at the new ` +
-        "site and add the file here, or use the plain words instead (HARRY.md §6). " +
+        "site and add the file here, or use the plain words instead (HARRY.md Talk). " +
         "Limit: a second, ungrounded use inside an allowlisted file is not caught; " +
         "that is not mechanically decidable. Deliberately not an exact equality with the " +
         "files on disk, so a copy-edit that drops one use does not fail.",
@@ -348,7 +348,7 @@ for (const [term, { re, allowed, gloss }] of Object.entries(SURVIVING)) {
 }
 
 const DEFINITIONS: Record<string, [string, RegExp]> = {
-  "red line": ["HARRY.md", /red lines, the boundaries[^.]*shortcut cross/i],
+  "red line": ["HARRY.md", /Red lines are the boundaries no shortcut may cross/i],
   "acceptance criteria": [
     "references/doc-types.md",
     /`### Acceptance criteria` is a numbered `AC-1, AC-2, …` list/i,
@@ -370,24 +370,33 @@ for (const [term, [rel, re]] of Object.entries(DEFINITIONS)) {
   });
 }
 
-const HEADER_AND_ALIGNMENT_ROWS = 2;
-
-test("AC-6: 'tier' is defined by the enumeration in §3's table and tier-gates.md", () => {
-  const section = read("HARRY.md").split("## §3")[1]?.split("## §4")[0] ?? "";
-  const table = section
+test("AC-6: 'tier' is defined by the enumeration in HARRY.md's Tiers and tier-gates.md", () => {
+  const section = read("HARRY.md").split("## Tiers")[1]?.split("## Ask first")[0] ?? "";
+  const tiers = section
     .split("\n")
-    .filter((l) => l.trimStart().startsWith("|"))
-    .slice(HEADER_AND_ALIGNMENT_ROWS)
-    .map((l) => (l.split("|")[1] as string).trim());
+    .map((l) => /^- \*\*(\w+)\*\* — /.exec(l)?.[1])
+    .filter(Boolean);
   assert.deepEqual(
-    table,
+    tiers,
     ["Trivial", "Standard", "Major"],
-    "HARRY.md §3's table no longer enumerates exactly the three tiers; the enumeration is the definition of 'tier', and every body row is read so a fourth row fails too",
+    "HARRY.md Tiers no longer enumerates exactly the three tiers; the enumeration is the definition of 'tier', and every trigger line is read so a fourth tier fails too",
   );
   assert.match(
     plain(read("references/tier-gates.md")),
     /Classify every non-trivial task into exactly one tier/i,
     "tier-gates.md no longer says a task lands in exactly one tier",
+  );
+});
+
+test("plain-language keeps the honest-hedge and fabrication rules", () => {
+  const section = plain(read(PLAIN_LANGUAGE)).split("## What this does not license")[1] ?? "";
+  assert.match(
+    section,
+    /Keep only hedges that carry real uncertainty; deleting an honest one manufactures confidence\./,
+  );
+  assert.match(
+    section,
+    /A plausible-sounding fix you did not verify exists is a fabrication, not a suggestion; say 'I don't know of one' instead\./,
   );
 });
 
@@ -404,13 +413,13 @@ test("AC-6: 'scope tag' is defined by its two values in grilling.md", () => {
 test("AC-6: squash and ledger are pinned in their own contract tests, cited here rather than re-pinned", () => {
   assert.match(
     read("tests/squash-merge-rule.test.ts"),
-    /HARRY\.md §5 makes integration a squash merge/,
-    "squash's defining sentence lost its pin; re-pinning it here would put two regexes on one sentence (HARRY.md §2)",
+    /finishing makes integration a squash merge/,
+    "squash's defining sentence lost its pin; re-pinning it here would put two regexes on one sentence (the drift test)",
   );
   assert.match(
     read("tests/grilling-contract.test.ts"),
     /AC-5: the ledger keeps four lists/,
-    "ledger's defining sentence lost its pin; re-pinning it here would put two regexes on one sentence (HARRY.md §2)",
+    "ledger's defining sentence lost its pin; re-pinning it here would put two regexes on one sentence (the drift test)",
   );
 });
 

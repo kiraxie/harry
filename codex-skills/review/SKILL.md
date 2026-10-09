@@ -59,7 +59,7 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--base <ref>] [--reasoni
 
 A run can take several minutes — a five-file branch has taken ~5.5 minutes, a
 small one 35–90s. Read the file named on the `Review written to <path>` line and
-return it verbatim (markdown). No paraphrase, summary, or commentary (HARRY.md §6).
+return it verbatim (markdown). No paraphrase, summary, or commentary (HARRY.md **Talk**).
 
 **Nothing to review:** when the output has no `Review written to` line and prints
 a `# Review Summary` saying there are no changes to review, the target is empty —
@@ -92,5 +92,5 @@ given.
 
 ## Findings are suggestions
 
-Per HARRY.md §6, automated review findings are suggestions to verify against
+Per `references/review-rubric.md` (**Engineering judgment**), automated review findings are suggestions to verify against
 this codebase, not orders — judge them, don't rubber-stamp them.

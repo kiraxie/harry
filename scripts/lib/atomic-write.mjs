@@ -5,7 +5,7 @@
 // disk mid-write leaves the irreplaceable file truncated with no recovery.
 //
 // All three installers must write safely — divergence would be a bug
-// (HARRY.md §2: shared knowledge across a boundary gets one source of truth),
+// (the drift test in `references/review-rubric.md`: shared knowledge across a boundary gets one source of truth),
 // so the safe-write policy lives here once.
 
 import { randomUUID } from "node:crypto";

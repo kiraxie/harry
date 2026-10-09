@@ -105,7 +105,7 @@ shape left as it is belongs to that rubric, not here.
 Every finding carries five things: **where** (`file:line`, or the shape's name
 when it spans files), **why** it matters, its **severity**, the **structural fix**,
 and your **recommended ruling**. The structural fix is the long-term one, never a workaround
-(HARRY.md §6). The user rules each finding one of three ways, and you recommend one
+(`references/review-rubric.md`, **Engineering judgment**). The user rules each finding one of three ways, and you recommend one
 of the same three:
 
 - **fix now** — fix it before this merges. The work goes back to be fixed, and

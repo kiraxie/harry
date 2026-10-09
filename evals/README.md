@@ -6,9 +6,9 @@ law deployed into a user's global instructions; this checks that the prose still
 earns its place. **Run it after any material change to `HARRY.md`** to catch a
 reword that quietly stops moving behavior.
 
-## The two conditions
+## The conditions
 
-Every case runs the same prompt, on the same pinned model, under two conditions:
+Every case runs the same prompt, on the same pinned model, under one of three conditions:
 
 - **baseline** — a fresh, empty `CLAUDE_CONFIG_DIR` (no global `CLAUDE.md`, so no
   laws). This is the model's unguided behavior.
@@ -22,6 +22,31 @@ Every case runs the same prompt, on the same pinned model, under two conditions:
 The delta between them is the laws' effect. **candidate is what must pass;
 baseline is informative contrast** (it is expected to fail many checks — that
 gap is the point).
+
+- **plugin** — candidate plus a frozen copy of this plugin loaded with
+  `--plugin-dir`. A rule that moved from `HARRY.md` into a skill or reference is
+  measured there the way a real session meets it. Each run copies only what the
+  plugin loads (`.claude-plugin`, `HARRY.md`, `skills`, `commands`, `agents`,
+  `references`) into its throwaway root and reads the laws from that copy; it leaves
+  out `scripts/` and `dist/`, so no trial can run the installer or Codex, and
+  `evals/`, `tests/` and `.local/`, so no trial can read the grading patterns. Text
+  cases get `--tools "Skill,Read" --disallowedTools "Read(~/**)"`. Read needs no
+  permission, so an allowlist never withholds it, and restricted mode, which would
+  confine it, also drops the laws (`CLAUDE.md` is not loaded under `--restricted`).
+  So Read is denied under the operator's home instead, where the checkout and its
+  grading patterns live; the copy and the trial dirs sit in the temp dir, and a
+  trial root under the home is refused. Agentic cases add Skill and the same deny to
+  their own tools, but their `node` commands can still read the host, as under
+  candidate — only the sandbox contains that, and the plugin condition refuses
+  `EVALS_SANDBOX=1` because the jail is not wired to read the copy. Every line
+  carries `pluginSha256`, the copy's content hash, and `score` flags a group that
+  mixes copies the way it flags mixed law texts. A failing graded plugin group fails
+  `score` the way a candidate group does.
+
+Text cases under baseline and candidate run with `--tools ""`, so no tool exists at
+all; `--allowedTools ""` alone would still leave Read. Every line records its tool
+flags as `toolSetup`, and `score` flags a group whose trials ran under different
+setups (`MIXED TOOL SETUP`) — older lines, taken with Read available, carry none.
 
 ### Why isolation matters
 
@@ -159,8 +184,8 @@ append-merge mechanism that lets baseline and candidate share one file.)
 ## Cost
 
 Every `run` is **real API spend** — one `claude -p` call per (case, condition,
-trial). With ~12 cases and two conditions at `--trials 1` that is ~24 calls per
-pass; `--trials 3` triples it. Only run it when you mean to. The `validate` and
+trial). With ~12 cases and two conditions (baseline and candidate) at `--trials 1`
+that is ~24 calls per pass; `--trials 3` triples it. Only run it when you mean to. The `validate` and
 `score` subcommands are free (they touch no API). Tests use a fake shim and never
 spend.
 
@@ -191,9 +216,9 @@ say. The runner:
 
 ### Permission model (what the session may do)
 
-A headless `-p` session is **deny-by-default**. Text cases keep it fully denied
-(`--allowedTools ""`), but an agentic session must actually *act*, so it runs with
-two permissions and nothing more:
+Text cases run with no tools at all (`--tools ""`; under the plugin condition,
+Skill and a Read denied under the home). An agentic session must actually *act*, so
+it runs with two permissions and nothing more:
 
 - `--permission-mode acceptEdits` — auto-approves **file edits** (create/modify)
   without an interactive prompt, which a headless run can't answer.
@@ -412,9 +437,15 @@ path, in the `DEBT:` note on `buildSeatbeltProfile` in
 case is queued to run but the platform is not macOS, or `sandbox-exec` is not found,
 the run **hard-errors before any session starts**. It never falls back to an
 unsandboxed agentic run. **Text mode ignores the flag**: a text case runs
-`claude -p` with all tools denied (`--allowedTools ""`), unjailed. Its config and
+`claude -p` with no tools (`--tools ""`), unjailed. Its config and
 work dirs belong to its own trial, which no jailed session can write. Setting the
-flag on a text-only run is a no-op, not a refusal.
+flag on a text-only run is a no-op, not a refusal — except under the plugin
+condition, which refuses the flag for every run: its text cases have Read, and the
+jail neither covers them nor may read the plugin copy.
+
+Every result line also records `claudeVersion`, read once per run with
+`claude --version` (no session, no credential, a throwaway config dir): the CLI
+enforces the tool limits a trial ran under.
 
 ```sh
 # Release gate, sandboxed: each agentic trial jailed, token read from a file.
@@ -457,9 +488,9 @@ path *before* the content grep — use it to scope a grep to, say, test files
 `NOTES.md`) can't satisfy it. A case object adds `"fixture": "<name>"`; everything
 else (`id`, `mode`, `law`, `checks`, `note`) is shared with text cases.
 
-`git_created_branch` and `git_no_new_commits_on_initial` are paired for §5: the
+`git_created_branch` and `git_no_new_commits_on_initial` are paired for HARRY.md **Ask first**: the
 first proves a fresh branch exists, the second proves the work actually moved off
-the initial branch. HARRY.md §5 requires a fresh branch even for a Trivial edit and
+the initial branch. HARRY.md **Ask first** requires a fresh branch even for a Trivial edit and
 forbids touching `main`/`master` without consent, so both apply.
 
 ### Informative (contrast-only) cases
@@ -510,7 +541,7 @@ and why `score` prints them together.
 
 As of the 2026-07-30 recalibration (`claude-sonnet-4-5`), of 18 cases: **10 pass in
 both conditions**, 4 fail in both, and 4 put the candidate ahead. Of those 4, exactly
-**one** — `agentic-debt-shortcut`, §4's `DEBT:` marker, 0/3 → 3/3 — reaches
+**one** — `agentic-debt-shortcut`, the `DEBT:` marker (now HARRY.md **Code**), 0/3 → 3/3 — reaches
 conventional significance (one-sided Fisher p=0.05). The other three sit at p=0.12–0.20,
 which is the evidential weight of flipping two heads.
 
@@ -563,7 +594,7 @@ probe works and the model genuinely no longer branches.
 `cases.jsonl` — one JSON object per line:
 
 ```json
-{"id": "...", "mode": "text", "prompt": "...", "law": "§3",
+{"id": "...", "mode": "text", "prompt": "...", "law": "Tiers",
  "checks": [{"type": "regex_must" | "regex_must_not", "pattern": "...", "flags": "i"},
             {"type": "declared_tier", "tier": "trivial" | "standard" | "major"}],
  "note": "..."}

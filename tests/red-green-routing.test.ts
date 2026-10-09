@@ -42,7 +42,7 @@ const POINTER_WORDS = 60;
 
 test("the rubric's test-hygiene item points at red-green.md and stays pointer-sized", () => {
   const rubric = read(path.join("references", "review-rubric.md"));
-  const item = between(rubric, "4. **Test hygiene**", "## Severity");
+  const item = between(rubric, "4. **Test hygiene**", "## Engineering judgment");
   assert.ok(item.includes(RED_GREEN), item);
   const words = item.split(" ").filter(Boolean).length;
   assert.ok(words <= POINTER_WORDS, `item 4 is ${words} words — restating red-green.md?`);

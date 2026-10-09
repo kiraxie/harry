@@ -1,17 +1,17 @@
 ---
 name: brainstorming
-description: "Use when starting any creative work — a new feature, component, behavior change, or anything not yet Trivial — and a design has not yet been agreed. Triggers on Standard/Major tasks per HARRY.md §3, before any code."
+description: "Use when starting any creative work — a new feature, component, behavior change, or anything not yet Trivial — and a design has not yet been agreed. Triggers on Standard/Major tasks per HARRY.md **Tiers**, before any code."
 ---
 
 # Brainstorming Ideas Into Designs
 
 Turn an idea into an agreed design through collaborative dialogue, then write it into an item. This is a procedure governed by the Harry laws (HARRY.md); when they conflict, the laws win.
 
-**Gate.** Present a design and get the user's approval before any implementation — code, scaffolding, or the executing skill. Every task that enters this skill is Standard or Major (Trivial never enters, per HARRY.md §3), so the gate holds however simple the task looks; tier is settled by §3.
+**Gate.** Present a design and get the user's approval before any implementation — code, scaffolding, or the executing skill. Every task that enters this skill is Standard or Major (Trivial never enters, per HARRY.md **Tiers**), so the gate holds however simple the task looks; tier is settled by HARRY.md **Tiers**.
 
 ## Entry: tier, then depth
 
-Classify the tier first (HARRY.md §3); a red line hit (HARRY.md §2) auto-promotes to
+Classify the tier first (HARRY.md **Tiers**); a red line hit auto-promotes to
 Major. A Trivial task skips this skill and goes straight to the work. Every other task
 takes the path its brainstorm depth names:
 
@@ -37,7 +37,7 @@ Complete these in order:
 3. **Propose approaches** — as many as your depth sets (`references/tier-gates.md`), with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here.
 4. **Present the design** — section by section, scaled to complexity; ask after each whether it holds. Cover architecture, components, data flow, error handling, testing. Break the system into small units each with one clear purpose and a defined interface, cut and tested as the reviews will judge them: `references/architecture-review.md` category 4 for module shape. See **Seams and what sits behind them** in `references/red-green.md` for seams and how to test across them. Follow the codebase's existing patterns; fix in-scope rough edges in the design, propose no unrelated refactoring.
 5. **Get approval** — close the interview per `references/grilling.md`'s exit gate: the residue manifest presented alongside the numbered acceptance criteria. The AC approved here is the contract execution builds and review verdicts are read against, and executing may not change it (`references/doc-types.md`). The manifest's dispositions are *commitments* recorded here but discharged at step 6, because the item file does not exist yet: deferred-in-scope lines land in a `## Follow-ups` section created on the item at step 6; destination-outside lines become new `status: backlog` items (the manifest's approval is the user's nod for each). Revise and re-present until the user approves. Only then proceed.
-6. **Write the item** (template below) → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What` including its `### Acceptance criteria`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
+6. **Write the item** (template below). Read `references/doc-types.md` **Naming & location** first: resolve the store inside the command that writes the item and the INDEX line, and run its no-`.local/` check. → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What` including its `### Acceptance criteria`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
 7. **Item self-review** — fix inline (see below).
 8. **User reviews the item** — ask, wait, revise if needed.
 9. **Premise check, then transition** — before handing off, confirm the base is up to date (rebase/refresh from the base branch) and that the premises the design rests on still hold in that base. AC cannot catch a wrong premise: it is built on them. A premise that moved sends you back to step 4 with the user. Then invoke `executing`.

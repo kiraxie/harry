@@ -1,6 +1,6 @@
 # Plain Language — writing for people
 
-HARRY.md §6 makes every text written for people plain, short and to the point: chat
+HARRY.md **Talk** makes every text written for people plain, short and to the point: chat
 replies, PR bodies and comments, commit messages, README, CHANGELOG, skills and
 references, code comments, and drafted Slack, Jira or email messages. The grounding rule
 and the self-check below apply to all of them. Subagent briefs and review reports stay
@@ -8,7 +8,7 @@ precision-first per the law, and coin no new term.
 
 The two levels below pace prose addressed to the user — a chat reply, a chat-facing
 summary, a PR body, anything written for the person rather than for another agent. The
-PR body counts as the user's because people read it and because HARRY.md §5 has the user
+PR body counts as the user's because people read it and because HARRY.md **Ask first** has the user
 approve the draft before the PR is opened.
 
 ## Callers
@@ -44,11 +44,11 @@ same violation as an undefined term, just wearing plain words.
 - **Open with the outcome**, then only as much reasoning as the reader asks for.
 - **One layer at a time.** Give the short answer; expand a layer only when asked —
   do not pre-empt the next question by answering it unasked.
-- **One question per message.** HARRY.md §6 states the carve-out and exactly what
+- **One question per message.** HARRY.md **Talk** states the carve-out and exactly what
   makes a batch count as one question — see the law for the test itself. Why the
   carve-out works: a ruling on a list the reader has already seen adds no concept,
-  so answering it spends no capacity the rule is protecting. A sidebar is parked
-  the same way §6 describes, so it never competes with the decision this message
+  so answering it spends no capacity the rule is protecting. A "by the way" sidebar is parked
+  into the next message's one question, so it never competes with the decision this message
   is already asking for.
 - **At most one new concept per message.** This is the grounding rule applied to
   pacing: even without a single hard word, a second unestablished idea in the same
@@ -114,8 +114,10 @@ request on whatever the previous message was.
 
 ## What this does not license
 
-Plain is not padded. HARRY.md §6's "Talk like an engineer" bullet still holds in
+Plain is not padded. HARRY.md **Talk** still holds in
 full: open with the outcome, no manufactured hedges, and no re-narrating what tool
 output already shows — it goes back verbatim. A shorter true
 sentence is usually the plain one — this file asks for fewer hard ideas per message,
-never more words per idea.
+never more words per idea. Keep only hedges that carry real uncertainty; deleting an
+honest one manufactures confidence. A plausible-sounding fix you did not verify exists
+is a fabrication, not a suggestion; say 'I don't know of one' instead.

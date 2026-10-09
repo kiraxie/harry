@@ -53,7 +53,7 @@ const PLUGIN_ROOT_RE = /\$\{CLAUDE_PLUGIN_ROOT\}\/([\w./-]+)/g;
 // Extension whitelist shared by both path regexes below — kept as one constant
 // composed into each pattern's source rather than duplicated literally, after
 // this file's own `mts` addition had to edit two copies to stay in sync
-// (HARRY.md §2 drift test: shared knowledge, not incidental duplication).
+// (the drift test in references/review-rubric.md: shared knowledge, not incidental duplication).
 const EXT_SRC = String.raw`\.(?:md|json|cjs|mjs|mts|ts|sh)\b`;
 const BARE_PATH_RE = new RegExp(
   String.raw`(?<!\/)\b(?:references|scripts|dist|tests|skills|commands|codex-skills)\/[\w./-]+${EXT_SRC}`,
@@ -184,72 +184,53 @@ test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
 });
 
 // ---------------------------------------------------------------------------
-// §-section citations
+// HARRY.md heading citations
 //
 // The test above checks that a referenced *path* exists; it says nothing about
 // what is cited INSIDE a file. A citation naming a section that has been deleted
 // passes it, and that failure has happened here: the fix-now batch removed
 // `skills/executing/SKILL.md`'s `## Never` section while
-// `references/review-rubric.md` still cited "(executing §Never)". A reviewer
-// caught it, twice — the re-pointed citation was then aimed at the wrong tier.
+// `references/review-rubric.md` still cited "(executing §Never)".
 //
-// SCOPE, measured before building rather than assumed. The item behind this test
-// contemplated four citation grammars; three have ZERO instances — bare
-// `§<Heading>`, `(<file> — the <name> step)`, and prose-worded "session mode step
-// N". Building a parser for grammars with no instances is the guard version of
-// speculative abstraction, so this covers the one that exists.
+// Laws are cited by heading name — `HARRY.md **Evidence**` — not by number. The
+// laws used to be cited as `§N`, and a renumber escaped that check: if one
+// section's content moved to the next number, the old number still resolved, to the wrong law. A name moves with its
+// content, and a renamed heading fails here.
 //
-// THE INVARIANT THIS RESTS ON — `§N` MEANS HARRY.md, ALWAYS. That was not true
-// when this test was first written, and review caught it: `review-rubric.md` said
-// "(executing §3)", meaning `skills/executing/SKILL.md`'s step 3, and this test
-// waved it through because HARRY.md happens to define a §3. Worse, that file has
-// three independent numbering scopes, so the citation resolved three ways — the
-// same wrong-step defect a reviewer had already caught once. Two others read the
-// same way (`sync-migration.md`'s legacy spec template, `finishing`'s own step 1).
-// All three were rewritten to name their target rather than borrow the § form, so
-// the invariant is now enforced by the prose rather than assumed by the test. If
-// a cross-document `§N` is ever reintroduced, this test will silently bless it —
-// that is the cost of the invariant, and the reason it is stated this loudly.
-//
-// KNOWN CEILINGS, both real:
-//  - A RENUMBER escapes. If §5's content became §6 and citations were left alone,
-//    `§5` still resolves to a heading, just to the wrong law. Closing it needs
-//    citations to name titles instead of numbers — a bigger change to how the
-//    laws are written than it is worth.
-//  - Fences are NOT skipped, unlike the path scan above, which explains at length
-//    why it does skip them. That asymmetry is deliberate: a fabricated *path* in
-//    an example is normal, but there is no reason to write a §N that does not
-//    resolve, even illustratively. Do not "fix" it to match its sibling.
-test("every §N citation names a section HARRY.md actually has", () => {
-  const laws = readFileSync(path.join(repoRoot, "HARRY.md"), "utf-8");
-  const sections = new Set(Array.from(laws.matchAll(/^## §(\d+)\b/gm), (m) => m[1]));
-  // An EXACT set, not a floor. A floor answers "did the parse break", but the
-  // citation check is only as sound as this set, so a phantom section is just as
-  // damaging as a missing one: an illustrative `## §9` inside a fenced block
-  // would otherwise become real and legitimize bogus citations. Exact also makes
-  // a genuine section change cost one deliberate line here — correct, since it
-  // invalidates citations across ~100 sites and someone should look.
-  assert.deepEqual(
-    [...sections].sort(),
-    ["0", "1", "2", "3", "4", "5", "6", "7"],
-    `HARRY.md's "## §N" headings are no longer exactly §0-§7. Either the heading format ` +
-      `changed (fix the regex above — a parse matching nothing would make this test ` +
-      `vacuous), a section was added or removed (sweep its citations, then update this ` +
-      `list — it is sorted as STRINGS, so a §10 belongs between "1" and "2"), or a fenced ` +
-      `example is being parsed as a real heading.`,
-  );
+// Fences are NOT skipped, unlike the path scan above: there is no reason to
+// write a law citation that does not resolve, even illustratively.
+const LAW_HEADINGS = [
+  "Priority",
+  "Tiers",
+  "Ask first",
+  "Secrets",
+  "Root cause",
+  "Evidence",
+  "Clarify first",
+  "Code",
+  "Talk",
+];
+// `law` labels in evals/cases.jsonl that name no HARRY.md heading on purpose: a
+// rule the review standard or red-green holds, the plugin probes, and two informative cases.
+const NON_LAW_LABELS = new Set(["rubric", "red-green", "plugin", "L&C", "grill"]);
 
-  // The corpus needs guarding too, and this is the likelier vacuity vector of the
-  // two: `listMarkdownFiles` returns [] for a directory that does not exist, so
-  // renaming `skills/` — an ordinary refactor — silently drops five files and
-  // their citations while this test stays green. Changing HARRY.md's heading
-  // format, which the assertion above guards, is a far rarer edit.
-  //
-  // Asserted per directory rather than as a total count. A count is an
-  // approximation of the thing that matters and a bad one: the first version of
-  // this was `proseFiles.length >= 40` against a corpus of 46, which the
-  // five-file `skills/` directory could vanish from without tripping. Naming each
-  // directory catches the case exactly and says which one broke.
+test("every HARRY.md citation names a heading HARRY.md actually has", () => {
+  const laws = readFileSync(path.join(repoRoot, "HARRY.md"), "utf-8");
+  const headings = Array.from(laws.matchAll(/^## (.+)$/gm), (m) => (m[1] as string).trim());
+  // An EXACT list, not a floor: the citation check is only as sound as this set,
+  // and a heading change invalidates citations across many sites, so it should
+  // cost one deliberate line here.
+  assert.deepEqual(
+    headings,
+    LAW_HEADINGS,
+    "HARRY.md's ## headings changed. Sweep the citations of any renamed or removed " +
+      "heading, then update LAW_HEADINGS.",
+  );
+  const sections = new Set(headings);
+
+  // The corpus needs guarding too: `listMarkdownFiles` returns [] for a directory
+  // that does not exist, so renaming `skills/` would silently drop its citations
+  // while this test stays green. Asserted per directory, so it says which broke.
   for (const dir of PROSE_DIRS) {
     assert.ok(
       listMarkdownFiles(dir).length > 0,
@@ -257,10 +238,6 @@ test("every §N citation names a section HARRY.md actually has", () => {
         `is fixed, every citation in it is unchecked and both tests here pass regardless.`,
     );
   }
-  // Same shape for the top-level files, which are otherwise dropped by a
-  // `.filter(existsSync)` in the corpus above — rename README.md and its
-  // citations stop being checked without a word. HARRY.md is protected
-  // incidentally (read directly below, so a rename throws); the other two are not.
   for (const file of TOP_LEVEL_FILES) {
     assert.ok(
       existsSync(path.join(repoRoot, file)),
@@ -270,61 +247,45 @@ test("every §N citation names a section HARRY.md actually has", () => {
   }
 
   const failures: string[] = [];
-  // `evals/cases.jsonl`'s `law` field is a §N citation that a MACHINE reads, and
-  // `scripts/run-evals.mts` validates it only as a non-empty string, so `law:
-  // "§9"` passes there today. Two cases legitimately use a non-§ value, hence the
-  // prefix test rather than a blanket one.
-  //
-  // Read it unguarded, deliberately. An `if (existsSync(...))` here would be a
-  // SILENT SKIP — renaming `evals/` would drop all sixteen and leave this green,
-  // which is the same vacuity the two assertions above exist to prevent, three
-  // lines away and treated the opposite way. (It was written that way first;
-  // review caught it.) The file is committed and this is a repo test, so a bare
-  // read costs nothing and fails loudly if it moves.
+  // `evals/cases.jsonl`'s `law` field names the law a case measures, and the
+  // runner validates it only as a non-empty string. Read unguarded, so a moved
+  // file fails loudly instead of dropping every case from the check.
   readFileSync(path.join(repoRoot, "evals/cases.jsonl"), "utf-8")
     .split("\n")
     .forEach((line, idx) => {
       if (!line.trim()) return;
       let parsed: unknown;
-      // The try wraps ONLY the parse. Wrapping the property read too would let a
-      // line that is valid JSON but not an object (`null`) report "is not valid
-      // JSON" — a message asserting the opposite of the truth, which is the
-      // defect class this whole test exists to police.
       try {
         parsed = JSON.parse(line);
       } catch (err) {
-        // JSON.parse's own position is an offset within THIS line, so its
-        // "line 1 column 3" points at the wrong place in a file of many.
         throw new Error(
           `evals/cases.jsonl:${idx + 1} is not valid JSON: ${(err as Error).message}`,
         );
       }
       const law: unknown = (parsed as { law?: unknown } | null)?.law;
-      if (typeof law !== "string" || !law.startsWith("§")) return;
-      const n = law.slice(1);
-      if (!sections.has(n)) failures.push(`evals/cases.jsonl:${idx + 1} -> law ${law}`);
+      if (typeof law !== "string" || (!sections.has(law) && !NON_LAW_LABELS.has(law)))
+        failures.push(`evals/cases.jsonl:${idx + 1} -> law ${String(law)}`);
     });
 
   for (const relFile of proseFiles) {
-    readFileSync(path.join(repoRoot, relFile), "utf-8")
-      .split("\n")
-      .forEach((line, idx) => {
-        // `§ 9` with a space reads as a citation to a human; match it so it
-        // cannot be a silent skip.
-        for (const m of line.matchAll(/§ ?(\d+)/g)) {
-          if (!sections.has(m[1])) failures.push(`${relFile}:${idx + 1} -> §${m[1]}`);
-        }
-      });
+    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
+    // Matched on the whole text, so a citation wrapped across a line break and the
+    // possessive form are checked too.
+    for (const m of text.matchAll(/HARRY\.md`?(?:'s)?\s+\*\*([^*]+)\*\*/g)) {
+      const name = (m[1] as string).replace(/\s+/g, " ");
+      const line = text.slice(0, m.index).split("\n").length;
+      if (!sections.has(name)) failures.push(`${relFile}:${line} -> HARRY.md **${name}**`);
+    }
   }
 
-  assert.deepEqual(failures, [], "citations pointing at a section HARRY.md does not define");
+  assert.deepEqual(failures, [], "citations pointing at a heading HARRY.md does not have");
 });
 
 // ---------------------------------------------------------------------------
 // `See **Heading** in <reference>` pointers
 //
 // The third citation form, and the one that has actually been breaking. The
-// path check above proves the FILE exists; the §N check proves a law number
+// path check above proves the FILE exists; the law-name check proves a law heading
 // resolves; neither says anything about a heading named inside another file.
 // Three consecutive units broke exactly this and were caught by review rather
 // than by the suite: a section was hoisted or renamed and the sentence pointing
@@ -392,4 +353,69 @@ test("every `See **Heading** in <reference>` names a heading that reference has"
     "the `See **X** in` regex has stopped matching, and this test now asserts nothing.",
   );
   assert.deepEqual(failures, [], "pointers naming a heading their reference does not have");
+});
+
+test("every reference is cited by path from a shipped file other than itself", () => {
+  const shipped = [...SHIPPED_TOP_LEVEL, ...SHIPPED_PROSE_DIRS.flatMap(listMarkdownFiles)];
+  const texts = new Map(
+    shipped.map((rel) => [rel, readFileSync(path.join(repoRoot, rel), "utf-8")]),
+  );
+  const orphans = listMarkdownFiles("references")
+    .map((rel) => rel.split(path.sep).join("/"))
+    .filter(
+      (ref) =>
+        ![...texts].some(
+          ([rel, text]) => rel.split(path.sep).join("/") !== ref && text.includes(ref),
+        ),
+    );
+  assert.deepEqual(
+    orphans,
+    [],
+    "references no shipped file cites — a reference nothing loads is deleted in effect",
+  );
+});
+
+test("no tracked file but the changelog cites a law by the retired section-number form", () => {
+  // Every tracked file, not a list of kinds: a list missed a file kind four times
+  // (test messages, scripts, eval notes, upstream.json). CHANGELOG.md is release
+  // history and quotes the numbering of its day.
+  const tracked = execFileSync("git", ["ls-files"], { cwd: repoRoot, encoding: "utf-8" })
+    .split("\n")
+    .filter((rel) => rel && rel !== "CHANGELOG.md" && existsSync(path.join(repoRoot, rel)));
+  assert.ok(tracked.includes("upstream.json"), "the scan lost the tracked files");
+  const hits = tracked.flatMap((rel) => {
+    const text = readFileSync(path.join(repoRoot, rel), "utf-8");
+    if (text.includes("\0")) return [];
+    return text
+      .split("\n")
+      .flatMap((line, idx) => (/§ ?\d/.test(line) ? [`${rel}:${idx + 1}`] : []));
+  });
+  assert.deepEqual(hits, [], "a section-number law citation; cite the heading name instead");
+});
+
+test("every `<path>` **Heading** citation names a heading that file has", () => {
+  const failures: string[] = [];
+  let seen = 0;
+  for (const relFile of proseFiles) {
+    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
+    for (const m of text.matchAll(
+      /`((?:skills|references|commands|codex-skills|agents)\/[\w./-]+\.md)`,?\s+\*\*([^*]+)\*\*/g,
+    )) {
+      seen += 1;
+      const [target, name] = [m[1] as string, (m[2] as string).replace(/\s+/g, " ").trim()];
+      const line = text.slice(0, m.index).split("\n").length;
+      if (!existsSync(path.join(repoRoot, target))) {
+        failures.push(`${relFile}:${line} -> ${target} is missing`);
+        continue;
+      }
+      const headings = Array.from(
+        readFileSync(path.join(repoRoot, target), "utf-8").matchAll(/^##+ (.+)$/gm),
+        (h) => (h[1] as string).trim(),
+      );
+      if (!headings.includes(name))
+        failures.push(`${relFile}:${line} -> ${target} has no heading "${name}"`);
+    }
+  }
+  assert.ok(seen > 0, "the citation pattern matched nothing; it is no longer checking anything");
+  assert.deepEqual(failures, [], "a heading citation pointing at a heading its file does not have");
 });

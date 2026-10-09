@@ -8,7 +8,7 @@ This command brings every dependency of the current repo to its latest stable re
 package manager and the CI setup actions included — verifies the result, and lands
 it through the usual merge-vs-PR ask. It never deploys unless the user asks.
 
-A full upgrade touching CI is at least Standard (HARRY.md §3). Work on a fresh
+A full upgrade touching CI is at least Standard (HARRY.md **Tiers**). Work on a fresh
 branch, never the default branch.
 
 ## 1. Read the toolchain before touching anything
@@ -32,7 +32,7 @@ still needs the user's approval** — if an upgrade seems to need one, stop and 
 
 For each major bump, read its migration notes and fix the code. When one cannot be
 fixed now, pin it at the last working major with a `DEBT:` note that names the
-blocker and what unblocks it (HARRY.md §4), and move on.
+blocker and what unblocks it (HARRY.md **Code**), and move on.
 
 ## 4. Verify
 
@@ -49,7 +49,7 @@ change to make here.
 
 ## 6. Land
 
-Hand off to the finishing skill: merge or PR is always the user's call (HARRY.md §5),
+Hand off to the finishing skill: merge or PR is always the user's call (HARRY.md **Ask first**),
 landed as a squash. Do not deploy unless the user asks.
 
 ## Notes per ecosystem

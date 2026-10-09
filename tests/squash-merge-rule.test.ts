@@ -18,17 +18,19 @@ const plain = (text: string): string =>
     .replace(/\*+/g, "")
     .replace(/(?<!\w)_+|_+(?!\w)/g, "");
 
-test("HARRY.md §5 makes integration a squash merge", () => {
-  const section = plain(read("HARRY.md").split("## §5")[1]?.split("## §6")[0] ?? "");
+test("finishing makes integration a squash merge", () => {
+  const section = plain(
+    read("skills/finishing/SKILL.md").split("## 3.")[1]?.split("## 4.")[0] ?? "",
+  );
   // Through the definition, not just the term: `squash` is one of the project terms
   // that survives only while the sentence saying what it means survives with it, and
   // the term alone can stay while that sentence is deleted whole.
   assert.match(
     section,
     /lands as a squash: one commit on the base whose message summarises the unit, never the branch's commit-by-commit history/,
-    "§5 no longer says a unit lands as a squash — one commit on the base, summarising the unit",
+    "finishing no longer says a unit lands as a squash — one commit on the base, summarising the unit",
   );
-  assert.match(section, /never a merge commit/, "§5 no longer rules out merge commits");
+  assert.match(section, /never a merge commit/, "finishing no longer rules out merge commits");
 });
 
 test("finishing squash-merges locally and on PRs with a summarising message", () => {

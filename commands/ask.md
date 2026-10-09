@@ -29,7 +29,7 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" [--reasoning <low
 
 The answer is printed verbatim to stdout; stderr ends with `Log: <path>`.
 Return the stdout content verbatim — no paraphrase, summary, or commentary
-before or after it (HARRY.md §6) — but only once you've confirmed the run
+before or after it (HARRY.md **Talk**) — but only once you've confirmed the run
 succeeded (see Failure below).
 
 ## Failure

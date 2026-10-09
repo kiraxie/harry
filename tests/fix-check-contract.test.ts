@@ -46,6 +46,15 @@ test("review-round-cap AC-5(a): the referee's own comparison with earlier findin
   );
 });
 
+test("fix-check level 2 fails a fix whose side-effect flags go unlisted", () => {
+  const text = fixCheck();
+  const level2 = text.slice(text.indexOf("2. Data flow —"), text.indexOf("3. System —"));
+  assert.match(
+    level2,
+    /A fix that flips any setting beyond the one it targets lists each one — its side-effect flags; an unlisted one fails at this level\./,
+  );
+});
+
 test("AC-1: fix-check lists every input the check is handed", () => {
   const text = fixCheck();
   const inputs: [RegExp, string][] = [
@@ -90,27 +99,14 @@ test("AC-1: fix-check names the cases that stop for the user", () => {
     assert.match(text, re, `fix-check no longer stops for the user on ${what}`);
 });
 
-const lawBullet = (marker: string): string => {
-  const found = read("HARRY.md")
-    .split("\n")
-    .find((l) => l.includes(marker));
-  assert.ok(found, `HARRY.md no longer has the ${marker} bullet`);
-  return flat(found);
-};
-
-test("AC-7: HARRY.md §5 routes fix checks to the referee", () => {
+test("AC-7: executing routes fix checks to the referee", () => {
+  const who = flat(read("skills/executing/SKILL.md"))
+    .split("## Who writes")[1]
+    ?.split("## Before you build")[0];
   assert.match(
-    lawBullet("**The session writes"),
+    who ?? "",
     /fix checks → referee/,
-    "§5 no longer routes a fix check to the referee",
-  );
-});
-
-test("AC-10: HARRY.md §6 has a non-small Standard or Major fix pass the three-level check before it is built", () => {
-  assert.match(
-    lawBullet("**Honesty & evidence.**"),
-    /On Standard and Major, a finding's fix that is not small \(§3\) passes the referee's three-level check \(references\/fix-check\.md\) before it is built/,
-    "§6 no longer requires the independent check of a fix before it is built",
+    "executing no longer routes a fix check to the referee",
   );
 });
 

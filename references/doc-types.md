@@ -1,10 +1,12 @@
-# `.local/` Item Store — full detail for HARRY.md §5
+# `.local/` Item Store
 
 harry keeps work products as items under `.local/items/` (backlog + active)
 and `.local/archive/` (done), plus two tracking files (`INDEX.md`,
-`HISTORY.md`). HARRY.md §5 carries the one-paragraph summary and the load
-trigger; this reference is the full item format, milestone semantics, and
-lifecycle. **Read this whenever you create, graduate, or archive any
+`HISTORY.md`). A work unit is one item: `status: backlog → active → done`,
+where `active` holds `## Why / What` (ending in its acceptance criteria) and an
+append-only `## Progress`; `INDEX.md` maps active and backlog work and opens with
+the `## In flight` list; completion appends one line to `HISTORY.md`. This
+reference is the full item format, milestone semantics, and lifecycle. **Read this whenever you create, graduate, or archive any
 `.local/` item.**
 
 ## The item model
@@ -101,6 +103,14 @@ milestone edit.
   no main checkout — the formula lands beside the bare dir; confirm a store
   location with the user there.) Never create a `.local/` inside a worktree;
   if one exists there, it is a stray — merge its content back, then delete it (confirm the deletion with the user first).
+  Resolve it inside the same command that uses it, as `$STORE`:
+
+  ```bash
+  STORE="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+  ```
+
+- **If the project has no `.local/` at all, set it up or confirm it with the user first:**
+  don't scatter untracked docs into a repo whose `.gitignore` lacks harry's block.
 
 - File: `.local/items/<slug>.md` (backlog or active). `<slug>` is kebab-case,
   derived from the title — **no date prefix**: `status` is now the temporal

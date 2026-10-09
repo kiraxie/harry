@@ -50,6 +50,7 @@ import {
   resolveTrials,
   restoreFixtureGitConfig,
   runEvals,
+  snapshotPlugin,
 } from "../scripts/run-evals.mts";
 import { installFakeClaude, readCalls } from "./fake-claude.ts";
 
@@ -77,19 +78,19 @@ function authFreeEnv(): Record<string, string | undefined> {
 
 test("validateCases: flags a case missing checks, a bad type, and a broken regex", () => {
   const bad = [
-    { id: "no-checks", mode: "text", prompt: "hi", law: "§1", checks: [] },
+    { id: "no-checks", mode: "text", prompt: "hi", law: "Code", checks: [] },
     {
       id: "bad-type",
       mode: "text",
       prompt: "hi",
-      law: "§1",
+      law: "Code",
       checks: [{ type: "regex_maybe", pattern: "x" }],
     },
     {
       id: "bad-regex",
       mode: "text",
       prompt: "hi",
-      law: "§1",
+      law: "Code",
       checks: [{ type: "regex_must", pattern: "(" }],
     },
   ];
@@ -114,14 +115,14 @@ test("validateCases: flags an unsupported mode and a duplicate id", () => {
       id: "dup",
       mode: "text",
       prompt: "hi",
-      law: "§1",
+      law: "Code",
       checks: [{ type: "regex_must", pattern: "x" }],
     },
     {
       id: "dup",
       mode: "screencast",
       prompt: "hi",
-      law: "§1",
+      law: "Code",
       checks: [{ type: "regex_must", pattern: "x" }],
     },
   ];
@@ -151,14 +152,14 @@ test("scoreResults: candidate must pass; a failing candidate check sets candidat
     {
       id: "tier",
       condition: "candidate",
-      law: "§3",
+      law: "Tiers",
       response: "This is a Standard tier task; let me plan it.",
       checks: [{ type: "regex_must", pattern: "tier", flags: "i" }],
     },
     {
       id: "tier",
       condition: "baseline",
-      law: "§3",
+      law: "Tiers",
       response: "Sure, here's the code.",
       checks: [{ type: "regex_must", pattern: "tier", flags: "i" }],
     },
@@ -172,7 +173,7 @@ test("scoreResults: candidate must pass; a failing candidate check sets candidat
     {
       id: "tier",
       condition: "candidate",
-      law: "§3",
+      law: "Tiers",
       response: "Sure, here's the code.",
       checks: [{ type: "regex_must", pattern: "tier", flags: "i" }],
     },
@@ -184,7 +185,7 @@ test("scoreResults: a group passes on a STRICT majority of its trials", () => {
   const mk = (trial: number, response: string) => ({
     id: "tier",
     condition: "candidate",
-    law: "§3",
+    law: "Tiers",
     trial,
     response,
     checks: [{ type: "regex_must", pattern: "tier", flags: "i" }],
@@ -228,14 +229,14 @@ test("scoreResults: old-format (no trial) lines pool with new trial lines per gr
   const oldLine = {
     id: "debt",
     condition: "candidate",
-    law: "§4",
+    law: "Code",
     response: "Leaving a DEBT: marker for later.",
     checks: [{ type: "regex_must", pattern: "DEBT:" }],
   }; // no `trial` field — legacy single-trial line.
   const newFail = {
     id: "debt",
     condition: "candidate",
-    law: "§4",
+    law: "Code",
     trial: 2,
     response: "no marker at all",
     checks: [{ type: "regex_must", pattern: "DEBT:" }],
@@ -287,7 +288,7 @@ test("validateCases: declared_tier names one of the three tiers", () => {
     id: `t-${String(tier)}`,
     mode: "text",
     prompt: "hi",
-    law: "§3",
+    law: "Tiers",
     checks: [{ type: "declared_tier", tier }],
   });
   assert.deepEqual(validateCases([mk("standard")]), []);
@@ -305,7 +306,7 @@ test("score CLI: exits non-zero when a candidate result fails a check", () => {
         JSON.stringify({
           id: "debt",
           condition: "candidate",
-          law: "§4",
+          law: "Code",
           response: "I'll just hardcode it (no marker).",
           checks: [{ type: "regex_must", pattern: "DEBT:" }],
         }),
@@ -319,7 +320,7 @@ test("score CLI: exits non-zero when a candidate result fails a check", () => {
         JSON.stringify({
           id: "debt",
           condition: "candidate",
-          law: "§4",
+          law: "Code",
           response: "Hardcoding for now with a DEBT: make configurable post-launch.",
           checks: [{ type: "regex_must", pattern: "DEBT:" }],
         }),
@@ -382,6 +383,14 @@ test("runEvals: baseline gives an empty config dir; candidate's inlines the laws
     assert.equal(seenBaseline?.lawsPresent, false, "shim saw no laws under baseline");
     assert.equal(seenCandidate?.lawsPresent, true, "shim saw laws under candidate");
     assert.equal(seenCandidate?.allowedTools, "", "tools disabled via --allowedTools ''");
+    for (const c of calls)
+      assert.equal(c.pluginDir, undefined, "no plugin outside the plugin condition");
+    for (const c of calls) {
+      assert.equal(c.tools, "", "a text case outside the plugin condition gets no tools at all");
+      assert.equal(c.restricted, false);
+      assert.equal(c.disallowedTools, undefined);
+    }
+    assert.equal(candidate.lines[0].toolSetup, '--tools ""', "a line records its tool setup");
 
     // cwd isolation: the child ran from an empty dir with no CLAUDE.md above it,
     // so this repo's own project CLAUDE.md can't leak into EITHER condition.
@@ -396,6 +405,128 @@ test("runEvals: baseline gives an empty config dir; candidate's inlines the laws
       candidate.lines[0].configDir,
       "candidate cwd is not its laws dir",
     );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: the plugin condition runs against a frozen copy holding only what the plugin loads", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: root,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "plugin",
+        model: "test-model",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "p.jsonl"),
+        trials: 2,
+      },
+      env,
+    );
+    const calls = readCalls(binDir);
+    const dir = calls[0]?.pluginDir ?? "";
+    assert.ok(dir && dir !== pluginRoot, "the session loads a copy, never the live checkout");
+    assert.equal(
+      path.dirname(dir),
+      realpathSync(root),
+      "the copy sits in the run's throwaway root",
+    );
+    for (const kept of ["skills/executing/SKILL.md", ".claude-plugin/plugin.json", "HARRY.md"])
+      assert.ok(existsSync(path.join(dir, kept)), `the copy holds ${kept}`);
+    for (const left of ["evals", "tests", ".local", "scripts", "dist"])
+      assert.ok(!existsSync(path.join(dir, left)), `the copy leaves out ${left}/`);
+    assert.equal(calls[0]?.lawsPresent, true, "the plugin condition still loads the laws");
+    assert.equal(calls[0]?.allowedTools, "Skill", "Skill is approved; Read needs no approval");
+    assert.equal(calls[0]?.tools, "Skill,Read", "the text session has only Skill and Read");
+    assert.equal(
+      calls[0]?.disallowedTools,
+      "Read(~/**)",
+      "Read is denied under the operator's home, where the repo and its grading patterns live",
+    );
+    assert.equal(calls[0]?.restricted, false, "restricted mode would drop the laws");
+    assert.equal(lines[0].toolSetup, "--tools Skill,Read --disallowedTools Read(~/**)");
+    assert.equal(calls[1]?.pluginDir, dir, "every trial of a run shares one copy");
+    assert.equal(calls[0]?.cwdHasClaudeMd, false, "cwd isolation holds");
+    const sha = lines[0].pluginSha256;
+    assert.match(String(sha), /^[0-9a-f]{16}$/, "a line records the copy's content hash");
+    assert.equal(lines[1].pluginSha256, sha);
+    assert.equal(
+      lines[0].pluginHead,
+      undefined,
+      "the commit stamp is replaced by the content hash",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: an agentic case under the plugin condition loads the copy, with home reads denied", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: root,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    runEvals(
+      {
+        condition: "plugin",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+      },
+      env,
+    );
+    const [call] = readCalls(binDir);
+    const dir = call?.pluginDir ?? "";
+    assert.notEqual(dir, pluginRoot);
+    assert.ok((call?.allowedTools ?? "").endsWith(",Skill"), "the agentic allowlist adds Skill");
+    assert.equal(call?.disallowedTools, "Read(~/**)", "and denies Read under the operator's home");
+    assert.match(call?.allowedTools ?? "", /^Bash\(git status:\*\)/, "and keeps its own tools");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: the plugin condition refuses the sandbox, which it is not wired into", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      EVALS_SANDBOX: "1",
+    };
+    assert.throws(
+      () =>
+        runEvals(
+          {
+            condition: "plugin",
+            model: "m",
+            cases: ["agentic-isolate-branch"],
+            out: path.join(binDir, "o.jsonl"),
+            agentic: true,
+          },
+          env,
+        ),
+      /the plugin condition is not wired into the sandbox/,
+    );
+    assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
   }
@@ -667,7 +798,7 @@ test("score table: an all-errored group reads FAIL (0/N, N error), not a bare 0/
       JSON.stringify({
         id: "debt",
         condition: "candidate",
-        law: "§4",
+        law: "Code",
         trial,
         response: "",
         error: "claude returned an error result: Not logged in",
@@ -719,7 +850,7 @@ test("score table: a long informative id does not overflow the condition column"
         JSON.stringify({
           id: "tier",
           condition: "candidate",
-          law: "§3",
+          law: "Tiers",
           response: "a tier note",
           checks: [{ type: "regex_must", pattern: "tier", flags: "i" }],
         }),
@@ -859,7 +990,7 @@ test("collectRepoState + evaluateArtifactChecks: each artifact check type is jud
 
 test("git_no_new_commits_on_initial: fails when work lands ON the initial branch", () => {
   // The mirror of buildSimulatedRepo: a session that committed directly on the
-  // initial branch instead of branching. This is the §5 violation the check
+  // initial branch instead of branching. This is the Ask first violation the check
   // catches (git_created_branch alone would still pass if a stray branch exists).
   const dir = mkdtempSync(path.join(os.tmpdir(), "harry-evals-repo-oninit-"));
   try {
@@ -900,7 +1031,7 @@ test("scoreResults: an informative case NEVER gates the run (contrast-only)", ()
       id: "graded-pass",
       mode: "text",
       condition: "candidate",
-      law: "§4",
+      law: "Code",
       response: "Leaving a DEBT: marker.",
       checks: [{ type: "regex_must", pattern: "DEBT:" }],
     },
@@ -940,7 +1071,7 @@ test("validateCases: informative must be boolean; pathPattern only on repo_grep(
       id: "bad-informative",
       mode: "text",
       prompt: "hi",
-      law: "§1",
+      law: "Code",
       informative: "yes",
       checks: [{ type: "regex_must", pattern: "x" }],
     },
@@ -949,7 +1080,7 @@ test("validateCases: informative must be boolean; pathPattern only on repo_grep(
       mode: "agentic",
       fixture: "tiny-node",
       prompt: "hi",
-      law: "§1",
+      law: "Code",
       checks: [{ type: "file_contains", path: "a", pattern: "x", pathPattern: "\\.test\\." }],
     },
   ];
@@ -1204,7 +1335,7 @@ test("scoreResults: a group whose trials ran under two law texts is marked mixed
     id: "c",
     condition: "candidate",
     mode: "text",
-    law: "§1",
+    law: "Code",
     checks: [{ type: "regex_must", pattern: "ok" }],
     response: "ok",
     lawSha256,
@@ -1214,6 +1345,171 @@ test("scoreResults: a group whose trials ran under two law texts is marked mixed
   assert.equal(mixed?.mixedLaw, true);
   const [single] = scoreResults([trial("aaaa"), trial("aaaa")]).groups;
   assert.equal(single?.mixedLaw, false);
+});
+
+test("runEvals: the plugin condition refuses a trial root under the operator's home", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: path.join(os.homedir(), "harry-evals-under-home"),
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    assert.throws(
+      () =>
+        runEvals(
+          {
+            condition: "plugin",
+            model: "m",
+            cases: ["destructive-confirmation"],
+            out: path.join(binDir, "o.jsonl"),
+          },
+          env,
+        ),
+      /trial root .* under the home directory/,
+    );
+    assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+    assert.ok(
+      !existsSync(path.join(os.homedir(), "harry-evals-under-home")),
+      "nothing was written there",
+    );
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: the plugin condition refuses the sandbox even for text cases alone", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      EVALS_SANDBOX: "1",
+    };
+    assert.throws(
+      () =>
+        runEvals(
+          {
+            condition: "plugin",
+            model: "m",
+            cases: ["destructive-confirmation"],
+            out: path.join(binDir, "o.jsonl"),
+          },
+          env,
+        ),
+      /plugin condition is not wired into the sandbox/,
+    );
+    assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: every line records the claude CLI version, read without a session", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+        trials: 2,
+      },
+      env,
+    );
+    for (const l of lines) assert.equal(l.claudeVersion, "9.9.9 (fake)");
+    assert.equal(readCalls(binDir).length, 2, "the version read is not counted as a session");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("snapshotPlugin: the content hash changes with any file's content", () => {
+  const a = tmpDir("harry-evals-src-a-");
+  const b = tmpDir("harry-evals-src-b-");
+  const out = tmpDir("harry-evals-snap-");
+  try {
+    for (const src of [a, b]) {
+      for (const d of [".claude-plugin", "skills", "commands", "agents", "references"])
+        mkdirSync(path.join(src, d), { recursive: true });
+      writeFileSync(path.join(src, "HARRY.md"), "# laws\n");
+      writeFileSync(path.join(src, "skills", "s.md"), "same\n");
+    }
+    writeFileSync(path.join(b, "skills", "s.md"), "changed\n");
+    const first = snapshotPlugin(out, a);
+    assert.equal(snapshotPlugin(out, a).sha, first.sha, "the same tree hashes the same");
+    assert.notEqual(snapshotPlugin(out, b).sha, first.sha, "a changed file changes the hash");
+  } finally {
+    for (const d of [a, b, out]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("scoreResults: a group whose trials ran under two tool setups is marked mixed", () => {
+  const trial = (toolSetup: string) => ({
+    id: "c",
+    condition: "candidate",
+    mode: "text",
+    law: "Tiers",
+    checks: [{ type: "regex_must", pattern: "ok" }],
+    response: "ok",
+    lawSha256: "aaaa",
+    toolSetup,
+  });
+  assert.equal(scoreResults([trial('--tools ""'), trial("")]).groups[0]?.mixedTools, true);
+  assert.equal(
+    scoreResults([trial('--tools ""'), trial('--tools ""')]).groups[0]?.mixedTools,
+    false,
+  );
+});
+
+test("score CLI: a failing graded plugin group fails the run", () => {
+  const dir = tmpDir("harry-evals-score-");
+  try {
+    const results = path.join(dir, "r.jsonl");
+    writeFileSync(
+      results,
+      `${JSON.stringify({
+        id: "c",
+        condition: "plugin",
+        mode: "text",
+        law: "Tiers",
+        checks: [{ type: "regex_must", pattern: "ok" }],
+        response: "no",
+      })}\n`,
+    );
+    assert.equal(main(["score", "--results", results]), 1, "a failing plugin group exits 1");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("scoreResults: a plugin group whose trials ran on two plugin copies is marked mixed", () => {
+  const trial = (pluginSha256: string) => ({
+    id: "c",
+    condition: "plugin",
+    mode: "text",
+    law: "Tiers",
+    checks: [{ type: "regex_must", pattern: "ok" }],
+    response: "ok",
+    lawSha256: "aaaa",
+    pluginSha256,
+  });
+  const scored = scoreResults([trial("p1"), trial("p2")]);
+  assert.equal(scored.groups[0]?.mixedPlugin, true);
+  assert.equal(scoreResults([trial("p1"), trial("p1")]).groups[0]?.mixedPlugin, false);
+  assert.equal(scored.summary.pluginTotal, 1, "plugin groups are counted in the summary");
+  assert.equal(scored.summary.pluginPass, 1);
 });
 
 test("runEvals: every trial gets its own config, work and temp dirs, never another trial's", () => {
@@ -3213,7 +3509,7 @@ test(
           mode: "agentic",
           fixture: "pty-probe",
           prompt: "Probe the fds.",
-          law: "§5",
+          law: "Ask first",
           checks: [{ type: "test_command_passes", command: "node tty-probe.mjs" }],
         })}\n`,
       );

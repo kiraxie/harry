@@ -123,7 +123,7 @@ repo's workflow uses ships. When writing or editing a skill or command, follow
 
 ## Plugin content (`HARRY.md`, `skills/`, `commands/`, `references/`)
 
-`HARRY.md` is the resident law file. `scripts/install.mjs` (`pnpm run install-laws` / the plugin's
+`HARRY.md` is the resident law file. It holds only what a session must know before acting, under nine `##` headings; procedure lives in the skills and review judgment in `references/review-rubric.md` (**Engineering judgment**). Prose cites a law by its heading — `HARRY.md **Evidence**` — and `tests/prose-refs.test.ts` checks that every such name is a heading. `scripts/install.mjs` (`pnpm run install-laws` / the plugin's
 own `/sync` command) **deploys a snapshot** of it to `~/.claude/harry/HARRY.md` and `@`-imports that
 deployed copy into a consumer's global `~/.claude/CLAUDE.md`, so it applies every session without
 needing a keyword. The import points at the deployed snapshot, NOT the live plugin checkout: editing
@@ -133,7 +133,7 @@ direct-repo-path import). "Release" = re-run sync — the same resync model as t
 (`scripts/install-codex.mjs`), so both builds converge on one mental model.
 
 The three pipeline skills (`skills/brainstorming`, `skills/executing`, `skills/finishing`)
-auto-trigger (no slash command) and read `HARRY.md`'s tier table (§3) to decide
+auto-trigger (no slash command) and read the tier triggers in HARRY.md **Tiers** to decide
 how much process a task gets. Brainstorming closes on numbered acceptance criteria
 inside the item's `## Why / What`, and executing builds against them. `references/` holds on-demand tables/techniques the skills link to
 (e.g. `tier-gates.md`, `red-green.md`, `review-rubric.md`) rather than inlining them, to keep the
@@ -144,7 +144,7 @@ skill files themselves short.
 audit analysis — opus/high, no edit or spawn tools) and `referee` (fix check, fable/high,
 no edit or spawn tools: checks a finding's fix at three levels before it is built, per
 `references/fix-check.md`, on a different model from the reviewer that proposed it). The
-session writes everything itself; it dispatches only these three (HARRY.md §5). The Agent
+session writes everything itself; it dispatches only these three (`skills/executing/SKILL.md`, **Who writes**). The Agent
 tool takes a model but no effort, so a fixed effort needs an agent file. CC namespaces
 plugin agents, so they dispatch as `harry:scout`, `harry:analyst` and `harry:referee`.
 `tests/agents.test.ts` enforces the invariants (alias models only, no edit or spawn tools;

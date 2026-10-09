@@ -9,7 +9,7 @@ import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 // A gate the model cannot execute is not a gate. `commands/review.md` used to set
 // `disable-model-invocation: true` (inherited from codex-plugin-cc, which sets it on every
 // quota-spending command), which blocks BOTH the SlashCommand and Skill tools — only a human
-// typing the command can run it. Meanwhile HARRY.md §3 named `/review` as Major's review gate,
+// typing the command can run it. Meanwhile HARRY.md's tier table named `/review` as Major's review gate,
 // so every Major silently ran on the declared fallback instead. The same shape already bit
 // `/review --full`, whose `/code-review max` lane could never execute (dropped in 0.13.4).
 // `/review` has since dropped the flag so the executing skill can call it; Claude Code's own

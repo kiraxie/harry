@@ -4,7 +4,7 @@ import test from "node:test";
 
 // `src/lib/version.ts` single-sources PLUGIN_VERSION from package.json, but the
 // plugin manifests each carry an independently hand-maintained `version`.
-// Divergence would be a bug (HARRY.md §2 drift test), and nothing else enforces
+// Divergence would be a bug (the drift test in `references/review-rubric.md`), and nothing else enforces
 // it — so this test is the enforcement: every version-carrying manifest must
 // agree with package.json.
 function read(relPath: string): unknown {

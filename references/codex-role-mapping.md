@@ -1,6 +1,6 @@
-# Codex Role Map — model + effort bindings for HARRY.md §5
+# Codex Role Map — model + effort bindings for the dispatch roles
 
-HARRY.md §5 dispatches three roles: `scout` reads, `analyst` judges, `referee` checks fixes. This table is
+The session dispatches three roles (`skills/executing/SKILL.md`, **Who writes**): `scout` reads, `analyst` judges, `referee` checks fixes. This table is
 Codex's binding of them to a model + reasoning effort. Codex has no per-subagent
 dispatch, so the map is **advisory**: pick the row's model/effort for the work at
 hand via a session profile or `-m` / reasoning-effort config.

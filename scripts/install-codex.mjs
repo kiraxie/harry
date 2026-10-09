@@ -34,7 +34,7 @@ export function applyImport(existing, { remove = false, root = pluginRoot } = {}
   let body = "";
   if (!remove) {
     const laws = readFileSync(join(root, "HARRY.md"), "utf8").replace(/\s+$/, "");
-    // Codex binds §5's roles to model+effort via this map; inline it into the same
+    // Codex binds the dispatch roles to model+effort via this map; inline it into the same
     // block since Codex has no @-import (unlike Claude Code's agents/*.md frontmatter).
     const roleMap = readFileSync(join(root, "references", "codex-role-mapping.md"), "utf8").replace(
       /\s+$/,

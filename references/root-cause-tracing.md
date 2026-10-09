@@ -13,7 +13,7 @@ diff than a guard in every caller.
 
 A debugging session runs commands, prints outputs and opens captured artifacts, and an
 agent reads each one the moment it runs: a secret in that output is already in the
-transcript, and a secret there is a secret to rotate (HARRY.md §5). Redacting it later in a
+transcript, and a secret there is a secret to rotate (HARRY.md **Secrets**). Redacting it later in a
 reply is too late, so mask before you look:
 
 - Loops take credentials from environment variables; the command names the variable, never
@@ -56,7 +56,8 @@ trace all just consume it. No red command, no theory.
 
 Once you have *a* loop: make it **faster** (skip unrelated init, narrow scope), the signal
 **sharper** (assert the specific symptom, not "didn't crash"), and the verdict **more
-deterministic** (pin time, seed RNG, isolate the filesystem, freeze network). A 2-second
+deterministic** (pin time, seed RNG, isolate the filesystem, freeze network; wait on the
+condition, never a delay — `references/condition-based-waiting.md`). A 2-second
 deterministic loop beats a 30-second flaky one — that gap is the whole superpower.
 
 ### Non-deterministic bugs
@@ -125,4 +126,4 @@ absent at one spot.
 
 **Never fix just where the error appears.** Trace back to the original trigger. After 3 failed
 fixes — failures of the hypothesis, not infra flakes (a flaky CI run doesn't count) — stop — it's
-a wrong design, not a failed hypothesis (HARRY.md §6).
+a wrong design, not a failed hypothesis (HARRY.md **Root cause**).

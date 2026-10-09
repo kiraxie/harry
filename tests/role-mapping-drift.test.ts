@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// harry's role routing (HARRY.md §5) is declared in three independent places that
+// harry's role routing (executing's **Who writes**) is declared in three independent places that
 // must not drift: the resident law prose, the Claude Code agent frontmatter, and
 // the Codex role map. Likewise every read-only/mechanical slash command has a Codex
 // skill twin, and the reference-doc paths they point at are a cross-boundary contract
@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 // The canonical role set — derived ONCE, compared against all three sources below
-// (hoist closure, HARRY.md §2: no per-assertion re-listing).
+// (hoist closure, the drift test: no per-assertion re-listing).
 const CANONICAL_ROLES = new Set(["scout", "analyst", "referee"]);
 const MODEL_ALIASES = ["haiku", "sonnet", "opus", "fable"];
 const CODEX_MODEL_RE = /gpt-\d+(\.\d+)?-[a-z]+/i;
@@ -29,11 +29,11 @@ function read(rel: string): string {
 // A. Role-set consistency across the three sources
 // ---------------------------------------------------------------------------
 
-test("A1 · HARRY.md §5 'Route by role' bullet names exactly the canonical roles, no model ids", () => {
-  const bullet = read("HARRY.md")
+test("A1 · executing's Who writes paragraph names exactly the canonical roles, no model ids", () => {
+  const bullet = read("skills/executing/SKILL.md")
     .split("\n")
-    .find((l) => l.includes("**The session writes"));
-  assert.ok(bullet, "HARRY.md: no dispatch bullet found");
+    .find((l) => l.startsWith("The session does all implementation"));
+  assert.ok(bullet, "skills/executing/SKILL.md: no Who writes paragraph found");
 
   // Extract the COMPLETE routed-role set from the routing clauses: each clause reads
   // "<nature> → `role`", so the role is the backtick token immediately after an arrow.
@@ -202,7 +202,7 @@ function refPaths(rel: string): Set<string> {
 // NOTE: on-disk existence of these reference paths is NOT re-checked here —
 // prose-refs.test.ts already asserts every `${CLAUDE_PLUGIN_ROOT}/...` and bare
 // repo-relative path in commands/ and codex-skills/ resolves on disk. Duplicating
-// it would be redundant (HARRY.md §2 DRY). This test only asserts CC↔Codex parity.
+// it would be redundant (the drift test). This test only asserts CC↔Codex parity.
 
 for (const name of PAIRS) {
   test(`B · ${name}: CC command and Codex skill reference the same paths (modulo allowlist)`, () => {
@@ -304,6 +304,7 @@ const HOISTED: Record<string, string[]> = {
     "references/audit/VALIDATION-AND-REPORTING.md",
     "references/audit/report-schema.json",
     "references/audit/validate-findings.cjs",
+    "references/codex-role-mapping.md",
     "references/red-green.md",
     "references/architecture-review.md",
     "references/review-rubric.md",
@@ -312,8 +313,23 @@ const HOISTED: Record<string, string[]> = {
     "references/tier-gates.md",
     "references/grilling.md",
   ],
-  grill: ["references/grilling.md"],
-  "wait-what": ["references/grilling.md", "references/plain-language.md"],
+  grill: [
+    "references/grilling.md",
+    "references/review-rubric.md",
+    "references/red-green.md",
+    "references/tier-gates.md",
+    "references/doc-types.md",
+    "references/debt-audit.md",
+  ],
+  "wait-what": [
+    "references/plain-language.md",
+    "references/grilling.md",
+    "references/review-rubric.md",
+    "references/red-green.md",
+    "references/tier-gates.md",
+    "references/doc-types.md",
+    "references/debt-audit.md",
+  ],
 };
 
 /**

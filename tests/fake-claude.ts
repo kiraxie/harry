@@ -16,6 +16,11 @@ export interface FakeClaudeCall {
   model?: string;
   allowedTools?: string;
   permissionMode?: string;
+  pluginDir?: string;
+  tools?: string;
+  restricted?: boolean;
+  addDir?: string;
+  disallowedTools?: string;
   configDir: string | null;
   cwd: string;
   cwdHasClaudeMd: boolean;
@@ -82,6 +87,12 @@ const SETTINGS = JSON.parse(fs.readFileSync(${JSON.stringify(settingsPath)}, "ut
 const REPLY = ${JSON.stringify(reply)};
 
 const argv = process.argv.slice(2);
+// The runner asks for the CLI version once per run; that is not a session, so it
+// is answered here and never counted.
+if (argv[0] === "--version") {
+  process.stdout.write("9.9.9 (fake)\\n");
+  process.exit(0);
+}
 function flag(name) {
   const i = argv.indexOf(name);
   return i >= 0 ? argv[i + 1] : undefined;
@@ -104,6 +115,11 @@ const call = {
   model: flag("--model"),
   allowedTools: argv.includes("--allowedTools") ? flag("--allowedTools") : undefined,
   permissionMode: argv.includes("--permission-mode") ? flag("--permission-mode") : undefined,
+  pluginDir: argv.includes("--plugin-dir") ? flag("--plugin-dir") : undefined,
+  tools: argv.includes("--tools") ? flag("--tools") : undefined,
+  restricted: argv.includes("--restricted"),
+  addDir: argv.includes("--add-dir") ? flag("--add-dir") : undefined,
+  disallowedTools: argv.includes("--disallowedTools") ? flag("--disallowedTools") : undefined,
   configDir,
   cwd: process.cwd(),
   cwdHasClaudeMd: fs.existsSync(path.join(process.cwd(), "CLAUDE.md")),

@@ -1,4 +1,4 @@
-# Red-Green-Refactor — full detail for HARRY.md §6 (TDD)
+# Red-Green-Refactor
 
 **Core principle: if you didn't watch the test fail, you don't know it tests the right thing.**
 A test you didn't watch fail proves nothing — written after the code, it passes immediately and

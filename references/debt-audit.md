@@ -19,9 +19,9 @@ inline; a near-identical pair for that is duplication, not a divergence.
 
 Deferrals — and open backlog — hide in two places. Collect both — this command is the single overview items alone can't give (items are scattered per-feature).
 
-- **Code markers.** **Claude Code build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- $ARGUMENTS` (drop `-- $ARGUMENTS` when no path given). **Codex build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- <path...>` (drop the path filter when none given). `DEBT:` is the sanctioned marker from HARRY.md §4 and carries a ceiling + upgrade path; TODO/FIXME/HACK are unsanctioned debt — flag them as `unmarked` (a violation per §4).
+- **Code markers.** **Claude Code build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- $ARGUMENTS` (drop `-- $ARGUMENTS` when no path given). **Codex build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- <path...>` (drop the path filter when none given). `DEBT:` is the sanctioned marker from HARRY.md **Code** and carries a ceiling + upgrade path; TODO/FIXME/HACK are unsanctioned debt — flag them as `unmarked` (a violation per HARRY.md **Code**).
 - **Item deferrals.** Read the `## Why / What` (its Scope & Non-Goals content) and the `## Progress` section of every `status: active` item under `.local/items/` (`Glob: .local/items/**/*.md`, keep only files whose frontmatter has `status: active`). Each "不做 / 移除 / 丟棄 / 延後 / Non-Goal" bullet in Scope & Non-Goals, and each "do later / 延後 / out of scope / follow-up" line in `## Progress`, is one deferral. A legacy item that still has a `## Plan` is read there too.
-- **Backlog items.** Read every item under `.local/items/` whose frontmatter has `status: backlog` (`Glob: .local/items/**/*.md`, filter by frontmatter). Each item is one entry — unlike item deferrals, nothing here was ever decided (HARRY.md §5).
+- **Backlog items.** Read every item under `.local/items/` whose frontmatter has `status: backlog` (`Glob: .local/items/**/*.md`, filter by frontmatter). Each item is one entry — unlike item deferrals, nothing here was ever decided (`references/doc-types.md`).
 
 ## 2. Freshness verdict — is the landmine now armed, or is the question still open?
 

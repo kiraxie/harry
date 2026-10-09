@@ -170,4 +170,4 @@ strongest on each contested point and why>
 ```
 
 Do not write transcripts to disk. Only print this report. Quote each voice's
-actual output faithfully — do not invent positions a model did not take (HARRY.md §6).
+actual output faithfully — do not invent positions a model did not take (HARRY.md **Talk**).

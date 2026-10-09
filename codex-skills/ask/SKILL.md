@@ -34,7 +34,7 @@ decides which one runs.
 
 - On success, the answer is printed verbatim to stdout and stderr ends with
   `Log: <path>`. Return the stdout content verbatim, exactly as-is — no
-  paraphrase, summary, or commentary before or after it (HARRY.md §6) — but
+  paraphrase, summary, or commentary before or after it (HARRY.md **Talk**) — but
   only once you've confirmed the run succeeded (next bullet).
 - Failure signals: a non-zero exit, a `Fatal error: <message>` line on stderr
   (argument errors, before any run), or a `# Ask Failed` first line of stdout

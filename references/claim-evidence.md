@@ -1,4 +1,4 @@
-# Claim → Evidence — the claim/evidence map for HARRY.md §6 (Honesty & evidence)
+# Claim → Evidence — the claim/evidence map for HARRY.md **Evidence**
 
 **Core principle: evidence before claims, always.** No completion claim without fresh
 verification evidence — run the command, read the output (exit code, failure count), *then*

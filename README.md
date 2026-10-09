@@ -4,7 +4,7 @@ A personal Claude Code plugin: the **Superpowers** workflow philosophy and **pon
 
 Two halves:
 
-- **Resident laws** (`HARRY.md`) — deployed as a snapshot into your global instructions via an `@`-import, so they apply every session: a cost model, a three-tier complexity threshold, red lines, and the correctness disciplines (TDD, root-cause, honesty/evidence, and plain language for anything you have to read).
+- **Resident laws** (`HARRY.md`) — a short core deployed as a snapshot into your global instructions via an `@`-import, so it applies every session: instruction priority, the three tiers and their red lines, what to ask before acting, secrets, root cause, evidence before claims, clarifying first, code, and plain language for anything you have to read. Procedure lives in the pipeline skills and review judgment in the review standard, both loaded when used.
 - **A `brainstorm → execute → finish` pipeline** — three skills, plus slash commands for review, debate, adversarial grilling interviews, and over-engineering/debt audits.
 
 ## The three-tier threshold

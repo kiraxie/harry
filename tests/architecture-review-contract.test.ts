@@ -143,7 +143,10 @@ test("AC-2: with no item (Trivial) the skip line is written in the reply", () =>
 
 test("AC-3: one analyst, one lane", () => {
   const p = step2("Reviewer.");
-  assert.match(p, /dispatch ONE harry:analyst, one lane — no Codex lane/);
+  assert.match(
+    p,
+    /dispatch ONE harry:analyst \(skills\/executing\/SKILL\.md, Who writes\), one lane — no Codex lane/,
+  );
 });
 
 test("AC-3: the reviewer is handed every input", () => {

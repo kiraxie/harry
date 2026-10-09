@@ -48,8 +48,8 @@ Early in the session, pin in one or two lines what this effort is trying to solv
 
 ## Live scope labeling
 
-When an answer moves the boundary, classify it **on the spot** using HARRY.md §1's
-related test — shared root cause / shared systemic gap / the main change is incomplete
+When an answer moves the boundary, classify it **on the spot** using the
+related-changes test in `references/review-rubric.md` (**Engineering judgment**) — shared root cause / shared systemic gap / the main change is incomplete
 without it:
 
 - **Inside the destination** → it is the complete version of the same problem.

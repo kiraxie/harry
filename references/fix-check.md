@@ -20,7 +20,8 @@ level at a time, and stop at the first level where it fails.
    built, whether or not the finding under check says so, or when the finding says a previous fix left
    something incomplete, the fix holds only if it adds a check that catches the whole
    class (a test, a lint rule or a scan); patching only the instances in view fails at
-   this level.
+   this level. A fix that flips any setting beyond the one it targets lists each one —
+   its side-effect flags; an unlisted one fails at this level.
 3. System — does the fix fit the unit's goal, the neighbouring modules and the
    conventions already in the codebase? Would someone reading the whole change see it
    as the natural place, or as a patch?

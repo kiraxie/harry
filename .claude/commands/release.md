@@ -9,7 +9,7 @@ Raw slash-command arguments: `$ARGUMENTS` — a single required `<version>` (str
 `x.y.z`, no leading `v`).
 
 A release has two phases because the tag must land on the commit that is on the
-default branch, and with squash merges (HARRY.md §5) that commit exists only after
+default branch, and with squash merges (`skills/finishing/SKILL.md`) that commit exists only after
 the merge. **Phase A** bumps and commits on a branch; **Phase B** tags the merged
 result. A repo with nothing to bump skips Phase A and only tags.
 
@@ -97,7 +97,7 @@ would be released with the old version in it. No tag yet → skip this check.
 
 ## Phase A — bump, verify, commit (before the merge)
 
-**Branch first.** Never commit the release on the default branch (HARRY.md §5): cut a
+**Branch first.** Never commit the release on the default branch (HARRY.md **Ask first**): cut a
 fresh branch from it (already synced above), holding nothing but the release
 commit. The squash in step 6 lands everything on the branch under the release
 subject, so other work on it would be released under that name.
@@ -121,7 +121,7 @@ comes up.
    commit, report it.
 5. **Commit** exactly the CHANGELOG, the field files and the build's generated files,
    as `chore(release): bump version to <version>`.
-6. **Hand off** to the finishing skill for merge-vs-PR (HARRY.md §5 — always ask).
+6. **Hand off** to the finishing skill for merge-vs-PR (HARRY.md **Ask first** — always ask).
    The state script finds Phase B by step 5's subject on the default branch, and a
    squash rewrites the subject, so a release overrides finishing's usual wording:
    - **Local merge:** the squash commit's subject is exactly that subject.

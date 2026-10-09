@@ -43,9 +43,8 @@ historical influence gets a fresh comparison only if the user asks for one.
 
 ### 2. Clone and capture pin data
 
-Clone into `.references/<name>` in the MAIN checkout — the same main-checkout store rule
-as `.local/` (HARRY.md §5): from a worktree, resolve the main checkout as the parent of
-`git rev-parse --path-format=absolute --git-common-dir`. The directory is gitignored.
+Clone into `<store>/.references/<name>`, where `<store>` is the main checkout, resolved
+as `references/doc-types.md` **Naming & location** says. The directory is gitignored.
 Record the full 40-char HEAD SHA, a version if the repo declares one (package.json,
 plugin manifest, or latest tag), and today's date. Write nothing to `upstream.json` yet —
 pinning waits for the outcome (step 7).
@@ -76,7 +75,7 @@ concludes "nothing changed".
 
 ### 5. Rule on every candidate
 
-Issue one ruling per candidate principle, each with a stated reason (HARRY.md §6:
+Issue one ruling per candidate principle, each with a stated reason (`references/review-rubric.md`, **Engineering judgment**:
 dismissals need declared reasons — "not relevant" without a why is a silent dismissal):
 
 - **pull** — adopt substantially as-is: it closes a real gap and fits harry's
@@ -127,8 +126,8 @@ the failure mode this command exists to close.
 
 ### 8. Backlog items — with the user's nod
 
-Each accepted candidate becomes a `.local/items/<slug>.md` with `status: backlog`
-quoting its ruling line, plus an `.local/INDEX.md` entry — only after the user confirms
+Each accepted candidate becomes a `<store>/.local/items/<slug>.md` with `status: backlog`
+quoting its ruling line, plus a `<store>/.local/INDEX.md` entry — only after the user confirms
 which ones to keep (present the list; let them cut). Deliver the confirmation via the
 harness's structured picker when one exists (on Claude Code, AskUserQuestion with
 multi-select); plain text otherwise. If no user is available (headless/batch run),
@@ -140,6 +139,6 @@ proposals for future pipeline runs, not commitments.
 - Never modify the cloned repo; never commit `.references/` content into harry.
 - The bookkeeping edits (upstream.json, upstream-sync.md) are the only
   writes to tracked files a distill session makes, and they go on a branch like any
-  other change — branch-first still applies (HARRY.md §5).
+  other change — branch-first still applies (HARRY.md **Ask first**).
 - Note the upstream's license before porting text or code; anything ported carries
   attribution per the repo's existing NOTICE pattern.

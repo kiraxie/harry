@@ -2,7 +2,7 @@
 // Both wrap a body between `# >>> harry >>>` / `# <<< harry <<<` markers and
 // must behave identically — re-running replaces the block in place, --remove
 // strips it. Extracted because divergence between the two would be a bug
-// (HARRY.md §2: shared knowledge across a boundary gets one source of truth).
+// (the drift test in `references/review-rubric.md`: shared knowledge across a boundary gets one source of truth).
 
 // The single newline harry inserts between the user's own content and its block
 // when appending (see applyMarkerBlock). It is a fixed, known string, so strip

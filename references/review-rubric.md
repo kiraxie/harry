@@ -28,19 +28,66 @@ mutation; its report is its final message.
    boundaries; edge cases (empty / null / overflow / concurrency); type safety
    where the language offers it; integrates cleanly with surrounding code. Flag a
    comment that restates the code, justifies a workaround, or resists a change —
-   code carries no comment by default (HARRY.md §4).
-3. **YAGNI / altitude** (HARRY.md §1–§2). Speculative abstraction (interface with
+   code carries no comment by default (HARRY.md **Code**).
+3. **YAGNI / altitude** (**Engineering judgment**, below). Speculative abstraction (interface with
    one impl, factory for one product, config for a constant), premature
    generality or optimization (a cache/index/clever rewrite with no measured
-   bottleneck — §1), dead scaffolding → flag for deletion. **Counter-constraint:**
+   bottleneck), dead scaffolding → flag for deletion. **Counter-constraint:**
    grep-unused is necessary but NOT sufficient to cut — run the drift test first.
    A cross-boundary contract, trust-boundary validation, or correctness
-   infrastructure stays even if currently uncalled (§2). Do not YAGNI away a
+   infrastructure stays even if currently uncalled (HARRY.md **Tiers**). Do not YAGNI away a
    red line.
-4. **Test hygiene** (HARRY.md §6). Judge every test the diff adds or changes
+4. **Test hygiene**. Judge every test the diff adds or changes
    against `references/red-green.md` — what a good test is, one owner per
    contract, and the patterns that pass without guarding anything. Flag tests
    that assert nothing.
+
+## Engineering judgment
+
+These are the laws the session builds by and a reviewer judges a diff by, beyond its acceptance criteria. HARRY.md
+keeps only what must be known before acting (**Code**, **Root cause**); the rest lives here.
+
+- **Correctness and leaving no legacy outrank saving cost** — deferred cost lands on whoever
+  steps on the buried mine. Be lazy about code volume, never about correctness: skip
+  boilerplate, speculative abstraction and scaffolding "for later"; never skip validation,
+  error handling, contracts, or anything whose absence is a silent landmine.
+- **The ladder** (after understanding the problem; stop at the first rung that holds): needs
+  to exist at all (YAGNI) → already in this codebase → stdlib → native platform feature →
+  already-installed dependency → one line → minimal code that works. It shortens the
+  solution, never the correctness infrastructure. No interface with one implementation, no
+  factory for one product, no config for a constant; deletion over addition; boring over
+  clever.
+- **Optimize on evidence, never on imagination.** No cache, index, memoization or clever
+  rewrite without a measurement naming *this* path on a real workload — "should be faster"
+  is a banned claim. Ship the simple version, with a `DEBT:` ceiling when it has one worth
+  naming, and upgrade when N actually approaches it. Not banned: design-time scale
+  decisions against a known workload, an explicit perf budget or SLO, and choosing the
+  equally clear faster idiom — declining to waste is not optimizing.
+- **Clean legacy in the scope you touch.** Minor issues visible in the files or module
+  already changing are fixed in the same PR as separate commits, no follow-up; pure style
+  nits are raised as non-blocking.
+- **Pull related changes into the same PR.** Related = shared root cause, shared systemic
+  gap, or the main change is incomplete without it. Propose the complete version; confirm
+  before expanding scope.
+- **DRY is about knowledge, not code.** Drift test: "if these two copies silently diverge,
+  is that a bug or normal evolution?" Bug → one authoritative truth — extract it now
+  (cross-boundary: on first occurrence), and after extracting verify every composed value
+  (a superset, an "X plus more" list) *derives* from the extracted value instead of
+  re-listing members by hand — a hand-relisted composite is the drift vector left open,
+  now disguised as fixed. Normal → leave the duplication (rule of three). Logic shareable
+  across repos: suggest the extraction and its destination, not for a single use point or
+  clearly product-specific logic, and don't move it without confirmation.
+- **A fix stays pure.** No "while I'm here" edits in a fix commit; cleanup goes in its own
+  commit, same PR. A proposed fix lists its side-effect flags — every setting it flips
+  beyond the one it targets; a password reset that also sets `shouldChangePassword=true`
+  is the next bug, not a detail.
+- **Findings carry their structural fix.** Every review finding reaches the user with its
+  long-term structural fix; a short-term one only when that is not simple; a workaround
+  (treats the symptom, leaves the cause) never.
+- **Automated findings are suggestions.** External or automated review findings (the Codex
+  review lane, `/audit`, CodeRabbit) are verified against *this* codebase, not obeyed —
+  graded by source (the user is trusted and always in control; automated review is not), and dismissing one needs
+  a stated reason.
 
 ## Severity
 
@@ -61,7 +108,7 @@ never Critical. In a fresh review, acknowledge what was done well before listing
   think a finding is a false positive, let it surface and adjudicate it after the
   fix wave.
 - **Be specific:** `file:line`, what's wrong, why it matters, and the long-term
-  structural fix — never a workaround (HARRY.md §6).
+  structural fix — never a workaround (**Engineering judgment**).
 - A finding that **conflicts with an AC** is the human's call — present the
   finding beside the AC text; do not silently fix against the AC, or dismiss
   the finding because the AC mandated it.

@@ -43,16 +43,13 @@ const plain = (rel: string): string =>
 const EXECUTING = path.join("skills", "executing", "SKILL.md");
 const FINISHING = path.join("skills", "finishing", "SKILL.md");
 
-test("AC-1: HARRY.md has the session write and dispatches only its named roles", () => {
-  const harry = plain("HARRY.md");
-  assert.match(harry, /\| Tier \| Trigger \| brainstorm \| item \| TDD \| review \|/);
-  assert.doesNotMatch(harry, /\| execution \|/i);
-  assert.match(harry, /The session does all implementation, fixing and writing itself/);
-  assert.match(harry, /independent judgment — review, debate, audit analysis → analyst/);
-  assert.match(harry, /bulk reading → scout/);
-  assert.match(harry, /Parallel writing is separate units, each in its own worktree/);
-  const words = readFileSync(path.join(repoRoot, "HARRY.md"), "utf-8").split(/\s+/).filter(Boolean);
-  assert.ok(words.length <= 2358, `HARRY.md grew to ${words.length} words`);
+test("AC-1: executing has the session write and dispatches only its named roles", () => {
+  const who = plain(EXECUTING).split("## Who writes")[1]?.split("## Before you build")[0] ?? "";
+  assert.match(who, /The session does all implementation, fixing and writing itself/);
+  assert.match(who, /independent judgment — review, debate, audit analysis → analyst/);
+  assert.match(who, /bulk reading → scout/);
+  assert.match(who, /Parallel writing is separate units, each in its own worktree/);
+  assert.doesNotMatch(plain("references/tier-gates.md"), /\| Execution \|/);
 });
 
 test("AC-3: executing has one mode, reviews by tier in parallel, one fix wave", () => {
