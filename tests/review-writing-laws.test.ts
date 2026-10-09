@@ -168,7 +168,12 @@ test("AC-5: tier-gates cites §3's small-fix rule and gives examples only", () =
   const gates = plain(path.join("references", "tier-gates.md"));
   const fixes = between(gates, "Fixes inside a unit.", "## ");
   assert.match(fixes, /whatever the unit's tier, a fix is small or not by HARRY\.md §3/i);
-  assert.match(fixes, /local one-line rename/i, "renaming an exported symbol is not small");
+  assert.match(
+    fixes,
+    /mechanical rename or move the typecheck covers/i,
+    "a mechanical rename is small whatever its file span (§3)",
+  );
+  assert.match(fixes, /refactor that restructures logic or adds a decision/i);
   assert.match(fixes, /for example/i);
   assert.doesNotMatch(fixes, /changes no behavior/i, "tier-gates restates §3's definition");
   assert.match(

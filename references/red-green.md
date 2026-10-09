@@ -32,8 +32,10 @@ uses real code, has a clear name). Corollaries:
 - **No change detectors** — `expect(MAX_RETRIES).toBe(5)` fires on redesign and sleeps
   through bugs; test the behavior the constant controls, not the constant.
 - **Behavior, not text** — never grep a script's or skill's source as a substitute for
-  running it; run it and assert its effects. (Asserting a text artifact's own contract —
-  links resolve, two files agree — is a different kind of test, and fine.)
+  running it; run it and assert its effects. An instruction edit is tested by a probe
+  (`references/tier-gates.md`, "Red-green for an instruction edit"). (Asserting a text
+  artifact's own contract — links resolve, two files agree — is a different kind of test,
+  and fine.)
 - **No borrowed pass** — a negative test must fail for the reason it names. A rejection
   that comes from a different guard, or from a path production never reaches, passes
   while the guard it claims to test is gone.
@@ -146,7 +148,8 @@ Do not add behavior. Then move to the next failing test for the next behavior.
 and confirm them with the user up front — testing effort lands on critical paths
 and complex logic, not every edge; an unconfirmed seam gets no test. When no
 correct seam exists for a needed test, that absence is itself the finding to
-report — it never waives the mandatory reproduction test.
+report — it never waives the mandatory reproduction test. The one exception is set in
+`references/tier-gates.md`, "Red-green for an instruction edit".
 
 What a seam is, and how to test across one, is in **Seams and what sits behind them** above.
 

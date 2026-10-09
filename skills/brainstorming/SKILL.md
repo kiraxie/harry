@@ -9,37 +9,32 @@ Turn an idea into an agreed design through collaborative dialogue, then write it
 
 **Gate.** Present a design and get the user's approval before any implementation — code, scaffolding, or the executing skill. Every task that enters this skill is Standard or Major (Trivial never enters, per HARRY.md §3), so the gate holds however simple the task looks; tier is settled by §3.
 
-## Tier-Aware Entry (HARRY.md §3)
+## Entry: tier, then depth
 
-Classify the task first, then take the matching path.
+Classify the tier first (HARRY.md §3); a red line hit (HARRY.md §2) auto-promotes to
+Major. A Trivial task skips this skill and goes straight to the work. Every other task
+takes the path its brainstorm depth names:
 
-| Tier | Brainstorming |
-|------|---------------|
-| Trivial | **Skip** — go straight to the work. |
-| Standard | **Compressed path**: the Full Flow at compressed depth with one approach proposal — the exact sequence, and what the item holds, are spelled out in the paragraph after the Full Flow steps below. |
-| Major | **Full flow** below. |
+| Depth | Path |
+|-------|------|
+| Compressed | **Compressed path** — the exact sequence, and what the item holds, are spelled out in the paragraph after the Full Flow steps below. |
+| Full | **Full Flow** below. |
 
-A red line hit (HARRY.md §2) auto-promotes to Major. **Tier sets the interview's
-depth, never its cadence:** both paths ask one question per round, per
-`references/grilling.md`, and both close on the reference's exit gate unabridged — the
-gate itself is never a "lite" version. **Compressed depth** (Standard) still runs the
-interview, just shorter: the opening divergence is brief, since a 2-5-file task's
-destination is usually already legible from the request, so skip extensive adversarial
-probing of the request unless something looks wrong;
-convergence covers only the frontier this task's scope actually raises. The reference's re-walk after every answer
-and design draft, and its design-draft probe, run at every depth — depth sets how far
-each question is pushed, never whether either one runs. **Full depth** (Major) is the
-complete divergence/convergence in step 2 below.
+Which depth a task takes, what each one holds (the approach count included), and what
+runs at every depth: See **Brainstorm depth** in `references/tier-gates.md`. **Tier and
+task set the interview's depth, never its cadence:** both paths ask one question per
+round, per `references/grilling.md`, and both close on the reference's exit gate
+unabridged — the gate itself is never a "lite" version.
 
 **`/grill` handoff — nothing settled is asked twice without cause.** If a `/grill` session already ran on this idea, its settled decisions and residue manifest replace the interview (Full Flow step 2 / the compressed path's interview-at-compressed-depth step) — do not re-ask what it settled; proceed from its manifest (per `references/grilling.md`'s Handoff). The loop still applies to what the manifest left open: a design pass here that moves the destination fails the reference's third termination condition, and you go back into the interview for the questions that move raises, plus any settled decision a re-walk reopens with its cause (per the reference's Re-walk).
 
-## Full Flow (Major)
+## Full Flow (full depth)
 
 Complete these in order:
 
 1. **Explore context** — files, docs, recent commits, existing patterns. If the request is really several independent subsystems, flag it and decompose first; each sub-project gets its own item → execute cycle.
 2. **Grill the idea** — run the adversarial interview per `references/grilling.md`. Diverge first (destination pinning, adversarial probing, code cross-examination, live scope labeling), then converge (frontier questions, one per round). Steps 2-4 are a loop, per the reference: a design pass can send you back into the interview, and the loop only exits once the reference's termination conditions hold. Follow the reference's rules; do not re-derive them here. The interview closes at step 5. **Convergence also produces the acceptance criteria** — the settled decisions restated as outcomes (template below); they are approved with the design, not written afterwards.
-3. **Propose 2-3 approaches** — with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here.
+3. **Propose approaches** — as many as your depth sets (`references/tier-gates.md`), with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here.
 4. **Present the design** — section by section, scaled to complexity; ask after each whether it holds. Cover architecture, components, data flow, error handling, testing. Break the system into small units each with one clear purpose and a defined interface, cut and tested as the reviews will judge them: `references/architecture-review.md` category 4 for module shape. See **Seams and what sits behind them** in `references/red-green.md` for seams and how to test across them. Follow the codebase's existing patterns; fix in-scope rough edges in the design, propose no unrelated refactoring.
 5. **Get approval** — close the interview per `references/grilling.md`'s exit gate: the residue manifest presented alongside the numbered acceptance criteria. The AC approved here is the contract execution builds and review verdicts are read against, and executing may not change it (`references/doc-types.md`). The manifest's dispositions are *commitments* recorded here but discharged at step 6, because the item file does not exist yet: deferred-in-scope lines land in a `## Follow-ups` section created on the item at step 6; destination-outside lines become new `status: backlog` items (the manifest's approval is the user's nod for each). Revise and re-present until the user approves. Only then proceed.
 6. **Write the item** (template below) → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What` including its `### Acceptance criteria`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
@@ -47,7 +42,7 @@ Complete these in order:
 8. **User reviews the item** — ask, wait, revise if needed.
 9. **Premise check, then transition** — before handing off, confirm the base is up to date (rebase/refresh from the base branch) and that the premises the design rests on still hold in that base. AC cannot catch a wrong premise: it is built on them. A premise that moved sends you back to step 4 with the user. Then invoke `executing`.
 
-The compressed Standard path runs steps 1 → (2 at compressed depth (above) ⇄ present (one approach, step 4)) → residue manifest + AC per `references/grilling.md`'s exit gate, unabridged → approve → step 6, which always writes the item: `### Acceptance criteria` always, the `## Why / What` prose sections **only when a real design decision was weighed** (alternatives existed); with no such decision, `## Why / What` holds the AC list alone. Then steps 7-9 as usual. The ⇄ is the reference's loop running on this path too, not a one-shot pass: a design that surfaces a gap or moves the destination sends you back into the interview, and the close comes only once the reference's three termination conditions hold. The manifest's deferred lines land the same way as the Full Flow's — create `## Follow-ups` on the item when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items.
+The compressed path runs steps 1 → (2 at compressed depth ⇄ steps 3-4, propose and present) → residue manifest + AC per `references/grilling.md`'s exit gate, unabridged → approve → step 6, which always writes the item: `### Acceptance criteria` always, the `## Why / What` prose sections **only when a real design decision was weighed** (alternatives existed); with no such decision, `## Why / What` holds the AC list alone. Then steps 7-9 as usual. The ⇄ is the reference's loop running on this path too, not a one-shot pass: a design that surfaces a gap or moves the destination sends you back into the interview, and the close comes only once the reference's three termination conditions hold. The manifest's deferred lines land the same way as the Full Flow's — create `## Follow-ups` on the item when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items.
 
 ## Decision Aids (opt-in, cost quota)
 
@@ -74,7 +69,7 @@ milestone: <slug>   <!-- omit the key entirely if standalone -->
 Situation / Complication / Question / Answer
 
 ### 2. Approaches Considered
-2-3 approaches + tradeoffs + why chosen.
+The approaches proposed at step 3, with tradeoffs and why one was chosen.
 Doubles as the decision record: Discussion → Decision → considered-but-rejected.
 
 ### 3. Design
@@ -101,7 +96,7 @@ cite AC IDs.
 ## Progress   <!-- heading only; executing appends the lines -->
 ```
 
-On the AC-only Standard path the `## Why / What` header stays — the AC list
+On the compressed path with no design decision weighed, the `## Why / What` header stays — the AC list
 nests under it; sections 1-5 are what is skipped.
 
 `## Progress` is written here as an empty heading only — its lines are `executing`'s to append. `## Follow-ups`

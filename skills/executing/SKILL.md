@@ -17,7 +17,7 @@ Major     → build test-first, verify, then review with two lanes (analyst + Co
 
 State the route in one line before starting ("Trivial → no review" / "Standard → one review lane" / "Major → two review lanes"). When in doubt, go higher.
 
-**Re-classify mid-flight.** If scope growth crosses a §3 tier trigger during execution (more files, a new subsystem, a red line surfacing), STOP, re-declare the tier out loud, and adopt the higher tier's remaining gates from that point. Work already done stands — its gates are not re-run retroactively — but the review/TDD gates not yet reached run at the new tier.
+**Re-classify mid-flight.** If scope growth crosses any HARRY.md §3 tier trigger during execution (a red line surfacing among them), STOP, re-declare the tier out loud, and adopt the higher tier's remaining gates from that point. Work already done stands — its gates are not re-run retroactively — but the review/TDD gates not yet reached run at the new tier.
 
 ## Before you build
 

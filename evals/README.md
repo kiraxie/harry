@@ -564,7 +564,8 @@ probe works and the model genuinely no longer branches.
 
 ```json
 {"id": "...", "mode": "text", "prompt": "...", "law": "§3",
- "checks": [{"type": "regex_must" | "regex_must_not", "pattern": "...", "flags": "i"}],
+ "checks": [{"type": "regex_must" | "regex_must_not", "pattern": "...", "flags": "i"},
+            {"type": "declared_tier", "tier": "trivial" | "standard" | "major"}],
  "note": "..."}
 ```
 
@@ -572,6 +573,11 @@ probe works and the model genuinely no longer branches.
   mentions "root cause").
 - `regex_must_not` — the response must not match it (e.g. no "you're absolutely
   right" opener).
+- `declared_tier` — takes `"tier": "trivial" | "standard" | "major"` in place of a
+  pattern; the response must declare that tier ("**Tier: Major**", "tier is Major")
+  and no other. A tier word outside a declaration ("a major change") does not count.
+  A result line embeds it expanded into its `regex_must` / `regex_must_not` pair, so
+  `score` judges archived results by the matcher they were run with.
 
 Prompts are realistic user requests and never mention harry or the laws — asking
 "would you classify this?" would cue the answer. Checks are robust regexes, not

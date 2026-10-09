@@ -3,7 +3,7 @@
 // its regex checks. Pure; the runner (scripts/run-evals.mts) and scoring
 // (scripts/lib/evals-score.mts) import it.
 
-export type TextCheckType = "regex_must" | "regex_must_not";
+export type TextCheckType = "regex_must" | "regex_must_not" | "declared_tier";
 export type AgenticCheckType =
   | "git_created_branch"
   | "git_no_new_commits_on_initial"
@@ -26,6 +26,7 @@ export interface CheckInput {
   path?: string;
   pathPattern?: string;
   command?: string;
+  tier?: string;
 }
 
 // A parsed JSONL row — used for both the cases file and result files, so fields
@@ -40,7 +41,11 @@ export interface CheckOutcome {
 }
 
 // Text cases judge the model's first-response prose with regexes.
-const CHECK_TYPES = new Set(["regex_must", "regex_must_not"]);
+const CHECK_TYPES = new Set(["regex_must", "regex_must_not", "declared_tier"]);
+const TIERS = ["trivial", "standard", "major"];
+// A tier declaration: "**Tier: Major**", "**Tier:** Major", "tier is Major", "Tier: Major".
+// A bare tier word ("a major change") is not one.
+const TIER_DECLARATION = String.raw`(?:\*\*\s*tier\s*:?\s*\**\s*|\btier\s*(?:is|:)\s*\**\s*)`;
 // Agentic cases judge the fixture REPO STATE after a full headless session.
 const AGENTIC_CHECK_TYPES = new Set([
   "git_created_branch",
@@ -181,6 +186,9 @@ export function validateCases(cases: unknown[]): string[] {
           }
         }
       }
+      if (check.type === "declared_tier" && !TIERS.includes(check.tier)) {
+        violations.push(`${cw}: "tier" must be one of ${TIERS.join(", ")}`);
+      }
       if (check.flags !== undefined && typeof check.flags !== "string") {
         violations.push(`${cw}: "flags" must be a string when present`);
       }
@@ -191,9 +199,30 @@ export function validateCases(cases: unknown[]): string[] {
 
 // ---- text checks (pure) ----------------------------------------------------
 
+// A declared_tier check is shorthand for its regex pair: the reply declares that tier,
+// and declares no other. Expanded before a result line embeds it, so result files carry
+// their matcher as data.
+export function expandChecks(checks: CheckInput[]): CheckInput[] {
+  return checks.flatMap((check) => {
+    if (check.type !== "declared_tier") return [check];
+    const others = TIERS.filter((t) => t !== check.tier).join("|");
+    return [
+      { type: "regex_must", pattern: String.raw`${TIER_DECLARATION}${check.tier}\b`, flags: "i" },
+      {
+        type: "regex_must_not",
+        pattern: String.raw`${TIER_DECLARATION}(?:${others})\b`,
+        flags: "i",
+      },
+    ];
+  });
+}
+
 // Evaluate one check against a response. regex_must → pattern must match;
-// regex_must_not → pattern must NOT match.
+// regex_must_not → pattern must NOT match. Any other type (an unexpanded
+// declared_tier included) is refused rather than judged as an absence check.
 export function evaluateCheck(check: CheckInput, responseText: string | undefined): CheckOutcome {
+  if (check.type !== "regex_must" && check.type !== "regex_must_not")
+    throw new Error(`evaluateCheck judges regex checks only, got "${check.type}"`);
   const re = compileCheck(check);
   const matched = re.test(responseText ?? "");
   const ok = check.type === "regex_must" ? matched : !matched;

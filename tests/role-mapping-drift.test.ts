@@ -292,6 +292,8 @@ const HOISTED: Record<string, string[]> = {
     "references/doc-types.md",
     "references/debt-audit.md",
     "references/red-green.md",
+    "references/tier-gates.md",
+    "references/grilling.md",
   ],
   sync: ["references/sync-migration.md", "references/doc-types.md", "references/debt-audit.md"],
   audit: [
@@ -307,6 +309,8 @@ const HOISTED: Record<string, string[]> = {
     "references/review-rubric.md",
     "references/doc-types.md",
     "references/debt-audit.md",
+    "references/tier-gates.md",
+    "references/grilling.md",
   ],
   grill: ["references/grilling.md"],
   "wait-what": ["references/grilling.md", "references/plain-language.md"],

@@ -32,9 +32,11 @@ Classify every non-trivial task; take the highest tier whose trigger is hit (whe
 
 | Tier | Trigger | brainstorm | item | TDD | review |
 |------|---------|:--:|:--:|:--:|:--:|
-| Trivial | 1 file, mechanical, no branching, one-glance revert | skip | – | none | – |
-| Standard | 2–5 files, real logic, single subsystem | compressed | AC (+ Why/What on-decision) | one runnable check | `analyst` |
-| Major | 6+ files, cross-subsystem, or any red line | full | full Why/What + AC | red-green + watch-it-fail | `analyst` + Codex lane |
+| Trivial | mechanical, no branching, no behavior change, one-glance revert — any file count | skip | – | none | – |
+| Standard | the default: real logic or a behavior change whose failure its checks can see and a revert undoes; an on-demand skill or reference edit that changes what a model is asked | compressed | AC (+ Why/What on-decision) | one runnable check | `analyst` |
+| Major | any red line; a failure hard to see or hard to undo (data, a published contract, subsystems no single check sees whole); an edit to always-loaded agent instructions (CLAUDE.md, AGENTS.md, a resident law file, skill, command and agent descriptions) that changes what a model is asked | full | full Why/What + AC | red-green + watch-it-fail | `analyst` + Codex lane |
+
+A wording-only instruction edit that asks the same is Trivial; the always-loaded trigger promotes as a red line does (§2).
 
 A fix inside a unit is tiered like a task: one that is Trivial and weakens no test gets the full suite and no re-review; any other is re-reviewed.
 

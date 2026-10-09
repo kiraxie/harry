@@ -411,24 +411,36 @@ test("round format: no other model-instructing file carries the layout", () => {
 // ---------------------------------------------------------------------------
 // AC-7 — tier sets the interview's DEPTH, never its cadence
 //
-// Compressed depth is defined in two files, and these three phrases are the contract
-// between them: each file carries the pinned prefix of each phrase, verbatim (the two
-// copies' wording diverges past that prefix — e.g. one omits "actually" — which the
-// regexes below tolerate on purpose). This is a shared-phrase pin, not a semantic one —
-// rewording one copy fails here on purpose, because the two
-// definitions silently diverging is HARRY.md §2's drift test answering "bug" (the model
-// would get two different interviews for one tier). Reword both copies together.
+// Brainstorm depth is defined once, in tier-gates.md's "Brainstorm depth" section;
+// brainstorming points at it. A second copy drifted four review rounds running, each time
+// through a claim the scan did not name, so it covers the approach count and tier-named
+// paths too.
 
-test("AC-7: both definitions of compressed depth make the same claims", () => {
+test("AC-7: tier-gates defines brainstorm depth once, and brainstorming points at it", () => {
+  const depth = section(read(TIER_GATES), TIER_GATES, "## Brainstorm depth", "## Promotion rules");
   const claims: [RegExp, string][] = [
     [/divergence is brief/i, "divergence is brief"],
     [/convergence covers only the frontier/i, "convergence covers only this task's frontier"],
     [/exit gate,? unabridged/i, "the exit gate is closed unabridged"],
+    [
+      /no real alternatives to weigh and no new module boundary/i,
+      "design complexity raises a Standard task to full depth",
+    ],
   ];
+  for (const [re, claim] of claims)
+    assert.match(depth, re, `tier-gates' Brainstorm depth dropped: ${claim}`);
+  assert.match(
+    read(BRAINSTORMING).replace(/\s+/g, " "),
+    /See \*\*Brainstorm depth\*\* in `references\/tier-gates\.md`/,
+    `${BRAINSTORMING} no longer points at tier-gates' Brainstorm depth`,
+  );
   for (const rel of [BRAINSTORMING, TIER_GATES]) {
-    const text = read(rel);
-    for (const [re, claim] of claims)
-      assert.match(text, re, `${rel}'s compressed-depth definition dropped: ${claim}`);
+    const restated = read(rel)
+      .replace(depth, "")
+      .match(
+        /divergence is brief|no real alternatives to weigh|\b\d[-–]\d approaches|\bone approach\b|\b(?:Trivial|Standard|Major) path\b/gi,
+      );
+    assert.deepEqual(restated, null, `${rel} restates brainstorm depth outside its one definition`);
   }
 });
 
@@ -531,14 +543,14 @@ test("AC-8: the handoff lets a re-walk reopen a settled decision", () => {
   assert.doesNotMatch(read(BRAINSTORMING), /those only/i, `${BRAINSTORMING} forbids the reopen`);
 });
 
-test("AC-8: brainstorming and tier-gates run the re-walk at every depth, by citation", () => {
+test("AC-8: brainstorm depth runs the re-walk at every depth, and every mention cites it", () => {
+  assert.match(
+    read(TIER_GATES),
+    /re-walk[^.]*every\s+depth|every\s+depth[^.]*re-walk/i,
+    `${TIER_GATES} no longer says the re-walk runs at every depth`,
+  );
   for (const rel of [BRAINSTORMING, TIER_GATES]) {
     const text = read(rel);
-    assert.match(
-      text,
-      /re-walk[^.]*every\s+depth|every\s+depth[^.]*re-walk/i,
-      `${rel} no longer says the re-walk runs at every depth`,
-    );
     const uncited = paragraphs(text).filter(
       (p) => /re-walk/i.test(p) && !p.includes("references/grilling.md"),
     );

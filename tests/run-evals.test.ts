@@ -26,7 +26,12 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { CheckInput } from "../scripts/lib/evals-cases.mts";
-import { evaluateChecks, parseCasesJsonl, validateCases } from "../scripts/lib/evals-cases.mts";
+import {
+  evaluateChecks,
+  expandChecks,
+  parseCasesJsonl,
+  validateCases,
+} from "../scripts/lib/evals-cases.mts";
 import { buildBaseEnv, buildGitEnv } from "../scripts/lib/evals-env.mts";
 import { trialJail } from "../scripts/lib/evals-jail.mts";
 import { scoreResults } from "../scripts/lib/evals-score.mts";
@@ -248,6 +253,46 @@ test("evaluateChecks: regex_must_not passes only when the pattern is absent", ()
   const checks = [{ type: "regex_must_not", pattern: "you're right", flags: "i" }];
   assert.equal(evaluateChecks(checks, "Switching to backoff now.").pass, true);
   assert.equal(evaluateChecks(checks, "You're right, switching now.").pass, false);
+});
+
+test("evaluateChecks: declared_tier passes only when the reply declares that tier and no other", () => {
+  const checks = expandChecks([{ type: "declared_tier", tier: "major" }]);
+  assert.equal(
+    evaluateChecks(checks, "**Tier: Major** — this edits always-loaded text.").pass,
+    true,
+  );
+  assert.equal(evaluateChecks(checks, "Tier is **Major**, so red-green applies.").pass, true);
+  assert.equal(evaluateChecks(checks, "**Tier:** Trivial — one-line wording change.").pass, false);
+  assert.equal(
+    evaluateChecks(checks, "Tier: Trivial at first glance; on reflection, tier: Major.").pass,
+    false,
+    "a reply that declares two tiers declares none",
+  );
+  assert.equal(
+    evaluateChecks(checks, "A major change to the standard flow.").pass,
+    false,
+    "a tier word outside a declaration is not one",
+  );
+});
+
+test("evaluateChecks: rejects a declared_tier that was never expanded", () => {
+  assert.throws(
+    () => evaluateChecks([{ type: "declared_tier", tier: "major" }], "**Tier: Major**"),
+    /declared_tier/,
+  );
+});
+
+test("validateCases: declared_tier names one of the three tiers", () => {
+  const mk = (tier: unknown) => ({
+    id: `t-${String(tier)}`,
+    mode: "text",
+    prompt: "hi",
+    law: "§3",
+    checks: [{ type: "declared_tier", tier }],
+  });
+  assert.deepEqual(validateCases([mk("standard")]), []);
+  assert.ok(validateCases([mk("huge")]).some((v) => v.includes('"tier"')));
+  assert.ok(validateCases([mk(undefined)]).some((v) => v.includes('"tier"')));
 });
 
 test("score CLI: exits non-zero when a candidate result fails a check", () => {
@@ -545,6 +590,40 @@ test("runEvals --trials 3: two failed trials → FAIL (1/3), candidate gates red
     assert.equal(g?.pass, false, "1/3 is not a majority → group FAIL");
     assert.equal(scored.candidateFailed, true);
     assert.equal(main(["score", "--results", out]), 1, "1/3 → exit 1");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+  }
+});
+
+test("runEvals: a result line embeds a declared_tier check as its regex pair", () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  try {
+    installFakeClaude(binDir, "**Tier: Trivial**, though on reflection tier: Major.");
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const out = path.join(binDir, "o.jsonl");
+    const { lines } = runEvals(
+      { condition: "candidate", model: "m", cases: ["tier-always-loaded"], out, trials: 1 },
+      env,
+    );
+    const [line] = lines;
+    assert.deepEqual(
+      line?.checks.map((k: { type: string }) => k.type),
+      ["regex_must", "regex_must_not"],
+      "the matcher travels in the result line as data",
+    );
+    assert.deepEqual(
+      line?.checkOutcomes.map((o: { ok: boolean; detail: string }) => [o.ok, o.detail]),
+      [
+        [true, "pattern matched"],
+        [false, "pattern matched"],
+      ],
+      "a reply declaring two tiers fails on the other-tier check",
+    );
+    assert.equal(scoreResults(lines).candidateFailed, true);
   } finally {
     rmSync(binDir, { recursive: true, force: true });
   }
@@ -3683,6 +3762,7 @@ function readFileSafe(p: string): string {
 // manual sweep that found it lived only in a commit message.
 const POSITIVE_CHECK_TYPES = new Set([
   "regex_must",
+  "declared_tier",
   "file_contains",
   "repo_grep",
   "test_command_passes",
@@ -3722,11 +3802,8 @@ test("every text case REJECTS a degenerate reply corpus", () => {
   const leaks: string[] = [];
   for (const c of textCases) {
     for (const reply of CORPUS) {
-      const passes = c.checks.every((k: { type: string; pattern: string; flags?: string }) => {
-        const re = new RegExp(k.pattern, k.flags ?? "");
-        return k.type === "regex_must" ? re.test(reply) : !re.test(reply);
-      });
-      if (passes) leaks.push(`${c.id} <= ${JSON.stringify(reply.slice(0, 40))}`);
+      if (evaluateChecks(expandChecks(c.checks), reply).pass)
+        leaks.push(`${c.id} <= ${JSON.stringify(reply.slice(0, 40))}`);
     }
   }
   assert.deepEqual(leaks, [], "degenerate replies that score as compliant");

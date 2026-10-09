@@ -48,6 +48,7 @@ import {
   compileCheck,
   type EvalRecord,
   evaluateChecks,
+  expandChecks,
   parseCasesJsonl,
   SUPPORTED_MODES,
   validateCases,
@@ -1108,7 +1109,7 @@ export function runEvals(
         law: c.law,
         informative: c.informative === true,
         prompt: c.prompt,
-        checks: c.checks,
+        checks: expandChecks(c.checks),
         trialDir: dirs.trialDir,
         configDir: dirs.configDir,
         workDir: dirs.workDir,
@@ -1185,7 +1186,7 @@ export function runEvals(
           // inspector can see WHICH check failed without re-scoring. Scoring
           // still re-evaluates text lines from `response`, so these are
           // informational and never the source of truth.
-          const { results } = evaluateChecks(c.checks, line.response);
+          const { results } = evaluateChecks(line.checks, line.response);
           line.checkOutcomes = results.map((r) => ({
             check: r.check,
             ok: r.ok,
