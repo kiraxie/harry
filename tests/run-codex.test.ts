@@ -336,10 +336,31 @@ for (const [command, signal] of [
       // The companion still dies by the signal, as it did before forwarding it.
       assert.equal(await exited, signal);
       const pid = codexPid;
-      await waitFor(
-        () => !alive(pid),
-        `codex (pid ${pid}) to exit after the companion's ${signal}`,
-      );
+      try {
+        await waitFor(
+          () => !alive(pid),
+          `codex (pid ${pid}) to exit after the companion's ${signal}`,
+        );
+      } catch (err) {
+        let info = "";
+        try {
+          info = readFileSync(`/proc/${pid}/status`, "utf8")
+            .split("\n")
+            .filter((l) => /^(Name|State|PPid|SigIgn|SigBlk|SigCgt):/.test(l))
+            .join(" | ");
+        } catch (e) {
+          info = String(e);
+        }
+        let tree = "";
+        try {
+          tree = execFileSync("ps", ["-o", "pid,ppid,stat,comm", "-e"], { encoding: "utf8" })
+            .split("\n")
+            .filter((l) => /sleep|codex|node|sh$/.test(l))
+            .join("\n");
+        } catch {}
+        console.error(`DEBUG ${signal} pid ${pid}: ${info}\nself ${process.pid}\n${tree}`);
+        throw err;
+      }
     } finally {
       companion.kill("SIGKILL");
       if (codexPid !== undefined && alive(codexPid)) process.kill(codexPid, "SIGKILL");
