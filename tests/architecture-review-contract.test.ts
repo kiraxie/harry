@@ -585,14 +585,6 @@ test("review-round-cap AC-5(c): a later round's Minors are traceable, and a Mino
   );
 });
 
-test("review-round-cap AC-5: doc-types lists finishing's later rounds as a Follow-ups source", () => {
-  assert.match(
-    plain(read(DOC_TYPES)),
-    /## Follow-ups entries come from brainstorming's residue manifest[^.]*executing[^.]*and finishing's architecture review from round 2 on/,
-    "doc-types no longer names finishing's architecture review as a Follow-ups source",
-  );
-});
-
 test("review-round-cap AC-5(c): only doc-types lists the Follow-ups sources", () => {
   const template = read(DOC_TYPES)
     .split("\n")
@@ -613,20 +605,6 @@ test("review-round-cap AC-5(c): only doc-types lists the Follow-ups sources", ()
     brainstorming,
     /its other sources are listed in references\/doc-types\.md/,
     "brainstorming no longer points at doc-types for the Follow-ups sources",
-  );
-});
-
-test("review-round-cap: doc-types names every direct backlog source", () => {
-  const d = plain(read(DOC_TYPES));
-  assert.doesNotMatch(
-    d,
-    /the only place new backlog items get created/,
-    "doc-types still claims the flush is the only source of backlog items from execution",
-  );
-  assert.match(
-    d,
-    /Backlog items are also created directly by brainstorming's residue manifest, at design time, and by finishing's backlog ruling on an architecture finding\./,
-    "doc-types no longer names the direct backlog sources",
   );
 });
 

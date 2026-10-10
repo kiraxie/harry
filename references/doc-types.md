@@ -32,7 +32,7 @@ milestone: <slug>      # optional key — omit entirely if standalone
 ## Why / What      <!-- filled when promoted to active — the design and its acceptance criteria -->
 ### Acceptance criteria  <!-- last subsection of Why / What; approved with the design -->
 ## Progress        <!-- append-only, filled during execution -->
-## Follow-ups      <!-- sources: the Follow-ups flush, below; flushed to new backlog items at finish -->
+## Follow-ups      <!-- sources: Writers, below; flushed to new backlog items at finish -->
 ```
 
 Sections accumulate — never delete an earlier section when filling a later
@@ -134,13 +134,29 @@ milestone edit.
 - **Follow-ups flush**: before archiving, every line under the item's
   `## Follow-ups` becomes its own new `status: backlog` item in
   `.local/items/` (title + a `## Notes` line quoting the follow-up), then
-  the source item's `## Follow-ups` section is cleared. Backlog items
-  are also created directly by brainstorming's residue manifest, at design
-  time, and by finishing's **backlog** ruling on an architecture finding.
-  `## Follow-ups` entries come from brainstorming's residue manifest
-  (deferred discussion items), executing (follow-on work found mid-build),
-  and finishing's architecture review from round 2 on (its Minor findings) —
-  and the flush treats them all identically.
+  the source item's `## Follow-ups` section is cleared. The flush treats
+  every entry the same, whatever its source.
+- **Active → backlog (discard)**: finishing's Discard, when the user
+  chooses Back to backlog, sets `status: backlog`, appends a `## Notes`
+  line, removes its `## In flight` line and flips its `INDEX.md` item line
+  to backlog; the file does not move.
+- **Writers**: who adds work to the store besides the flush.
+  - Backlog items are also created directly by:
+    - brainstorming's residue manifest, at design time;
+    - `/grill`'s residue manifest, on the user's nod;
+    - finishing's **backlog** ruling on an architecture finding;
+    - `/debt`, on request, for its rows that need acting on;
+    - `/sync`'s legacy migration, for an old backlog or research file;
+    - an author promoting a Non-Goal (**Non-Goals do not survive archiving**, below).
+  - `## Follow-ups` entries come from:
+    - brainstorming's residue manifest (deferred discussion items);
+    - executing: follow-on work found mid-build, and the review findings it
+      does not fix:
+      - Minor findings;
+      - findings of any severity outside the fix range;
+      - findings adjudicated to Follow-ups;
+    - finishing's architecture review from round 2 on (its Minor findings);
+    - an author copying in a Non-Goal (**Non-Goals do not survive archiving**, below).
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.
