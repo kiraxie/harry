@@ -30,6 +30,7 @@ import test from "node:test";
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
 import { buildReviewPrompt } from "../src/lib/review-prompts.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
+import { inOrder, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI = path.join(REPO_ROOT, "src/companion.ts");
@@ -294,17 +295,14 @@ test("A3: branch mode names git diff <base>...HEAD, embeds the full rubric, and 
   assert.match(prompt, /not a review target/);
   assert.match(prompt, /must not be reported/);
 
-  const standardAt = prompt.indexOf("# Review standard\n");
-  assert.ok(standardAt > 0, "review standard section missing");
-  assert.ok(prompt.includes(RUBRIC.trim()), "the rubric must be embedded in full");
-  assert.ok(prompt.indexOf(RUBRIC.trim()) > standardAt);
-  const testStandardAt = prompt.indexOf("# Test standard (`references/red-green.md`)\n");
-  assert.ok(
-    testStandardAt > prompt.indexOf(RUBRIC.trim()),
-    "test standard heading after the rubric",
+  inOrder(
+    prompt,
+    "the review prompt",
+    "# Review standard\n",
+    RUBRIC.trim(),
+    "# Test standard (`references/red-green.md`)\n",
+    RED_GREEN.trim(),
   );
-  assert.ok(prompt.includes(RED_GREEN.trim()), "red-green.md must be embedded in full");
-  assert.ok(prompt.indexOf(RED_GREEN.trim()) > testStandardAt);
 
   assert.ok(!prompt.includes("## Background"), "no --context → no background section");
   assert.ok(!prompt.includes("## Focus"), "no focus text → no focus section");
@@ -347,12 +345,14 @@ test("A3: --context and focus text append Background then Focus, in that order, 
   const run = runReview(repo, ["--context", "the cache is intentional", "watch", "the", "locking"]);
   assert.equal(run.status, 0, run.stderr);
   const prompt = recordedPrompt(run);
-  const rubricAt = prompt.indexOf(RUBRIC.trim());
-  const bgAt = prompt.indexOf("## Background (settled facts from the working session)\n");
-  const focusAt = prompt.indexOf("## Focus\n");
-  assert.ok(rubricAt > 0 && bgAt > rubricAt && focusAt > bgAt, prompt);
-  assert.ok(prompt.slice(bgAt, focusAt).includes("the cache is intentional"));
-  assert.ok(prompt.slice(focusAt).includes("watch the locking"));
+  const background = "## Background (settled facts from the working session)\n";
+  inOrder(prompt, "the review prompt", RUBRIC.trim(), background, "## Focus\n");
+  assert.ok(
+    section(prompt, "the review prompt", background, "## Focus\n").includes(
+      "the cache is intentional",
+    ),
+  );
+  assert.ok(section(prompt, "the review prompt", "## Focus\n").includes("watch the locking"));
 });
 
 test("A3: --context @file and @- are expanded", () => {
@@ -430,10 +430,7 @@ test("A3: --architecture embeds architecture-review.md as the review standard, n
   assert.equal(run.status, 0, run.stderr);
   const prompt = recordedPrompt(run);
   assert.match(prompt, /git diff main\.\.\.HEAD/);
-  const standardAt = prompt.indexOf("# Review standard\n");
-  assert.ok(standardAt > 0, "review standard section missing");
-  assert.ok(prompt.includes(ARCH_RUBRIC.trim()), "architecture-review.md must be embedded in full");
-  assert.ok(prompt.indexOf(ARCH_RUBRIC.trim()) > standardAt);
+  inOrder(prompt, "the review prompt", "# Review standard\n", ARCH_RUBRIC.trim());
   assert.ok(!prompt.includes(RUBRIC.trim()), "--architecture must not embed review-rubric.md");
   assert.ok(!prompt.includes(RED_GREEN.trim()), "--architecture must not embed red-green.md");
   // The lens reads one level up and the history on purpose; the per-diff rule that bans

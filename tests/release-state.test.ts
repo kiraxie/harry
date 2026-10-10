@@ -15,7 +15,7 @@ import {
   parseVersion,
   RELEASE_STATES,
 } from "../.claude/scripts/release-state.mts";
-import { headingSection } from "./section.ts";
+import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const SCRIPT = path.join(repoRoot, ".claude/scripts/release-state.mts");
@@ -468,13 +468,7 @@ test(".claude/commands/release.md passes --start and leaves the bump-commit rule
 
 test("the subject release.md's Phase A commits under is the script's bump subject", () => {
   const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
-  const start = md.indexOf("5. **Commit**");
-  const end = md.indexOf("6. **Hand off**");
-  assert.ok(
-    start >= 0 && end > start,
-    'release.md has no "5. **Commit**" step before "6. **Hand off**"',
-  );
-  const step = md.slice(start, end);
+  const step = section(md, ".claude/commands/release.md", "5. **Commit**", "6. **Hand off**");
   assert.equal(
     md.split("bump version to <version>").length - 1,
     1,

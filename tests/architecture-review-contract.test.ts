@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { headingSection, section } from "./section.ts";
+import { headingSection, inOrder, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
@@ -37,16 +37,12 @@ const step2 = (label: string): string =>
 const archReview = (): string => plain(read(ARCH_REVIEW));
 
 test("AC-1: the architecture review is step 2, after verify-tests and before merge-or-PR", () => {
-  const text = read(FINISHING);
-  const verify = text.indexOf("## 1. Verify tests");
-  const review = text.indexOf("## 2. Architecture review");
-  const ask = text.indexOf("## 3. Ask: merge or PR");
-  assert.ok(verify !== -1, "finishing lost its '## 1. Verify tests' heading");
-  assert.ok(review !== -1, "finishing lost its '## 2. Architecture review' heading");
-  assert.ok(ask !== -1, "finishing lost its '## 3. Ask: merge or PR' heading");
-  assert.ok(
-    verify < review && review < ask,
-    "the architecture review no longer sits between verifying tests and asking merge or PR",
+  inOrder(
+    read(FINISHING),
+    FINISHING,
+    "## 1. Verify tests",
+    "## 2. Architecture review",
+    "## 3. Ask: merge or PR",
   );
 });
 

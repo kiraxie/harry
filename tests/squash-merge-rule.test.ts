@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { headingSection } from "./section.ts";
+import { headingSection, inOrder } from "./section.ts";
 
 // Integration squashes: one commit per unit lands on the base. The law states the
 // habit and the finishing skill carries the mechanics; if either drifts back to a
@@ -66,10 +66,5 @@ test("finishing proves the branch landed and the worktree is clean before forcin
     !/git branch -d\b(?!` refuses)/.test(skill),
     "cleanup went back to `git branch -d`, which refuses a squashed branch",
   );
-  const removeAt = skill.indexOf("**Remove the worktree**");
-  const deleteAt = skill.indexOf("**Delete the branch**");
-  assert.ok(
-    removeAt > 0 && deleteAt > removeAt,
-    "the branch must be deleted after its worktree is removed",
-  );
+  inOrder(skill, "skills/finishing/SKILL.md", "**Remove the worktree**", "**Delete the branch**");
 });

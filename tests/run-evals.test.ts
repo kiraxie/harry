@@ -53,6 +53,7 @@ import {
   snapshotPlugin,
 } from "../scripts/run-evals.mts";
 import { installFakeClaude, readCalls } from "./fake-claude.ts";
+import { section } from "./section.ts";
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -3394,8 +3395,7 @@ test("runEvals --agentic under EVALS_SANDBOX=1: git's exec path reaches the jail
       .split("\n")
       .map((l) => JSON.parse(l) as string[]);
     const profile = String(session?.[1]);
-    const exec = profile.slice(profile.indexOf("(allow process-exec"));
-    const execRules = exec.slice(0, exec.indexOf("\n)"));
+    const execRules = section(profile, "the jail profile", "(allow process-exec", "\n)");
     for (const dir of [realExecPath, path.resolve(realExecPath, "..", "..", "bin")]) {
       assert.ok(execRules.includes(`(subpath "${dir}")`), `exec allows git's canonical ${dir}`);
     }

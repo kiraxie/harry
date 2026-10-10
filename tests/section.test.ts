@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { headingSection, section } from "./section.ts";
+import { headingSection, inOrder, section } from "./section.ts";
 
 const doc = "# T\n\n## A\none\n\n## B\ntwo\n";
 
@@ -67,4 +67,34 @@ test("headingSection: a missing heading fails instead of returning a wrong slice
     () => headingSection(nested, "doc.md", "## Gone"),
     /doc\.md no longer has a heading "## Gone"/,
   );
+});
+
+test("headingSection: flattened text fails instead of reading as one heading line", () => {
+  assert.throws(
+    () => headingSection(nested.replace(/\s+/g, " "), "doc.md", "## A"),
+    /doc\.md has no line breaks/,
+  );
+});
+
+test("headingSection: a RegExp heading matches only at the start of a line", () => {
+  assert.equal(headingSection("# T\n### B\ndeep\n## B\ntwo\n", "doc.md", /## B/), "## B\ntwo\n");
+});
+
+test("inOrder: markers in order pass", () => {
+  inOrder(doc, "doc.md", "# T", "## A", "## B");
+});
+
+test("inOrder: a missing marker fails and names it", () => {
+  assert.throws(
+    () => inOrder(doc, "doc.md", "## A", "## Gone"),
+    /doc\.md no longer contains "## Gone"/,
+  );
+});
+
+test("inOrder: two markers at the same index are not in order", () => {
+  assert.throws(() => inOrder(doc, "doc.md", "## A", "## A"), /doc\.md has "## A" before "## A"/);
+});
+
+test("inOrder: an out-of-order pair fails and names both", () => {
+  assert.throws(() => inOrder(doc, "doc.md", "## B", "## A"), /doc\.md has "## A" before "## B"/);
 });

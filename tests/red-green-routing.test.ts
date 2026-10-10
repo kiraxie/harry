@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { section } from "./section.ts";
+import { headingSection, section } from "./section.ts";
 
 // red-green.md is read on demand, so its rules bind only a model something sends there:
 // the author at write time (executing's Build step) and the analyst lane at review. The
@@ -57,11 +57,8 @@ test("the rubric's test-hygiene item points at red-green.md and stays pointer-si
 // groups binds no one, and one in the wrong group binds the wrong tier.
 test("red-green.md sorts every section under an every-test or a Major group", () => {
   const raw = readFileSync(path.join(repoRoot, "references", "red-green.md"), "utf-8");
-  const every = raw.indexOf("\n## Every test");
-  const major = raw.indexOf("\n## Major / red line");
-  assert.ok(every > 0 && major > every, "two group headings, every-test first");
-  const inEvery = raw.slice(every, major);
-  const inMajor = raw.slice(major);
+  const inEvery = headingSection(raw, "references/red-green.md", "## Every test");
+  const inMajor = headingSection(raw, "references/red-green.md", "## Major / red line");
   for (const s of [
     "### What a good test is",
     "**One owner per contract.**",
@@ -76,7 +73,7 @@ test("red-green.md sorts every section under an every-test or a Major group", ()
     "### Red flags",
   ])
     assert.ok(inMajor.includes(s), `${s} belongs to Major / red line`);
-  const before = raw.slice(0, every);
+  const before = raw.split("\n## Every test", 1)[0] ?? "";
   assert.doesNotMatch(before, /\n### /, "no section before the groups");
   assert.deepEqual(
     [...raw.matchAll(/^## (.+)$/gm)].map((m) => m[1]),

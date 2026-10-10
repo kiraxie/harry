@@ -27,6 +27,7 @@ import {
   trialJail,
   wrapWithSandbox,
 } from "../scripts/lib/evals-jail.mts";
+import { section } from "./section.ts";
 
 function tmpDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -424,8 +425,7 @@ test("trialJail: git's exec path is canonicalized, so a symlinked prefix still l
       gitBin: launcher,
       gitExecPath: path.join(optGit, "libexec", "git-core"),
     });
-    const exec = profile.slice(profile.indexOf("(allow process-exec"));
-    const execRules = exec.slice(0, exec.indexOf("\n)"));
+    const execRules = section(profile, "the jail profile", "(allow process-exec", "\n)");
     for (const dir of [libexec, kegBin]) {
       assert.ok(execRules.includes(`(subpath "${dir}")`), `exec allows the canonical ${dir}`);
     }

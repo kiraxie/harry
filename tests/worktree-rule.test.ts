@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { headingSection, section } from "./section.ts";
+import { headingSection, inOrder, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const flatten = (text: string): string => text.replace(/\s+/g, " ");
@@ -82,7 +82,7 @@ test("a merge in progress is finished or aborted first, then cleanup restarts fr
     flow.includes(merge),
     "a commit that finishes the merge lands after f.1 proved the branch, so f.1 must run again before f.4's branch -D",
   );
-  assert.ok(flow.indexOf(merge) < flow.indexOf("**Rescue branch**"), "the merge comes first");
+  inOrder(flow, "skills/finishing/SKILL.md", merge, "**Rescue branch**");
 });
 
 test("f.2's clean check covers a merge in progress and lists ignored files", () => {

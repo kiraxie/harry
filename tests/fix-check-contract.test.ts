@@ -28,9 +28,7 @@ test("AC-1: fix-check names the three levels and what each checks", () => {
 
 test("review-round-cap AC-3: a returning cause needs a fix that adds a class-wide check", () => {
   const text = fixCheck();
-  const [two, three] = [text.indexOf("2. Data flow —"), text.indexOf("3. System —")];
-  assert.ok(two !== -1 && three > two, "fix-check no longer has level 2 followed by level 3");
-  const level2 = text.slice(two, three);
+  const level2 = section(text, FIX_CHECK, "2. Data flow —", "3. System —");
   assert.match(
     level2,
     /a previous fix left (?:something )?incomplete.*?adds a check that catches the whole class.*?fails at this level/i,
