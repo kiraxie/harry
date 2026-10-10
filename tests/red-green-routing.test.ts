@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { section } from "./section.ts";
 
 // red-green.md is read on demand, so its rules bind only a model something sends there:
 // the author at write time (executing's Build step) and the analyst lane at review. The
@@ -14,15 +15,9 @@ const read = (rel: string): string =>
 const RED_GREEN = "`references/red-green.md`";
 
 const executing = read(path.join("skills", "executing", "SKILL.md"));
-const between = (text: string, from: string, to: string): string => {
-  const start = text.indexOf(from);
-  const end = text.indexOf(to, start);
-  assert.ok(start >= 0 && end > start, `no section from "${from}" to "${to}"`);
-  return text.slice(start, end);
-};
 
 test("executing's Build step sends Standard and Major to red-green.md before a test", () => {
-  const build = between(executing, "1. **Build.**", "2. **Verify**");
+  const build = section(executing, "skills/executing/SKILL.md", "1. **Build.**", "2. **Verify**");
   assert.match(
     build,
     /Standard and Major[^.]*read `references\/red-green\.md` before writing a test/,
@@ -30,7 +25,12 @@ test("executing's Build step sends Standard and Major to red-green.md before a t
 });
 
 test("executing's analyst lane is handed every file the rubric declares as its standard", () => {
-  const lane = between(executing, "**analyst lane**", "**Codex lane**");
+  const lane = section(
+    executing,
+    "skills/executing/SKILL.md",
+    "**analyst lane**",
+    "**Codex lane**",
+  );
   assert.ok(
     lane.includes("every file `references/review-rubric.md` declares as its standard"),
     lane,
@@ -42,7 +42,12 @@ const POINTER_WORDS = 60;
 
 test("the rubric's test-hygiene item points at red-green.md and stays pointer-sized", () => {
   const rubric = read(path.join("references", "review-rubric.md"));
-  const item = between(rubric, "4. **Test hygiene**", "## Engineering judgment");
+  const item = section(
+    rubric,
+    "references/review-rubric.md",
+    "4. **Test hygiene**",
+    "## Engineering judgment",
+  );
   assert.ok(item.includes(RED_GREEN), item);
   const words = item.split(" ").filter(Boolean).length;
   assert.ok(words <= POINTER_WORDS, `item 4 is ${words} words — restating red-green.md?`);

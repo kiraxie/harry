@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { headingSection } from "./section.ts";
 
 // Integration squashes: one commit per unit lands on the base. The law states the
 // habit and the finishing skill carries the mechanics; if either drifts back to a
@@ -19,18 +20,18 @@ const plain = (text: string): string =>
     .replace(/(?<!\w)_+|_+(?!\w)/g, "");
 
 test("finishing makes integration a squash merge", () => {
-  const section = plain(
-    read("skills/finishing/SKILL.md").split("## 3.")[1]?.split("## 4.")[0] ?? "",
+  const step3 = plain(
+    headingSection(read("skills/finishing/SKILL.md"), "skills/finishing/SKILL.md", "## 3."),
   );
   // Through the definition, not just the term: `squash` is one of the project terms
   // that survives only while the sentence saying what it means survives with it, and
   // the term alone can stay while that sentence is deleted whole.
   assert.match(
-    section,
+    step3,
     /lands as a squash: one commit on the base whose message summarises the unit, never the branch's commit-by-commit history/,
     "finishing no longer says a unit lands as a squash — one commit on the base, summarising the unit",
   );
-  assert.match(section, /never a merge commit/, "finishing no longer rules out merge commits");
+  assert.match(step3, /never a merge commit/, "finishing no longer rules out merge commits");
 });
 
 test("finishing squash-merges locally and on PRs with a summarising message", () => {

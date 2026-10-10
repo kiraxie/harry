@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { section } from "./section.ts";
 
 // HARRY.md's red-line list (in **Tiers**) and references/tier-gates.md's promotion-trigger list
 // encode the SAME nine domains that auto-promote a task to Major. tier-gates.md itself
@@ -45,15 +46,8 @@ function harryRedLines(): string {
 
 // tier-gates.md promotion-domain list: from "If the task touches any of:" through just
 // before "…then it is **Major**" — i.e. exactly the nine domain bullets and nothing else.
-function tierGatesDomainList(): string {
-  const text = read("references/tier-gates.md");
-  const start = text.search(/If the task touches any of:/);
-  assert.ok(start >= 0, "tier-gates.md: no 'If the task touches any of:' marker");
-  const rest = text.slice(start);
-  const end = rest.search(/then it is \*\*Major\*\*/);
-  assert.ok(end >= 0, "tier-gates.md: no 'then it is **Major**' marker");
-  return rest.slice(0, end);
-}
+const TIER_GATES = "references/tier-gates.md";
+const DOMAIN_LIST = ["If the task touches any of:", "then it is **Major**"] as const;
 
 // --- probes: every domain present in BOTH files (catches a dropped/renamed domain) ---
 
@@ -65,7 +59,7 @@ test("HARRY.md's red-line list names all nine promotion-trigger domains", () => 
 });
 
 test("tier-gates.md promotion list names all nine promotion-trigger domains", () => {
-  const region = tierGatesDomainList();
+  const region = section(read(TIER_GATES), TIER_GATES, ...DOMAIN_LIST);
   for (const [name, probe] of Object.entries(DOMAIN_PROBES)) {
     assert.match(
       region,
@@ -79,7 +73,8 @@ test("tier-gates.md promotion list names all nine promotion-trigger domains", ()
 
 test("tier-gates.md promotion list has exactly N domain bullets", () => {
   // Each domain is one "- **…**" sub-bullet in the marked region; count them.
-  const bullets = tierGatesDomainList().match(/^\s*-\s+\*\*/gm) ?? [];
+  const bullets =
+    section(read(TIER_GATES), TIER_GATES, ...DOMAIN_LIST).match(/^\s*-\s+\*\*/gm) ?? [];
   assert.equal(
     bullets.length,
     N,

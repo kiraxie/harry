@@ -28,6 +28,7 @@ import { run as initRun } from "../scripts/init.mjs";
 import { run as installRun } from "../scripts/install.mjs";
 import { run as codexRun } from "../scripts/install-codex.mjs";
 import { safeWrite, tempPathFor } from "../scripts/lib/atomic-write.mjs";
+import { headingSection, section } from "./section.ts";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -764,9 +765,7 @@ test("init.mjs: a missing target directory is an error, not a directory to creat
 
 test("/sync's shared Phase 2 stops on init's non-zero exit before Phase 3", () => {
   const doc = readFileSync(path.join(pluginRoot, "references", "sync-migration.md"), "utf8");
-  const [start, end] = [doc.indexOf("## Phase 2"), doc.indexOf("## Phase 3")];
-  assert.ok(start !== -1 && end > start, "sync-migration.md lost its Phase 2 or Phase 3 heading");
-  const phase2 = doc.slice(start, end);
+  const phase2 = headingSection(doc, "references/sync-migration.md", "## Phase 2");
   assert.match(phase2, /verbatim/);
   assert.match(phase2, /exits non-zero/);
   assert.match(phase2, /stop[^.]*before\s+Phase 3/);
@@ -774,7 +773,6 @@ test("/sync's shared Phase 2 stops on init's non-zero exit before Phase 3", () =
 
 test("/sync's Phase 3 skip conditions point to Phase 2's init-failure stop", () => {
   const doc = readFileSync(path.join(pluginRoot, "references", "sync-migration.md"), "utf8");
-  const [start, end] = [doc.indexOf("**Skip conditions:**"), doc.indexOf("**Step A0")];
-  assert.ok(start !== -1 && end > start, "sync-migration.md lost Phase 3's Skip conditions");
-  assert.match(doc.slice(start, end), /init failed[^.]*Phase 2/);
+  const skips = section(doc, "references/sync-migration.md", "**Skip conditions:**", "**Step A0");
+  assert.match(skips, /init failed[^.]*Phase 2/);
 });

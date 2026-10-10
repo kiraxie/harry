@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { headingSection, section } from "./section.ts";
 
 // `references/grilling.md` owns the adversarial interview end to end; four callers
 // point at it (`commands/grill.md`, `codex-skills/grill/SKILL.md`,
@@ -25,22 +26,6 @@ const BRAINSTORMING = path.join("skills", "brainstorming", "SKILL.md");
 const TIER_GATES = "references/tier-gates.md";
 const DOORS = [path.join("commands", "grill.md"), path.join("codex-skills", "grill", "SKILL.md")];
 
-/**
- * The text from `startHeading` up to `endHeading` (exclusive).
- *
- * Throws when either heading is missing rather than returning "". A section-scoped
- * check that silently falls back to an empty string passes every `includes` test it
- * runs, so a renamed heading would read as "the contract still holds" — the exact
- * vacuity prose-refs.test.ts guards its own corpus against.
- */
-function section(text: string, rel: string, startHeading: string, endHeading: string): string {
-  const start = text.indexOf(startHeading);
-  assert.ok(start !== -1, `${rel} no longer has the heading "${startHeading}"`);
-  const end = text.indexOf(endHeading, start + startHeading.length);
-  assert.ok(end !== -1, `${rel} no longer has the heading "${endHeading}" after "${startHeading}"`);
-  return text.slice(start, end);
-}
-
 /** Blank-line-separated paragraphs — these files wrap prose, so a citation and the
  *  claim it supports routinely sit on different lines of one paragraph. */
 const paragraphs = (text: string): string[] => text.split(/\n\s*\n/);
@@ -54,7 +39,7 @@ const paragraphs = (text: string): string[] => text.split(/\n\s*\n/);
 // and the gate is precisely what must not get a "lite" version.
 
 test("AC-1: the exit gate is defined in grilling.md", () => {
-  const gate = section(read(GRILLING), GRILLING, "### Residue manifest", "## Handoff");
+  const gate = headingSection(read(GRILLING), GRILLING, "### Residue manifest");
   assert.match(gate, /\*\*Decided\*\*/, "the manifest no longer reads out the decided list");
   assert.match(gate, /deferred/i, "the manifest no longer reads out the deferred list");
   assert.match(gate, /assumptions?/i, "the manifest no longer reads out the assumptions list");
@@ -128,7 +113,7 @@ test("AC-2: grilling.md carries the loop and its three termination conditions", 
     "the interview → design → re-interview loop is no longer described",
   );
 
-  const loop = section(text, GRILLING, "## The loop and its close", "### Assumption gate");
+  const loop = section(text, GRILLING, "## The loop and its close", "### Re-walk");
   const conditions = loop.match(/^\d+\. \*\*/gm) ?? [];
   assert.equal(
     conditions.length,
@@ -154,7 +139,7 @@ test("AC-2: grilling.md carries the loop and its three termination conditions", 
 // a bug rather than normal evolution.
 
 test("AC-3: listing an assumption is not closing it, and there are exactly three dispositions", () => {
-  const gate = section(read(GRILLING), GRILLING, "### Assumption gate", "### Residue manifest");
+  const gate = headingSection(read(GRILLING), GRILLING, "### Assumption gate");
   assert.match(
     gate,
     /listing an assumption is not closing it/i,
@@ -178,7 +163,7 @@ test("AC-3: listing an assumption is not closing it, and there are exactly three
 // list means something raised can leave the session unaccounted for.
 
 test("AC-5: the ledger keeps four lists and is written to a file only on request", () => {
-  const ledger = section(read(GRILLING), GRILLING, "## The ledger", "## The loop and its close");
+  const ledger = headingSection(read(GRILLING), GRILLING, "## The ledger");
   const lists = Array.from(ledger.matchAll(/^\d+\. \*\*(.+?)\*\*/gm), (m) => m[1].trim());
   assert.deepEqual(
     lists,
@@ -198,7 +183,7 @@ test("AC-5: only the user may defer a question", () => {
   // that list by being deferred — so an agent free to defer on its own can empty the
   // list without settling anything. This is the exploit guard on the exit gate, and it
   // is a user ruling; deleting the paragraph would otherwise pass the whole suite.
-  const ledger = section(read(GRILLING), GRILLING, "## The ledger", "## The loop and its close");
+  const ledger = headingSection(read(GRILLING), GRILLING, "## The ledger");
   assert.match(
     ledger,
     /only the user\s+defers/i,
@@ -280,7 +265,7 @@ test("AC-4: the cadence regexes still match the design they forbid", () => {
 });
 
 test("AC-4: grilling.md states one question per round, both phases, both builds", () => {
-  const cadence = section(read(GRILLING), GRILLING, "## Cadence", "## Phase-dependent stance");
+  const cadence = headingSection(read(GRILLING), GRILLING, "## Cadence");
   assert.match(
     cadence,
     /one question (?:at a time|per round)/i,
@@ -417,7 +402,7 @@ test("round format: no other model-instructing file carries the layout", () => {
 // paths too.
 
 test("AC-7: tier-gates defines brainstorm depth once, and brainstorming points at it", () => {
-  const depth = section(read(TIER_GATES), TIER_GATES, "## Brainstorm depth", "## Promotion rules");
+  const depth = headingSection(read(TIER_GATES), TIER_GATES, "## Brainstorm depth");
   const claims: [RegExp, string][] = [
     [/divergence is brief/i, "divergence is brief"],
     [/convergence covers only the frontier/i, "convergence covers only this task's frontier"],
@@ -455,11 +440,8 @@ test("AC-7: tier gates set depth, and no tier row sets cadence", () => {
   // reference for a model reading the gates table.
   const gates = read(TIER_GATES);
   const offenders: string[] = [];
-  for (const [heading, next] of [
-    ["### Standard", "### Major"],
-    ["### Major", "## Promotion rules"],
-  ] as const)
-    section(gates, TIER_GATES, heading, next)
+  for (const heading of ["### Standard", "### Major"])
+    headingSection(gates, TIER_GATES, heading)
       .split("\n")
       .forEach((line) => {
         if (/\bquestions?\b|per round|cadence/i.test(line))
@@ -483,7 +465,7 @@ test("AC-7: tier gates set depth, and no tier row sets cadence", () => {
 
 test("AC-8: grilling.md re-walks the tree after every answer and design draft", () => {
   const text = read(GRILLING);
-  const rewalk = section(text, GRILLING, "### Re-walk", "### Assumption gate");
+  const rewalk = headingSection(text, GRILLING, "### Re-walk");
   const pins: [RegExp, string][] = [
     [
       /after\s+every\s+answer[^.]*after\s+every\s+design\s+draft/i,
@@ -529,7 +511,7 @@ test("AC-8: the handoff lets a re-walk reopen a settled decision", () => {
   // Handoff's "nothing settled is asked again" used to be absolute, which forbade the
   // reopen the Re-walk section requires — on the /grill → brainstorming path the more
   // specific rule would win and the one-round bug would survive there.
-  const handoff = read(GRILLING).slice(read(GRILLING).indexOf("## Handoff"));
+  const handoff = section(read(GRILLING), GRILLING, "## Handoff");
   assert.match(
     handoff,
     /asked again\*\*\s+unless a re-walk reopens it/i,

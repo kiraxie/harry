@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { headingSection } from "./section.ts";
 
 // HARRY.md is loaded into every session, so it holds only what a session must know
 // before acting. Each heading keeps its rule; everything that moved out keeps one home
@@ -14,19 +15,9 @@ import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 // no-speculative-optimization, 3/3 → 0/3, without it); 990 leaves room for a word, not a rule.
 const CORE_WORDS = 990;
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const plain = (rel: string): string =>
-  readFileSync(path.join(repoRoot, rel), "utf-8").replace(/\s+/g, " ").replace(/[*`]/g, "");
-
-function lawSection(name: string): string {
-  const text = readFileSync(path.join(repoRoot, "HARRY.md"), "utf-8");
-  const start = text.indexOf(`\n## ${name}\n`);
-  assert.ok(start !== -1, `HARRY.md has no "## ${name}" heading`);
-  const next = text.indexOf("\n## ", start + 1);
-  return text
-    .slice(start, next === -1 ? undefined : next)
-    .replace(/\s+/g, " ")
-    .replace(/[*`]/g, "");
-}
+const flatten = (text: string): string => text.replace(/\s+/g, " ").replace(/[*`]/g, "");
+const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
+const plain = (rel: string): string => flatten(raw(rel));
 
 test("each resident heading holds the rule the core keeps", () => {
   const rules: [string, RegExp][] = [
@@ -68,7 +59,11 @@ test("each resident heading holds the rule the core keeps", () => {
     ["Talk", /Open with the outcome and stop when the content stops/],
   ];
   for (const [heading, rule] of rules)
-    assert.match(lawSection(heading), rule, `HARRY.md ${heading} lost: ${rule}`);
+    assert.match(
+      flatten(headingSection(raw("HARRY.md"), "HARRY.md", new RegExp(`^## ${heading}$`))),
+      rule,
+      `HARRY.md ${heading} lost: ${rule}`,
+    );
 });
 
 test("procedure that left the core lives in the skill that runs it", () => {
@@ -133,8 +128,13 @@ test("procedure that left the core lives in the skill that runs it", () => {
 });
 
 test("judgment that left the core lives in the review standard", () => {
-  const rubric = plain("references/review-rubric.md");
-  const judgment = rubric.split("## Engineering judgment")[1]?.split("## Severity")[0] ?? "";
+  const judgment = flatten(
+    headingSection(
+      raw("references/review-rubric.md"),
+      "references/review-rubric.md",
+      "## Engineering judgment",
+    ),
+  );
   for (const [rule, what] of [
     [/The ladder/, "the solution ladder"],
     [/Optimize on evidence, never on imagination/, "evidence before optimizing"],

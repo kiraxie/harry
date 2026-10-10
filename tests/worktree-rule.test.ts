@@ -3,14 +3,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const read = (rel: string): string =>
-  readFileSync(path.join(repoRoot, rel), "utf-8").replace(/\s+/g, " ");
+const flatten = (text: string): string => text.replace(/\s+/g, " ");
+const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
+const read = (rel: string): string => flatten(raw(rel));
 
 test("executing ties worktree isolation to concurrent writers, not tier", () => {
   const executing = read("skills/executing/SKILL.md");
-  const branch = executing.split("1. **Branch.**")[1]?.split("2. **Paths.**")[0] ?? "";
+  const branch = section(executing, "skills/executing/SKILL.md", "1. **Branch.**", "2. **Paths.**");
   assert.match(branch, /Isolation follows concurrent writers, not tier/);
   assert.match(
     branch,
@@ -32,7 +34,13 @@ test("executing ties worktree isolation to concurrent writers, not tier", () => 
 
 test("the layout names only the unit's own checkout, and never the main checkout", () => {
   const finishing = read("skills/finishing/SKILL.md");
-  const layout = finishing.split("## Where the unit lives")[1]?.split("## 1.")[0] ?? "";
+  const layout = flatten(
+    headingSection(
+      raw("skills/finishing/SKILL.md"),
+      "skills/finishing/SKILL.md",
+      "## Where the unit lives",
+    ),
+  );
   assert.match(
     layout,
     /\*\*own worktree\*\* — a linked worktree \(never the main checkout\)/,
@@ -48,7 +56,9 @@ test("the layout names only the unit's own checkout, and never the main checkout
 });
 
 test("Discard never touches a main checkout that is not on the unit's branch", () => {
-  const discard = read("skills/finishing/SKILL.md").split("### Discard")[1] ?? "";
+  const discard = flatten(
+    headingSection(raw("skills/finishing/SKILL.md"), "skills/finishing/SKILL.md", "### Discard"),
+  );
   assert.match(
     discard,
     /does `git branch --show-current` still print `<branch>`\?/,
@@ -60,8 +70,12 @@ test("Discard never touches a main checkout that is not on the unit's branch", (
 
 test("a merge in progress is finished or aborted first, then cleanup restarts from f.1", () => {
   const finishing = read("skills/finishing/SKILL.md");
-  const flow =
-    finishing.split("**If removal is refused**")[1]?.split("g. **Back on `<base>`**")[0] ?? "";
+  const flow = section(
+    finishing,
+    "skills/finishing/SKILL.md",
+    "**If removal is refused**",
+    "g. **Back on `<base>`**",
+  );
   const merge =
     "A merge in progress (MERGE_HEAD set) comes first, whatever the status shows: the user finishes or aborts it, then cleanup restarts from f.1, so a commit that finishes it is proven landed before f.4 deletes the branch; no choice below runs mid-merge, since git cannot switch branches then.";
   assert.ok(
@@ -72,10 +86,12 @@ test("a merge in progress is finished or aborted first, then cleanup restarts fr
 });
 
 test("f.2's clean check covers a merge in progress and lists ignored files", () => {
-  const clean =
-    read("skills/finishing/SKILL.md")
-      .split("2. **Clean worktree.**")[1]
-      ?.split("3. **Remove the worktree**")[0] ?? "";
+  const clean = section(
+    read("skills/finishing/SKILL.md"),
+    "skills/finishing/SKILL.md",
+    "2. **Clean worktree.**",
+    "3. **Remove the worktree**",
+  );
   assert.ok(clean.includes("`git -C <looked-up-path> status --porcelain -uall` must be empty"));
   assert.ok(
     clean.includes("`git -C <looked-up-path> rev-parse -q --verify MERGE_HEAD` must print nothing"),

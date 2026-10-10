@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
@@ -371,8 +372,8 @@ for (const [term, [rel, re]] of Object.entries(DEFINITIONS)) {
 }
 
 test("AC-6: 'tier' is defined by the enumeration in HARRY.md's Tiers and tier-gates.md", () => {
-  const section = read("HARRY.md").split("## Tiers")[1]?.split("## Ask first")[0] ?? "";
-  const tiers = section
+  const tiersLaw = headingSection(read("HARRY.md"), "HARRY.md", "## Tiers");
+  const tiers = tiersLaw
     .split("\n")
     .map((l) => /^- \*\*(\w+)\*\* — /.exec(l)?.[1])
     .filter(Boolean);
@@ -389,13 +390,17 @@ test("AC-6: 'tier' is defined by the enumeration in HARRY.md's Tiers and tier-ga
 });
 
 test("plain-language keeps the honest-hedge and fabrication rules", () => {
-  const section = plain(read(PLAIN_LANGUAGE)).split("## What this does not license")[1] ?? "";
+  const license = section(
+    plain(read(PLAIN_LANGUAGE)),
+    PLAIN_LANGUAGE,
+    "## What this does not license",
+  );
   assert.match(
-    section,
+    license,
     /Keep only hedges that carry real uncertainty; deleting an honest one manufactures confidence\./,
   );
   assert.match(
-    section,
+    license,
     /A plausible-sounding fix you did not verify exists is a fabrication, not a suggestion; say 'I don't know of one' instead\./,
   );
 });

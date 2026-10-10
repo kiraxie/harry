@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
@@ -41,12 +42,8 @@ test("executing numbers the merged findings list", () => {
 });
 
 function rereviewForm(): string {
-  const text = read("references/review-rubric.md");
-  const start = text.indexOf("**Re-review**");
-  assert.ok(start >= 0, "the rubric has no re-review form");
-  const end = text.indexOf("Both verdicts", start);
-  assert.ok(end > start, "the re-review form no longer sits before the both-verdicts rule");
-  return flat(text.slice(start, end));
+  const rel = "references/review-rubric.md";
+  return flat(section(read(rel), rel, "**Re-review**", "Both verdicts"));
 }
 
 test("the rubric's re-review form gives one verdict per handed number", () => {
@@ -66,7 +63,7 @@ test("the rubric's re-review form numbers new issues on from the handed list", (
 });
 
 test("the re-review's Assessment carries Quality and Verdict, no per-AC spec", () => {
-  const assessment = rereviewForm().split("### Assessment")[1] ?? "";
+  const assessment = section(rereviewForm(), "references/review-rubric.md", "### Assessment");
   assert.match(
     assessment,
     /Quality: Approved \/ Changes requested/,

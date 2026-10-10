@@ -15,6 +15,7 @@ import {
   parseVersion,
   RELEASE_STATES,
 } from "../.claude/scripts/release-state.mts";
+import { headingSection } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const SCRIPT = path.join(repoRoot, ".claude/scripts/release-state.mts");
@@ -526,13 +527,8 @@ test("this repo's own released version classifies as already-tagged", () => {
 
 test(".claude/commands/release.md's state section names exactly the script's states", () => {
   const md = readFileSync(path.join(repoRoot, ".claude/commands/release.md"), "utf8");
-  const start = md.indexOf("## Classify the state");
-  const end = md.indexOf("## Phase A");
-  assert.ok(
-    start >= 0 && end > start,
-    ".claude/commands/release.md: no state section before Phase A",
-  );
-  const names = [...md.slice(start, end).matchAll(/`([a-z-]+)`/g)]
+  const states = headingSection(md, ".claude/commands/release.md", "## Classify the state");
+  const names = [...states.matchAll(/`([a-z-]+)`/g)]
     .map((m) => m[1])
     .filter((n) => /^[a-z]+(-[a-z]+)+$/.test(n));
   assert.deepEqual(new Set(names), new Set(RELEASE_STATES));

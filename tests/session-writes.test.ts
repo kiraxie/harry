@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { headingSection } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -38,13 +39,14 @@ test("AC-8: no prose names a retired dispatch concept", () => {
   assert.deepEqual(hits, []);
 });
 
-const plain = (rel: string): string =>
-  readFileSync(path.join(repoRoot, rel), "utf-8").replace(/\s+/g, " ").replace(/[*`]/g, "");
+const flatten = (text: string): string => text.replace(/\s+/g, " ").replace(/[*`]/g, "");
+const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
+const plain = (rel: string): string => flatten(raw(rel));
 const EXECUTING = path.join("skills", "executing", "SKILL.md");
 const FINISHING = path.join("skills", "finishing", "SKILL.md");
 
 test("AC-1: executing has the session write and dispatches only its named roles", () => {
-  const who = plain(EXECUTING).split("## Who writes")[1]?.split("## Before you build")[0] ?? "";
+  const who = flatten(headingSection(raw(EXECUTING), EXECUTING, "## Who writes"));
   assert.match(who, /The session does all implementation, fixing and writing itself/);
   assert.match(who, /independent judgment — review, debate, audit analysis → analyst/);
   assert.match(who, /bulk reading → scout/);

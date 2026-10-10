@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { REPO_TOP_LEVEL, SHIPPED_PROSE_DIRS, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { headingSection } from "./section.ts";
 
 // A tier is set by what a failure can break, not by how many files change. HARRY.md **Tiers** owns
 // the triggers; tier-gates.md points at them instead of keeping a second copy.
@@ -36,7 +37,7 @@ test("no prose paragraph states a file-count tier trigger", () => {
 });
 
 test("HARRY.md Tiers sets the Major trigger by risk", () => {
-  const s3 = read("HARRY.md").split("## Tiers")[1]?.split("## Ask first")[0] ?? "";
+  const s3 = headingSection(read("HARRY.md"), "HARRY.md", "## Tiers");
   const major = s3.split("\n").find((l) => l.startsWith("- **Major**")) ?? "";
   assert.match(major, /red line/);
   assert.match(major, /hard to see or hard to undo/);

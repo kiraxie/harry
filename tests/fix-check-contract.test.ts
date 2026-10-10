@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const FIX_CHECK = "references/fix-check.md";
@@ -38,7 +39,7 @@ test("review-round-cap AC-3: a returning cause needs a fix that adds a class-wid
 
 test("review-round-cap AC-5(a): the referee's own comparison with earlier findings triggers the class rule", () => {
   const text = fixCheck();
-  const level2 = text.slice(text.indexOf("2. Data flow —"), text.indexOf("3. System —"));
+  const level2 = section(text, "references/fix-check.md", "2. Data flow —", "3. System —");
   assert.match(
     level2,
     /an earlier findings file holds a finding with the same cause in the same area — same file or same rule — whose fix was built, whether or not the finding under check says so/i,
@@ -48,7 +49,7 @@ test("review-round-cap AC-5(a): the referee's own comparison with earlier findin
 
 test("fix-check level 2 fails a fix whose side-effect flags go unlisted", () => {
   const text = fixCheck();
-  const level2 = text.slice(text.indexOf("2. Data flow —"), text.indexOf("3. System —"));
+  const level2 = section(text, "references/fix-check.md", "2. Data flow —", "3. System —");
   assert.match(
     level2,
     /A fix that flips any setting beyond the one it targets lists each one — its side-effect flags; an unlisted one fails at this level\./,
@@ -100,11 +101,11 @@ test("AC-1: fix-check names the cases that stop for the user", () => {
 });
 
 test("AC-7: executing routes fix checks to the referee", () => {
-  const who = flat(read("skills/executing/SKILL.md"))
-    .split("## Who writes")[1]
-    ?.split("## Before you build")[0];
+  const who = flat(
+    headingSection(read("skills/executing/SKILL.md"), "skills/executing/SKILL.md", "## Who writes"),
+  );
   assert.match(
-    who ?? "",
+    who,
     /fix checks → referee/,
     "executing no longer routes a fix check to the referee",
   );
@@ -119,11 +120,8 @@ test("AC-7: CLAUDE.md describes the referee role", () => {
 });
 
 const executingStep4 = (): string => {
-  const text = read("skills/executing/SKILL.md");
-  const start = text.indexOf("4. **One fix wave.**");
-  const end = text.indexOf("**There is no second wave.**", start);
-  assert.ok(start >= 0 && end > start, "executing step 4 is not where it was");
-  return flat(text.slice(start, end));
+  const rel = "skills/executing/SKILL.md";
+  return flat(section(read(rel), rel, "4. **One fix wave.**", "**There is no second wave.**"));
 };
 
 test("AC-3: executing checks every non-small fix with one referee dispatch before building", () => {
@@ -176,7 +174,7 @@ test("AC-5: a failed dispatch falls back to the session, recorded as not indepen
 
 test("AC-5: on the Codex build the fix check runs in a separate read-only codex exec through ask", () => {
   const text = read("skills/executing/SKILL.md");
-  const codex = flat(text.slice(text.indexOf("**Codex build.**")));
+  const codex = flat(section(text, "skills/executing/SKILL.md", "**Codex build.**"));
   assert.match(
     codex,
     /The fix check runs in a separate read-only codex exec through that build's ask skill \(codex-skills\/ask\)/,
@@ -246,7 +244,7 @@ test("executing's fix-check Progress line counts the fixes that stopped", () => 
 test("the Codex fix-check prompt tells the model to read and trace the repo, rulings as facts", () => {
   const text = read("skills/executing/SKILL.md");
   assert.match(
-    flat(text.slice(text.indexOf("**Codex build.**"))),
+    flat(section(text, "skills/executing/SKILL.md", "**Codex build.**")),
     /its prompt naming references\/fix-check\.md, the inputs it lists and an explicit instruction to read and trace the repo, with rulings passed as facts/,
     "the Codex fix check may answer at level 1 only, since ask's preamble forbids exploring unless the prompt asks",
   );

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
@@ -20,14 +21,6 @@ const plain = (text: string): string =>
     .replace(/[*`]/g, "")
     .replace(/(^|[^\w])_(?=\S)|(?<=\S)_(?=[^\w]|$)/g, "$1");
 
-function section(text: string, rel: string, startHeading: string, endHeading: string): string {
-  const start = text.indexOf(startHeading);
-  assert.ok(start !== -1, `${rel} no longer has the heading "${startHeading}"`);
-  const end = text.indexOf(endHeading, start + startHeading.length);
-  assert.ok(end !== -1, `${rel} no longer has the heading "${endHeading}" after "${startHeading}"`);
-  return text.slice(start, end);
-}
-
 function labelled(text: string, rel: string, label: string): string {
   const hit = text
     .split(/\n\s*\n/)
@@ -38,14 +31,9 @@ function labelled(text: string, rel: string, label: string): string {
   return hit;
 }
 
-function step2Raw(): string {
-  const text = read(FINISHING);
-  const start = text.search(/^## \d+\. Architecture review/m);
-  assert.ok(start !== -1, `${FINISHING} no longer has an "Architecture review" step heading`);
-  const end = text.indexOf("\n## ", start + 1);
-  return text.slice(start, end === -1 ? undefined : end);
-}
-const step2 = (label: string): string => labelled(step2Raw(), FINISHING, label);
+const STEP2 = /^## \d+\. Architecture review/;
+const step2 = (label: string): string =>
+  labelled(headingSection(read(FINISHING), FINISHING, STEP2), FINISHING, label);
 const archReview = (): string => plain(read(ARCH_REVIEW));
 
 test("AC-1: the architecture review is step 2, after verify-tests and before merge-or-PR", () => {
@@ -63,7 +51,7 @@ test("AC-1: the architecture review is step 2, after verify-tests and before mer
 });
 
 test("AC-1: merge, PR and keep all pass through the review; only Discard skips it", () => {
-  const intro = plain(step2Raw());
+  const intro = plain(headingSection(read(FINISHING), FINISHING, STEP2));
   assert.match(
     intro,
     /Every path out of the menu.*?merge, PR.*?keep.*?passes through it/,
@@ -104,7 +92,11 @@ test("AC-1: a pre-decided integration path still runs the architecture review", 
 test("AC-2: a shape is one of four kinds, defined the same in the step and the architecture-review reference", () => {
   const kinds =
     /A shape is the outward form other code depends on: an API, a DB schema, a public interface, or a module or service boundary\./;
-  assert.match(plain(step2Raw()), kinds, "step 2's shape definition drifted");
+  assert.match(
+    plain(headingSection(read(FINISHING), FINISHING, STEP2)),
+    kinds,
+    "step 2's shape definition drifted",
+  );
   assert.match(
     archReview(),
     kinds,
@@ -278,12 +270,7 @@ test("AC-3: with no item (Trivial) the reviewer gets the task as the user stated
 });
 
 test("AC-4: the architecture-review reference carries the five categories", () => {
-  const cats = section(
-    read(ARCH_REVIEW),
-    ARCH_REVIEW,
-    "## Five categories",
-    "## Two passes beyond the diff",
-  );
+  const cats = headingSection(read(ARCH_REVIEW), ARCH_REVIEW, "## Five categories");
   const names = [
     "API and interfaces.",
     "DB schema.",
@@ -299,9 +286,7 @@ test("AC-4: the architecture-review reference carries the five categories", () =
 });
 
 test("AC-4: line-level quality and tests are excluded", () => {
-  const notYours = plain(
-    section(read(ARCH_REVIEW), ARCH_REVIEW, "## Not your job", "## Five categories"),
-  );
+  const notYours = plain(headingSection(read(ARCH_REVIEW), ARCH_REVIEW, "## Not your job"));
   assert.match(
     notYours,
     /Line-level code quality and tests are out of scope/,
@@ -410,7 +395,12 @@ test("AC-5: exactly three rulings — fix now, backlog, leave as is", () => {
       .filter((l) => l.startsWith("- ") && l.includes(` ${arrow} `))
       .map((l) => l.slice(2, l.indexOf(` ${arrow} `)));
 
-  const rulings = section(step2Raw(), FINISHING, "**Rulings.**", "No findings →");
+  const rulings = section(
+    headingSection(read(FINISHING), FINISHING, STEP2),
+    FINISHING,
+    "**Rulings.**",
+    "No findings →",
+  );
   assert.match(
     plain(rulings),
     /Each finding is ruled one of three ways:/,
@@ -501,7 +491,11 @@ test("AC-5: leave as is records the reason and is not raised again", () => {
 
 // review-round-cap: the loop stops at round 3, and the stop says why it may be stuck.
 test("review-round-cap AC-1: round 1 plus at most two more, then a stop with a status report", () => {
-  assert.doesNotMatch(step2Raw(), /There is no round cap/, "step 2 still says there is no cap");
+  assert.doesNotMatch(
+    headingSection(read(FINISHING), FINISHING, STEP2),
+    /There is no round cap/,
+    "step 2 still says there is no cap",
+  );
   const p = step2("Round cap.");
   const claims: [RegExp, string][] = [
     [
