@@ -140,7 +140,10 @@ test("AC-3: one analyst, one lane", () => {
 test("AC-3: the reviewer is handed every input", () => {
   const p = step2("Reviewer.");
   const inputs: [RegExp, string][] = [
-    [/Hand it: the shape list;/, "the shape list"],
+    [
+      /Hand it: the round — its number, or that it is a follow-up round after a pull request \(Option 2\), which has no number; the shape list;/,
+      "the round and the shape list",
+    ],
     [/the item's ## Why \/ What and its ### Acceptance criteria/, "the item's design and AC"],
     [/the diff file, by its absolute path;/, "the diff, by absolute path"],
     [
@@ -211,6 +214,10 @@ test("AC-3: the diff file is the CC reviewer's input only; the Codex build write
 test("AC-3: the architecture-review reference lists the same inputs the step hands over", () => {
   const l = archReview();
   const inputs: [RegExp, string][] = [
+    [
+      /The round — its number, or that it is a follow-up round after a pull request, which has no number\. "From round 2 on" in this file counts only rounds with a number\./,
+      "the round",
+    ],
     [/The shape list — the shapes this change added or altered/, "the shape list"],
     [/The item's ## Why \/ What and its acceptance criteria/, "the design and AC"],
     [/The branch diff, as a file/, "the diff"],
@@ -239,7 +246,7 @@ test("AC-3: on the Codex build the review runs out of session through companion 
   );
   assert.match(
     p,
-    /context file .*? — the shape list, the item's ## Why \/ What and its AC, the git log -n 20 --stat -- <changed paths> output, and on a later round the rulings recorded so far and the Minor findings sent to ## Follow-ups\./,
+    /context file .*? — the round, the shape list, the item's ## Why \/ What and its AC, the git log -n 20 --stat -- <changed paths> output, and on a later round the rulings recorded so far and the Minor findings sent to ## Follow-ups\./,
     "the Codex build's context file no longer carries the items the CC reviewer is handed",
   );
 });
@@ -334,7 +341,7 @@ test("AC-4: every finding carries where, why, severity, structural fix and recom
   const out = section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "```");
   assert.match(
     plain(out),
-    /Every finding carries five things: where .*?, why it matters, its severity, the structural fix, and your recommended ruling\./,
+    /Every finding carries five things: where .*?, why it matters, its severity, the structural fix, and your recommended ruling/,
     "a finding no longer carries all five fields",
   );
   const template = section(read(ARCH_REVIEW), ARCH_REVIEW, "### Findings", "```\n\nA finding");
@@ -750,5 +757,26 @@ test("Round cap leaves the no-item rule to the No item paragraph", () => {
     step2("Round cap."),
     /no item|in the reply/i,
     "Round cap carries its own no-item rule again; the No item paragraph owns it",
+  );
+});
+
+test("a Minor finding from round 2 on carries no recommended ruling, at every place that asks for one", () => {
+  const out = plain(
+    section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "When there is nothing to report"),
+  );
+  for (const [anchor, where] of [
+    [/your recommended ruling/, "the five things every finding carries"],
+    [/You recommend one of the same three/, "the recommendation sentence"],
+    [/Recommended ruling: fix now \/ backlog \/ leave as is/, "the template line"],
+  ] as const)
+    assert.match(
+      out,
+      new RegExp(`${anchor.source}[^.:]*?which a Minor finding from round 2 on does not carry`),
+      `${where} asks a recommended ruling of a round-2 Minor again`,
+    );
+  assert.match(
+    out,
+    /A finding phrased as a question follows the same rule as any other: when it carries a recommended ruling, give the one you would give if the answer is the worse case\./,
+    "a question-phrased finding asks a recommended ruling of a round-2 Minor again",
   );
 });

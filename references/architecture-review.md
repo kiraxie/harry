@@ -11,6 +11,8 @@ A **shape** is the outward form other code depends on: an API, a DB schema, a
 public interface, or a module or service boundary. You judge only shapes. You are
 handed:
 
+- **The round** — its number, or that it is a follow-up round after a pull request,
+  which has no number. "From round 2 on" in this file counts only rounds with a number.
 - **The shape list** — the shapes this change added or altered. Judge these; read
   anything else only to judge them.
 - **The item's `## Why / What` and its acceptance criteria** — known facts, not
@@ -104,10 +106,10 @@ shape left as it is belongs to that rubric, not here.
 
 Every finding carries five things: **where** (`file:line`, or the shape's name
 when it spans files), **why** it matters, its **severity**, the **structural fix**,
-and your **recommended ruling**. The structural fix is the long-term one, never a workaround
+and your **recommended ruling**, which a Minor finding from round 2 on does not carry. The structural fix is the long-term one, never a workaround
 (`references/review-rubric.md`, **Engineering judgment**). The user rules each finding one of three ways. A Minor finding from round 2 on is the
 exception: it goes to the item's `## Follow-ups` without a ruling. You recommend one of the
-same three for every finding:
+same three — a recommendation which a Minor finding from round 2 on does not carry:
 
 - **fix now** — fix it before this merges. The work goes back to be fixed, and
   this review then re-checks the shapes the fix changed.
@@ -134,12 +136,12 @@ Severity is judged on the shape, one of three:
    Severity: Critical / Important / Minor
    Structural fix: <the long-term change>
    [Short-term fix: <only when the structural one is not simple>]
-   Recommended ruling: fix now / backlog / leave as is · <one-line reason>
+   [Recommended ruling: fix now / backlog / leave as is · <one-line reason; the line which a Minor finding from round 2 on does not carry>]
 2. …
 ```
 
-A finding phrased as a question still carries a recommended ruling — the one you
-would give if the answer is the worse case.
+A finding phrased as a question follows the same rule as any other: when it carries a
+recommended ruling, give the one you would give if the answer is the worse case.
 
 When there is nothing to report, say so plainly — the whole `### Findings`
 section is the single line `No findings.` Never pad it with praise, with
