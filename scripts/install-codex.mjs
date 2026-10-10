@@ -12,11 +12,12 @@
 //   node scripts/install-codex.mjs --remove   # uninstall
 //   node scripts/install-codex.mjs --selftest # runnable check
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
+import { runCli } from "./lib/cli.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 import { warnStale } from "./lib/stale-entries.mjs";
 
@@ -45,14 +46,12 @@ export function applyImport(existing, { remove = false, root = pluginRoot } = {}
   return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
 }
 
-/** @param {{ remove?: boolean }} [opts] @returns {string} */
+/** @param {{ remove?: boolean }} [opts] @returns {{ path: string; changed: boolean }} */
 export function run({ remove = false } = {}) {
   const path = globalPath();
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
   if (!remove) warnStale(existing);
-  mkdirSync(dirname(path), { recursive: true });
-  safeWrite(path, applyImport(existing, { remove }));
-  return path;
+  return { path, changed: safeWrite(path, applyImport(existing, { remove })) };
 }
 
 function selftest() {
@@ -98,9 +97,17 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (args.includes("--selftest")) {
     selftest();
   } else {
-    const path = run({ remove: args.includes("--remove") });
-    console.log(
-      `${args.includes("--remove") ? "Removed harry laws from" : "Wired HARRY.md into"} ${path}`,
-    );
+    runCli(() => {
+      const remove = args.includes("--remove");
+      const { path, changed } = run({ remove });
+      const what = changed
+        ? remove
+          ? "Removed harry laws from"
+          : "Wired HARRY.md into"
+        : remove
+          ? "No harry laws to remove in"
+          : "Already up to date:";
+      console.log(`${what} ${path}`);
+    });
   }
 }

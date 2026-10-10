@@ -12,11 +12,12 @@
 //   node scripts/init.mjs --remove [dir]  # uninstall the entries
 //   node scripts/init.mjs --selftest      # runnable check (no project needed)
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
+import { runCli, UserError } from "./lib/cli.mjs";
 
 // Per project dir: local scratch (items/, archive/, INDEX.md with its
 // in-flight work list, HISTORY.md, tmp/ handoff files), worktree sandboxes,
@@ -51,12 +52,14 @@ export function applyBlock(existing, { remove = false } = {}) {
   return `${merged.join("\n")}\n`;
 }
 
-/** @param {string} targetDir @param {{ remove?: boolean }} [opts] @returns {string} */
+/** @param {string} targetDir @param {{ remove?: boolean }} [opts] @returns {{ path: string; changed: boolean }} */
 export function run(targetDir, { remove = false } = {}) {
+  // safeWrite makes a missing parent, which here is a typo'd target, not a dir to create.
+  if (!statSync(targetDir, { throwIfNoEntry: false })?.isDirectory())
+    throw new UserError(`not a directory: ${targetDir}`);
   const path = join(targetDir, ".gitignore");
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
-  safeWrite(path, applyBlock(existing, { remove }));
-  return path;
+  return { path, changed: safeWrite(path, applyBlock(existing, { remove })) };
 }
 
 function selftest() {
@@ -127,9 +130,18 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (args.includes("--selftest")) {
     selftest();
   } else {
-    const remove = args.includes("--remove");
-    const target = args.find((a) => !a.startsWith("--")) ?? process.cwd();
-    const path = run(target, { remove });
-    console.log(`${remove ? "Removed harry's entries from" : "Updated"} ${path}`);
+    runCli(() => {
+      const remove = args.includes("--remove");
+      const target = args.find((a) => !a.startsWith("--")) ?? process.cwd();
+      const { path, changed } = run(target, { remove });
+      const what = changed
+        ? remove
+          ? "Removed harry's entries from"
+          : "Updated"
+        : remove
+          ? "No harry entries to remove in"
+          : "Already up to date:";
+      console.log(`${what} ${path}`);
+    });
   }
 }

@@ -9,9 +9,22 @@
 // so the safe-write policy lives here once.
 
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname } from "node:path";
 
-// Write `content` to `targetPath` atomically, keeping a one-time backup.
+// Write `content` to `targetPath` atomically, keeping a one-time backup. Returns
+// whether it wrote: content equal to the target's (a missing target reading as
+// empty) is left alone, so a re-run neither rewrites the file nor creates it empty,
+// and the caller can tell the user nothing changed. The parent directory is made
+// only on the write path, so a no-op leaves no empty directory behind either.
 //
 //  1. On the FIRST modification of an existing target, copy it to `<target>.bak`
 //     — but only if no `.bak` already exists, so re-runs never clobber the
@@ -35,16 +48,20 @@ export function tempPathFor(targetPath) {
   return `${targetPath}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
-/** @param {string} targetPath @param {string} content @returns {void} */
+/** @param {string} targetPath @param {string} content @returns {boolean} */
 export function safeWrite(targetPath, content) {
+  const exists = existsSync(targetPath);
+  if ((exists ? readFileSync(targetPath, "utf8") : "") === content) return false;
+  mkdirSync(dirname(targetPath), { recursive: true });
   const backupPath = `${targetPath}.bak`;
-  if (existsSync(targetPath) && !existsSync(backupPath)) {
+  if (exists && !existsSync(backupPath)) {
     copyFileSync(targetPath, backupPath);
   }
   const tmpPath = tempPathFor(targetPath);
   try {
     writeFileSync(tmpPath, content);
     renameSync(tmpPath, targetPath);
+    return true;
   } catch (err) {
     try {
       rmSync(tmpPath, { force: true });

@@ -26,11 +26,12 @@
 //   node scripts/install.mjs --remove   # uninstall the import block + harry's Explore override
 //   node scripts/install.mjs --selftest # runnable check
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
+import { runCli } from "./lib/cli.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 import { warnStale } from "./lib/stale-entries.mjs";
 
@@ -68,6 +69,9 @@ function explorePath() {
   return join(dirname(globalPath()), "agents", "Explore.md");
 }
 
+/** @typedef {"deployed" | "unchanged" | "skipped" | "removed" | "absent"} ExploreOutcome */
+
+/** @returns {ExploreOutcome} */
 function deployExplore() {
   const dest = explorePath();
   // Symmetric with removeExplore: never silently clobber a user's own Explore.md.
@@ -78,36 +82,43 @@ function deployExplore() {
       `\n  ${dest} already exists and isn't harry's — leaving it untouched.` +
         `\n  Delete it yourself first if you want harry's Explore override.`,
     );
-    return;
+    return "skipped";
   }
-  mkdirSync(dirname(dest), { recursive: true });
-  safeWrite(dest, readFileSync(EXPLORE_SOURCE, "utf8"));
+  return safeWrite(dest, readFileSync(EXPLORE_SOURCE, "utf8")) ? "deployed" : "unchanged";
 }
 
+/** @returns {ExploreOutcome} */
 function removeExplore() {
   const dest = explorePath();
   if (existsSync(dest) && readFileSync(dest, "utf8").includes(EXPLORE_MARKER)) {
     rmSync(dest);
+    return "removed";
   }
+  return "absent";
 }
 
+/**
+ * @param {{ remove?: boolean; explore?: boolean }} [opts]
+ * @returns {{ path: string; imported: boolean; snapshot: boolean; explore: ExploreOutcome | null }}
+ */
 export function run({ remove = false, explore = false } = {}) {
   const path = globalPath();
   const snapshot = snapshotPath();
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
+  let snapshotChanged = false;
+  /** @type {ExploreOutcome | null} */
+  let exploreOutcome = null;
   if (remove) {
-    removeExplore();
+    exploreOutcome = removeExplore();
   } else {
     warnStale(existing);
     // Deploy: copy the plugin's current HARRY.md into the snapshot location, so
     // the wired-in @ import reads a frozen copy — not the live plugin checkout.
-    mkdirSync(dirname(snapshot), { recursive: true });
-    safeWrite(snapshot, readFileSync(join(pluginRoot, "HARRY.md"), "utf8"));
-    if (explore) deployExplore();
+    snapshotChanged = safeWrite(snapshot, readFileSync(join(pluginRoot, "HARRY.md"), "utf8"));
+    if (explore) exploreOutcome = deployExplore();
   }
-  mkdirSync(dirname(path), { recursive: true });
-  safeWrite(path, applyImport(existing, { remove, importPath: snapshot }));
-  return path;
+  const imported = safeWrite(path, applyImport(existing, { remove, importPath: snapshot }));
+  return { path, imported, snapshot: snapshotChanged, explore: exploreOutcome };
 }
 
 function selftest() {
@@ -166,14 +177,19 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (args.includes("--selftest")) {
     selftest();
   } else {
-    const remove = args.includes("--remove");
-    const explore = args.includes("--explore");
-    const path = run({ remove, explore });
-    const what = remove
-      ? "Removed harry import from"
-      : explore
-        ? "Wired HARRY.md + deployed Explore override into"
-        : "Wired HARRY.md into";
-    console.log(`${what} ${path}`);
+    runCli(() => {
+      const remove = args.includes("--remove");
+      const r = run({ remove, explore: args.includes("--explore") });
+      /** @type {string[]} */
+      const lines = [];
+      if (r.imported)
+        lines.push(`${remove ? "Removed harry import from" : "Wired HARRY.md into"} ${r.path}`);
+      if (r.snapshot) lines.push(`Deployed HARRY.md snapshot to ${snapshotPath()}`);
+      if (r.explore === "deployed") lines.push(`Deployed Explore override to ${explorePath()}`);
+      if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
+      if (lines.length === 0)
+        lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
+      console.log(lines.join("\n"));
+    });
   }
 }

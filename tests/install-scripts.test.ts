@@ -7,18 +7,22 @@
 // init's explicit target-dir argument.
 
 import assert from "node:assert/strict";
-import {
+import { spawnSync } from "node:child_process";
+import fs, {
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { fileURLToPath } from "node:url";
 import { run as initRun } from "../scripts/init.mjs";
 import { run as installRun } from "../scripts/install.mjs";
@@ -470,17 +474,28 @@ test("safeWrite: each write picks a unique temp path in the target's directory",
 test("safeWrite: a failed write cleans up its temp file and rethrows", () => {
   const dir = tmpDir("harry-safewrite-fail-");
   try {
-    // Make the rename fail: the target is a non-empty DIRECTORY (rename onto it
-    // is EISDIR), with a .bak already present so the backup step is skipped and
-    // the temp file is actually written before the failure.
+    // Make the rename fail, and only the rename: the target is a regular file, so
+    // the no-op read succeeds and the temp file is written before the failure. No
+    // real filesystem setup fails a rename while the read succeeds, so the rename
+    // is mocked; syncBuiltinESMExports carries the mock to atomic-write's named import.
     const target = path.join(dir, "t");
-    mkdirSync(target);
-    writeFileSync(path.join(target, "inner"), "x");
+    writeFileSync(target, "old");
     writeFileSync(`${target}.bak`, "old");
+    const rename = mock.method(fs, "renameSync", () => {
+      throw Object.assign(new Error("rename failed"), { syscall: "rename" });
+    });
+    syncBuiltinESMExports();
 
-    assert.throws(() => safeWrite(target, "new"), /EISDIR/, "the write failure must surface");
+    assert.throws(
+      () => safeWrite(target, "new"),
+      { syscall: "rename" },
+      "the rename failure must surface",
+    );
+    assert.equal(rename.mock.callCount(), 1, "the temp file reached the rename step");
     assertNoTempResidue(dir, "failed safeWrite");
   } finally {
+    mock.restoreAll();
+    syncBuiltinESMExports();
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -508,4 +523,241 @@ test("the shipped scripts reach only .mjs modules through their relative imports
   }
   assert.ok(seen.size > entries.length, "the walk followed the scripts' lib imports");
   assert.deepEqual(offenders, [], "a shipped script reaches a module that needs type stripping");
+});
+
+// An installer rewrote its target on every run, even when nothing changed, so it
+// could not tell the user whether it had changed anything: `/sync` printed
+// "Updated .gitignore" over a file it left byte-identical.
+test("safeWrite: content equal to the target's writes nothing and returns false", () => {
+  const dir = tmpDir("harry-safewrite-test-");
+  try {
+    const f = path.join(dir, "file.txt");
+    writeFileSync(f, "same");
+    utimesSync(f, 0, 0);
+    assert.equal(safeWrite(f, "same"), false, "an unchanged write reports false");
+    assert.equal(statSync(f).mtimeMs, 0, "the target was not rewritten");
+    assert.ok(!existsSync(`${f}.bak`), "no backup for a write that changed nothing");
+    assert.equal(safeWrite(f, "new"), true, "a real write reports true");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("safeWrite: empty content over a missing target creates nothing", () => {
+  const dir = tmpDir("harry-safewrite-test-");
+  try {
+    const missing = path.join(dir, "missing.txt");
+    assert.equal(safeWrite(missing, ""), false, "empty content over a missing target is no change");
+    assert.ok(!existsSync(missing), "a missing target is not created empty");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+type CliResult = { stdout: string; stderr: string };
+
+function cli(
+  script: string,
+  args: string[],
+  env: Record<string, string> = {},
+  { expectStatus = 0 }: { expectStatus?: number } = {},
+): CliResult {
+  const r = spawnSync(process.execPath, [path.join(pluginRoot, "scripts", script), ...args], {
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+  });
+  assert.equal(
+    r.status,
+    expectStatus,
+    `${script} ${args.join(" ")} exited ${r.status}: ${r.stderr}`,
+  );
+  return { stdout: r.stdout, stderr: r.stderr };
+}
+
+function withTmp(prefix: string, fn: (dir: string) => void): void {
+  const dir = tmpDir(prefix);
+  try {
+    fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("init.mjs CLI: a first run says Updated", () => {
+  withTmp("harry-init-cli-", (dir) => {
+    assert.match(cli("init.mjs", [dir]).stdout, /^Updated /);
+  });
+});
+
+test("init.mjs CLI: a re-run that changes nothing says so", () => {
+  withTmp("harry-init-cli-", (dir) => {
+    cli("init.mjs", [dir]);
+    assert.match(cli("init.mjs", [dir]).stdout, /^Already up to date: /);
+  });
+});
+
+test("init.mjs CLI: --remove says what it removed", () => {
+  withTmp("harry-init-cli-", (dir) => {
+    cli("init.mjs", [dir]);
+    assert.match(cli("init.mjs", ["--remove", dir]).stdout, /^Removed harry's entries from /);
+  });
+});
+
+test("init.mjs CLI: --remove with no .gitignore says there is nothing to remove", () => {
+  withTmp("harry-init-cli-", (dir) => {
+    assert.match(cli("init.mjs", ["--remove", dir]).stdout, /^No harry entries to remove in /);
+  });
+});
+
+test("init.mjs CLI: --remove with no .gitignore creates none", () => {
+  withTmp("harry-init-cli-", (dir) => {
+    cli("init.mjs", ["--remove", dir]);
+    assert.ok(!existsSync(path.join(dir, ".gitignore")), "no .gitignore created");
+  });
+});
+
+test("init.mjs CLI: a missing target directory is one stderr line and exit 1", () => {
+  withTmp("harry-init-cli-", (dir) => {
+    const r = cli("init.mjs", [path.join(dir, "typo")], {}, { expectStatus: 1 });
+    assert.match(r.stderr, /^harry: not a directory: .*typo\n$/, "one line, no stack trace");
+  });
+});
+
+test("init.mjs CLI: a file as target is one stderr line and exit 1", () => {
+  withTmp("harry-init-cli-", (dir) => {
+    const file = path.join(dir, "a-file");
+    writeFileSync(file, "");
+    const r = cli("init.mjs", [file], {}, { expectStatus: 1 });
+    assert.match(r.stderr, /^harry: not a directory: .*a-file\n$/, "one line, no stack trace");
+  });
+});
+
+test("install.mjs CLI: a first run names the global file and each deployed file", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    const out = cli("install.mjs", ["--explore"], { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") });
+    assert.match(
+      out.stdout,
+      /^Wired HARRY\.md into .*\nDeployed HARRY\.md snapshot to .*\nDeployed Explore override to /,
+    );
+  });
+});
+
+test("install.mjs CLI: a re-run that changes nothing says so", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    const env = { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") };
+    cli("install.mjs", ["--explore"], env);
+    assert.match(cli("install.mjs", ["--explore"], env).stdout, /^Already up to date: [^\n]*\n$/);
+  });
+});
+
+test("install.mjs CLI: a resync that only refreshes the snapshot names only the snapshot", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    const env = { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") };
+    cli("install.mjs", [], env);
+    writeFileSync(path.join(dir, "harry", "HARRY.md"), "an older HARRY.md\n");
+    assert.match(cli("install.mjs", [], env).stdout, /^Deployed HARRY\.md snapshot to [^\n]*\n$/);
+  });
+});
+
+test("install.mjs CLI: --remove names the global file and the removed override", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    const env = { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") };
+    cli("install.mjs", ["--explore"], env);
+    assert.match(
+      cli("install.mjs", ["--remove"], env).stdout,
+      /^Removed harry import from .*\nRemoved Explore override /,
+    );
+  });
+});
+
+test("install.mjs CLI: --remove with nothing installed says so", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    const env = { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") };
+    assert.match(
+      cli("install.mjs", ["--remove"], env).stdout,
+      /^No harry import to remove in [^\n]*\n$/,
+    );
+  });
+});
+
+test("install.mjs CLI: a deploy skipped for a user's own Explore.md is reported as a skip", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    mkdirSync(path.join(dir, "agents"));
+    writeFileSync(path.join(dir, "agents", "Explore.md"), "my own\n");
+    const r = cli("install.mjs", ["--explore"], { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") });
+    assert.match(r.stdout, /^Wired HARRY\.md into /);
+    assert.doesNotMatch(r.stdout, /Deployed Explore override/);
+    assert.match(r.stderr, /isn't harry's — leaving it untouched/);
+  });
+});
+
+test("install.mjs CLI: --remove that only drops the Explore override names that file", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    mkdirSync(path.join(dir, "agents"));
+    writeFileSync(path.join(dir, "agents", "Explore.md"), "harry:explore-override\n");
+    assert.match(
+      cli("install.mjs", ["--remove"], { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") }).stdout,
+      /^Removed Explore override [^\n]*\n$/,
+    );
+  });
+});
+
+test("install.mjs CLI: --remove on a fresh home creates no directory", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    cli("install.mjs", ["--remove"], { HARRY_GLOBAL: path.join(dir, "claude", "CLAUDE.md") });
+    assert.ok(!existsSync(path.join(dir, "claude")), "no empty claude/ left behind");
+  });
+});
+
+test("install-codex.mjs CLI: a first run says Wired", () => {
+  withTmp("harry-codex-cli-", (dir) => {
+    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
+    assert.match(cli("install-codex.mjs", [], env).stdout, /^Wired HARRY\.md into /);
+  });
+});
+
+test("install-codex.mjs CLI: a re-run that changes nothing says so", () => {
+  withTmp("harry-codex-cli-", (dir) => {
+    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
+    cli("install-codex.mjs", [], env);
+    assert.match(cli("install-codex.mjs", [], env).stdout, /^Already up to date: /);
+  });
+});
+
+test("install-codex.mjs CLI: --remove says what it removed", () => {
+  withTmp("harry-codex-cli-", (dir) => {
+    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
+    cli("install-codex.mjs", [], env);
+    assert.match(cli("install-codex.mjs", ["--remove"], env).stdout, /^Removed harry laws from /);
+  });
+});
+
+test("install-codex.mjs CLI: --remove with nothing installed says so", () => {
+  withTmp("harry-codex-cli-", (dir) => {
+    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
+    assert.match(
+      cli("install-codex.mjs", ["--remove"], env).stdout,
+      /^No harry laws to remove in /,
+    );
+  });
+});
+
+test("install-codex.mjs CLI: --remove on a fresh home creates no directory", () => {
+  withTmp("harry-codex-cli-", (dir) => {
+    cli("install-codex.mjs", ["--remove"], {
+      HARRY_CODEX_GLOBAL: path.join(dir, "codex", "AGENTS.md"),
+    });
+    assert.ok(!existsSync(path.join(dir, "codex")), "no empty codex/ left behind");
+  });
+});
+
+test("init.mjs: a missing target directory is an error, not a directory to create", () => {
+  const dir = tmpDir("harry-init-test-");
+  try {
+    const missing = path.join(dir, "typo");
+    assert.throws(() => initRun(missing), /not a directory/);
+    assert.ok(!existsSync(missing), "the typo'd directory was not created");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
