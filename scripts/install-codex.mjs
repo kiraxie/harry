@@ -17,7 +17,6 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
-import { runCli } from "./lib/cli.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 import { warnStale } from "./lib/stale-entries.mjs";
 
@@ -97,17 +96,15 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (args.includes("--selftest")) {
     selftest();
   } else {
-    runCli(() => {
-      const remove = args.includes("--remove");
-      const { path, changed } = run({ remove });
-      const what = changed
-        ? remove
-          ? "Removed harry laws from"
-          : "Wired HARRY.md into"
-        : remove
-          ? "No harry laws to remove in"
-          : "Already up to date:";
-      console.log(`${what} ${path}`);
-    });
+    const remove = args.includes("--remove");
+    const { path, changed } = run({ remove });
+    const what = changed
+      ? remove
+        ? "Removed harry laws from"
+        : "Wired HARRY.md into"
+      : remove
+        ? "No harry laws to remove in"
+        : "Already up to date:";
+    console.log(`${what} ${path}`);
   }
 }

@@ -17,12 +17,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
-import { runCli, UserError } from "./lib/cli.mjs";
 
 // Per project dir: local scratch (items/, archive/, INDEX.md with its
 // in-flight work list, HISTORY.md, tmp/ handoff files), worktree sandboxes,
 // and the user's per-project specialization rules. All non-versioned.
 const ENTRIES = [".local/", "*worktrees/", "CLAUDE.local.md"];
+
+class UserError extends Error {}
 
 // Returns the .gitignore content with harry's entries appended (or removed).
 // Per-entry dedupe: an entry already present anywhere in the file is skipped,
@@ -130,7 +131,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (args.includes("--selftest")) {
     selftest();
   } else {
-    runCli(() => {
+    try {
       const remove = args.includes("--remove");
       const target = args.find((a) => !a.startsWith("--")) ?? process.cwd();
       const { path, changed } = run(target, { remove });
@@ -142,6 +143,10 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
           ? "No harry entries to remove in"
           : "Already up to date:";
       console.log(`${what} ${path}`);
-    });
+    } catch (err) {
+      if (!(err instanceof UserError)) throw err;
+      console.error(`harry: ${err.message}`);
+      process.exitCode = 1;
+    }
   }
 }

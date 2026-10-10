@@ -761,3 +761,20 @@ test("init.mjs: a missing target directory is an error, not a directory to creat
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("/sync's shared Phase 2 stops on init's non-zero exit before Phase 3", () => {
+  const doc = readFileSync(path.join(pluginRoot, "references", "sync-migration.md"), "utf8");
+  const [start, end] = [doc.indexOf("## Phase 2"), doc.indexOf("## Phase 3")];
+  assert.ok(start !== -1 && end > start, "sync-migration.md lost its Phase 2 or Phase 3 heading");
+  const phase2 = doc.slice(start, end);
+  assert.match(phase2, /verbatim/);
+  assert.match(phase2, /exits non-zero/);
+  assert.match(phase2, /stop[^.]*before\s+Phase 3/);
+});
+
+test("/sync's Phase 3 skip conditions point to Phase 2's init-failure stop", () => {
+  const doc = readFileSync(path.join(pluginRoot, "references", "sync-migration.md"), "utf8");
+  const [start, end] = [doc.indexOf("**Skip conditions:**"), doc.indexOf("**Step A0")];
+  assert.ok(start !== -1 && end > start, "sync-migration.md lost Phase 3's Skip conditions");
+  assert.match(doc.slice(start, end), /init failed[^.]*Phase 2/);
+});

@@ -31,7 +31,6 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
-import { runCli } from "./lib/cli.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 import { warnStale } from "./lib/stale-entries.mjs";
 
@@ -177,19 +176,17 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (args.includes("--selftest")) {
     selftest();
   } else {
-    runCli(() => {
-      const remove = args.includes("--remove");
-      const r = run({ remove, explore: args.includes("--explore") });
-      /** @type {string[]} */
-      const lines = [];
-      if (r.imported)
-        lines.push(`${remove ? "Removed harry import from" : "Wired HARRY.md into"} ${r.path}`);
-      if (r.snapshot) lines.push(`Deployed HARRY.md snapshot to ${snapshotPath()}`);
-      if (r.explore === "deployed") lines.push(`Deployed Explore override to ${explorePath()}`);
-      if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
-      if (lines.length === 0)
-        lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
-      console.log(lines.join("\n"));
-    });
+    const remove = args.includes("--remove");
+    const r = run({ remove, explore: args.includes("--explore") });
+    /** @type {string[]} */
+    const lines = [];
+    if (r.imported)
+      lines.push(`${remove ? "Removed harry import from" : "Wired HARRY.md into"} ${r.path}`);
+    if (r.snapshot) lines.push(`Deployed HARRY.md snapshot to ${snapshotPath()}`);
+    if (r.explore === "deployed") lines.push(`Deployed Explore override to ${explorePath()}`);
+    if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
+    if (lines.length === 0)
+      lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
+    console.log(lines.join("\n"));
   }
 }

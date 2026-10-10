@@ -35,7 +35,9 @@ What it does:
   no marker to distinguish origin, this also removes a line the user typed in by
   hand that happens to match exactly.
 
-Return the command output verbatim.
+Return the command output verbatim. If init exits non-zero — for a bad target it
+prints one `harry: <message>` line — say that Phase 2 failed and stop before
+Phase 3, which would scan that same target.
 
 ## Phase 3 — Legacy migration (agent-driven)
 
@@ -49,6 +51,7 @@ owns nothing deterministically — every move is gated on the user's answers.
   or migrate. (Uninstalling harry must not migrate anything. `--remove` wins over
   `--force`.)
 - **Codex build:** Skip if uninstalling — do not scan or migrate.
+- **Both builds:** Skip if init failed in Phase 2 (the stop rule there).
 
 **Step A0 — Migrate harry's own pre-convergence layout, if present.** Before
 the generic scan below, check for the old per-type `.local/` directories this
