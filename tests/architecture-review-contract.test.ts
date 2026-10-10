@@ -124,7 +124,7 @@ test("AC-2: a bug fix that alters a shape is not exempt", () => {
 test("AC-2: with no item (Trivial) the skip line is written in the reply", () => {
   assert.match(
     step2("No item (Trivial)."),
-    /There is no ## Progress: every line this step would write there is written in the reply instead\./,
+    /There is no ## Progress or ## Follow-ups: every line this step would write to either is written in the reply instead\./,
     "a Trivial unit's skip line no longer goes to the reply",
   );
 });
@@ -446,7 +446,7 @@ test("AC-5: every round records the head it reviews", () => {
   );
   assert.match(
     step2("No item (Trivial)."),
-    /There is no ## Progress: every line this step would write there is written in the reply instead\./,
+    /There is no ## Progress or ## Follow-ups: every line this step would write to either is written in the reply instead\./,
     "a Trivial unit's head line no longer goes to the reply",
   );
 });
@@ -627,7 +627,7 @@ test("AC-5: with no item (Trivial) rulings go to the reply and fix now fixes in 
   const p = step2("No item (Trivial).");
   assert.match(
     p,
-    /every line this step would write there is written in the reply instead\./,
+    /every line this step would write to either is written in the reply instead\./,
     "Trivial rulings left the reply",
   );
   assert.match(
@@ -734,5 +734,21 @@ test("the architecture-review Output carries the opening's round-2 Minor excepti
     plain(section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "Severity is judged")),
     exception,
     "Output has the user rule every finding, contradicting the opening",
+  );
+});
+
+test("with no item, a later round reads its inputs back from the replies", () => {
+  assert.match(
+    step2("No item (Trivial)."),
+    /A later round reads from those replies what it would read in those sections: the round number and head the most recent round recorded, the rulings so far and the Minor findings from round 2 on\./,
+    "a no-item round no longer reads the last head, rulings and Minors back from the replies",
+  );
+});
+
+test("Round cap leaves the no-item rule to the No item paragraph", () => {
+  assert.doesNotMatch(
+    step2("Round cap."),
+    /no item|in the reply/i,
+    "Round cap carries its own no-item rule again; the No item paragraph owns it",
   );
 });
