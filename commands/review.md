@@ -41,9 +41,9 @@ carries `references/architecture-review.md` in place of the per-diff standard.
 And it scopes findings to the shapes the change adds or alters, rather than to
 the diff's lines. Everything else stays the same — target resolution, the
 read-only spawn, the output and failure handling. It is how the finishing
-skill's architecture review (step 2) runs out of session on the Codex build; the
-shape list, the item's `## Why / What` and acceptance criteria, the recent
-history and any prior rulings go in through `--context @<file>`.
+skill's architecture review (step 2) runs out of session on the Codex build. Finishing
+passes the context file its **Reviewer.** paragraph lists for the Codex build
+(`skills/finishing/SKILL.md`, step 2) through `--context @<file>`.
 
 ## Execution mode
 

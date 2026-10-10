@@ -705,3 +705,34 @@ test("the architecture-review reference says its reviewer gets it in full", () =
     "the reference's hand-off list no longer says the reviewer gets this file in full",
   );
 });
+
+test("the review commands point at step 2's Reviewer list instead of copying it", () => {
+  for (const rel of ["commands/review.md", "codex-skills/review/SKILL.md"]) {
+    const flag = plain(headingSection(read(rel), rel, "## `--architecture`"));
+    assert.match(
+      flag,
+      /Finishing passes the context file its Reviewer\. paragraph lists for the Codex build \(skills\/finishing\/SKILL\.md, step 2\) through --context @<file>\./,
+      `${rel} no longer points at finishing step 2's Reviewer list`,
+    );
+    assert.doesNotMatch(
+      flag,
+      /shape list|Why \/ What|acceptance criteria|git log|20 commits|history|rulings|Follow-ups/i,
+      `${rel} copies the hand-off list again`,
+    );
+  }
+});
+
+test("the architecture-review Output carries the opening's round-2 Minor exception", () => {
+  const exception =
+    /Minor finding from round 2 on\b.{0,40}goes to the item's ## Follow-ups without a ruling/;
+  assert.match(
+    plain(section(read(ARCH_REVIEW), ARCH_REVIEW, "# Architecture Review", "A **shape**")),
+    exception,
+    "the opening lost the round-2 Minor exception",
+  );
+  assert.match(
+    plain(section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "Severity is judged")),
+    exception,
+    "Output has the user rule every finding, contradicting the opening",
+  );
+});

@@ -105,8 +105,9 @@ shape left as it is belongs to that rubric, not here.
 Every finding carries five things: **where** (`file:line`, or the shape's name
 when it spans files), **why** it matters, its **severity**, the **structural fix**,
 and your **recommended ruling**. The structural fix is the long-term one, never a workaround
-(`references/review-rubric.md`, **Engineering judgment**). The user rules each finding one of three ways, and you recommend one
-of the same three:
+(`references/review-rubric.md`, **Engineering judgment**). The user rules each finding one of three ways. A Minor finding from round 2 on is the
+exception: it goes to the item's `## Follow-ups` without a ruling. You recommend one of the
+same three for every finding:
 
 - **fix now** — fix it before this merges. The work goes back to be fixed, and
   this review then re-checks the shapes the fix changed.
