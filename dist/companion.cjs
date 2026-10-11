@@ -166,11 +166,7 @@ function spawnCodex(args, options) {
     return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
   }
   return new Promise((resolve3) => {
-    const child = (0, import_node_child_process.spawn)(command, args, {
-      cwd: options.cwd,
-      env: options.env,
-      stdio: ["pipe", "ignore", options.logFd]
-    });
+    let child;
     const forward = (signal) => {
       try {
         child.kill(signal);
@@ -183,6 +179,16 @@ function spawnCodex(args, options) {
       for (const s of FORWARDED_SIGNALS) process.off(s, forward);
     };
     for (const s of FORWARDED_SIGNALS) process.on(s, forward);
+    try {
+      child = (0, import_node_child_process.spawn)(command, args, {
+        cwd: options.cwd,
+        env: options.env,
+        stdio: ["pipe", "ignore", options.logFd]
+      });
+    } catch (err) {
+      stopForwarding();
+      throw err;
+    }
     let spawnError;
     let stdinError;
     child.on("error", (err) => {

@@ -97,6 +97,21 @@ test("spawnCodex never runs a cwd `codex` through an empty PATH entry, and runs 
   assert.deepEqual(readdirSync(markers), [`ran-${path.basename(bin)}`]);
 });
 
+test("spawnCodex removes its signal listeners when spawn throws synchronously", async () => {
+  const markers = tempDir("harry-rc-markers-");
+  const bin = codexDir("harry-rc-bin-", markers);
+  const signals = ["SIGTERM", "SIGINT", "SIGHUP"] as const;
+  const before = signals.map((s) => process.listenerCount(s));
+  await assert.rejects(
+    spawnCodex(["exec", "bad\0arg"], { cwd: bin, input: "", logFd: 2, env: { PATH: bin } }),
+    { code: "ERR_INVALID_ARG_VALUE" },
+  );
+  assert.deepEqual(
+    signals.map((s) => process.listenerCount(s)),
+    before,
+  );
+});
+
 test("codexMissing: only ENOENT — a non-zero exit is a real failure, not a missing CLI", () => {
   const enoent = { error: Object.assign(new Error("spawn codex ENOENT"), { code: "ENOENT" }) };
   assert.equal(codexMissing({ ...enoent, status: null }), true);
@@ -380,6 +395,49 @@ for (const [command, signal] of [
     }
   });
 }
+
+test("a signal that lands as spawn returns still takes codex with it", async () => {
+  const dir = tempDir("harry-rc-spawnrace-");
+  const bin = path.join(dir, "bin");
+  mkdirSync(bin);
+  const pidFile = path.join(dir, "codex.pid");
+  writeFileSync(path.join(bin, "codex"), "#!/bin/sh\nexec sleep 30\n");
+  chmodSync(path.join(bin, "codex"), 0o755);
+  const runCodex = path.join(REPO_ROOT, "src/lib/run-codex.ts");
+  const script = `
+    import { ChildProcess } from "node:child_process";
+    import { writeFileSync } from "node:fs";
+    import { spawnCodex } from ${JSON.stringify(runCodex)};
+    const spawn = ChildProcess.prototype.spawn;
+    ChildProcess.prototype.spawn = function (...args) {
+      const result = spawn.apply(this, args);
+      writeFileSync(${JSON.stringify(pidFile)}, String(this.pid));
+      process.kill(process.pid, "SIGTERM");
+      return result;
+    };
+    spawnCodex(["exec", "-"], { cwd: ${JSON.stringify(dir)}, input: "", logFd: 2, env: { PATH: ${JSON.stringify(`${bin}${path.delimiter}${process.env.PATH ?? ""}`)} } });
+  `;
+  const companion = spawn(process.execPath, ["--input-type=module", "-e", script], {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderr = "";
+  companion.stderr.on("data", (d) => {
+    stderr += d;
+  });
+  const exited = new Promise<[number | null, NodeJS.Signals | null]>((resolve) =>
+    companion.on("exit", (code, sig) => resolve([code, sig])),
+  );
+  let pid = 0;
+  try {
+    const [code, signal] = await exited;
+    assert.deepEqual({ code, signal }, { code: null, signal: "SIGTERM" }, stderr);
+    pid = Number(readFileSync(pidFile, "utf8").trim());
+    await waitFor(() => !alive(pid), `codex (pid ${pid}) to exit with the companion`);
+  } finally {
+    companion.kill("SIGKILL");
+    if (pid && alive(pid)) process.kill(pid, "SIGKILL");
+  }
+});
 
 test("a signal whose forward to codex throws still re-raises on the companion", async () => {
   // Stand in a ChildProcess.kill that throws: a throw inside the forward must neither

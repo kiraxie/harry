@@ -15,7 +15,13 @@
  * output file each throw.
  */
 
-import { type SpawnSyncOptions, type SpawnSyncReturns, spawn, spawnSync } from "node:child_process";
+import {
+  type ChildProcess,
+  type SpawnSyncOptions,
+  type SpawnSyncReturns,
+  spawn,
+  spawnSync,
+} from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, rmSync, statSync } from "node:fs";
 
 import { notFoundError, resolveOnPath } from "./path-search.ts";
@@ -92,11 +98,7 @@ export function spawnCodex(
     return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
   }
   return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      env: options.env,
-      stdio: ["pipe", "ignore", options.logFd],
-    });
+    let child: ChildProcess;
     const forward = (signal: NodeJS.Signals): void => {
       try {
         child.kill(signal);
@@ -112,6 +114,16 @@ export function spawnCodex(
       for (const s of FORWARDED_SIGNALS) process.off(s, forward);
     };
     for (const s of FORWARDED_SIGNALS) process.on(s, forward);
+    try {
+      child = spawn(command, args, {
+        cwd: options.cwd,
+        env: options.env,
+        stdio: ["pipe", "ignore", options.logFd],
+      });
+    } catch (err) {
+      stopForwarding();
+      throw err;
+    }
 
     let spawnError: Error | undefined;
     let stdinError: Error | undefined;
