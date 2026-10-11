@@ -268,6 +268,35 @@ function alive(pid: number): boolean {
   }
 }
 
+function processState(pid: number): string {
+  let status: string;
+  try {
+    status = readFileSync(`/proc/${pid}/status`, "utf8")
+      .split("\n")
+      .filter((l) => /^(Name|State|PPid|SigIgn|SigBlk|SigCgt):/.test(l))
+      .join(" | ");
+  } catch (err) {
+    status = String(err);
+  }
+  let tree: string;
+  try {
+    const [header, ...rows] = execFileSync("ps", ["-e", "-o", "pid,ppid,stat,comm"], {
+      encoding: "utf8",
+    }).split("\n");
+    const ids = (row: string): number[] => row.trim().split(/\s+/, 2).map(Number);
+    const parent = rows.map(ids).find(([p]) => p === pid)?.[1];
+    const near = [pid, process.pid];
+    const kept = rows.filter((r) => {
+      const [p, pp] = ids(r);
+      return near.includes(p) || p === parent || near.includes(pp);
+    });
+    tree = [header, ...kept].join("\n");
+  } catch (err) {
+    tree = String(err);
+  }
+  return `codex pid ${pid}, test pid ${process.pid}\n${status}\n${tree}`;
+}
+
 /** A repo on `main` with one commit and a dirty working tree, so review has a target. */
 function dirtyRepo(): string {
   const repo = tempDir("harry-rc-kill-repo-");
@@ -336,10 +365,15 @@ for (const [command, signal] of [
       // The companion still dies by the signal, as it did before forwarding it.
       assert.equal(await exited, signal);
       const pid = codexPid;
-      await waitFor(
-        () => !alive(pid),
-        `codex (pid ${pid}) to exit after the companion's ${signal}`,
-      );
+      try {
+        await waitFor(
+          () => !alive(pid),
+          `codex (pid ${pid}) to exit after the companion's ${signal}`,
+        );
+      } catch (err) {
+        console.error(processState(pid));
+        throw err;
+      }
     } finally {
       companion.kill("SIGKILL");
       if (codexPid !== undefined && alive(codexPid)) process.kill(codexPid, "SIGKILL");
