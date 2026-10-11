@@ -140,7 +140,7 @@ milestone edit.
   chooses Back to backlog, sets `status: backlog`, appends a `## Notes`
   line, removes its `## In flight` line and flips its `INDEX.md` item line
   to backlog; the file does not move.
-- **Writers**: who adds work to the store besides the flush.
+- **Writers**: who adds work to the store besides the flush and the discard.
   - Backlog items are also created directly by:
     - brainstorming's residue manifest, at design time;
     - `/grill`'s residue manifest, on the user's nod;

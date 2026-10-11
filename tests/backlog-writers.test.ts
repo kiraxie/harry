@@ -12,23 +12,28 @@ const flat = (text: string): string => text.replace(/\s+/g, " ").replace(/\*\*/g
 const DOC_TYPES = "references/doc-types.md";
 const MENTION = /status: backlog|## Follow-ups/;
 
-type Role = { writer: string[] } | { reader: string } | { repoLocal: string };
-type Entry = { file: string; snippet: string; lines?: number } & Role;
+type Role = { writer: string[] } | { rule: string } | { reader: string } | { repoLocal: string };
+type Entry = { file: string; snippet: string; sentences?: number } & Role;
 
 const KNOWN: Entry[] = [
   {
     file: "skills/brainstorming/SKILL.md",
-    snippet: "5. **Get approval**",
+    snippet: "The manifest's dispositions are *commitments*",
     writer: ["brainstorming's residue manifest"],
   },
   {
     file: "skills/brainstorming/SKILL.md",
-    snippet: "6. **Write the item**",
+    snippet: "promote an existing `status: backlog` item",
+    reader: "promotes a backlog item in place",
+  },
+  {
+    file: "skills/brainstorming/SKILL.md",
+    snippet: "Discharge step 5's manifest commitments",
     writer: ["brainstorming's residue manifest"],
   },
   {
     file: "skills/brainstorming/SKILL.md",
-    snippet: "The compressed path runs steps",
+    snippet: "The manifest's deferred lines land the same way",
     writer: ["brainstorming's residue manifest"],
   },
   {
@@ -43,7 +48,7 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/brainstorming/SKILL.md",
-    snippet: "its lines are `executing`'s to append. `## Follow-ups`",
+    snippet: "`## Follow-ups` MAY be created here at step 6",
     writer: ["brainstorming's residue manifest"],
   },
   {
@@ -53,7 +58,7 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/executing/SKILL.md",
-    snippet: "A small fix (",
+    snippet: "anything outside it → the item's `## Follow-ups`",
     writer: ["findings of any severity outside the fix range"],
   },
   {
@@ -83,8 +88,13 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "**Reviewer.**",
+    snippet: "On a later round, also hand it every ruling",
     reader: "hands the reviewer the Minors already in Follow-ups",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "Instead of the diff file, in one command",
+    reader: "puts the Minors already in Follow-ups in the Codex build's context file",
   },
   {
     file: "skills/finishing/SKILL.md",
@@ -93,7 +103,7 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "**Round cap.**",
+    snippet: "From round 2 on, each Minor finding goes to the item's `## Follow-ups`",
     writer: ["finishing's architecture review from round 2 on"],
   },
   {
@@ -103,13 +113,28 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "c. **Flush Follow-ups**",
-    writer: ["Follow-ups flush"],
+    snippet: "**Flush Follow-ups** — read",
+    rule: "Follow-ups flush",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "For each line, create a new `.local/items/<new-slug>.md`",
+    rule: "Follow-ups flush",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "Then clear the source item's `## Follow-ups` section.",
+    rule: "Follow-ups flush",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "Non-Goals do NOT get this treatment",
+    rule: "Follow-ups flush",
   },
   {
     file: "skills/finishing/SKILL.md",
     snippet: "- **Back to backlog**",
-    writer: ["Active → backlog (discard)"],
+    rule: "Active → backlog (discard)",
   },
   {
     file: "references/debt-audit.md",
@@ -134,7 +159,7 @@ const KNOWN: Entry[] = [
   {
     file: "references/review-rubric.md",
     snippet: "#### Minor (nice to have — item's `## Follow-ups` for final triage)",
-    lines: 2,
+    sentences: 2,
     reader: "report-template headings, in the review and re-review forms",
   },
   {
@@ -144,7 +169,7 @@ const KNOWN: Entry[] = [
   },
   {
     file: "references/architecture-review.md",
-    snippet: "`## Follow-ups` from round 2 on. Do not raise",
+    snippet: "and the Minor findings sent to `## Follow-ups` from round 2 on.",
     reader: "tells the reviewer not to raise Minors already in Follow-ups",
   },
   {
@@ -172,48 +197,73 @@ const prose = (): string[] =>
     .filter((f) => f !== DOC_TYPES)
     .sort();
 
-const mentions = (file: string): string[] =>
-  read(file)
+const BLOCK_START = /^\s*(?:$|#|[-*] |\d+\. |[a-z]\. |\||```|<!--)/;
+
+const sentences = (text: string): string[] =>
+  text
     .split("\n")
-    .filter((l) => MENTION.test(l));
+    .reduce<string[]>((blocks, line) => {
+      if (BLOCK_START.test(line) || blocks.length === 0) blocks.push(line.trim());
+      else blocks[blocks.length - 1] += ` ${line.trim()}`;
+      return blocks;
+    }, [])
+    .flatMap((block) => block.split(/(?<=[.!?])\s+(?=\S)/))
+    .map((s) => s.trim());
 
-const lifecycle = (): string =>
-  flat(headingSection(read(DOC_TYPES), DOC_TYPES, "## Lifecycle rules"));
+const mentions = (file: string): string[] => sentences(read(file)).filter((s) => MENTION.test(s));
 
-test("every line that mentions backlog items or Follow-ups is on the known list", () => {
+const lifecycleBullets = (): Map<string, string> =>
+  new Map(
+    headingSection(read(DOC_TYPES), DOC_TYPES, "## Lifecycle rules")
+      .split(/\n(?=- \*\*)/)
+      .flatMap((b) => {
+        const name = /^- \*\*(.+?)\*\*:/.exec(b)?.[1];
+        return name === undefined ? [] : [[name, flat(b)] as const];
+      }),
+  );
+
+test("every sentence that mentions backlog items or Follow-ups is on the known list", () => {
   const unlisted = prose().flatMap((file) =>
     mentions(file)
-      .filter((line) => !KNOWN.some((k) => k.file === file && line.includes(k.snippet)))
-      .map((line) => `${file}: ${line.trim().slice(0, 100)}`),
+      .filter((s) => !KNOWN.some((k) => k.file === file && s.includes(k.snippet)))
+      .map((s) => `${file}: ${s.trim().slice(0, 100)}`),
   );
   assert.deepEqual(
     unlisted,
     [],
-    "class each new line: a writer named in doc-types' Lifecycle rules, or a reader with its reason",
+    "class each new sentence: a writer named in doc-types' Writers bullet, a Lifecycle rule of its own, a reader with its reason, or repo-local",
   );
 });
 
-test("every known entry matches as many mention lines as it declares", () => {
+test("every known entry matches as many mention sentences as it declares", () => {
   const files = prose();
   const off = KNOWN.map((k) => ({
     k,
-    n: files.includes(k.file) ? mentions(k.file).filter((l) => l.includes(k.snippet)).length : 0,
-  })).filter(({ k, n }) => n !== (k.lines ?? 1));
+    n: files.includes(k.file) ? mentions(k.file).filter((s) => s.includes(k.snippet)).length : 0,
+  })).filter(({ k, n }) => n !== (k.sentences ?? 1));
   assert.deepEqual(
     off.map(({ k, n }) => `${k.file}: ${k.snippet} (matches ${n})`),
     [],
-    "remove a stale entry, or narrow a snippet that now covers more than its lines",
+    "remove a stale entry, or narrow a snippet that now covers more than its sentences",
   );
 });
 
-test("doc-types' Lifecycle rules name every writer", () => {
-  const rules = lifecycle();
+test("doc-types' Writers bullet names every writer", () => {
+  const list = lifecycleBullets().get("Writers") ?? "";
   const missing = KNOWN.flatMap((k) =>
     "writer" in k
-      ? k.writer.filter((w) => !rules.includes(flat(w))).map((w) => `${k.file}: ${w}`)
+      ? k.writer.filter((w) => !list.includes(flat(w))).map((w) => `${k.file}: ${w}`)
       : [],
   );
-  assert.deepEqual(missing, [], "doc-types' Lifecycle rules no longer name these writers");
+  assert.deepEqual(missing, [], "doc-types' Writers bullet no longer names these writers");
+});
+
+test("the writers outside the Writers bullet are Lifecycle rules of their own", () => {
+  const bullets = lifecycleBullets();
+  const missing = [...new Set(KNOWN.flatMap((k) => ("rule" in k ? [k.rule] : [])))].filter(
+    (rule) => !bullets.has(rule),
+  );
+  assert.deepEqual(missing, [], "doc-types' Lifecycle rules no longer have these bullets");
 });
 
 test("doc-types never calls the flush the only source of backlog items, anywhere in the file", () => {
