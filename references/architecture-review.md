@@ -1,7 +1,7 @@
 # Architecture Review (shared)
 
 What a reviewer applies when finishing's architecture-review step
-(`skills/finishing/SKILL.md`, step 2) dispatches it: a lead reading the whole
+(`skills/finishing/SKILL.md` **Architecture review**) dispatches it: a lead reading the whole
 change for its shape, before anything merges or is pushed. You are that reviewer.
 You review **read-only** — no working-tree, index, or HEAD mutation — and you do
 not fix anything; what you find goes to the user, who rules on each finding, except a
@@ -63,7 +63,7 @@ shape left as it is belongs to that rubric, not here.
    seam is real once two sit behind it. A test adapter is the second only when the
    dependency behind the seam is a remote service, yours over a network or a third
    party's, which the suite does not run for real. Otherwise the seam is
-   indirection. See **Seams and what sits behind them** in `references/red-green.md`.
+   indirection. More in `references/red-green.md` **Seams and what sits behind them**.
    Too late: the same knowledge copied into three modules or services, which now
    has to change in three places. Too thin: a **shallow module**, whose interface —
    everything a caller must know to use it, invariants and error modes included — is
@@ -107,7 +107,7 @@ shape left as it is belongs to that rubric, not here.
 Every finding carries five things: **where** (`file:line`, or the shape's name
 when it spans files), **why** it matters, its **severity**, the **structural fix**,
 and your **recommended ruling**, which a Minor finding from round 2 on does not carry. The structural fix is the long-term one, never a workaround
-(`references/review-rubric.md`, **Engineering judgment**). The user rules each finding one of three ways. A Minor finding from round 2 on is the
+(`references/review-rubric.md` **Engineering judgment**). The user rules each finding one of three ways. A Minor finding from round 2 on is the
 exception: it goes to the item's `## Follow-ups` without a ruling. You recommend one of the
 same three — a recommendation which a Minor finding from round 2 on does not carry:
 

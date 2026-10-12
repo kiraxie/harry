@@ -1,8 +1,8 @@
 # Fix Check (shared)
 
 What the `referee` applies before a review finding's fix is built: executing's fix
-wave (`skills/executing/SKILL.md`, step 4) and finishing's **fix now** ruling
-(`skills/finishing/SKILL.md`, step 2) dispatch it. You are that referee. You did not
+wave (`skills/executing/SKILL.md` **One fix wave**) and finishing's **fix now** ruling
+(`skills/finishing/SKILL.md` **Architecture review**) dispatch it. You are that referee. You did not
 find the issue and you did not design the fix; your value is the wider view both of
 those were made without. You check **read-only** and fix nothing.
 

@@ -36,6 +36,7 @@ const proseFiles = [
   ...TOP_LEVEL_FILES.filter((f) => existsSync(path.join(repoRoot, f))),
   ...PROSE_DIRS.flatMap(listMarkdownFiles),
 ].filter((f) => f !== "CHANGELOG.md");
+const citeCorpus = [...proseFiles, "upstream.json"];
 
 // Three reference shapes:
 // 1. `${CLAUDE_PLUGIN_ROOT}/<path>` — path is everything after the prefix. Checked
@@ -267,7 +268,7 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
         failures.push(`evals/cases.jsonl:${idx + 1} -> law ${String(law)}`);
     });
 
-  for (const relFile of proseFiles) {
+  for (const relFile of citeCorpus) {
     const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
     // Matched on the whole text, so a citation wrapped across a line break and the
     // possessive form are checked too.
@@ -282,77 +283,188 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 });
 
 // ---------------------------------------------------------------------------
-// `See **Heading** in <reference>` pointers
+// Cross-file section citations
 //
-// The third citation form, and the one that has actually been breaking. The
-// path check above proves the FILE exists; the law-name check proves a law heading
-// resolves; neither says anything about a heading named inside another file.
-// Three consecutive units broke exactly this and were caught by review rather
-// than by the suite: a section was hoisted or renamed and the sentence pointing
-// at it kept its old name, or introduced bullets that no longer existed.
-//
-// The doors cite the heading WITHOUT the reference's `(one definition)` suffix
-// — `See **The apply steps — baseline snapshot, apply, report**` against
-// `## The apply steps — baseline snapshot, apply, report (one definition)` — so
-// a trailing parenthetical is stripped before comparing. Nothing else about the
-// heading is normalized: an em dash or casing change should fail, because it
-// means the door and the reference have stopped agreeing on the section's name.
-// One pattern for both the scan and its non-vacuity guard, so the guard proves
-// the regex the scan actually uses. `matchAll` clones a /g regex, so sharing it
-// carries no lastIndex state between uses.
-const SEE_POINTER_RE = /See \*\*(.+?)\*\* in\b/g;
+// One form: `path` **Name**. A name is a heading's core name — a leading `N. `,
+// a trailing ` — …`, then a trailing `(…)` dropped — or the bold label opening a
+// top-level numbered item, so a step renumbered or a subtitle reworded leaves its
+// citations standing. A name must be unique in its file. Laws keep their own
+// form, `HARRY.md **Heading**`, checked above.
+// The legacy forms resolve against nothing, so a rename broke them silently;
+// they fail here instead.
+const CITE_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`\s+\*\*([^*]+)\*\*/g;
+const LEGACY_FORMS: [string, RegExp, string[]][] = [
+  ["See **X** in", /See \*\*[^*]+\*\* in\b/g, ["See **Seams** in"]],
+  ["a path, then a quoted name", /\.md`?(?:'s)?,?\s+\\?"[A-Z]/g, ['`references/x.md`, "Seams"']],
+  ["a path, then a comma or 's", /\.md`(?:'s|,)\s+\*\*/g, ["`references/x.md`, **Seams**"]],
+  ["a name, then a step", /\*\*\s+step \d/g, ["**Steps** step 4"]],
+  [
+    "a path, then a category number",
+    /\.md`?(?:'s)?,?\s+\(?category \d/g,
+    ["`references/x.md` category 4"],
+  ],
+  [
+    "a path, then a bare step",
+    /(?:\.md`?|`)(?:'s)?,?\s+step \d/g,
+    ["`skills/x/SKILL.md`, step 2", "`skills/x` step 4"],
+  ],
+  [
+    "a skill's step with no path",
+    /\b(?:brainstorming|executing|finishing)`?(?:'s)?\s+step \d/g,
+    ["as executing step 4 does", "`skills/executing` step 4"],
+  ],
+  [
+    "a law named in plain text",
+    new RegExp(String.raw`HARRY\.md\`?(?:'s)?,?\s+(?:${LAW_HEADINGS.join("|")})\b`, "g"),
+    ["HARRY.md Tiers"],
+  ],
+  [
+    "a skill's step in parentheses",
+    /(?<!\/)\b(?:brainstorming|executing|finishing)(?!\/)[^`*]{0,60}?\(step \d\)/g,
+    ["the finishing skill's review (step 2)"],
+  ],
+];
+const coreName = (heading: string): string =>
+  heading
+    .replace(/^\d+\.\s+/, "")
+    .replace(/\s+—\s.*$/, "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
 
-test("every `See **Heading** in <reference>` names a heading that reference has", () => {
-  const headings = new Map<string, Set<string>>();
-  const headingsOf = (rel: string): Set<string> => {
-    let set = headings.get(rel);
-    if (!set) {
-      set = new Set(
-        Array.from(readFileSync(path.join(repoRoot, rel), "utf-8").matchAll(/^##+ (.+)$/gm), (m) =>
-          m[1].replace(/\s*\([^)]*\)\s*$/, "").trim(),
-        ),
-      );
-      headings.set(rel, set);
+type Name = { name: string; full: string };
+
+const namesIn = (text: string): Name[] => {
+  const lines = text.split("\n");
+  const names: Name[] = [];
+  let fence = "";
+  for (const line of lines) {
+    const run = FENCE_OPEN_RE.exec(line)?.[1];
+    if (run && (!fence || run.length >= fence.length)) {
+      fence = fence ? "" : run;
+      continue;
     }
-    return set;
-  };
-
-  const failures: string[] = [];
-
-  for (const relFile of proseFiles) {
-    const lines = readFileSync(path.join(repoRoot, relFile), "utf-8").split("\n");
-    lines.forEach((line, idx) => {
-      for (const m of line.matchAll(SEE_POINTER_RE)) {
-        // The path usually sits on the NEXT line (these sentences are wrapped),
-        // so look at the remainder of this line and the following one. A
-        // pointer with no path at all is a FAILURE, never a skip — that is the
-        // shape that would quietly excuse every future rename.
-        const window = `${line.slice(m.index ?? 0)}\n${lines[idx + 1] ?? ""}`;
-        const target = window.match(/references\/[\w./-]+\.md/)?.[0];
-        if (!target) {
-          failures.push(`${relFile}:${idx + 1} -> "${m[1]}" names no reference path`);
-          continue;
-        }
-        if (!existsSync(path.join(repoRoot, target))) {
-          failures.push(`${relFile}:${idx + 1} -> ${target} is missing`);
-          continue;
-        }
-        if (!headingsOf(target).has(m[1].trim())) {
-          failures.push(`${relFile}:${idx + 1} -> ${target} has no heading "${m[1]}"`);
-        }
-      }
-    });
+    if (fence) continue;
+    const h = /^#{2,} (.+)$/.exec(line);
+    if (h) {
+      const full = (h[1] as string).trim();
+      names.push({ name: coreName(full), full });
+      continue;
+    }
+    const label = /^\d+\. \*\*([^*]+)\*\*/.exec(line);
+    if (label) {
+      const name = (label[1] as string).replace(/[.:]$/, "").trim();
+      names.push({ name, full: name });
+    }
   }
+  return names;
+};
 
-  // Guards the parse, not the corpus. The corpus may legitimately hold no pointer
-  // (the last users went with references/review-orchestration.md), so the regex is
-  // proven against a literal instead — otherwise a regex that stopped matching
-  // would read the same as a corpus with nothing to check.
-  assert.ok(
-    [..."See **The apply steps** in".matchAll(SEE_POINTER_RE)].length === 1,
-    "the `See **X** in` regex has stopped matching, and this test now asserts nothing.",
+const namesOf = (rel: string): Name[] => namesIn(readFileSync(path.join(repoRoot, rel), "utf-8"));
+
+const resolveCitation = (target: string, name: string): string | null => {
+  if (!existsSync(path.join(repoRoot, target))) return `${target} is missing`;
+  const names = namesOf(target);
+  const matches = names.filter((n) => n.name === name);
+  if (matches.length > 1)
+    return `${target} **${name}** is ambiguous: ${matches.map((n) => `"${n.full}"`).join(", ")}`;
+  if (matches.length === 1) return null;
+  const full = names.find((n) => n.full === name);
+  if (full) return `${target} **${name}**: cite its core name **${full.name}**`;
+  return `${target} has no heading or step "${name}"`;
+};
+
+test("every cross-file citation names a heading or step its file has, once", () => {
+  const failures: string[] = [];
+  let seen = 0;
+  for (const relFile of citeCorpus) {
+    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
+    for (const m of text.matchAll(CITE_RE)) {
+      seen += 1;
+      const name = (m[2] as string).replace(/\s+/g, " ").trim();
+      const failure = resolveCitation(m[1] as string, name);
+      if (failure)
+        failures.push(`${relFile}:${text.slice(0, m.index).split("\n").length} -> ${failure}`);
+    }
+  }
+  assert.ok(seen > 0, "the citation pattern matched nothing; it is no longer checking anything");
+  const fixtures: [string, string, string | null][] = [
+    ["skills/executing/SKILL.md", "One fix wave", null],
+    [
+      "skills/executing/SKILL.md",
+      "Check the fixes first",
+      'skills/executing/SKILL.md has no heading or step "Check the fixes first"',
+    ],
+    [
+      "skills/brainstorming/SKILL.md",
+      "Full Flow (full depth)",
+      "skills/brainstorming/SKILL.md **Full Flow (full depth)**: cite its core name **Full Flow**",
+    ],
+  ];
+  assert.deepEqual(
+    namesIn(
+      "## 2. Top — sub (x)\n1. **Step one.** a\n   1. **Nested.** b\n**Paragraph.** c\n```\n1. **Fenced.** d\n```\n",
+    ).map((n) => n.name),
+    ["Top", "Step one"],
+    "a name now comes from a nested item, a bold paragraph or a fenced line",
   );
-  assert.deepEqual(failures, [], "pointers naming a heading their reference does not have");
+  for (const [target, name, expected] of fixtures)
+    assert.equal(
+      resolveCitation(target, name),
+      expected,
+      `the resolver misjudges ${target} "${name}"`,
+    );
+  for (const [target, name] of [
+    ["README.md", "Install"],
+    ["CLAUDE.md", "Plugin content"],
+  ] as const)
+    assert.match(
+      resolveCitation(target, name) ?? "",
+      / is ambiguous: ".+", ".+"/,
+      `the resolver no longer fails the ambiguous ${target} "${name}"`,
+    );
+  assert.deepEqual(failures, [], "citations pointing at a name their file lacks or repeats");
+});
+
+test("no cross-file citation uses a legacy form", () => {
+  const hits: string[] = [];
+  for (const [label, re, samples] of LEGACY_FORMS) {
+    for (const sample of samples)
+      assert.equal([...sample.matchAll(re)].length, 1, `the "${label}" rule no longer matches`);
+    for (const relFile of citeCorpus) {
+      const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
+      for (const m of text.matchAll(re))
+        hits.push(`${relFile}:${text.slice(0, m.index).split("\n").length} -> ${label}`);
+    }
+  }
+  assert.deepEqual(hits, [], "cite a section or step as `path` **Name**");
+});
+
+const PATH_THEN_PLAIN_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`(?:'s|,)?\s+(?!\*\*)/g;
+
+const plainHeadingCitations = (text: string): { index: number; target: string; name: string }[] =>
+  [...text.matchAll(PATH_THEN_PLAIN_RE)].flatMap((m) => {
+    const target = m[1] as string;
+    if (!existsSync(path.join(repoRoot, target))) return [];
+    const rest = text.slice((m.index ?? 0) + m[0].length).toLowerCase();
+    const name = namesOf(target)
+      .map((n) => n.name)
+      .find((n) => rest.startsWith(n.toLowerCase()) && !/^[\w-]/.test(rest.slice(n.length)));
+    return name ? [{ index: m.index ?? 0, target, name }] : [];
+  });
+
+test("no cross-file citation names a heading in plain text", () => {
+  assert.equal(
+    plainHeadingCitations("per `references/grilling.md`'s Handoff, then").length,
+    1,
+    "the plain-text heading check no longer matches",
+  );
+  const hits = citeCorpus.flatMap((relFile) => {
+    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
+    return plainHeadingCitations(text).map(
+      (c) => `${relFile}:${text.slice(0, c.index).split("\n").length} -> ${c.target} "${c.name}"`,
+    );
+  });
+  assert.deepEqual(hits, [], "cite a heading as `path` **Heading**, not in plain text");
 });
 
 test("every reference is cited by path from a shipped file other than itself", () => {
@@ -391,31 +503,4 @@ test("no tracked file but the changelog cites a law by the retired section-numbe
       .flatMap((line, idx) => (/§ ?\d/.test(line) ? [`${rel}:${idx + 1}`] : []));
   });
   assert.deepEqual(hits, [], "a section-number law citation; cite the heading name instead");
-});
-
-test("every `<path>` **Heading** citation names a heading that file has", () => {
-  const failures: string[] = [];
-  let seen = 0;
-  for (const relFile of proseFiles) {
-    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
-    for (const m of text.matchAll(
-      /`((?:skills|references|commands|codex-skills|agents)\/[\w./-]+\.md)`,?\s+\*\*([^*]+)\*\*/g,
-    )) {
-      seen += 1;
-      const [target, name] = [m[1] as string, (m[2] as string).replace(/\s+/g, " ").trim()];
-      const line = text.slice(0, m.index).split("\n").length;
-      if (!existsSync(path.join(repoRoot, target))) {
-        failures.push(`${relFile}:${line} -> ${target} is missing`);
-        continue;
-      }
-      const headings = Array.from(
-        readFileSync(path.join(repoRoot, target), "utf-8").matchAll(/^##+ (.+)$/gm),
-        (h) => (h[1] as string).trim(),
-      );
-      if (!headings.includes(name))
-        failures.push(`${relFile}:${line} -> ${target} has no heading "${name}"`);
-    }
-  }
-  assert.ok(seen > 0, "the citation pattern matched nothing; it is no longer checking anything");
-  assert.deepEqual(failures, [], "a heading citation pointing at a heading its file does not have");
 });

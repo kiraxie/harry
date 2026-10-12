@@ -112,11 +112,12 @@ test("AC-4: the architecture review's findings carry a structural fix", () => {
 });
 
 test("AC-12: tier-gates tiers a fix like a task, small only when Trivial and no test weakens", () => {
-  const s3 = section(
-    plain(path.join("references", "tier-gates.md")),
-    "references/tier-gates.md",
-    "Fixes inside a unit.",
-    "## ",
+  const s3 = flatten(
+    headingSection(
+      raw("references/tier-gates.md"),
+      "references/tier-gates.md",
+      "## Fixes inside a unit",
+    ),
   );
   const rule = /A fix inside a unit is tiered like a task[^;]*;[^.]*\./i.exec(s3)?.[0] ?? "";
   assert.match(
@@ -137,7 +138,7 @@ test("AC-5: executing's one fix wave applies the fix tier", () => {
   const wave = section(plain(EXECUTING), EXECUTING, "4. One fix wave.", "Codex build.");
   assert.match(
     wave,
-    /small fix \(references\/tier-gates\.md, Fixes inside a unit\)/i,
+    /small fix \(references\/tier-gates\.md Fixes inside a unit\)/i,
     "the wave lost the fix tier",
   );
   assert.doesNotMatch(
@@ -178,8 +179,13 @@ test("AC-6: executing applies the scope brake to the re-review", () => {
 });
 
 test("AC-5: tier-gates owns the small-fix rule and gives examples", () => {
-  const gates = plain(path.join("references", "tier-gates.md"));
-  const fixes = section(gates, "references/tier-gates.md", "Fixes inside a unit.", "## ");
+  const fixes = flatten(
+    headingSection(
+      raw("references/tier-gates.md"),
+      "references/tier-gates.md",
+      "## Fixes inside a unit",
+    ),
+  );
   assert.match(fixes, /A fix inside a unit is tiered like a task, whatever the unit's tier/i);
   assert.match(
     fixes,

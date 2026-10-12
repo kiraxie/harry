@@ -61,7 +61,7 @@ Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run buil
 ## Install (Codex CLI)
 
 harry also ships as a **Codex CLI** plugin — a deliberate partial-parity build, not
-full feature parity (see `CLAUDE.md`'s "Codex CLI compatibility" section for exactly
+full feature parity (see `CLAUDE.md` **Codex CLI compatibility** for exactly
 what's degraded or missing). Requires the `codex` CLI on `PATH`, logged in
 (`codex login`).
 

@@ -92,7 +92,7 @@ test("AC-12: the findings list is a file Progress names, and a resume reads it",
 test("AC-13: /audit dispatches only analyst; Step 1b is the session's own script", () => {
   const orchestration = plain(path.join("references", "audit", "ORCHESTRATION.md"));
   assert.match(orchestration, /every research and general agent is harry:analyst/);
-  assert.match(orchestration, /Subagents in Round 1 \(Step 2\)/);
+  assert.match(orchestration, /Subagents in Round 1 \(references\/audit\/RECON\.md Step 2\)/);
   const recon = plain(path.join("references", "audit", "RECON.md"));
   assert.match(recon, /Run this as a script yourself: it is deterministic, so it needs no agent/);
   assert.doesNotMatch(recon, /Assign this to a research agent/);

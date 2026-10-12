@@ -54,8 +54,8 @@ same violation as an undefined term, just wearing plain words.
   pacing: even without a single hard word, a second unestablished idea in the same
   message costs the reader the same capacity a hard word would. One carve-out: a
   layer the reader asked for may carry the concepts that layer is made of. Walking
-  through a design the user asked to see is one such layer — `skills/brainstorming`
-  step 4 covers architecture, components, data flow, error handling and testing, and
+  through a design the user asked to see is one such layer — `skills/brainstorming/SKILL.md`
+  **Present the design** covers architecture, components, data flow, error handling and testing, and
   a section of the walkthrough is not a new idea arriving unasked. Anything the
   reader did not ask for still counts against the limit.
 - **Audience: a capable adult who has not read this codebase.** Assume competence,

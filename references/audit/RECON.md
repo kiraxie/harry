@@ -38,7 +38,7 @@ Launch the adapters in parallel (they're independent). Write each tool's raw out
 
 ## Step 1b — Hoist-candidate funnel: Stage A (deterministic candidate generation)
 
-Same-intent code that drifted apart evades token clone detectors *because* it drifted — a distinct signal from the token-level duplication tool above, and it belongs in the substrate for the same reason: this stage only gathers facts, it doesn't judge them. Pure LLM comparison of every module against every other is O(n²) and unaffordable, so generate candidates deterministically here in Round 1 (high recall, cheap). Round 2's dimension hunters don't adjudicate these — a dedicated Stage B step does, once Round 2 starts (see DEEP-DIVE.md "Hoist-candidate funnel — Stage B").
+Same-intent code that drifted apart evades token clone detectors *because* it drifted — a distinct signal from the token-level duplication tool above, and it belongs in the substrate for the same reason: this stage only gathers facts, it doesn't judge them. Pure LLM comparison of every module against every other is O(n²) and unaffordable, so generate candidates deterministically here in Round 1 (high recall, cheap). Round 2's dimension hunters don't adjudicate these — a dedicated Stage B step does, once Round 2 starts (see `references/audit/DEEP-DIVE.md` **Hoist-candidate funnel**).
 
 Take the **union** of these three signals. They're cheap and over-generate on purpose — noise here only costs one wasted Stage-B comparison later; a miss is the only real loss. Run this as a script yourself: it is deterministic, so it needs no agent. It produces a candidate list, each entry a pair/cluster of locations plus which signal(s) fired, which you write to `substrate/hoist-candidates.json`.
 

@@ -10,7 +10,7 @@ Every Round 2 agent prompt MUST establish, either by pasting the content inline 
 
 1. **`intended-architecture.md`** — including its "framework idioms — DO NOT flag" list.
 2. The **substrate facts** relevant to the agent's scope (the dead-code lines for its package, the cycles it's in, its duplication hits, its churn rank) — these are usually short enough to paste inline.
-3. The agent's **scope and dimension(s)**, with the dimension's *bar* from SCAN-DIMENSIONS.md. An agent given dimension 11 also reads `references/red-green.md` (under the plugin root, like the audit references) first — its "What a good test is" section is the standard that dimension judges tests by.
+3. The agent's **scope and dimension(s)**, with the dimension's *bar* from SCAN-DIMENSIONS.md. An agent given dimension 11 also reads `references/red-green.md` (under the plugin root, like the audit references) first — `references/red-green.md` **What a good test is** is the standard that dimension judges tests by.
 4. The **hunting methodology** below.
 5. The **finding contract** below.
 
@@ -104,7 +104,7 @@ If your scope is genuinely clean, say so — "no structural findings clearing th
 
 ## Hoist-candidate funnel (dimension 2) — Stage B: adjudicate
 
-Same-intent code that drifted apart evades token clone detectors *because* it drifted. Pure LLM comparison of every module against every other is O(n²) and unaffordable, so Round 1 already generated candidates deterministically (Stage A — high recall, cheap; see RECON.md "Step 1b") and wrote them to `substrate/hoist-candidates.json`. This is the same shape as the main hunt→validate flow, applied to reuse: Stage A over-generates on purpose, Stage B below reads the real code and adjudicates precisely.
+Same-intent code that drifted apart evades token clone detectors *because* it drifted. Pure LLM comparison of every module against every other is O(n²) and unaffordable, so Round 1 already generated candidates deterministically (Stage A — high recall, cheap; see `references/audit/RECON.md` **Step 1b**) and wrote them to `substrate/hoist-candidates.json`. This is the same shape as the main hunt→validate flow, applied to reuse: Stage A over-generates on purpose, Stage B below reads the real code and adjudicates precisely.
 
 ### Stage B — adjudicate each candidate with an agent that reads both sides
 

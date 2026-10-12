@@ -18,7 +18,7 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 ## 2. Reusability & hoist candidates (same-intent code that drifted apart)
 
-**What:** Logic that exists in more than one place with the same purpose but a divergent implementation — the classic outcome of merging two codebases, or of two teams solving the same problem independently. Token-level clone detectors miss these *because* they drifted. This dimension has its own two-stage funnel: Stage A (deterministic candidate generation) runs in Round 1 — see RECON.md "Step 1b"; Stage B (LLM adjudication) runs in Round 2 — see DEEP-DIVE.md "Hoist-candidate funnel."
+**What:** Logic that exists in more than one place with the same purpose but a divergent implementation — the classic outcome of merging two codebases, or of two teams solving the same problem independently. Token-level clone detectors miss these *because* they drifted. This dimension has its own two-stage funnel: Stage A (deterministic candidate generation) runs in Round 1 — see `references/audit/RECON.md` **Step 1b**; Stage B (LLM adjudication) runs in Round 2 — see `references/audit/DEEP-DIVE.md` **Hoist-candidate funnel**.
 
 **Seed:** cross-boundary symbol/filename fuzzy matches; shared-external-dependency fingerprints; git provenance (files merged in from another repo; prior hoist PRs).
 
@@ -86,7 +86,7 @@ A test that exists but guards nothing is not a hole — it belongs to dimension 
 
 **What:** The mirror image of dimensions 1 and 2 — code that carries *more*
 abstraction, flexibility, or indirection than its current call sites earn:
-single-implementation interfaces (see `references/architecture-review.md` category 4
+single-implementation interfaces (see `references/architecture-review.md` **Abstraction timing**
 for when one implementation is too early), factories with one product, config for a value
 that never changes, dead feature flags, speculative "for later" scaffolding,
 wrappers that only delegate, reinvented stdlib/native functionality.
@@ -97,7 +97,7 @@ churn (an abstraction nobody has touched since it was added is a stronger signal
 than one under active use).
 
 A module that may be shallow gets the deletion test in `references/architecture-review.md`
-(category 4): one that fails it is a candidate, which still needs the Bar's named cost below.
+**Abstraction timing**: one that fails it is a candidate, which still needs the Bar's named cost below.
 
 **Bar:** Same falsifiability anchor as every other dimension — a deletion
 recommendation still needs a named cost, or it's taste. "This `Strategy` interface
@@ -112,8 +112,8 @@ the drift test before recommending any deletion.
 ## 11. Low-value tests
 
 **What:** Tests that exist but guard nothing — they pass whether or not the behavior
-they name still works. Judge each against the "What a good test is" section of
-`references/red-green.md`: a mirror assertion, a change detector, a borrowed pass, an
+they name still works. Judge each against
+`references/red-green.md` **What a good test is**: a mirror assertion, a change detector, a borrowed pass, an
 overpromising name, a restated flag, a fixture doing the owner's work. Also: a second
 layer replaying a contract its owner already proves, and a test whose only job is
 keeping a test-only production seam (an export, flag, wrapper or hook nothing else

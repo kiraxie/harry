@@ -193,7 +193,7 @@ test("AC-4: a fix now ruling runs the referee's check before the AC is drafted, 
   );
   assert.match(
     ruling,
-    /fix now → first the fix check: dispatch ONE harry:referee over every fix now finding at once, handed what references\/fix-check\.md lists, as executing step 4 does[^→]*its line sets the fix the new AC states[^→]*→ draft a new AC/,
+    /fix now → first the fix check: dispatch ONE harry:referee over every fix now finding at once, handed what references\/fix-check\.md lists, as skills\/executing\/SKILL\.md One fix wave does[^→]*its line sets the fix the new AC states[^→]*→ draft a new AC/,
     "a fix now ruling no longer runs the referee's check before its AC is drafted",
   );
 });

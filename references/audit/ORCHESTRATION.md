@@ -76,10 +76,10 @@ All files written during the audit go in the output directory:
 - `REPORT.md` — human-readable report (Round 6)
 - `FINDINGS-DETAIL.md` — detailed evidence for MODERATE+ findings (Round 6)
 
-Subagents in Round 1 (Step 2), Round 2, Round 3, and Round 5 do NOT write files — they return results to you. You write all files. Rounds 4 and 6 have no subagents at all — structured-output assembly and report writing are yours directly, not delegated.
+Subagents in Round 1 (`references/audit/RECON.md` **Step 2**), Round 2, Round 3, and Round 5 do NOT write files — they return results to you. You write all files. Rounds 4 and 6 have no subagents at all — structured-output assembly and report writing are yours directly, not delegated.
 
 - **Claude Code build:** every `research` and `general` agent is `harry:analyst`
-  (`skills/executing/SKILL.md`, **Who writes**).
+  (`skills/executing/SKILL.md` **Who writes**).
 - **Codex build:** there is no per-subagent model parameter — model/effort comes
   from the session profile per the `/sync`-wired role map (`references/codex-role-mapping.md`).
 

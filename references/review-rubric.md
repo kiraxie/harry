@@ -1,7 +1,7 @@
 # Review Rubric (shared)
 
-The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md`,
-step 3, and its scoped re-review in step 4). The review standard is the files listed
+The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md` **Review**,
+and its scoped re-review in `skills/executing/SKILL.md` **One fix wave**). The review standard is the files listed
 below, and every review lane gets each of them in full: `dist/companion.cjs review` embeds
 them verbatim into its `codex exec review` prompt (`src/lib/review-prompts.ts`), so the
 analyst and Codex lanes judge by the same standard even though they run in isolated
@@ -45,7 +45,7 @@ mutation; its report is its final message.
 ## Engineering judgment
 
 These are the laws the session builds by and a reviewer judges a diff by, beyond its acceptance criteria. HARRY.md
-keeps only what must be known before acting (**Code**, **Root cause**); the rest lives here.
+keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root cause**); the rest lives here.
 
 - **Correctness and leaving no legacy outrank saving cost** — deferred cost lands on whoever
   steps on the buried mine. Be lazy about code volume, never about correctness: skip
@@ -138,7 +138,7 @@ Quality: Approved / Changes requested
 Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 ```
 
-**Re-review** (executing step 4) — handed the fix range, the open findings under
+**Re-review** (`skills/executing/SKILL.md` **One fix wave**) — handed the fix range, the open findings under
 their numbers, the fix check's verdicts and the last number in use, the reviewer reports in this form instead — no Strengths section, since it judges only the fix:
 
 ```
@@ -158,7 +158,7 @@ Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 
 Both verdicts (**spec** AND **quality**) are required — a report missing either
 is not a valid review. This binds every review run against this rubric; executing
-states the acceptance rule at its review step (step 3). The re-review is the one
+states the acceptance rule at its review step (`skills/executing/SKILL.md` **Review**). The re-review is the one
 exception: its spec was judged by the review it follows, so its Assessment carries
 Quality and Verdict only.
 

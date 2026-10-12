@@ -416,7 +416,7 @@ test("AC-7: tier-gates defines brainstorm depth once, and brainstorming points a
     assert.match(depth, re, `tier-gates' Brainstorm depth dropped: ${claim}`);
   assert.match(
     read(BRAINSTORMING).replace(/\s+/g, " "),
-    /See \*\*Brainstorm depth\*\* in `references\/tier-gates\.md`/,
+    /`references\/tier-gates\.md` \*\*Brainstorm depth\*\*/,
     `${BRAINSTORMING} no longer points at tier-gates' Brainstorm depth`,
   );
   for (const rel of [BRAINSTORMING, TIER_GATES]) {

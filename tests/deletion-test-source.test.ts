@@ -40,7 +40,7 @@ test("/audit dimension 10 points at architecture-review.md for the deletion test
   assert.match(ten, /\*\*Bar:\*\*/);
 });
 
-test("/audit dimension 10 takes when a single implementation is too early from category 4", () => {
+test("/audit dimension 10 takes when a single implementation is too early from Abstraction timing", () => {
   const ten = flatten(
     headingSection(
       raw("references/audit/SCAN-DIMENSIONS.md"),
@@ -50,6 +50,6 @@ test("/audit dimension 10 takes when a single implementation is too early from c
   );
   assert.match(
     ten,
-    /single-implementation[^.]*`references\/architecture-review\.md`[^.]*category 4/i,
+    /single-implementation[^.]*`references\/architecture-review\.md` \*\*Abstraction timing\*\*/i,
   );
 });

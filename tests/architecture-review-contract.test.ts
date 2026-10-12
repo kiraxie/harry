@@ -133,7 +133,7 @@ test("AC-3: one analyst, one lane", () => {
   const p = step2("Reviewer.");
   assert.match(
     p,
-    /dispatch ONE harry:analyst \(skills\/executing\/SKILL\.md, Who writes\), one lane — no Codex lane/,
+    /dispatch ONE harry:analyst \(skills\/executing\/SKILL\.md Who writes\), one lane — no Codex lane/,
   );
 });
 
@@ -156,7 +156,7 @@ test("AC-3: the reviewer is handed every input", () => {
     ],
     [/and read access to the whole repo\./, "read access to the whole repo"],
     [
-      /On a later round, also hand it every ruling recorded so far — each leave as is record as references\/architecture-review\.md's Output defines it, and each backlog/,
+      /On a later round, also hand it every ruling recorded so far — each leave as is record as references\/architecture-review\.md Output defines it, and each backlog/,
       "the prior rulings on a later round",
     ],
     [
@@ -487,7 +487,7 @@ test("AC-5: backlog opens a new item quoting the finding", () => {
 test("AC-5: leave as is records the reason and is not raised again", () => {
   assert.match(
     step2("Rulings."),
-    /- leave as is → the ruling goes to ## Progress as the record references\/architecture-review\.md's Output defines — a number names a finding in one list only; handed to the reviewer on any later round, so the finding is not raised again\./,
+    /- leave as is → the ruling goes to ## Progress as the record references\/architecture-review\.md Output defines — a number names a finding in one list only; handed to the reviewer on any later round, so the finding is not raised again\./,
     "leave as is no longer records the reason and the finding's location and gist, or the finding may be raised again",
   );
 });
@@ -696,7 +696,7 @@ test("the review commands point at step 2's Reviewer list instead of copying it"
     const flag = plain(headingSection(read(rel), rel, "## `--architecture`"));
     assert.match(
       flag,
-      /Finishing passes the context file its Reviewer\. paragraph lists for the Codex build \(skills\/finishing\/SKILL\.md, step 2\) through --context @<file>\./,
+      /Finishing passes the context file its Reviewer\. paragraph lists for the Codex build \(skills\/finishing\/SKILL\.md Architecture review\) through --context @<file>\./,
       `${rel} no longer points at finishing step 2's Reviewer list`,
     );
     assert.doesNotMatch(

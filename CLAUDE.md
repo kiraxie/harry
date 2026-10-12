@@ -144,7 +144,7 @@ skill files themselves short.
 audit analysis — opus/high, no edit or spawn tools) and `referee` (fix check, fable/high,
 no edit or spawn tools: checks a finding's fix at three levels before it is built, per
 `references/fix-check.md`, on a different model from the reviewer that proposed it). The
-session writes everything itself; it dispatches only these three (`skills/executing/SKILL.md`, **Who writes**). The Agent
+session writes everything itself; it dispatches only these three (`skills/executing/SKILL.md` **Who writes**). The Agent
 tool takes a model but no effort, so a fixed effort needs an agent file. CC namespaces
 plugin agents, so they dispatch as `harry:scout`, `harry:analyst` and `harry:referee`.
 `tests/agents.test.ts` enforces the invariants (alias models only, no edit or spawn tools;
@@ -232,7 +232,7 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   doc starts with that exact invocation so it matches the pattern (an unmatched
   one only costs a permission prompt). The frontmatter does not set
   `disable-model-invocation`, so both the `SlashCommand` and `Skill` tools — and
-  `skills/executing/SKILL.md`'s review step (step 3) — can invoke it directly.
+  executing's review step (`skills/executing/SKILL.md` **Review**) — can invoke it directly.
 - Codex `audit`'s RO round-boundaries are likewise instruction-only, not
   tool-enforced (see its skill's own "Known limitation" note); it shares the same
   `references/audit/` reference bundle and `report-schema.json`/

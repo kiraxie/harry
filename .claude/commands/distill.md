@@ -55,7 +55,7 @@ Before judging anything, read:
 
 - `upstream.json` `derived[].note` entries — each names what harry changed or removed on
   purpose, and why.
-- `.claude/references/upstream-sync.md`'s provenance notes — per-source warnings about what not
+- `.claude/references/upstream-sync.md` **Provenance notes** — per-source warnings about what not
   to "restore".
 - `HARRY.md` — the laws are the calibration target; every candidate is judged against
   them, not against novelty.
@@ -75,7 +75,7 @@ concludes "nothing changed".
 
 ### 5. Rule on every candidate
 
-Issue one ruling per candidate principle, each with a stated reason (`references/review-rubric.md`, **Engineering judgment**:
+Issue one ruling per candidate principle, each with a stated reason (`references/review-rubric.md` **Engineering judgment**:
 dismissals need declared reasons — "not relevant" without a why is a silent dismissal):
 
 - **pull** — adopt substantially as-is: it closes a real gap and fits harry's
