@@ -38,6 +38,8 @@ const proseFiles = [
 ].filter((f) => f !== "CHANGELOG.md");
 const citeCorpus = [...proseFiles, "upstream.json"];
 
+const lineOf = (text: string, index?: number): number => text.slice(0, index).split("\n").length;
+
 // Three reference shapes:
 // 1. `${CLAUDE_PLUGIN_ROOT}/<path>` — path is everything after the prefix. Checked
 //    everywhere (fenced or not) — this is how the plugin's own docs express real
@@ -274,7 +276,7 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
     // possessive form are checked too.
     for (const m of text.matchAll(/HARRY\.md`?(?:'s)?\s+\*\*([^*]+)\*\*/g)) {
       const name = (m[1] as string).replace(/\s+/g, " ");
-      const line = text.slice(0, m.index).split("\n").length;
+      const line = lineOf(text, m.index);
       if (!sections.has(name)) failures.push(`${relFile}:${line} -> HARRY.md **${name}**`);
     }
   }
@@ -285,19 +287,28 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 // ---------------------------------------------------------------------------
 // Cross-file section citations
 //
-// One form: `path` **Name**. A name is a heading's core name — a leading `N. `,
-// a trailing ` — …`, then a trailing `(…)` dropped — or the bold label opening a
-// top-level numbered item, so a step renumbered or a subtitle reworded leaves its
-// citations standing. A name must be unique in its file. Laws keep their own
-// form, `HARRY.md **Heading**`, checked above.
+// The cross-file form is `path` **Name**. A name is a heading's core name — a
+// leading `N. `, a trailing ` — …`, then a trailing `(…)` dropped — or the bold
+// label opening a top-level numbered item, so a step renumbered or a subtitle
+// reworded leaves its citations standing. A name must be unique in its file.
+// Two names keep their own form: a law is `HARRY.md **Heading**`, checked above;
+// an audit dimension is `dimension **Name**`, resolved below through the same
+// resolver against references/audit/SCAN-DIMENSIONS.md's `##` headings only.
 // The legacy forms resolve against nothing, so a rename broke them silently;
-// they fail here instead.
+// they fail here instead, each hit naming the form to use.
+const DIMENSION_FORM = "dimension **<SCAN-DIMENSIONS ## core name>**";
 const CITE_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`\s+\*\*([^*]+)\*\*/g;
-const LEGACY_FORMS: [string, RegExp, string[]][] = [
+const LEGACY_FORMS: [string, RegExp, string[], string?][] = [
   ["See **X** in", /See \*\*[^*]+\*\* in\b/g, ["See **Seams** in"]],
   ["a path, then a quoted name", /\.md`?(?:'s)?,?\s+\\?"[A-Z]/g, ['`references/x.md`, "Seams"']],
   ["a path, then a comma or 's", /\.md`(?:'s|,)\s+\*\*/g, ["`references/x.md`, **Seams**"]],
   ["a name, then a step", /\*\*\s+step \d/g, ["**Steps** step 4"]],
+  [
+    "an audit dimension by number",
+    /\bdimensions? \(?\d/gi,
+    ["/audit dimension 10", "dimension (2)", "dimensions 1 and 2", "Dimension 10"],
+    DIMENSION_FORM,
+  ],
   [
     "a path, then a category number",
     /\.md`?(?:'s)?,?\s+\(?category \d/g,
@@ -317,6 +328,7 @@ const LEGACY_FORMS: [string, RegExp, string[]][] = [
     "a law named in plain text",
     new RegExp(String.raw`HARRY\.md\`?(?:'s)?,?\s+(?:${LAW_HEADINGS.join("|")})\b`, "g"),
     ["HARRY.md Tiers"],
+    "HARRY.md **Heading**",
   ],
   [
     "a skill's step in parentheses",
@@ -331,7 +343,7 @@ const coreName = (heading: string): string =>
     .replace(/\s*\([^)]*\)\s*$/, "")
     .trim();
 
-type Name = { name: string; full: string };
+type Name = { name: string; full: string; level?: number };
 
 const namesIn = (text: string): Name[] => {
   const lines = text.split("\n");
@@ -344,10 +356,10 @@ const namesIn = (text: string): Name[] => {
       continue;
     }
     if (fence) continue;
-    const h = /^#{2,} (.+)$/.exec(line);
+    const h = /^(#{2,}) (.+)$/.exec(line);
     if (h) {
-      const full = (h[1] as string).trim();
-      names.push({ name: coreName(full), full });
+      const full = (h[2] as string).trim();
+      names.push({ name: coreName(full), full, level: (h[1] as string).length });
       continue;
     }
     const label = /^\d+\. \*\*([^*]+)\*\*/.exec(line);
@@ -361,16 +373,18 @@ const namesIn = (text: string): Name[] => {
 
 const namesOf = (rel: string): Name[] => namesIn(readFileSync(path.join(repoRoot, rel), "utf-8"));
 
-const resolveCitation = (target: string, name: string): string | null => {
+const resolveCitation = (target: string, name: string, level?: number): string | null => {
   if (!existsSync(path.join(repoRoot, target))) return `${target} is missing`;
-  const names = namesOf(target);
+  const names = namesOf(target).filter((n) => level === undefined || n.level === level);
   const matches = names.filter((n) => n.name === name);
   if (matches.length > 1)
     return `${target} **${name}** is ambiguous: ${matches.map((n) => `"${n.full}"`).join(", ")}`;
   if (matches.length === 1) return null;
   const full = names.find((n) => n.full === name);
   if (full) return `${target} **${name}**: cite its core name **${full.name}**`;
-  return `${target} has no heading or step "${name}"`;
+  return level === undefined
+    ? `${target} has no heading or step "${name}"`
+    : `${target} has no ${"#".repeat(level)} heading "${name}"`;
 };
 
 test("every cross-file citation names a heading or step its file has, once", () => {
@@ -382,8 +396,7 @@ test("every cross-file citation names a heading or step its file has, once", () 
       seen += 1;
       const name = (m[2] as string).replace(/\s+/g, " ").trim();
       const failure = resolveCitation(m[1] as string, name);
-      if (failure)
-        failures.push(`${relFile}:${text.slice(0, m.index).split("\n").length} -> ${failure}`);
+      if (failure) failures.push(`${relFile}:${lineOf(text, m.index)} -> ${failure}`);
     }
   }
   assert.ok(seen > 0, "the citation pattern matched nothing; it is no longer checking anything");
@@ -425,18 +438,70 @@ test("every cross-file citation names a heading or step its file has, once", () 
   assert.deepEqual(failures, [], "citations pointing at a name their file lacks or repeats");
 });
 
+const legacyHits = (text: string): string[] =>
+  LEGACY_FORMS.flatMap(([label, re, , form = "`path` **Name**"]) =>
+    [...text.matchAll(re)].map((m) => `${lineOf(text, m.index)} -> ${label}; cite it as ${form}`),
+  );
+
 test("no cross-file citation uses a legacy form", () => {
-  const hits: string[] = [];
-  for (const [label, re, samples] of LEGACY_FORMS) {
+  for (const [label, re, samples] of LEGACY_FORMS)
     for (const sample of samples)
       assert.equal([...sample.matchAll(re)].length, 1, `the "${label}" rule no longer matches`);
-    for (const relFile of citeCorpus) {
-      const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
-      for (const m of text.matchAll(re))
-        hits.push(`${relFile}:${text.slice(0, m.index).split("\n").length} -> ${label}`);
-    }
-  }
-  assert.deepEqual(hits, [], "cite a section or step as `path` **Name**");
+  assert.deepEqual(
+    legacyHits("intro\nper dimension 10 and HARRY.md Tiers\nper `references/x.md`, **Seams**"),
+    [
+      "3 -> a path, then a comma or 's; cite it as `path` **Name**",
+      "2 -> an audit dimension by number; cite it as dimension **<SCAN-DIMENSIONS ## core name>**",
+      "2 -> a law named in plain text; cite it as HARRY.md **Heading**",
+    ],
+    "a legacy hit no longer carries its line or the form to use",
+  );
+  const hits = citeCorpus.flatMap((relFile) =>
+    legacyHits(readFileSync(path.join(repoRoot, relFile), "utf-8")).map((h) => `${relFile}:${h}`),
+  );
+  assert.deepEqual(hits, [], "a legacy citation form; each hit names the form to use");
+});
+
+const DIMENSION_CITE_RE = /\bdimensions?\s+\*\*([^*]+)\*\*/gi;
+
+const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
+
+const dimensionFailures = (text: string): string[] =>
+  [...text.matchAll(DIMENSION_CITE_RE)].flatMap((m) => {
+    const name = (m[1] as string).replace(/\s+/g, " ").trim();
+    const failure = resolveCitation(SCAN_DIMENSIONS, name, 2);
+    return failure ? [`${lineOf(text, m.index)} -> ${failure}`] : [];
+  });
+
+test("every audit dimension citation names a SCAN-DIMENSIONS ## heading", () => {
+  assert.ok(
+    namesOf(SCAN_DIMENSIONS).some(
+      (n) => n.name === "Choosing dimensions and shaping agents" && n.level === 3,
+    ),
+    "the ### fixture below lost its heading; point it at a live ### heading",
+  );
+  assert.deepEqual(
+    dimensionFailures(
+      "a dimension **Low-value tests**,\nDimension **Low value tests**, dimension\n**Wrapped typo**,\n" +
+        "dimension **Choosing dimensions and shaping agents** and\n" +
+        "dimension **2. Reusability & hoist candidates (same-intent code that drifted apart)**",
+    ),
+    [
+      '2 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Low value tests"',
+      '2 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Wrapped typo"',
+      '4 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Choosing dimensions and shaping agents"',
+      "5 -> references/audit/SCAN-DIMENSIONS.md **2. Reusability & hoist candidates (same-intent code that drifted apart)**: cite its core name **Reusability & hoist candidates**",
+    ],
+    "the dimension citation check no longer matches, accepts a wrong or ### name, lost the core-name hint or the line",
+  );
+  let seen = 0;
+  const failures = citeCorpus.flatMap((relFile) => {
+    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
+    seen += [...text.matchAll(DIMENSION_CITE_RE)].length;
+    return dimensionFailures(text).map((f) => `${relFile}:${f}`);
+  });
+  assert.ok(seen > 0, "the dimension citation pattern matched nothing");
+  assert.deepEqual(failures, [], `cite a dimension as ${DIMENSION_FORM}`);
 });
 
 const PATH_THEN_PLAIN_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`(?:'s|,)?\s+(?!\*\*)/g;
@@ -461,7 +526,7 @@ test("no cross-file citation names a heading in plain text", () => {
   const hits = citeCorpus.flatMap((relFile) => {
     const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
     return plainHeadingCitations(text).map(
-      (c) => `${relFile}:${text.slice(0, c.index).split("\n").length} -> ${c.target} "${c.name}"`,
+      (c) => `${relFile}:${lineOf(text, c.index)} -> ${c.target} "${c.name}"`,
     );
   });
   assert.deepEqual(hits, [], "cite a heading as `path` **Heading**, not in plain text");

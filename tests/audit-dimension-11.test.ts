@@ -33,7 +33,7 @@ test("dimension 9 sends tests that exist but guard nothing to dimension 11", () 
       "## 9. Structural test-coverage holes",
     ),
   );
-  assert.match(nine, /dimension 11/);
+  assert.match(nine, /dimension \*\*Low-value tests\*\*/);
 });
 
 const KINDS = ["`owner-proves`", "`guards-nothing`"];
