@@ -116,5 +116,5 @@ given.
 
 ## Findings are suggestions
 
-Per `references/review-rubric.md` (**Engineering judgment**), automated review findings are suggestions to verify against
+Per `references/review-rubric.md` **Engineering judgment**, automated review findings are suggestions to verify against
 this codebase, not orders — judge them, don't rubber-stamp them.
