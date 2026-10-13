@@ -157,3 +157,35 @@ load on every word, every turn, so it earns the hardest pruning.
   path carries only what it needs. *Reinvented helpers* — successive runs each rewrite the same
   helper script from scratch; that repetition IS the signal to bundle it once under the skill's
   `scripts/` and point the body at it, so no future invocation reinvents it.
+
+## (f) Citations — how prose names another file's section
+
+A name in prose that points into another file is checked by `tests/prose-refs.test.ts`, so each
+kind has exactly one form:
+
+- A heading or numbered step of a `.md` file: the backticked path, whitespace (a line break is
+  fine), then the bold name — `references/red-green.md` **What a good test is**.
+- A skill directory: through its file, `skills/executing/SKILL.md` **Steps**; never the bare
+  directory.
+- A law: HARRY.md **Evidence**, with only whitespace between — no possessive, comma or colon,
+  and never the law name in plain text or a section number (`§N`).
+- An audit dimension: dimension **Low-value tests**, by the name of a `##` heading of
+  `references/audit/SCAN-DIMENSIONS.md`, never by number.
+
+The name is the core name: the heading or bold step label without a leading `N. `, a trailing
+` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
+standing. It must be unique in its file.
+
+The test reads three things as citation attempts, and each must be in the form above:
+
+- a bold or quoted string right after a path, even through an apostrophe-s, a comma, a colon, an
+  em dash or an opening parenthesis — whether it names anything or not;
+- a plain word right after a path that names a heading or step of that file;
+- a bold or quoted heading or step name of the path's file anywhere else in the same sentence.
+
+A law heading set in bold outside HARRY.md needs HARRY.md directly before it, unless it is
+another file's citation of its own heading of that name.
+
+Steps and categories are cited by label, never by number — a number moves when a step is added.
+A step or category number after a path or after a bold name fails, and so does a step number in
+parentheses after a path in its sentence, and a skill named with a step number and no path.

@@ -272,9 +272,8 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 
   for (const relFile of citeCorpus) {
     const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
-    // Matched on the whole text, so a citation wrapped across a line break and the
-    // possessive form are checked too.
-    for (const m of text.matchAll(/HARRY\.md`?(?:'s)?\s+\*\*([^*]+)\*\*/g)) {
+    // Matched on the whole text, so a citation wrapped across a line break is checked too.
+    for (const m of text.matchAll(LAW_CITE_RE)) {
       const name = (m[1] as string).replace(/\s+/g, " ");
       const line = lineOf(text, m.index);
       if (!sections.has(name)) failures.push(`${relFile}:${line} -> HARRY.md **${name}**`);
@@ -297,47 +296,14 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 // The legacy forms resolve against nothing, so a rename broke them silently;
 // they fail here instead, each hit naming the form to use.
 const DIMENSION_FORM = "dimension **<SCAN-DIMENSIONS ## core name>**";
-const DIRECTORY_FORM = "`dir/SKILL.md` **Name**";
 const CITE_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`\s+\*\*([^*]+)\*\*/g;
+const LAW_CITE_RE = /HARRY\.md`?\s+\*\*([^*]+)\*\*/g;
 const LEGACY_FORMS: [string, RegExp, string[], string?][] = [
-  ["See **X** in", /See \*\*[^*]+\*\* in\b/g, ["See **Seams** in"]],
-  ["a path, then a quoted name", /\.md`?(?:'s)?,?\s+\\?"[A-Z]/g, ['`references/x.md`, "Seams"']],
-  [
-    "a path, then a comma, 's or colon",
-    /\.md`(?:'s|’s|,|:)\s+\*\*/g,
-    [
-      "`references/x.md`, **Seams**",
-      "`references/x.md`’s **Seams**",
-      "`references/x.md`: **Seams**",
-    ],
-  ],
-  [
-    "a path, then a name in parentheses",
-    /\.md`(?:'s|’s)?,?\s+\(\*\*/g,
-    ["`references/x.md` (**Seams**)"],
-  ],
-  [
-    "a directory, then a name",
-    /\/[\w-]+\/?`(?:'s|’s|,|:)?\s+\(?\*\*/g,
-    ["`skills/x` **Steps**", "`skills/x/`'s **Steps**", "`skills/x` (**Steps**)"],
-    DIRECTORY_FORM,
-  ],
-  ["a name, then a step", /\*\*\s+step \d/g, ["**Steps** step 4"]],
   [
     "an audit dimension by number",
     /\bdimensions? \(?\d/gi,
     ["/audit dimension 10", "dimension (2)", "dimensions 1 and 2", "Dimension 10"],
     DIMENSION_FORM,
-  ],
-  [
-    "a path, then a category number",
-    /\.md`?(?:'s)?,?\s+\(?category \d/g,
-    ["`references/x.md` category 4"],
-  ],
-  [
-    "a path, then a bare step",
-    /(?:\.md`?|`)(?:'s)?,?\s+step \d/g,
-    ["`skills/x/SKILL.md`, step 2", "`skills/x` step 4"],
   ],
   [
     "a skill's step with no path",
@@ -474,12 +440,8 @@ test("no cross-file citation uses a legacy form", () => {
     for (const sample of samples)
       assert.equal([...sample.matchAll(re)].length, 1, `the "${label}" rule no longer matches`);
   assert.deepEqual(
-    legacyHits(
-      "intro\nper dimension 10 and HARRY.md Tiers\nper `references/x.md`, **Seams**\nat `skills/x` **Steps**",
-    ),
+    legacyHits("intro\nper dimension 10 and HARRY.md Tiers"),
     [
-      "3 -> a path, then a comma, 's or colon; cite it as `path` **Name**",
-      "4 -> a directory, then a name; cite it as `dir/SKILL.md` **Name**",
       "2 -> an audit dimension by number; cite it as dimension **<SCAN-DIMENSIONS ## core name>**",
       "2 -> a law named in plain text; cite it as HARRY.md **Heading**",
     ],
@@ -533,13 +495,21 @@ test("every audit dimension citation names a SCAN-DIMENSIONS ## heading", () => 
   assert.deepEqual(failures, [], `cite a dimension as ${DIMENSION_FORM}`);
 });
 
-const PATH_THEN_PLAIN_RE = /`((?:[\w.-]+\/)*[\w.-]+?)\/?`(?:'s|’s|,|:)?\s+\(?/g;
+const CONNECTOR_SRC = String.raw`(?:'s|’s)?\s*[,:—]?\s*\(?\s*`;
+const PATH_THEN_PLAIN_RE = new RegExp(
+  String.raw`\`((?:[\w.-]+\/)*[\w.-]+?)\/?\`${CONNECTOR_SRC}`,
+  "g",
+);
+
+const citeTarget = (cited: string): string | null => {
+  const target = cited.endsWith(".md") ? cited : `${cited}/SKILL.md`;
+  return existsSync(path.join(repoRoot, target)) ? target : null;
+};
 
 const plainNameCitations = (text: string): { index: number; target: string; name: string }[] =>
   [...text.matchAll(PATH_THEN_PLAIN_RE)].flatMap((m) => {
-    const cited = m[1] as string;
-    const target = cited.endsWith(".md") ? cited : `${cited}/SKILL.md`;
-    if (!existsSync(path.join(repoRoot, target))) return [];
+    const target = citeTarget(m[1] as string);
+    if (!target) return [];
     const rest = text.slice((m.index ?? 0) + m[0].length);
     const name = namesOf(target)
       .map((n) => n.name)
@@ -556,6 +526,7 @@ test("no cross-file citation names a heading or step in plain text", () => {
     ["at `skills/executing/SKILL.md` Review, the", ["Review"]],
     ["at `skills/executing` Review, the", ["Review"]],
     ["at `skills/executing/` Review, the", ["Review"]],
+    ["per `references/grilling.md` — Handoff", ["Handoff"]],
     ["see `skills/executing/SKILL.md` review step", []],
     ["`references/grilling.md` covers it", []],
     ["`references/grilling.md` Handoffs list", []],
@@ -573,6 +544,205 @@ test("no cross-file citation names a heading or step in plain text", () => {
     );
   });
   assert.deepEqual(hits, [], "cite a heading or step as `path` **Name**, not in plain text");
+});
+
+const PATH_TOKEN_RE = /`((?:[\w.-]+\/)*[\w.-]+?)\/?`|(?<![\w`/.-])(HARRY\.md)(?![\w`])/g;
+const SENTENCE_END_RE = /\.(?:\s|$)|\n\s*\n/g;
+const ADJACENT_NAME_RE = new RegExp(String.raw`^${CONNECTOR_SRC}(?:\*\*(?=\S)|\\?"(?=\w))`);
+const STEP_NUMBER_RE = new RegExp(String.raw`^${CONNECTOR_SRC}(?:steps?|category) \d`);
+const PAREN_STEP_RE = /\(steps? \d/;
+const QUOTED_OR_BOLD_RE = /\*\*([^*]+)\*\*|"([^"\n]+)"/g;
+const LAW_NAMED_BEFORE_RE = new RegExp(String.raw`\bHARRY\.md\`?${CONNECTOR_SRC}$`);
+const DIRECTORY_FORM = "`dir/SKILL.md` **Name**";
+const STEP_HINT = "cite the step by its label, as `path` **Name**";
+
+const exactCitations = (text: string): Set<number> =>
+  new Set(
+    [CITE_RE, LAW_CITE_RE, DIMENSION_CITE_RE].flatMap((re) =>
+      [...text.matchAll(re)].map(
+        (m) => (m.index ?? 0) + m[0].length - (m[m.length - 1] as string).length - 4,
+      ),
+    ),
+  );
+
+const citationAttempts = (text: string, isHarry = false): string[] => {
+  const exactAt = exactCitations(text);
+  const hits = new Map<number, string>();
+  const hit = (index: number, message: string) => {
+    if (!hits.has(index)) hits.set(index, `${lineOf(text, index)} -> ${message}`);
+  };
+  const ends = [...text.matchAll(SENTENCE_END_RE)].map((e) => e.index ?? 0);
+  for (const m of text.matchAll(PATH_TOKEN_RE)) {
+    const cited = (m[1] ?? m[2]) as string;
+    const isFile = cited.endsWith(".md");
+    if (!isFile && !cited.includes("/")) continue;
+    const target = citeTarget(cited);
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    const advice = isFile
+      ? `cite it as ${cited === "HARRY.md" ? "HARRY.md **Heading**" : "`path` **Name**"}`
+      : target
+        ? `cite it as ${DIRECTORY_FORM}`
+        : existsSync(path.join(repoRoot, cited))
+          ? "cite it as `dir/FILE.md` **Name**"
+          : `${cited} does not exist`;
+    const after = text.slice(end, ends.find((e) => e >= end) ?? text.length);
+    const exact = exactAt.has(end + (/^\s*/.exec(after)?.[0].length ?? 0));
+    const adjacent = !exact && ADJACENT_NAME_RE.test(after);
+    if (adjacent) hit(end, `a name next to ${cited}; ${advice}`);
+    const adjacentAt = adjacent ? end + (/\*\*|"/.exec(after)?.index ?? 0) : -1;
+    if (STEP_NUMBER_RE.test(after))
+      hit(end, `a step or category number after ${cited}; ${STEP_HINT}`);
+    const paren = PAREN_STEP_RE.exec(after);
+    if (paren) hit(end + paren.index, `a step number in the sentence after ${cited}; ${STEP_HINT}`);
+    if (!target) continue;
+    const from = ends.reduce((last, e) => (e < start ? e + 1 : last), 0);
+    const names = new Set(namesOf(target).flatMap((n) => [n.name, n.full]));
+    for (const [offset, span] of [
+      [from, text.slice(from, start)],
+      [end, after],
+    ] as const)
+      for (const q of span.matchAll(QUOTED_OR_BOLD_RE)) {
+        const at = offset + (q.index ?? 0);
+        if (at === adjacentAt) continue;
+        if (q[1] !== undefined && exactAt.has(at)) continue;
+        const name = ((q[1] ?? q[2]) as string).replace(/\s+/g, " ").trim();
+        if (names.has(name)) hit(at, `${cited} "${name}" outside the citation form; ${advice}`);
+      }
+  }
+  for (const m of text.matchAll(/\*\*([^*]+)\*\*/g)) {
+    const at = m.index ?? 0;
+    const end = at + m[0].length;
+    if (STEP_NUMBER_RE.test(text.slice(end, end + 40)))
+      hit(at, `a step or category number after a name; ${STEP_HINT}`);
+    if (
+      !isHarry &&
+      LAW_HEADINGS.includes((m[1] as string).trim()) &&
+      !exactAt.has(at) &&
+      !LAW_NAMED_BEFORE_RE.test(text.slice(Math.max(0, at - 20), at))
+    )
+      hit(
+        at,
+        `**${m[1]}** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**`,
+      );
+  }
+  return [...hits.entries()].sort(([a], [b]) => a - b).map(([, message]) => message);
+};
+
+test("every citation attempt next to a path is in the one form", () => {
+  const mustFail = [
+    "per `references/grilling.md`: (**Handoff**) here",
+    "per `references/grilling.md`’s, **Handoff** here",
+    "per `references/grilling.md`; **Handoff** here",
+    "per `references/grilling.md` — **Handoff** here",
+    'per `references/grilling.md`’s "Handoff" here',
+    "per `references/grilling.md`, **Handof** here",
+    "at `skills/executing` **Steps** here",
+    'the "Handoff" section of `references/grilling.md` says so',
+    "see `references/grilling.md` and then its **Handoff** rule",
+    "at `skills/executing/SKILL.md` **Steps**, step 4",
+    "at `skills/executing/SKILL.md` **Steps**'s step 4",
+    "at `skills/executing/SKILL.md` **Steps** (step 4)",
+    "the `skills/finishing`'s architecture review (step 2)",
+    "`skills/executing/SKILL.md` covers it (steps 2-3)",
+    "per HARRY.md's **Tiers** here",
+    "per HARRY.md’s **Tiers** here",
+    "per `HARRY.md`'s **Tiers** here",
+    "the **Tiers** law holds",
+    "See **Handoff** in `references/grilling.md`",
+    'per `references/grilling.md`, "Handoff"',
+    "per `references/grilling.md`, **Handoff**",
+    "per `references/grilling.md`'s **Handoff**",
+    "per `references/grilling.md`’s **Handoff**",
+    "per `references/grilling.md`’s **Handof**",
+    'per `references/grilling.md`, \\"Handoff\\"',
+    "per `references/grilling.md`: **Handoff**",
+    "the **Steps** step 4 applies",
+    "per `references/architecture-review.md` category 4",
+    "per `skills/executing/SKILL.md`, step 2",
+    "per `skills/executing` step 4",
+    "per `references/grilling.md` (**Handoff**)",
+    "per `skills/executing/`'s **Steps**",
+    "per `skills/executing` (**Steps**)",
+    "per `references/grilling.md` — **Handof** here",
+    "per `references/grilling.md`: **Handof** here",
+    "per `references/grilling.md` (**Handof**) here",
+    "the **Steps** (step 4) applies",
+    "per `skills/executing/SKILL.md`'s step 4",
+    "per `references/grilling.md` (category 4)",
+    "per `references/grilling.md`: step 4",
+    "per `references/grilling.md` — step 4",
+    "the **Steps**: step 4 applies",
+    "at `references/audit` **Recon** here",
+    "at `skills/brainstrming` **Steps** here",
+    'per `references/x.md`, "Seams"',
+    "per `references/x.md`, **Seams**",
+    "per `references/x.md`’s **Seams**",
+    "per `references/x.md`: **Seams**",
+    "the **Seams** step 4 applies",
+    "per `references/x.md` category 4",
+    "per `skills/x/SKILL.md`, step 2",
+    "per `skills/x` step 4",
+    "per `references/x.md` (**Seams**)",
+    "per `skills/x` **Steps**",
+    "per `skills/x/`'s **Steps**",
+    "per `skills/x` (**Steps**)",
+    "per `references/grilling.md`, then run `x` **Handoff** here",
+    "run `x` **Tiers** now",
+    "`references/x.md` covers it (steps 2-3)",
+    "see `skills/brainstorming/SKILL.md` and its **Full Flow (full depth)** part",
+    'per `references/grilling.md` and `x` "Handoff" here',
+  ];
+  for (const sample of mustFail)
+    assert.ok(citationAttempts(sample).length > 0, `no longer fails: ${sample}`);
+  const mustPass = [
+    "simplify dual-lane — **Claude Code build:** in `commands/review.md`; **Codex build:**",
+    "earns its place. **Run it after any material change to `HARRY.md`** to catch a",
+    "The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md` **Review**,\nand its scoped re-review in `skills/executing/SKILL.md` **One fix wave**). The review standard",
+    "then `skills/finishing/SKILL.md` **Verify tests first** runs, and finishing again from step 1",
+    "per HARRY.md **Tiers** and `references/grilling.md` **Handoff**",
+    '      "skill": "HARRY.md",',
+    'the "`references/grilling.md`" file',
+    "Rebuild `dist/` when changing `src/` **or `package.json`** — the bundle",
+    "do **step 4** next",
+    "Run **lint**, then **step 2** of the release.",
+    "per `references/audit/SCAN-DIMENSIONS.md` and dimension **Low-value tests**",
+    "per `references/pr-body.md` **Evidence** here",
+    "per `references/x.md` **Seams** here",
+    "the copy at ~/.claude/harry/HARRY.md, **Code** included",
+    "see `references/grilling.md` for it\n\n**Handoff** opens the next paragraph",
+  ];
+  for (const sample of mustPass)
+    assert.deepEqual(citationAttempts(sample), [], `now fails: ${sample}`);
+  assert.deepEqual(
+    citationAttempts("the **Tiers** law holds", true),
+    [],
+    "HARRY.md now fails its own bold law names",
+  );
+  assert.deepEqual(
+    citationAttempts(
+      "intro\nat `skills/executing` **Steps** and HARRY.md's **Tiers**\nat `references/audit` **Recon**, or `skills/x` **Steps**",
+    ),
+    [
+      "2 -> a name next to skills/executing; cite it as `dir/SKILL.md` **Name**",
+      "2 -> a name next to HARRY.md; cite it as HARRY.md **Heading**",
+      "3 -> a name next to references/audit; cite it as `dir/FILE.md` **Name**",
+      "3 -> a name next to skills/x; skills/x does not exist",
+      '3 -> skills/executing "Steps" outside the citation form; cite it as `dir/SKILL.md` **Name**',
+    ],
+    "a hit no longer carries its line or the form to use",
+  );
+  const hits = citeCorpus.flatMap((relFile) =>
+    citationAttempts(
+      readFileSync(path.join(repoRoot, relFile), "utf-8"),
+      relFile === "HARRY.md",
+    ).map((h) => `${relFile}:${h}`),
+  );
+  assert.deepEqual(
+    hits,
+    [],
+    "a citation attempt outside the one form; each hit names the form to use",
+  );
 });
 
 test("every reference is cited by path from a shipped file other than itself", () => {
