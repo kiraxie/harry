@@ -5,16 +5,14 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  CITE_RE,
   citationAttempts,
-  DIMENSION_CITE_RE,
+  citeFailures,
   dimensionFailures,
   FORM,
-  LAW_CITE_RE,
   LAW_HEADINGS,
   lawAttempts,
+  lawFailures,
   legacyHits,
-  lineOf,
   type Name,
   namesIn,
   plainNameCitations,
@@ -34,7 +32,7 @@ import { outline } from "./section.ts";
 
 // The plugin's real product is ~3,000 lines of markdown that an AI agent follows,
 // full of file-path references (references/tier-gates.md, ${CLAUDE_PLUGIN_ROOT}/...,
-// scripts/init.mjs). Nothing else verifies those paths exist — renames/deletes leave
+// scripts/init.mjs). Nothing else verifies those paths are tracked — renames/deletes leave
 // dangling references (this exact failure class was found twice in recent reviews).
 // This test extracts candidate repo-relative paths from all prose and asserts git tracks each.
 
@@ -267,7 +265,6 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
     "HARRY.md's ## headings changed. Sweep the citations of any renamed or removed " +
       "heading, then update LAW_HEADINGS.",
   );
-  const sections = new Set(headings);
 
   // The corpus needs guarding too: `listMarkdownFiles` returns [] for a directory
   // with no tracked markdown, so renaming `skills/` would silently drop its citations
@@ -304,19 +301,20 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
         );
       }
       const law: unknown = (parsed as { law?: unknown } | null)?.law;
-      if (typeof law !== "string" || (!sections.has(law) && !NON_LAW_LABELS.has(law)))
+      if (typeof law !== "string" || (!LAW_HEADINGS.includes(law) && !NON_LAW_LABELS.has(law)))
         failures.push(`evals/cases.jsonl:${idx + 1} -> law ${String(law)}`);
     });
 
+  let seen = 0;
   for (const relFile of citeCorpus) {
-    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
-    // Matched on the whole text, so a citation wrapped across a line break is checked too.
-    for (const m of text.matchAll(LAW_CITE_RE)) {
-      const name = (m[1] as string).replace(/\s+/g, " ");
-      const line = lineOf(text, m.index);
-      if (!sections.has(name)) failures.push(`${relFile}:${line} -> HARRY.md **${name}**`);
-    }
+    const checked = lawFailures(readFileSync(path.join(repoRoot, relFile), "utf-8"));
+    seen += checked.seen;
+    failures.push(...checked.failures.map((f) => `${relFile}:${f}`));
   }
+  assert.ok(
+    seen > 0,
+    "the law citation pattern matched nothing; it is no longer checking anything",
+  );
 
   assert.deepEqual(failures, [], "citations pointing at a heading HARRY.md does not have");
 });
@@ -335,17 +333,12 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 // they fail here instead, each hit naming the form to use.
 
 test("every cross-file citation names a heading or step its file has, once", () => {
-  const failures: string[] = [];
   let seen = 0;
-  for (const relFile of citeCorpus) {
-    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
-    for (const m of text.matchAll(CITE_RE)) {
-      seen += 1;
-      const name = (m[2] as string).replace(/\s+/g, " ").trim();
-      const failure = resolveCitation(repo, m[1] as string, name);
-      if (failure) failures.push(`${relFile}:${lineOf(text, m.index)} -> ${failure}`);
-    }
-  }
+  const failures = citeCorpus.flatMap((relFile) => {
+    const checked = citeFailures(repo, readFileSync(path.join(repoRoot, relFile), "utf-8"));
+    seen += checked.seen;
+    return checked.failures.map((f) => `${relFile}:${f}`);
+  });
   assert.ok(seen > 0, "the citation pattern matched nothing; it is no longer checking anything");
   for (const target of [".git", ".local/INDEX.md"])
     assert.equal(
@@ -366,30 +359,26 @@ test("no cross-file citation uses a legacy form", () => {
 test("every audit dimension citation names a SCAN-DIMENSIONS ## heading", () => {
   let seen = 0;
   const failures = citeCorpus.flatMap((relFile) => {
-    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
-    seen += [...text.matchAll(DIMENSION_CITE_RE)].length;
-    return dimensionFailures(repo, text).map((f) => `${relFile}:${f}`);
+    const checked = dimensionFailures(repo, readFileSync(path.join(repoRoot, relFile), "utf-8"));
+    seen += checked.seen;
+    return checked.failures.map((f) => `${relFile}:${f}`);
   });
   assert.ok(seen > 0, "the dimension citation pattern matched nothing");
   assert.deepEqual(failures, [], `cite a dimension as ${FORM.dimension}`);
 });
 
-test("no cross-file citation names a heading or step in plain text", () => {
-  const hits = citeCorpus.flatMap((relFile) => {
-    const text = readFileSync(path.join(repoRoot, relFile), "utf-8");
-    return plainNameCitations(repo, text).map(
-      (c) => `${relFile}:${lineOf(text, c.index)} -> ${c.target} "${c.name}"`,
-    );
-  });
-  assert.deepEqual(hits, [], `cite a heading or step as ${FORM.path}, not in plain text`);
-});
-
-const scanCorpus = (scan: (text: string, isHarry: boolean) => string[]): string[] =>
+const scanCorpus = (scan: (text: string) => string[]): string[] =>
   citeCorpus.flatMap((relFile) =>
-    scan(readFileSync(path.join(repoRoot, relFile), "utf-8"), relFile === "HARRY.md").map(
-      (h) => `${relFile}:${h}`,
-    ),
+    scan(readFileSync(path.join(repoRoot, relFile), "utf-8")).map((h) => `${relFile}:${h}`),
   );
+
+test("no cross-file citation names a heading or step in plain text", () => {
+  assert.deepEqual(
+    scanCorpus((text) => plainNameCitations(repo, text)),
+    [],
+    `cite a heading or step as ${FORM.path}, not in plain text`,
+  );
+});
 
 test("every citation attempt next to a path is in the one form", () => {
   assert.deepEqual(
@@ -407,7 +396,7 @@ test("no prose cites a step or category by its number", () => {
   );
 });
 
-test("every bold law name outside HARRY.md has HARRY.md before it", () => {
+test("every bold law name has HARRY.md before it", () => {
   assert.deepEqual(scanCorpus(lawAttempts), [], "a bold law name with no HARRY.md before it");
 });
 

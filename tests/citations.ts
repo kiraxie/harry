@@ -7,8 +7,7 @@ export type Repo = {
   names: (rel: string) => Name[];
 };
 
-export const lineOf = (text: string, index?: number): number =>
-  text.slice(0, index).split("\n").length;
+const lineOf = (text: string, index?: number): number => text.slice(0, index).split("\n").length;
 
 export const LAW_HEADINGS = [
   "Priority",
@@ -29,8 +28,8 @@ export const FORM = {
   skillDir: "`dir/SKILL.md` **Name**",
   dirFile: "`dir/FILE.md` **Name**",
 } as const;
-export const CITE_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`\s+\*\*([^*]+)\*\*/dg;
-export const LAW_CITE_RE = /HARRY\.md`?\s+\*\*([^*]+)\*\*/dg;
+const CITE_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`\s+\*\*([^*]+)\*\*/dg;
+const LAW_CITE_RE = /HARRY\.md`?\s+\*\*([^*]+)\*\*/dg;
 type LegacyForm = { label: string; re: RegExp; samples: string[]; form: string };
 export const LEGACY_FORMS: LegacyForm[] = [
   {
@@ -115,16 +114,42 @@ export const legacyHits = (text: string): string[] =>
     [...text.matchAll(re)].map((m) => `${lineOf(text, m.index)} -> ${label}; cite it as ${form}`),
   );
 
-export const DIMENSION_CITE_RE = /\bdimensions?\s+\*\*([^*]+)\*\*/dgi;
+const DIMENSION_CITE_RE = /\bdimensions?\s+\*\*([^*]+)\*\*/dgi;
 
 const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
 
-export const dimensionFailures = (repo: Repo, text: string): string[] =>
-  [...text.matchAll(DIMENSION_CITE_RE)].flatMap((m) => {
-    const name = (m[1] as string).replace(/\s+/g, " ").trim();
-    const failure = resolveCitation(repo, SCAN_DIMENSIONS, name, 2);
-    return failure ? [`${lineOf(text, m.index)} -> ${failure}`] : [];
+const cleanName = (raw: string): string => raw.replace(/\s+/g, " ").trim();
+
+type Checked = { seen: number; failures: string[] };
+
+const checkEach = (
+  text: string,
+  re: RegExp,
+  judge: (m: RegExpExecArray) => string | null,
+): Checked => {
+  const matches = [...text.matchAll(re)];
+  return {
+    seen: matches.length,
+    failures: matches.flatMap((m) => {
+      const failure = judge(m);
+      return failure ? [`${lineOf(text, m.index)} -> ${failure}`] : [];
+    }),
+  };
+};
+
+export const citeFailures = (repo: Repo, text: string): Checked =>
+  checkEach(text, CITE_RE, (m) => resolveCitation(repo, m[1] as string, cleanName(m[2] as string)));
+
+export const lawFailures = (text: string): Checked =>
+  checkEach(text, LAW_CITE_RE, (m) => {
+    const name = cleanName(m[1] as string);
+    return LAW_HEADINGS.includes(name) ? null : `HARRY.md **${name}**`;
   });
+
+export const dimensionFailures = (repo: Repo, text: string): Checked =>
+  checkEach(text, DIMENSION_CITE_RE, (m) =>
+    resolveCitation(repo, SCAN_DIMENSIONS, cleanName(m[1] as string), 2),
+  );
 
 const CONNECTOR_SRC = String.raw`(?:'s|’s)?\s*[,:—]?\s*\(?\s*`;
 const PATH_THEN_PLAIN_RE = new RegExp(
@@ -137,10 +162,7 @@ const citeTarget = (repo: Repo, cited: string): string | null => {
   return repo.kind(target) === "file" ? target : null;
 };
 
-export const plainNameCitations = (
-  repo: Repo,
-  text: string,
-): { index: number; target: string; name: string }[] =>
+export const plainNameCitations = (repo: Repo, text: string): string[] =>
   [...text.matchAll(PATH_THEN_PLAIN_RE)].flatMap((m) => {
     const target = citeTarget(repo, m[1] as string);
     if (!target) return [];
@@ -149,7 +171,7 @@ export const plainNameCitations = (
       .names(target)
       .map((n) => n.name)
       .find((n) => rest.startsWith(n) && !/^[\w-]/.test(rest.slice(n.length)));
-    return name ? [{ index: m.index ?? 0, target, name }] : [];
+    return name ? [`${lineOf(text, m.index)} -> ${target} "${name}"`] : [];
   });
 
 const PATH_TOKEN_RE = /`((?:[\w.-]+\/)*[\w.-]+?)\/?`|(?<![\w`/.-])(HARRY\.md)(?![\w`])/g;
@@ -246,7 +268,7 @@ export const citationAttempts = (repo: Repo, text: string): string[] => {
       if (!((s.at >= from && s.end <= start) || (s.at >= end && s.end <= afterEnd))) continue;
       if (adjacent && s === opener) continue;
       if (s.bold && exactAt.has(s.at)) continue;
-      const name = s.name.replace(/\s+/g, " ").trim();
+      const name = cleanName(s.name);
       if (names.has(name)) hit(s.at, `${cited} "${name}" outside the citation form; ${advice}`);
     }
   }
@@ -267,13 +289,12 @@ export const stepAttempts = (repo: Repo, text: string): string[] => {
   return list();
 };
 
-export const lawAttempts = (text: string, isHarry = false): string[] => {
-  if (isHarry) return [];
+export const lawAttempts = (text: string): string[] => {
   const exactAt = exactCitations(text);
   const { hit, list } = hitList(text);
   for (const { at, name } of boldSpans(text)) {
     if (
-      LAW_HEADINGS.includes(name.trim()) &&
+      LAW_HEADINGS.includes(cleanName(name)) &&
       !exactAt.has(at) &&
       !LAW_NAMED_BEFORE_RE.test(text.slice(Math.max(0, at - 20), at))
     )

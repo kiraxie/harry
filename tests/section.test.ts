@@ -97,6 +97,13 @@ test("outline: each line's fence state and heading level", () => {
   );
 });
 
+test("headingSection: a fence line with an info string does not close a fence", () => {
+  assert.equal(
+    headingSection("## A\n```\n```js\n## not\n```  \n## B\n", "doc.md", "## A"),
+    "## A\n```\n```js\n## not\n```  ",
+  );
+});
+
 test("headingSection: a bare ## is not a section boundary", () => {
   assert.equal(
     headingSection("## A\none\n## \ntwo\n## B\n", "doc.md", "## A"),

@@ -278,7 +278,7 @@ for (const name of PAIRS) {
 // version of this) is the same mistake the unit exists to correct: it reads as a
 // guard while a second hoist onto an existing pair, or both doors switching to a
 // different reference, leaves the new path unguarded and everything green.
-// Includes what each pair reaches one level down (see sharedRefs). Two entries
+// Includes every reference each pair reaches, at any depth (see sharedRefs). Two entries
 // under audit are not prose — a JSON schema and a CJS validator — and the
 // content check below is inert on them by nature. They are listed rather than
 // exempted because the equality assertion is what keeps this map honest, and an

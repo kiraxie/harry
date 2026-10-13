@@ -5,9 +5,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   citationAttempts,
+  citeFailures,
   dimensionFailures,
   LEGACY_FORMS,
   lawAttempts,
+  lawFailures,
   legacyHits,
   namesIn,
   plainNameCitations,
@@ -110,34 +112,72 @@ test("a dimension citation names a SCAN-DIMENSIONS ## heading", () => {
         "dimension **Choosing dimensions and shaping agents** and\n" +
         "dimension **2. Reusability & hoist candidates (same-intent code that drifted apart)**",
     ),
-    [
-      '2 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Low value tests"',
-      '2 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Wrapped typo"',
-      '4 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Choosing dimensions and shaping agents"',
-      "5 -> references/audit/SCAN-DIMENSIONS.md **2. Reusability & hoist candidates (same-intent code that drifted apart)**: cite its core name **Reusability & hoist candidates**",
-    ],
+    {
+      seen: 5,
+      failures: [
+        '2 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Low value tests"',
+        '2 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Wrapped typo"',
+        '4 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Choosing dimensions and shaping agents"',
+        "5 -> references/audit/SCAN-DIMENSIONS.md **2. Reusability & hoist candidates (same-intent code that drifted apart)**: cite its core name **Reusability & hoist candidates**",
+      ],
+    },
     "the dimension citation check no longer matches, accepts a wrong or ### name, lost the core-name hint or the line",
+  );
+  assert.deepEqual(
+    dimensionFailures(repo, "a dimension **Low-value\ntests** here"),
+    { seen: 1, failures: [] },
+    "a dimension name wrapped across a line no longer resolves",
+  );
+});
+
+test("a cross-file citation names a heading or step its file has", () => {
+  assert.deepEqual(
+    citeFailures(
+      repo,
+      "per `references/grilling.md` **Handoff**, `skills/executing/SKILL.md` **One   fix\nwave**\n" +
+        "and `references/grilling.md` **Handof**, `references/x.md` **Seams**",
+    ),
+    {
+      seen: 4,
+      failures: [
+        '3 -> references/grilling.md has no heading or step "Handof"',
+        "3 -> references/x.md is not tracked",
+      ],
+    },
+    "the cross-file check no longer counts, cleans the name, resolves it or reports the line",
+  );
+});
+
+test("a law citation names a HARRY.md ## heading", () => {
+  assert.deepEqual(
+    lawFailures("per HARRY.md **Tiers** and `HARRY.md` **Evidence\n**,\nHARRY.md **Tier**"),
+    { seen: 3, failures: ["3 -> HARRY.md **Tier**"] },
+    "the law check no longer counts, cleans the name, resolves it or reports the line",
   );
 });
 
 test("a heading or step named in plain text after a path is caught", () => {
   const fixtures: [string, string[]][] = [
-    ["per `references/grilling.md`'s Handoff, then", ["Handoff"]],
-    ["per `references/grilling.md`’s Handoff, then", ["Handoff"]],
-    ["per `references/grilling.md`: Handoff", ["Handoff"]],
-    ["per `references/grilling.md` (Handoff)", ["Handoff"]],
-    ["at `skills/executing/SKILL.md` Review, the", ["Review"]],
-    ["at `skills/executing` Review, the", ["Review"]],
-    ["at `skills/executing/` Review, the", ["Review"]],
-    ["per `references/grilling.md` — Handoff", ["Handoff"]],
+    ["per `references/grilling.md`'s Handoff, then", ['1 -> references/grilling.md "Handoff"']],
+    ["per `references/grilling.md`’s Handoff, then", ['1 -> references/grilling.md "Handoff"']],
+    ["per `references/grilling.md`: Handoff", ['1 -> references/grilling.md "Handoff"']],
+    ["per `references/grilling.md` (Handoff)", ['1 -> references/grilling.md "Handoff"']],
+    ["at `skills/executing/SKILL.md` Review, the", ['1 -> skills/executing/SKILL.md "Review"']],
+    ["at `skills/executing` Review, the", ['1 -> skills/executing/SKILL.md "Review"']],
+    ["at `skills/executing/` Review, the", ['1 -> skills/executing/SKILL.md "Review"']],
+    ["per `references/grilling.md` — Handoff", ['1 -> references/grilling.md "Handoff"']],
     ["see `skills/executing/SKILL.md` review step", []],
     ["`references/grilling.md` covers it", []],
     ["`references/grilling.md` Handoffs list", []],
+    [
+      "intro\nper `references/grilling.md`'s Handoff, then",
+      ['2 -> references/grilling.md "Handoff"'],
+    ],
   ];
-  for (const [sample, names] of fixtures)
+  for (const [sample, hits] of fixtures)
     assert.deepEqual(
-      plainNameCitations(repo, sample).map((c) => c.name),
-      names,
+      plainNameCitations(repo, sample),
+      hits,
       `the plain-text name check misjudges: ${sample}`,
     );
 });
@@ -213,6 +253,7 @@ test("a citation attempt next to a path must be in the one form", () => {
       "**see `references/grilling.md`**, then",
       'see `references/grilling.md` and its **"Handoff"** rule',
       "see `references/grilling.md` for it\n\n**Handoff** opens the next paragraph",
+      'per `references/grilling.md` " and more" here',
     ],
   );
   assert.deepEqual(
@@ -292,16 +333,16 @@ test("a step or category cited by its number is caught", () => {
 test("a bold law name needs HARRY.md before it", () => {
   checkFixtures(
     laws,
-    ["the **Tiers** law holds", "run `x` **Tiers** now", 'say "the **Tiers** law holds" here'],
+    [
+      "the **Tiers** law holds",
+      "run `x` **Tiers** now",
+      'say "the **Tiers** law holds" here',
+      "the **Ask\nfirst** law holds",
+    ],
     [
       "per HARRY.md **Tiers** and `references/grilling.md` **Handoff**",
       "per `references/pr-body.md` **Evidence** here",
       "the copy at ~/.claude/harry/HARRY.md, **Code** included",
     ],
-  );
-  assert.deepEqual(
-    lawAttempts("the **Tiers** law holds", true),
-    [],
-    "HARRY.md now fails its own bold law names",
   );
 });

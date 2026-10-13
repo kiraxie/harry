@@ -14,16 +14,20 @@ export function section(
   return text.slice(start, end);
 }
 
-export const FENCE_OPEN_RE = /^\s*(`{3,})/;
+const FENCE_RE = /^\s*(`{3,})(.*)$/;
 
 export type OutlineLine = { text: string; fenced: boolean; level: number; title: string };
 
 export function outline(text: string): OutlineLine[] {
   let fence = "";
   return text.split("\n").map((line) => {
-    const run = FENCE_OPEN_RE.exec(line)?.[1];
-    if (run && (!fence || run.length >= fence.length)) {
-      fence = fence ? "" : run;
+    const [, run, rest = ""] = FENCE_RE.exec(line) ?? [];
+    if (run && !fence) {
+      fence = run;
+      return { text: line, fenced: true, level: 0, title: "" };
+    }
+    if (run && run.length >= fence.length && !rest.trim()) {
+      fence = "";
       return { text: line, fenced: true, level: 0, title: "" };
     }
     if (fence) return { text: line, fenced: true, level: 0, title: "" };
