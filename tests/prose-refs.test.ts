@@ -17,7 +17,7 @@ import {
 // full of file-path references (references/tier-gates.md, ${CLAUDE_PLUGIN_ROOT}/...,
 // scripts/init.mjs). Nothing else verifies those paths exist — renames/deletes leave
 // dangling references (this exact failure class was found twice in recent reviews).
-// This test extracts candidate repo-relative paths from all prose and asserts each exists.
+// This test extracts candidate repo-relative paths from all prose and asserts git tracks each.
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -37,8 +37,8 @@ const trackedDirs = new Set(
   ),
 );
 const trackedKind = (rel: string): "file" | "dir" | "missing" => {
-  const norm = path.posix.normalize(rel.split(path.sep).join("/")).replace(/\/$/, "");
-  if (norm === "." || norm === "") return "dir";
+  const norm = path.posix.normalize(rel.split(path.sep).join("/"));
+  if (norm === ".") return "dir";
   if (trackedFileSet.has(norm)) return "file";
   return trackedDirs.has(norm) ? "dir" : "missing";
 };
@@ -119,7 +119,7 @@ function extractCandidates(line: string, inFence: boolean): string[] {
   return found.filter((c) => !isPlaceholder(c));
 }
 
-test("every repo-relative path referenced in prose exists on disk", () => {
+test("every repo-relative path referenced in prose is tracked", () => {
   const failures: string[] = [];
 
   for (const relFile of proseFiles) {
@@ -136,9 +136,6 @@ test("every repo-relative path referenced in prose exists on disk", () => {
         return;
       }
       for (const candidate of extractCandidates(line, fenceLen > 0)) {
-        // Most references are repo-root-relative, but some prose (e.g. a skill
-        // pointing at its own scripts/ subfolder) writes paths relative to the
-        // prose file's own directory instead — accept either resolution.
         if (!resolves(candidate, fileDir)) {
           failures.push(`${relFile}:${idx + 1} -> ${candidate}`);
         }
@@ -152,7 +149,8 @@ test("every repo-relative path referenced in prose exists on disk", () => {
 test("every path check answers from git-tracked files", () => {
   assert.equal(trackedKind(".git"), "missing");
   assert.equal(trackedKind("./references/grilling.md"), "file");
-  assert.equal(trackedKind("references/"), "dir");
+  assert.equal(trackedKind("references"), "dir");
+  assert.equal(trackedKind("."), "dir");
   assert.equal(resolves(".git", repoRoot), false);
   assert.deepEqual(
     readFileSync(fileURLToPath(import.meta.url), "utf-8")
@@ -209,9 +207,7 @@ test("no shipped file cites a repo-local .claude/ path", () => {
 // The existence check and every prose scan see a `.claude/` dir only once it is listed,
 // so the lists must equal what git tracks there (untracked `worktrees/` drops out).
 test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
-  const tracked = execFileSync("git", ["ls-files", ".claude"], { cwd: repoRoot, encoding: "utf-8" })
-    .split("\n")
-    .filter((f) => f.split("/").length > 2);
+  const tracked = trackedFiles.filter((f) => f.startsWith(".claude/") && f.split("/").length > 2);
   const dirOf = (f: string) => f.split("/").slice(0, 2).join("/");
   const all = [...new Set(tracked.map(dirOf))].sort();
   const prose = [...new Set(tracked.filter((f) => f.endsWith(".md")).map(dirOf))].sort();
@@ -698,9 +694,9 @@ const stepAttempts = (text: string): string[] => {
 };
 
 const lawAttempts = (text: string, isHarry = false): string[] => {
+  if (isHarry) return [];
   const exactAt = exactCitations(text);
   const { hit, list } = hitList(text);
-  if (isHarry) return list();
   for (const { at, name } of boldSpans(text)) {
     if (
       LAW_HEADINGS.includes(name.trim()) &&
@@ -813,7 +809,7 @@ test("every citation attempt next to a path is in the one form", () => {
       "at `scripts/install.mjs` **Recon** here",
       "at `references/x.md`, **Seams** here",
       "at `.local/INDEX.md`, **In flight** here",
-      "at `.git/HEAD`, **x** here",
+      "at `tests/../.git`, **x** here",
       "at `./references/grilling.md`, **Handoff** here",
     ].flatMap((sample) => citationAttempts(sample)),
     [
@@ -824,7 +820,7 @@ test("every citation attempt next to a path is in the one form", () => {
       "1 -> a name next to scripts/install.mjs; scripts/install.mjs is not markdown, so it has no section to cite",
       "1 -> a name next to references/x.md; references/x.md does not exist",
       "1 -> a name next to .local/INDEX.md; .local/INDEX.md does not exist",
-      "1 -> a name next to .git/HEAD; .git/HEAD does not exist",
+      "1 -> a name next to tests/../.git; tests/../.git does not exist",
       "1 -> a name next to ./references/grilling.md; cite it as `path` **Name**",
     ],
     "a hint no longer follows the kind of path it names",
