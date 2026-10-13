@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -21,19 +21,40 @@ import {
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
+const gitFiles = (...args: string[]): string[] =>
+  execFileSync("git", ["ls-files", ...args], { cwd: repoRoot, encoding: "utf-8" })
+    .split("\n")
+    .filter(Boolean);
+const deletedFiles = new Set(gitFiles("--deleted"));
+const trackedFiles = gitFiles().filter((rel) => !deletedFiles.has(rel));
+const trackedFileSet = new Set(trackedFiles);
+const trackedDirs = new Set(
+  trackedFiles.flatMap((rel) =>
+    rel
+      .split("/")
+      .slice(0, -1)
+      .map((_, i, parts) => parts.slice(0, i + 1).join("/")),
+  ),
+);
+const trackedKind = (rel: string): "file" | "dir" | "missing" => {
+  const norm = path.posix.normalize(rel.split(path.sep).join("/")).replace(/\/$/, "");
+  if (norm === "." || norm === "") return "dir";
+  if (trackedFileSet.has(norm)) return "file";
+  return trackedDirs.has(norm) ? "dir" : "missing";
+};
+const isTracked = (abs: string): boolean => trackedKind(path.relative(repoRoot, abs)) !== "missing";
+const resolves = (candidate: string, fileDir: string): boolean =>
+  isTracked(path.join(repoRoot, candidate)) || isTracked(path.join(fileDir, candidate));
+
 const TOP_LEVEL_FILES = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
 const PROSE_DIRS = [...INSTRUCTION_DIRS, "evals"];
 
 function listMarkdownFiles(dir: string): string[] {
-  const abs = path.join(repoRoot, dir);
-  if (!existsSync(abs)) return [];
-  return readdirSync(abs, { recursive: true, encoding: "utf-8" })
-    .filter((rel) => rel.endsWith(".md"))
-    .map((rel) => path.join(dir, rel));
+  return trackedFiles.filter((rel) => rel.startsWith(`${dir}/`) && rel.endsWith(".md"));
 }
 
 const proseFiles = [
-  ...TOP_LEVEL_FILES.filter((f) => existsSync(path.join(repoRoot, f))),
+  ...TOP_LEVEL_FILES.filter((f) => isTracked(path.join(repoRoot, f))),
   ...PROSE_DIRS.flatMap(listMarkdownFiles),
 ].filter((f) => f !== "CHANGELOG.md");
 const citeCorpus = [...proseFiles, "upstream.json"];
@@ -118,9 +139,7 @@ test("every repo-relative path referenced in prose exists on disk", () => {
         // Most references are repo-root-relative, but some prose (e.g. a skill
         // pointing at its own scripts/ subfolder) writes paths relative to the
         // prose file's own directory instead — accept either resolution.
-        const rootHit = existsSync(path.join(repoRoot, candidate));
-        const dirHit = existsSync(path.join(fileDir, candidate));
-        if (!rootHit && !dirHit) {
+        if (!resolves(candidate, fileDir)) {
           failures.push(`${relFile}:${idx + 1} -> ${candidate}`);
         }
       }
@@ -128,6 +147,20 @@ test("every repo-relative path referenced in prose exists on disk", () => {
   }
 
   assert.deepEqual(failures, []);
+});
+
+test("every path check answers from git-tracked files", () => {
+  assert.equal(trackedKind(".git"), "missing");
+  assert.equal(trackedKind("./references/grilling.md"), "file");
+  assert.equal(trackedKind("references/"), "dir");
+  assert.equal(resolves(".git", repoRoot), false);
+  assert.deepEqual(
+    readFileSync(fileURLToPath(import.meta.url), "utf-8")
+      .split("\n")
+      .filter((line) => /\bfrom "(?:node:)?fs(?:\/promises)?";$/.test(line)),
+    ['import { readFileSync } from "node:fs";'],
+    "a path check reads the disk again; route it through trackedKind",
+  );
 });
 
 // The marketplace installs the whole tree, but no plugin build loads `.claude/`, so a
@@ -243,7 +276,7 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
   }
   for (const file of TOP_LEVEL_FILES) {
     assert.ok(
-      existsSync(path.join(repoRoot, file)),
+      isTracked(path.join(repoRoot, file)),
       `TOP_LEVEL_FILES names "${file}" but it is missing — renamed? Both tests here read ` +
         `that list, so its paths AND its citations go unchecked until this is fixed.`,
     );
@@ -296,8 +329,8 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 // The legacy forms resolve against nothing, so a rename broke them silently;
 // they fail here instead, each hit naming the form to use.
 const DIMENSION_FORM = "dimension **<SCAN-DIMENSIONS ## core name>**";
-const CITE_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`\s+\*\*([^*]+)\*\*/g;
-const LAW_CITE_RE = /HARRY\.md`?\s+\*\*([^*]+)\*\*/g;
+const CITE_RE = /`((?:[\w.-]+\/)*[\w.-]+\.md)`\s+\*\*([^*]+)\*\*/dg;
+const LAW_CITE_RE = /HARRY\.md`?\s+\*\*([^*]+)\*\*/dg;
 const LEGACY_FORMS: [string, RegExp, string[], string?][] = [
   [
     "an audit dimension by number",
@@ -360,7 +393,7 @@ const namesIn = (text: string): Name[] => {
 const namesOf = (rel: string): Name[] => namesIn(readFileSync(path.join(repoRoot, rel), "utf-8"));
 
 const resolveCitation = (target: string, name: string, level?: number): string | null => {
-  if (!existsSync(path.join(repoRoot, target))) return `${target} is missing`;
+  if (trackedKind(target) !== "file") return `${target} is missing`;
   const names = namesOf(target).filter((n) => level === undefined || n.level === level);
   const matches = names.filter((n) => n.name === name);
   if (matches.length > 1)
@@ -388,6 +421,8 @@ test("every cross-file citation names a heading or step its file has, once", () 
   assert.ok(seen > 0, "the citation pattern matched nothing; it is no longer checking anything");
   const fixtures: [string, string, string | null][] = [
     ["skills/executing/SKILL.md", "One fix wave", null],
+    [".git", "x", ".git is missing"],
+    [".local/INDEX.md", "In flight", ".local/INDEX.md is missing"],
     [
       "skills/executing/SKILL.md",
       "Check the fixes first",
@@ -453,7 +488,7 @@ test("no cross-file citation uses a legacy form", () => {
   assert.deepEqual(hits, [], "a legacy citation form; each hit names the form to use");
 });
 
-const DIMENSION_CITE_RE = /\bdimensions?\s+\*\*([^*]+)\*\*/gi;
+const DIMENSION_CITE_RE = /\bdimensions?\s+\*\*([^*]+)\*\*/dgi;
 
 const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
 
@@ -503,7 +538,7 @@ const PATH_THEN_PLAIN_RE = new RegExp(
 
 const citeTarget = (cited: string): string | null => {
   const target = cited.endsWith(".md") ? cited : `${cited}/SKILL.md`;
-  return existsSync(path.join(repoRoot, target)) ? target : null;
+  return trackedKind(target) === "file" ? target : null;
 };
 
 const plainNameCitations = (text: string): { index: number; target: string; name: string }[] =>
@@ -548,9 +583,10 @@ test("no cross-file citation names a heading or step in plain text", () => {
 
 const PATH_TOKEN_RE = /`((?:[\w.-]+\/)*[\w.-]+?)\/?`|(?<![\w`/.-])(HARRY\.md)(?![\w`])/g;
 const SENTENCE_END_RE = /\.(?:\s|$)|\n\s*\n/g;
-const ADJACENT_NAME_RE = new RegExp(String.raw`^${CONNECTOR_SRC}(?:\*\*(?=\S)|\\?"(?=\w))`);
+const CONNECTOR_RE = new RegExp(`^${CONNECTOR_SRC}`);
 const STEP_NUMBER_RE = new RegExp(String.raw`^${CONNECTOR_SRC}(?:steps?|category) \d`);
 const PAREN_STEP_RE = /\(steps? \d/;
+const BOLD_RE = /\*\*([^*]+)\*\*/g;
 const QUOTED_OR_BOLD_RE = /\*\*([^*]+)\*\*|"([^"\n]+)"/g;
 const LAW_NAMED_BEFORE_RE = new RegExp(String.raw`\bHARRY\.md\`?${CONNECTOR_SRC}$`);
 const DIRECTORY_FORM = "`dir/SKILL.md` **Name**";
@@ -559,165 +595,201 @@ const STEP_HINT = "cite the step by its label, as `path` **Name**";
 const exactCitations = (text: string): Set<number> =>
   new Set(
     [CITE_RE, LAW_CITE_RE, DIMENSION_CITE_RE].flatMap((re) =>
-      [...text.matchAll(re)].map(
-        (m) => (m.index ?? 0) + m[0].length - (m[m.length - 1] as string).length - 4,
-      ),
+      [...text.matchAll(re)].map((m) => (m.indices?.[m.length - 1]?.[0] ?? 0) - 2),
     ),
   );
 
-const citationAttempts = (text: string, isHarry = false): string[] => {
-  const exactAt = exactCitations(text);
-  const hits = new Map<number, string>();
-  const hit = (index: number, message: string) => {
-    if (!hits.has(index)) hits.set(index, `${lineOf(text, index)} -> ${message}`);
-  };
+type PathMention = {
+  cited: string;
+  target: string | null;
+  advice: string;
+  start: number;
+  end: number;
+  from: number;
+  after: string;
+};
+
+const pathMentions = (text: string): PathMention[] => {
   const ends = [...text.matchAll(SENTENCE_END_RE)].map((e) => e.index ?? 0);
-  for (const m of text.matchAll(PATH_TOKEN_RE)) {
+  return [...text.matchAll(PATH_TOKEN_RE)].flatMap((m) => {
     const cited = (m[1] ?? m[2]) as string;
     const isFile = cited.endsWith(".md");
-    if (!isFile && !cited.includes("/")) continue;
+    if (!isFile && !cited.includes("/")) return [];
     const target = citeTarget(cited);
     const start = m.index ?? 0;
     const end = start + m[0].length;
-    const advice = isFile
-      ? `cite it as ${cited === "HARRY.md" ? "HARRY.md **Heading**" : "`path` **Name**"}`
-      : target
-        ? `cite it as ${DIRECTORY_FORM}`
-        : existsSync(path.join(repoRoot, cited))
-          ? "cite it as `dir/FILE.md` **Name**"
-          : `${cited} does not exist`;
+    const kind = trackedKind(cited);
+    const advice =
+      kind === "missing"
+        ? `${cited} does not exist`
+        : kind === "dir"
+          ? `cite it as ${target ? DIRECTORY_FORM : "`dir/FILE.md` **Name**"}`
+          : isFile
+            ? `cite it as ${cited === "HARRY.md" ? "HARRY.md **Heading**" : "`path` **Name**"}`
+            : `${cited} is not markdown, so it has no section to cite`;
+    const from = ends.reduce((last, e) => (e < start ? e + 1 : last), 0);
     const after = text.slice(end, ends.find((e) => e >= end) ?? text.length);
+    return [{ cited, target, advice, start, end, from, after }];
+  });
+};
+
+type Span = { at: number; end: number; name: string; bold: boolean };
+
+const spansOf = (text: string, re: RegExp): Span[] =>
+  [...text.matchAll(re)].map((m) => ({
+    at: m.index ?? 0,
+    end: (m.index ?? 0) + m[0].length,
+    name: (m[1] ?? m[2]) as string,
+    bold: m[1] !== undefined,
+  }));
+
+const boldSpans = (text: string): Span[] => spansOf(text, BOLD_RE);
+
+const hitList = (text: string) => {
+  const hits = new Map<number, string>();
+  return {
+    hit: (index: number, message: string) => {
+      if (!hits.has(index)) hits.set(index, `${lineOf(text, index)} -> ${message}`);
+    },
+    list: () => [...hits.entries()].sort(([a], [b]) => a - b).map(([, message]) => message),
+  };
+};
+
+const citationAttempts = (text: string): string[] => {
+  const exactAt = exactCitations(text);
+  const { hit, list } = hitList(text);
+  const spans = spansOf(text, QUOTED_OR_BOLD_RE);
+  for (const { cited, target, advice, start, end, from, after } of pathMentions(text)) {
     const exact = exactAt.has(end + (/^\s*/.exec(after)?.[0].length ?? 0));
-    const adjacent = !exact && ADJACENT_NAME_RE.test(after);
+    const lead = end + (CONNECTOR_RE.exec(after)?.[0].length ?? 0);
+    const opener = spans.find(
+      (s) =>
+        (s.bold && s.at === lead && /^\S/.test(s.name)) ||
+        (!s.bold && s.at === lead + (text[lead] === "\\" ? 1 : 0) && /^\w/.test(s.name)),
+    );
+    const adjacent = !exact && opener !== undefined;
     if (adjacent) hit(end, `a name next to ${cited}; ${advice}`);
-    const adjacentAt = adjacent ? end + (/\*\*|"/.exec(after)?.index ?? 0) : -1;
+    if (!target) continue;
+    const names = new Set(namesOf(target).flatMap((n) => [n.name, n.full]));
+    const afterEnd = end + after.length;
+    for (const s of spans) {
+      if (!((s.at >= from && s.end <= start) || (s.at >= end && s.end <= afterEnd))) continue;
+      if (adjacent && s === opener) continue;
+      if (s.bold && exactAt.has(s.at)) continue;
+      const name = s.name.replace(/\s+/g, " ").trim();
+      if (names.has(name)) hit(s.at, `${cited} "${name}" outside the citation form; ${advice}`);
+    }
+  }
+  return list();
+};
+
+const stepAttempts = (text: string): string[] => {
+  const { hit, list } = hitList(text);
+  for (const { cited, end, after } of pathMentions(text)) {
     if (STEP_NUMBER_RE.test(after))
       hit(end, `a step or category number after ${cited}; ${STEP_HINT}`);
     const paren = PAREN_STEP_RE.exec(after);
     if (paren) hit(end + paren.index, `a step number in the sentence after ${cited}; ${STEP_HINT}`);
-    if (!target) continue;
-    const from = ends.reduce((last, e) => (e < start ? e + 1 : last), 0);
-    const names = new Set(namesOf(target).flatMap((n) => [n.name, n.full]));
-    for (const [offset, span] of [
-      [from, text.slice(from, start)],
-      [end, after],
-    ] as const)
-      for (const q of span.matchAll(QUOTED_OR_BOLD_RE)) {
-        const at = offset + (q.index ?? 0);
-        if (at === adjacentAt) continue;
-        if (q[1] !== undefined && exactAt.has(at)) continue;
-        const name = ((q[1] ?? q[2]) as string).replace(/\s+/g, " ").trim();
-        if (names.has(name)) hit(at, `${cited} "${name}" outside the citation form; ${advice}`);
-      }
   }
-  for (const m of text.matchAll(/\*\*([^*]+)\*\*/g)) {
-    const at = m.index ?? 0;
-    const end = at + m[0].length;
+  for (const { at, end } of boldSpans(text))
     if (STEP_NUMBER_RE.test(text.slice(end, end + 40)))
       hit(at, `a step or category number after a name; ${STEP_HINT}`);
+  return list();
+};
+
+const lawAttempts = (text: string, isHarry = false): string[] => {
+  const exactAt = exactCitations(text);
+  const { hit, list } = hitList(text);
+  if (isHarry) return list();
+  for (const { at, name } of boldSpans(text)) {
     if (
-      !isHarry &&
-      LAW_HEADINGS.includes((m[1] as string).trim()) &&
+      LAW_HEADINGS.includes(name.trim()) &&
       !exactAt.has(at) &&
       !LAW_NAMED_BEFORE_RE.test(text.slice(Math.max(0, at - 20), at))
     )
       hit(
         at,
-        `**${m[1]}** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**`,
+        `**${name}** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**`,
       );
   }
-  return [...hits.entries()].sort(([a], [b]) => a - b).map(([, message]) => message);
+  return list();
+};
+
+const scanCorpus = (scan: (text: string, isHarry: boolean) => string[]): string[] =>
+  citeCorpus.flatMap((relFile) =>
+    scan(readFileSync(path.join(repoRoot, relFile), "utf-8"), relFile === "HARRY.md").map(
+      (h) => `${relFile}:${h}`,
+    ),
+  );
+
+const checkFixtures = (
+  scan: (text: string) => string[],
+  mustFail: string[],
+  mustPass: string[],
+) => {
+  for (const sample of mustFail) assert.ok(scan(sample).length > 0, `no longer fails: ${sample}`);
+  for (const sample of mustPass)
+    for (const check of [citationAttempts, stepAttempts, lawAttempts])
+      assert.deepEqual(check(sample), [], `now fails ${check.name}: ${sample}`);
 };
 
 test("every citation attempt next to a path is in the one form", () => {
-  const mustFail = [
-    "per `references/grilling.md`: (**Handoff**) here",
-    "per `references/grilling.md`’s, **Handoff** here",
-    "per `references/grilling.md`; **Handoff** here",
-    "per `references/grilling.md` — **Handoff** here",
-    'per `references/grilling.md`’s "Handoff" here',
-    "per `references/grilling.md`, **Handof** here",
-    "at `skills/executing` **Steps** here",
-    'the "Handoff" section of `references/grilling.md` says so',
-    "see `references/grilling.md` and then its **Handoff** rule",
-    "at `skills/executing/SKILL.md` **Steps**, step 4",
-    "at `skills/executing/SKILL.md` **Steps**'s step 4",
-    "at `skills/executing/SKILL.md` **Steps** (step 4)",
-    "the `skills/finishing`'s architecture review (step 2)",
-    "`skills/executing/SKILL.md` covers it (steps 2-3)",
-    "per HARRY.md's **Tiers** here",
-    "per HARRY.md’s **Tiers** here",
-    "per `HARRY.md`'s **Tiers** here",
-    "the **Tiers** law holds",
-    "See **Handoff** in `references/grilling.md`",
-    'per `references/grilling.md`, "Handoff"',
-    "per `references/grilling.md`, **Handoff**",
-    "per `references/grilling.md`'s **Handoff**",
-    "per `references/grilling.md`’s **Handoff**",
-    "per `references/grilling.md`’s **Handof**",
-    'per `references/grilling.md`, \\"Handoff\\"',
-    "per `references/grilling.md`: **Handoff**",
-    "the **Steps** step 4 applies",
-    "per `references/architecture-review.md` category 4",
-    "per `skills/executing/SKILL.md`, step 2",
-    "per `skills/executing` step 4",
-    "per `references/grilling.md` (**Handoff**)",
-    "per `skills/executing/`'s **Steps**",
-    "per `skills/executing` (**Steps**)",
-    "per `references/grilling.md` — **Handof** here",
-    "per `references/grilling.md`: **Handof** here",
-    "per `references/grilling.md` (**Handof**) here",
-    "the **Steps** (step 4) applies",
-    "per `skills/executing/SKILL.md`'s step 4",
-    "per `references/grilling.md` (category 4)",
-    "per `references/grilling.md`: step 4",
-    "per `references/grilling.md` — step 4",
-    "the **Steps**: step 4 applies",
-    "at `references/audit` **Recon** here",
-    "at `skills/brainstrming` **Steps** here",
-    'per `references/x.md`, "Seams"',
-    "per `references/x.md`, **Seams**",
-    "per `references/x.md`’s **Seams**",
-    "per `references/x.md`: **Seams**",
-    "the **Seams** step 4 applies",
-    "per `references/x.md` category 4",
-    "per `skills/x/SKILL.md`, step 2",
-    "per `skills/x` step 4",
-    "per `references/x.md` (**Seams**)",
-    "per `skills/x` **Steps**",
-    "per `skills/x/`'s **Steps**",
-    "per `skills/x` (**Steps**)",
-    "per `references/grilling.md`, then run `x` **Handoff** here",
-    "run `x` **Tiers** now",
-    "`references/x.md` covers it (steps 2-3)",
-    "see `skills/brainstorming/SKILL.md` and its **Full Flow (full depth)** part",
-    'per `references/grilling.md` and `x` "Handoff" here',
-  ];
-  for (const sample of mustFail)
-    assert.ok(citationAttempts(sample).length > 0, `no longer fails: ${sample}`);
-  const mustPass = [
-    "simplify dual-lane — **Claude Code build:** in `commands/review.md`; **Codex build:**",
-    "earns its place. **Run it after any material change to `HARRY.md`** to catch a",
-    "The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md` **Review**,\nand its scoped re-review in `skills/executing/SKILL.md` **One fix wave**). The review standard",
-    "then `skills/finishing/SKILL.md` **Verify tests first** runs, and finishing again from step 1",
-    "per HARRY.md **Tiers** and `references/grilling.md` **Handoff**",
-    '      "skill": "HARRY.md",',
-    'the "`references/grilling.md`" file',
-    "Rebuild `dist/` when changing `src/` **or `package.json`** — the bundle",
-    "do **step 4** next",
-    "Run **lint**, then **step 2** of the release.",
-    "per `references/audit/SCAN-DIMENSIONS.md` and dimension **Low-value tests**",
-    "per `references/pr-body.md` **Evidence** here",
-    "per `references/x.md` **Seams** here",
-    "the copy at ~/.claude/harry/HARRY.md, **Code** included",
-    "see `references/grilling.md` for it\n\n**Handoff** opens the next paragraph",
-  ];
-  for (const sample of mustPass)
-    assert.deepEqual(citationAttempts(sample), [], `now fails: ${sample}`);
-  assert.deepEqual(
-    citationAttempts("the **Tiers** law holds", true),
-    [],
-    "HARRY.md now fails its own bold law names",
+  checkFixtures(
+    citationAttempts,
+    [
+      "per `references/grilling.md`: (**Handoff**) here",
+      "per `references/grilling.md`’s, **Handoff** here",
+      "per `references/grilling.md`; **Handoff** here",
+      "per `references/grilling.md` — **Handoff** here",
+      'per `references/grilling.md`’s "Handoff" here',
+      "per `references/grilling.md`, **Handof** here",
+      "at `skills/executing` **Steps** here",
+      'the "Handoff" section of `references/grilling.md` says so',
+      "see `references/grilling.md` and then its **Handoff** rule",
+      "per HARRY.md's **Tiers** here",
+      "per HARRY.md’s **Tiers** here",
+      "per `HARRY.md`'s **Tiers** here",
+      "See **Handoff** in `references/grilling.md`",
+      'per `references/grilling.md`, "Handoff"',
+      "per `references/grilling.md`, **Handoff**",
+      "per `references/grilling.md`'s **Handoff**",
+      "per `references/grilling.md`’s **Handoff**",
+      "per `references/grilling.md`’s **Handof**",
+      'per `references/grilling.md`, \\"Handoff\\"',
+      "per `references/grilling.md`: **Handoff**",
+      "per `references/grilling.md` (**Handoff**)",
+      "per `skills/executing/`'s **Steps**",
+      "per `skills/executing` (**Steps**)",
+      "per `references/grilling.md` — **Handof** here",
+      "per `references/grilling.md`: **Handof** here",
+      "per `references/grilling.md` (**Handof**) here",
+      "at `references/audit` **Recon** here",
+      "at `skills/brainstrming` **Steps** here",
+      'per `references/x.md`, "Seams"',
+      "per `references/x.md`, **Seams**",
+      "per `references/x.md`’s **Seams**",
+      "per `references/x.md`: **Seams**",
+      "per `references/x.md` (**Seams**)",
+      "per `skills/x` **Steps**",
+      "per `skills/x/`'s **Steps**",
+      "per `skills/x` (**Steps**)",
+      "per `references/grilling.md`, then run `x` **Handoff** here",
+      "see `skills/brainstorming/SKILL.md` and its **Full Flow (full depth)** part",
+      'per `references/grilling.md` and `x` "Handoff" here',
+    ],
+    [
+      "simplify dual-lane — **Claude Code build:** in `commands/review.md`; **Codex build:**",
+      "earns its place. **Run it after any material change to `HARRY.md`** to catch a",
+      "The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md` **Review**,\nand its scoped re-review in `skills/executing/SKILL.md` **One fix wave**). The review standard",
+      '      "skill": "HARRY.md",',
+      'the "`references/grilling.md`" file',
+      "Rebuild `dist/` when changing `src/` **or `package.json`** — the bundle",
+      "per `references/audit/SCAN-DIMENSIONS.md` and dimension **Low-value tests**",
+      "per `references/x.md` **Seams** here",
+      "**see `references/grilling.md`**, then",
+      'see `references/grilling.md` and its **"Handoff"** rule',
+      "see `references/grilling.md` for it\n\n**Handoff** opens the next paragraph",
+    ],
   );
   assert.deepEqual(
     citationAttempts(
@@ -732,17 +804,89 @@ test("every citation attempt next to a path is in the one form", () => {
     ],
     "a hit no longer carries its line or the form to use",
   );
-  const hits = citeCorpus.flatMap((relFile) =>
-    citationAttempts(
-      readFileSync(path.join(repoRoot, relFile), "utf-8"),
-      relFile === "HARRY.md",
-    ).map((h) => `${relFile}:${h}`),
+  assert.deepEqual(
+    [
+      "per `references/grilling.md`, **Handoff** here",
+      "per HARRY.md, **Tiers** here",
+      "at `skills/executing` **Steps** here",
+      "at `references/audit` **Recon** here",
+      "at `scripts/install.mjs` **Recon** here",
+      "at `references/x.md`, **Seams** here",
+      "at `.local/INDEX.md`, **In flight** here",
+      "at `.git/HEAD`, **x** here",
+      "at `./references/grilling.md`, **Handoff** here",
+    ].flatMap((sample) => citationAttempts(sample)),
+    [
+      "1 -> a name next to references/grilling.md; cite it as `path` **Name**",
+      "1 -> a name next to HARRY.md; cite it as HARRY.md **Heading**",
+      "1 -> a name next to skills/executing; cite it as `dir/SKILL.md` **Name**",
+      "1 -> a name next to references/audit; cite it as `dir/FILE.md` **Name**",
+      "1 -> a name next to scripts/install.mjs; scripts/install.mjs is not markdown, so it has no section to cite",
+      "1 -> a name next to references/x.md; references/x.md does not exist",
+      "1 -> a name next to .local/INDEX.md; .local/INDEX.md does not exist",
+      "1 -> a name next to .git/HEAD; .git/HEAD does not exist",
+      "1 -> a name next to ./references/grilling.md; cite it as `path` **Name**",
+    ],
+    "a hint no longer follows the kind of path it names",
   );
   assert.deepEqual(
-    hits,
+    scanCorpus(citationAttempts),
     [],
     "a citation attempt outside the one form; each hit names the form to use",
   );
+});
+
+test("no prose cites a step or category by its number", () => {
+  checkFixtures(
+    stepAttempts,
+    [
+      "at `skills/executing/SKILL.md` **Steps**, step 4",
+      "at `skills/executing/SKILL.md` **Steps**'s step 4",
+      "at `skills/executing/SKILL.md` **Steps** (step 4)",
+      "the `skills/finishing`'s architecture review (step 2)",
+      "`skills/executing/SKILL.md` covers it (steps 2-3)",
+      "the **Steps** step 4 applies",
+      "per `references/architecture-review.md` category 4",
+      "per `skills/executing/SKILL.md`, step 2",
+      "per `skills/executing` step 4",
+      "the **Steps** (step 4) applies",
+      "per `skills/executing/SKILL.md`'s step 4",
+      "per `references/grilling.md` (category 4)",
+      "per `references/grilling.md`: step 4",
+      "per `references/grilling.md` — step 4",
+      "the **Steps**: step 4 applies",
+      'say "the **Steps** step 4" here',
+      "the **Seams** step 4 applies",
+      "per `references/x.md` category 4",
+      "per `skills/x/SKILL.md`, step 2",
+      "per `skills/x` step 4",
+      "`references/x.md` covers it (steps 2-3)",
+    ],
+    [
+      "then `skills/finishing/SKILL.md` **Verify tests first** runs, and finishing again from step 1",
+      "do **step 4** next",
+      "Run **lint**, then **step 2** of the release.",
+    ],
+  );
+  assert.deepEqual(scanCorpus(stepAttempts), [], "a step cited by number; cite it by its label");
+});
+
+test("every bold law name outside HARRY.md has HARRY.md before it", () => {
+  checkFixtures(
+    lawAttempts,
+    ["the **Tiers** law holds", "run `x` **Tiers** now", 'say "the **Tiers** law holds" here'],
+    [
+      "per HARRY.md **Tiers** and `references/grilling.md` **Handoff**",
+      "per `references/pr-body.md` **Evidence** here",
+      "the copy at ~/.claude/harry/HARRY.md, **Code** included",
+    ],
+  );
+  assert.deepEqual(
+    lawAttempts("the **Tiers** law holds", true),
+    [],
+    "HARRY.md now fails its own bold law names",
+  );
+  assert.deepEqual(scanCorpus(lawAttempts), [], "a bold law name with no HARRY.md before it");
 });
 
 test("every reference is cited by path from a shipped file other than itself", () => {
@@ -769,9 +913,7 @@ test("no tracked file but the changelog cites a law by the retired section-numbe
   // Every tracked file, not a list of kinds: a list missed a file kind four times
   // (test messages, scripts, eval notes, upstream.json). CHANGELOG.md is release
   // history and quotes the numbering of its day.
-  const tracked = execFileSync("git", ["ls-files"], { cwd: repoRoot, encoding: "utf-8" })
-    .split("\n")
-    .filter((rel) => rel && rel !== "CHANGELOG.md" && existsSync(path.join(repoRoot, rel)));
+  const tracked = trackedFiles.filter((rel) => rel !== "CHANGELOG.md");
   assert.ok(tracked.includes("upstream.json"), "the scan lost the tracked files");
   const hits = tracked.flatMap((rel) => {
     const text = readFileSync(path.join(repoRoot, rel), "utf-8");
