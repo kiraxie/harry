@@ -14,26 +14,43 @@ export function section(
   return text.slice(start, end);
 }
 
+export const FENCE_OPEN_RE = /^\s*(`{3,})/;
+
+export type OutlineLine = { text: string; fenced: boolean; level: number; title: string };
+
+export function outline(text: string): OutlineLine[] {
+  let fence = "";
+  return text.split("\n").map((line) => {
+    const run = FENCE_OPEN_RE.exec(line)?.[1];
+    if (run && (!fence || run.length >= fence.length)) {
+      fence = fence ? "" : run;
+      return { text: line, fenced: true, level: 0, title: "" };
+    }
+    if (fence) return { text: line, fenced: true, level: 0, title: "" };
+    const heading = /^(#+) (.*)$/.exec(line);
+    const title = heading?.[2]?.trim() ?? "";
+    return { text: line, fenced: false, level: title ? (heading?.[1]?.length ?? 0) : 0, title };
+  });
+}
+
 export function headingSection(text: string, rel: string, heading: string | RegExp): string {
   assert.ok(
     text.includes("\n"),
     `${rel} has no line breaks: pass the raw text, not a flattened copy`,
   );
-  const lines = text.split("\n");
-  let fenced = false;
-  const level = lines.map((line) => {
-    if (line.startsWith("```")) fenced = !fenced;
-    return fenced ? 0 : (/^(#+) /.exec(line)?.[1]?.length ?? 0);
-  });
+  const lines = outline(text);
   const atStart =
     typeof heading === "string" ? heading : new RegExp(`^(?:${heading.source})`, heading.flags);
   const matches = (line: string): boolean =>
     typeof atStart === "string" ? line.startsWith(atStart) : atStart.test(line);
-  const first = lines.findIndex((line, i) => (level[i] ?? 0) > 0 && matches(line));
+  const first = lines.findIndex((line) => line.level > 0 && matches(line.text));
   assert.ok(first !== -1, `${rel} no longer has a heading "${heading}"`);
-  const own = level[first] ?? 0;
-  const next = level.findIndex((n, i) => i > first && n > 0 && n <= own);
-  return lines.slice(first, next === -1 ? undefined : next).join("\n");
+  const own = lines[first]?.level ?? 0;
+  const next = lines.findIndex((line, i) => i > first && line.level > 0 && line.level <= own);
+  return lines
+    .slice(first, next === -1 ? undefined : next)
+    .map((line) => line.text)
+    .join("\n");
 }
 
 const short = (marker: string): string =>

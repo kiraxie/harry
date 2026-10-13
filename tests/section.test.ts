@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { headingSection, inOrder, section } from "./section.ts";
+import { headingSection, inOrder, outline, section } from "./section.ts";
 
 const doc = "# T\n\n## A\none\n\n## B\ntwo\n";
 
@@ -60,6 +60,48 @@ test("headingSection: with no later heading it runs to the end of the text", () 
 
 test("headingSection: text inside a code fence is never taken for a heading", () => {
   assert.throws(() => headingSection(nested, "doc.md", "# not"), /no longer has a heading "# not"/);
+});
+
+test("headingSection: an indented fence hides its headings too", () => {
+  assert.equal(
+    headingSection("## A\none\n  ```\n## not\n  ```\n## B\n", "doc.md", "## A"),
+    "## A\none\n  ```\n## not\n  ```",
+  );
+});
+
+test("headingSection: a shorter fence line does not close a longer fence", () => {
+  assert.equal(
+    headingSection("## A\n````md\n```\n## not\n```\n````\n## B\n", "doc.md", "## A"),
+    "## A\n````md\n```\n## not\n```\n````",
+  );
+});
+
+test("outline: each line's fence state and heading level", () => {
+  assert.deepEqual(
+    outline("# T\n```\n## x\n```\ntext\n### D  \n## \n##\n#tag").map((l) => [
+      l.fenced,
+      l.level,
+      l.title,
+    ]),
+    [
+      [false, 1, "T"],
+      [true, 0, ""],
+      [true, 0, ""],
+      [true, 0, ""],
+      [false, 0, ""],
+      [false, 3, "D"],
+      [false, 0, ""],
+      [false, 0, ""],
+      [false, 0, ""],
+    ],
+  );
+});
+
+test("headingSection: a bare ## is not a section boundary", () => {
+  assert.equal(
+    headingSection("## A\none\n## \ntwo\n## B\n", "doc.md", "## A"),
+    "## A\none\n## \ntwo",
+  );
 });
 
 test("headingSection: a missing heading fails instead of returning a wrong slice", () => {

@@ -8,6 +8,8 @@ const testsDir = fileURLToPath(new URL(".", import.meta.url));
 const OWNER = "section.ts";
 const SELF = "slice-scan.test.ts";
 const LOOKUP = /\b(?:lastIndexOf|indexOf)\(|\.search\(/;
+const HEADING_READ =
+  /\/\^#(?:\\.|[^/\\])*\/[a-z]*m|new RegExp\((["'`])\^#.*?\1\s*,\s*["'`][a-z]*m|\\n#+ ?[/()[|$]|\(\?=#|\\n\)#|split\((?:["'`](?:\\n)?#+ |\/\^#)|(?:last)?[iI]ndexOf\(["'`](?:\\n)?#+ ["'`]/;
 
 const ALLOWED: { file: string; line: string; why: string }[] = [
   {
@@ -77,17 +79,6 @@ const ALLOWED: { file: string; line: string; why: string }[] = [
     why: "line number of a slice section() already proved present",
   },
   {
-    file: "review-writing-laws.test.ts",
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal source line, as the test writes it.
-    line: "const from = text.indexOf(`- ${label}`);",
-    why: "bullet slice, asserted present on the next line; no section shape has three callers",
-  },
-  {
-    file: "review-writing-laws.test.ts",
-    line: 'const ends = [text.indexOf(" - ", from + 2), text.indexOf("## ", from)].filter((i) => i !== -1);',
-    why: "nearest of several end markers; no section shape has three callers",
-  },
-  {
     file: "session-writes.test.ts",
     line: '.slice(deepDive.indexOf("```"), deepDive.lastIndexOf("```"))',
     why: "first to last fence; a missing fence empties the slice and the match below fails",
@@ -116,6 +107,51 @@ test("every indexOf, lastIndexOf or search in tests/ is on the allowlist", () =>
     [],
     `slice or order-check by marker through tests/section.ts (section(), headingSection(), inOrder()), or add an allowlist entry with its reason:\n${unlisted.join("\n")}`,
   );
+});
+
+const HEADING_READS = [
+  'assert.doesNotMatch(before, /\\n### /, "no section before the groups");',
+  'const before = raw.split("\\n## Every test", 1)[0] ?? "";',
+  "Array.from(laws.matchAll(/^## (.+)$/gm), (m) => m[1]);",
+  "raw.split(/\\n(?=## )/);",
+  'new RegExp("^## (.+)$", "gm");',
+  'new RegExp(`^## ${h}$`, "m");',
+  "[...raw.matchAll(/(?:^|\\n)## (.+)/g)];",
+  'const ends = [text.indexOf(" - ", from + 2), text.indexOf("## ", from)];',
+  "/^## Major \\/ red line$/gm.test(raw);",
+  'text.indexOf("\\n### ");',
+  'raw.split("## Output")[1];',
+];
+const NOT_HEADING_READS = [
+  'const docs = { "x.md": "## Steps\\n## Review\\n" };',
+  'const s = section(plain(X), X, "## Output", "### Assessment");',
+  'const [path, fragment] = url.split("#");',
+  "assert.match(out, /\\n## Focus\\n/);",
+  "headingSection(raw(HARRY), HARRY, /^## Code$/);",
+  "const re = new RegExp(`^## ${heading}$`);",
+  "lines.filter((line) => /`## Plan`|^## Plan\\b/.test(line));",
+];
+
+test("the heading scan catches each known shape and nothing else", () => {
+  assert.deepEqual(
+    HEADING_READS.filter((line) => !HEADING_READ.test(line)),
+    [],
+    "a known heading read now passes the scan",
+  );
+  assert.deepEqual(
+    NOT_HEADING_READS.filter((line) => HEADING_READ.test(line)),
+    [],
+    "the scan now flags a line that reads no heading",
+  );
+});
+
+test("no test in tests/ reads headings on its own", () => {
+  const own = scanned().flatMap((file) =>
+    lines(file).flatMap((line, i) =>
+      HEADING_READ.test(line) ? [`${file}:${i + 1}: ${line}`] : [],
+    ),
+  );
+  assert.deepEqual(own, [], `read headings through tests/section.ts outline():\n${own.join("\n")}`);
 });
 
 test("every allowlist entry matches exactly one line in its file", () => {

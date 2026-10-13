@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { headingSection, section } from "./section.ts";
+import { headingSection, outline, section } from "./section.ts";
 
 // red-green.md is read on demand, so its rules bind only a model something sends there:
 // the author at write time (executing's Build step) and the analyst lane at review. The
@@ -73,10 +73,19 @@ test("red-green.md sorts every section under an every-test or a Major group", ()
     "### Red flags",
   ])
     assert.ok(inMajor.includes(s), `${s} belongs to Major / red line`);
-  const before = raw.split("\n## Every test", 1)[0] ?? "";
-  assert.doesNotMatch(before, /\n### /, "no section before the groups");
+  const lines = outline(raw);
+  const every = lines.findIndex((l) => l.level === 2 && l.title === "Every test");
+  assert.ok(every !== -1, "references/red-green.md lost its ## Every test heading");
+  assert.ok(
+    lines.slice(0, every).every((l) => l.level !== 3),
+    "no section before the groups",
+  );
+  const before = lines
+    .slice(0, every)
+    .map((l) => l.text)
+    .join("\n");
   assert.deepEqual(
-    [...raw.matchAll(/^## (.+)$/gm)].map((m) => m[1]),
+    lines.filter((l) => l.level === 2).map((l) => l.title),
     ["When this is mandatory (tiered)", "Every test", "Major / red line"],
     "a section outside both groups binds no tier",
   );

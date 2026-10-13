@@ -16,12 +16,12 @@ const RUBRIC = path.join("references", "review-rubric.md");
 const ARCH_REVIEW = path.join("references", "architecture-review.md");
 const PLAIN_LANGUAGE = path.join("references", "plain-language.md");
 
-function lawBullet(label: string): string {
-  const text = plain(HARRY);
-  const from = text.indexOf(`- ${label}`);
-  assert.ok(from !== -1, `HARRY.md has no "${label}" bullet`);
-  const ends = [text.indexOf(" - ", from + 2), text.indexOf("## ", from)].filter((i) => i !== -1);
-  return text.slice(from, ends.length ? Math.min(...ends) : undefined);
+function lawBullet(heading: RegExp, label: string): string {
+  const lines = headingSection(raw(HARRY), HARRY, heading).split("\n");
+  const at = lines.findIndex((l) => l.startsWith(`- **${label}**`));
+  assert.ok(at !== -1, `HARRY.md has no "${label}" bullet under ${heading}`);
+  const next = lines.findIndex((l, i) => i > at && l.startsWith("- "));
+  return flatten(lines.slice(at, next === -1 ? undefined : next).join("\n"));
 }
 
 test("AC-1: HARRY.md Code makes code comments the exception", () => {
@@ -45,7 +45,7 @@ test("AC-4/AC-12: the rubric cites HARRY.md Code for tool directives instead of 
 });
 
 test("AC-2: HARRY.md Talk binds plain writing to every text written for people", () => {
-  const bullet = lawBullet("Plain language.");
+  const bullet = lawBullet(/^## Talk$/, "Plain language.");
   assert.match(bullet, /Every text written for people is plain, short and to the point/i);
   for (const kind of [
     /chat replies/i,
