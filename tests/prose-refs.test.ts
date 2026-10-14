@@ -12,6 +12,7 @@ import {
   LAW_HEADINGS,
   lawAttempts,
   lawFailures,
+  lawLabelFailures,
   legacyHits,
   type Name,
   namesIn,
@@ -247,9 +248,6 @@ test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
 //
 // Fences are NOT skipped, unlike the path scan above: there is no reason to
 // write a law citation that does not resolve, even illustratively.
-// `law` labels in evals/cases.jsonl that name no HARRY.md heading on purpose: a
-// rule the review standard or red-green holds, the plugin probes, and two informative cases.
-const NON_LAW_LABELS = new Set(["rubric", "red-green", "plugin", "L&C", "grill"]);
 
 test("every HARRY.md citation names a heading HARRY.md actually has", () => {
   const laws = readFileSync(path.join(repoRoot, "HARRY.md"), "utf-8");
@@ -284,26 +282,12 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
     );
   }
 
-  const failures: string[] = [];
   // `evals/cases.jsonl`'s `law` field names the law a case measures, and the
   // runner validates it only as a non-empty string. Read unguarded, so a moved
   // file fails loudly instead of dropping every case from the check.
-  readFileSync(path.join(repoRoot, "evals/cases.jsonl"), "utf-8")
-    .split("\n")
-    .forEach((line, idx) => {
-      if (!line.trim()) return;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch (err) {
-        throw new Error(
-          `evals/cases.jsonl:${idx + 1} is not valid JSON: ${(err as Error).message}`,
-        );
-      }
-      const law: unknown = (parsed as { law?: unknown } | null)?.law;
-      if (typeof law !== "string" || (!LAW_HEADINGS.includes(law) && !NON_LAW_LABELS.has(law)))
-        failures.push(`evals/cases.jsonl:${idx + 1} -> law ${String(law)}`);
-    });
+  const labels = lawLabelFailures(readFileSync(path.join(repoRoot, "evals/cases.jsonl"), "utf-8"));
+  assert.ok(labels.seen > 0, "evals/cases.jsonl holds no case; the label check reads nothing");
+  const failures = labels.failures.map((f) => `evals/cases.jsonl:${f}`);
 
   let seen = 0;
   for (const relFile of citeCorpus) {

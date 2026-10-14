@@ -10,6 +10,7 @@ import {
   LEGACY_FORMS,
   lawAttempts,
   lawFailures,
+  lawLabelFailures,
   legacyHits,
   namesIn,
   plainNameCitations,
@@ -52,13 +53,30 @@ const attempts = (text: string): string[] => citationAttempts(repo, text);
 const steps = (text: string): string[] => stepAttempts(repo, text);
 const laws = (text: string): string[] => lawAttempts(text);
 
-test("citations.ts is pure: it imports only the outline reader", () => {
+test("citations.ts is pure: nothing it reaches reads git or the disk", () => {
+  const reached = new Set<string>();
+  const builtins = new Set<string>();
+  const queue = [fileURLToPath(new URL("citations.ts", import.meta.url))];
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    if (reached.has(file)) continue;
+    reached.add(file);
+    for (const m of readFileSync(file, "utf-8").matchAll(/^import\b[^"';]*["']([^"']+)["']/gm)) {
+      const spec = m[1] as string;
+      if (spec.startsWith(".")) queue.push(path.resolve(path.dirname(file), spec));
+      else builtins.add(spec);
+    }
+  }
+  const root = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(
-    readFileSync(fileURLToPath(new URL("citations.ts", import.meta.url)), "utf-8")
-      .split("\n")
-      .filter((line) => line.startsWith("import ")),
-    ['import { outline } from "./section.ts";'],
-    "citations.ts reads git or the disk; take it through Repo",
+    [...reached].map((f) => path.relative(root, f)).sort(),
+    ["scripts/lib/evals-cases.mts", "tests/citations.ts", "tests/section.ts"],
+    "citations.ts reaches a new module; keep git and the disk out, take them through Repo",
+  );
+  assert.deepEqual(
+    [...builtins].sort(),
+    ["node:assert/strict"],
+    "a module citations.ts reaches imports more than node:assert; it may read git or the disk",
   );
 });
 
@@ -153,6 +171,26 @@ test("a law citation names a HARRY.md ## heading", () => {
     lawFailures("per HARRY.md **Tiers** and `HARRY.md` **Evidence\n**,\nHARRY.md **Tier**"),
     { seen: 3, failures: ["3 -> HARRY.md **Tier**"] },
     "the law check no longer counts, cleans the name, resolves it or reports the line",
+  );
+});
+
+test("an eval case with a non-string id is named by its position", () => {
+  assert.deepEqual(
+    lawLabelFailures('{"id":5,"law":"Tier"}\n').failures,
+    ["case #1 -> law Tier"],
+    "a non-string id now names the case",
+  );
+});
+
+test("an eval case's law label names a law or a known non-law label", () => {
+  const { seen, failures } = lawLabelFailures(
+    '{"law":"Tiers"}\n\n{"law":"rubric"}\n{"law":"Tier"}\n{"id":"x"}\n{oops\n{"law":"L&C"}\n',
+  );
+  assert.equal(seen, 6, "the law-label check no longer counts each non-empty line once");
+  assert.deepEqual(
+    failures.map((f) => f.replace(/^(line 6: not valid JSON) \(.*\)$/, "$1")),
+    ["line 6: not valid JSON", "case #3 -> law Tier", 'case "x" -> law undefined'],
+    "the law-label check no longer accepts a law or known label, or reports a bad one",
   );
 });
 

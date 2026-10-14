@@ -1,3 +1,4 @@
+import { parseCasesJsonl } from "../scripts/lib/evals-cases.mts";
 import { outline } from "./section.ts";
 
 export type Name = { name: string; full: string; level?: number };
@@ -20,6 +21,8 @@ export const LAW_HEADINGS = [
   "Code",
   "Talk",
 ];
+
+export const NON_LAW_LABELS = ["rubric", "red-green", "plugin", "L&C", "grill"];
 
 export const FORM = {
   path: "`path` **Name**",
@@ -145,6 +148,24 @@ export const lawFailures = (text: string): Checked =>
     const name = cleanName(m[1] as string);
     return LAW_HEADINGS.includes(name) ? null : `HARRY.md **${name}**`;
   });
+
+export const lawLabelFailures = (jsonl: string): Checked => {
+  const { cases, errors } = parseCasesJsonl(jsonl);
+  return {
+    seen: cases.length + errors.length,
+    failures: [
+      ...errors,
+      ...cases.flatMap((c, i) => {
+        const where = typeof c.id === "string" ? `case "${c.id}"` : `case #${i + 1}`;
+        const law: unknown = c.law;
+        return typeof law === "string" &&
+          (LAW_HEADINGS.includes(law) || NON_LAW_LABELS.includes(law))
+          ? []
+          : [`${where} -> law ${String(law)}`];
+      }),
+    ],
+  };
+};
 
 export const dimensionFailures = (repo: Repo, text: string): Checked =>
   checkEach(text, DIMENSION_CITE_RE, (m) =>

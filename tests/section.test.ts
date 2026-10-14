@@ -111,6 +111,29 @@ test("headingSection: a bare ## is not a section boundary", () => {
   );
 });
 
+test("outline: CRLF and CR line ends read like LF", () => {
+  const lf = "# T\n```\n## x\n```\ntext\n### D";
+  const shape = (text: string) => outline(text).map((l) => [l.fenced, l.level, l.title]);
+  assert.deepEqual(shape(lf.replaceAll("\n", "\r\n")), shape(lf));
+  assert.deepEqual(shape(lf.replaceAll("\n", "\r")), shape(lf));
+});
+
+test("headingSection: CR-only text is sliced, not taken for flattened text", () => {
+  assert.equal(headingSection("## A\rone\r## B\r", "doc.md", "## A"), "## A\none");
+});
+
+test("outline: a U+2028 inside a line hides no fence or heading", () => {
+  assert.deepEqual(
+    outline("```js\u2028x\n## not\n```\n## A\u2028b").map((l) => [l.fenced, l.level]),
+    [
+      [true, 0],
+      [true, 0],
+      [true, 0],
+      [false, 2],
+    ],
+  );
+});
+
 test("headingSection: a missing heading fails instead of returning a wrong slice", () => {
   assert.throws(
     () => headingSection(nested, "doc.md", "## Gone"),

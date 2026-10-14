@@ -14,13 +14,13 @@ export function section(
   return text.slice(start, end);
 }
 
-const FENCE_RE = /^\s*(`{3,})(.*)$/;
+const FENCE_RE = /^\s*(`{3,})(.*)$/s;
 
 export type OutlineLine = { text: string; fenced: boolean; level: number; title: string };
 
 export function outline(text: string): OutlineLine[] {
   let fence = "";
-  return text.split("\n").map((line) => {
+  return text.split(/\r\n|\r|\n/).map((line) => {
     const [, run, rest = ""] = FENCE_RE.exec(line) ?? [];
     if (run && !fence) {
       fence = run;
@@ -31,7 +31,7 @@ export function outline(text: string): OutlineLine[] {
       return { text: line, fenced: true, level: 0, title: "" };
     }
     if (fence) return { text: line, fenced: true, level: 0, title: "" };
-    const heading = /^(#+) (.*)$/.exec(line);
+    const heading = /^(#+) (.*)$/s.exec(line);
     const title = heading?.[2]?.trim() ?? "";
     return { text: line, fenced: false, level: title ? (heading?.[1]?.length ?? 0) : 0, title };
   });
@@ -39,7 +39,7 @@ export function outline(text: string): OutlineLine[] {
 
 export function headingSection(text: string, rel: string, heading: string | RegExp): string {
   assert.ok(
-    text.includes("\n"),
+    /\r\n|\r|\n/.test(text),
     `${rel} has no line breaks: pass the raw text, not a flattened copy`,
   );
   const lines = outline(text);
