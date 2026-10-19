@@ -635,7 +635,8 @@ EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)" \
 EVALS_MODEL=claude-sonnet-4-5 node scripts/run-evals.mts run \
   --condition candidate --cases tier-small-feature,debt-shortcut --out evals/results/run.jsonl
 
-# Free: score the results file (exit non-zero if any candidate check fails).
+# Free: score the results file (exit non-zero if any candidate check fails,
+# or if a malformed row is refused; each refused row is reported by its line).
 node scripts/run-evals.mts score --results evals/results/run.jsonl
 ```
 

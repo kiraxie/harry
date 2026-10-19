@@ -34,8 +34,8 @@ import {
 } from "../scripts/lib/evals-cases.mts";
 import { buildBaseEnv, buildGitEnv } from "../scripts/lib/evals-env.mts";
 import { trialJail } from "../scripts/lib/evals-jail.mts";
-import { scoreResults } from "../scripts/lib/evals-score.mts";
-import type { RepoState } from "../scripts/run-evals.mts";
+import { scoreResults, validateResultLines } from "../scripts/lib/evals-score.mts";
+import type { RepoState, RunLine } from "../scripts/run-evals.mts";
 import {
   buildChildEnv,
   collectRepoState,
@@ -95,7 +95,7 @@ test("validateCases: flags a case missing checks, a bad type, and a broken regex
       checks: [{ type: "regex_must", pattern: "(" }],
     },
   ];
-  const violations = validateCases(bad);
+  const violations = validateCases(bad.map((record, i) => ({ record, line: i + 1 })));
   assert.ok(
     violations.some((v) => v.includes("no-checks") && v.includes("non-empty")),
     "empty checks array is a violation",
@@ -127,7 +127,7 @@ test("validateCases: flags an unsupported mode and a duplicate id", () => {
       checks: [{ type: "regex_must", pattern: "x" }],
     },
   ];
-  const violations = validateCases(bad);
+  const violations = validateCases(bad.map((record, i) => ({ record, line: i + 1 })));
   assert.ok(
     violations.some((v) => v.includes("duplicate id")),
     "duplicate id caught",
@@ -140,10 +140,40 @@ test("validateCases: flags an unsupported mode and a duplicate id", () => {
 
 test("the shipped evals/cases.jsonl parses and validates clean", () => {
   const text = readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf8");
-  const { cases, errors } = parseCasesJsonl(text);
+  const { entries, errors } = parseCasesJsonl(text);
   assert.equal(errors.length, 0, "no JSONL parse errors");
-  assert.ok(cases.length >= 12, "at least 12 cases shipped");
-  assert.deepEqual(validateCases(cases), [], "shipped cases are schema-valid");
+  assert.ok(entries.length >= 12, "at least 12 cases shipped");
+  assert.deepEqual(validateCases(entries), [], "shipped cases are schema-valid");
+});
+
+const skipped = 'null\n\n[]\n{oops\n"x"\n{"id":"a"}\n';
+
+test("each parsed case carries its source line, past every skipped line", () => {
+  assert.deepEqual(
+    parseCasesJsonl(skipped).entries,
+    [{ record: { id: "a" }, line: 6 }],
+    "a case's line number no longer skips blank, malformed and non-object lines",
+  );
+});
+
+test("a non-object line, case or check is reported as not an object", () => {
+  assert.deepEqual(
+    parseCasesJsonl(skipped).errors.map((e) => e.replace(/ \(.*\)$/, "")),
+    [
+      "line 1: not an object",
+      "line 3: not an object",
+      "line 4: not valid JSON",
+      "line 5: not an object",
+    ],
+    "a non-object line is no longer a parse error",
+  );
+  assert.deepEqual(validateCases([{ record: [], line: 7 }]), ["line 7: not an object"]);
+  assert.ok(
+    validateCases([
+      { record: { id: "a", mode: "text", prompt: "p", checks: [[]] }, line: 1 },
+    ]).includes('case "a" check #1: not an object'),
+    "a non-object check is no longer reported as not an object",
+  );
 });
 
 // ---- scoring (core red-green target) ---------------------------------------
@@ -292,9 +322,263 @@ test("validateCases: declared_tier names one of the three tiers", () => {
     law: "Tiers",
     checks: [{ type: "declared_tier", tier }],
   });
-  assert.deepEqual(validateCases([mk("standard")]), []);
-  assert.ok(validateCases([mk("huge")]).some((v) => v.includes('"tier"')));
-  assert.ok(validateCases([mk(undefined)]).some((v) => v.includes('"tier"')));
+  assert.deepEqual(validateCases([{ record: mk("standard"), line: 1 }]), []);
+  assert.ok(validateCases([{ record: mk("huge"), line: 1 }]).some((v) => v.includes('"tier"')));
+  assert.ok(validateCases([{ record: mk(undefined), line: 1 }]).some((v) => v.includes('"tier"')));
+});
+
+test("validateResultLines: a row with nothing to score is reported by its line and left out", () => {
+  const check = { type: "regex_must", pattern: "x" };
+  const rows = [
+    { id: "ok", condition: "candidate", mode: "text", response: "x", checks: [check] },
+    { condition: "candidate", response: "x", checks: [check] },
+    { id: "", condition: "candidate", response: "x", checks: [check] },
+    { id: "a", response: "x", checks: [check] },
+    { id: "a", condition: "candidate", response: "x" },
+    { id: "a", condition: "candidate", response: "x", checks: [] },
+    { id: "a", condition: "candidate", mode: "agentic", response: "x", checks: [check] },
+    { id: "a", condition: "candidate", mode: "agentic", checkOutcomes: [] },
+    { id: "err", condition: "candidate", mode: "agentic", error: "boom" },
+    {
+      id: "ag",
+      condition: "candidate",
+      mode: "agentic",
+      checkOutcomes: [{ ok: true, detail: "" }],
+    },
+  ];
+  const { lines, errors } = validateResultLines(rows.map((record, i) => ({ record, line: i + 1 })));
+  assert.deepEqual(
+    lines.map((l) => l.id),
+    ["ok", "err", "ag"],
+    "a valid or errored row is no longer kept, or a bad row is",
+  );
+  assert.deepEqual(
+    errors,
+    [
+      'line 2: missing/empty string "id"',
+      'line 3: missing/empty string "id"',
+      'line 4: missing string "condition"',
+      'line 5: no "checks" to judge',
+      'line 6: no "checks" to judge',
+      'line 7: no "checkOutcomes" to judge',
+      'line 8: no "checkOutcomes" to judge',
+    ],
+    "a bad results row is no longer reported by its source line",
+  );
+});
+
+test("scoreResults: a row with no error and nothing to judge throws instead of passing", () => {
+  assert.throws(
+    () => scoreResults([{ id: "a", condition: "candidate", response: "x" }]),
+    /nothing to judge/,
+  );
+  assert.throws(
+    () => scoreResults([{ id: "a", condition: "candidate", mode: "agentic" }]),
+    /nothing to judge/,
+  );
+});
+
+const MISSING = Symbol("missing");
+const ODD_VALUES: unknown[] = [null, [], {}, "", 0, true, "false", MISSING];
+
+const withValue = (obj: Record<string, unknown>, key: string, value: unknown) => {
+  const copy = { ...obj };
+  if (value === MISSING) delete copy[key];
+  else copy[key] = value;
+  return copy;
+};
+
+const rowMutants = (row: Record<string, unknown>, listField: string) => {
+  const list = row[listField] as Record<string, unknown>[];
+  const element = list[0] as Record<string, unknown>;
+  return [...Object.keys(row), "error"]
+    .flatMap((field) =>
+      ODD_VALUES.map((v) => ({ what: `${field} = ${String(v)}`, row: withValue(row, field, v) })),
+    )
+    .concat(
+      ODD_VALUES.map((v) => ({
+        what: `${listField}[0] = ${String(v)}`,
+        row: { ...row, [listField]: v === MISSING ? [] : [v] },
+      })),
+      Object.keys(element).flatMap((key) =>
+        ODD_VALUES.map((v) => ({
+          what: `${listField}[0].${key} = ${String(v)}`,
+          row: { ...row, [listField]: [withValue(element, key, v)] },
+        })),
+      ),
+    );
+};
+
+test("validateResultLines and scoreResults agree: an odd row is rejected or scored, never thrown on", () => {
+  const shared = {
+    condition: "candidate",
+    trial: 1,
+    law: "Code",
+    informative: false,
+    lawSha256: "a",
+    pluginSha256: "b",
+    toolSetup: "s",
+  };
+  const text = {
+    id: "t",
+    mode: "text",
+    response: "x",
+    checks: [{ type: "regex_must", pattern: "x" }],
+    ...shared,
+  };
+  const agentic = {
+    id: "a",
+    mode: "agentic",
+    checkOutcomes: [{ check: { type: "file_contains" }, ok: true, detail: "d" }],
+    ...shared,
+  };
+  const mutants = [...rowMutants(text, "checks"), ...rowMutants(agentic, "checkOutcomes")];
+  const broken = mutants.flatMap(({ what, row }) => {
+    const { lines } = validateResultLines([{ record: row, line: 1 }]);
+    try {
+      scoreResults(lines);
+      return [];
+    } catch (err) {
+      return [`${what}: ${(err as Error).message}`];
+    }
+  });
+  assert.deepEqual(broken, [], "an odd row is now admitted and then throws in scoring");
+  const scoredThoughRejected = mutants.flatMap(({ what, row }) => {
+    const { errors } = validateResultLines([{ record: row, line: 1 }]);
+    if (!errors.some((e) => /checkOutcome #|check #|to judge/.test(e))) return [];
+    try {
+      scoreResults([{ ...row, id: "x", condition: "candidate" }]);
+      return [what];
+    } catch {
+      return [];
+    }
+  });
+  assert.deepEqual(
+    scoredThoughRejected,
+    [],
+    "the scorer now judges an element the validator rejects",
+  );
+  const admittedOk = ODD_VALUES.filter((v) => v !== true).filter(
+    (v) =>
+      validateResultLines([
+        {
+          record: { ...agentic, checkOutcomes: [withValue(agentic.checkOutcomes[0], "ok", v)] },
+          line: 1,
+        },
+      ]).lines.length > 0,
+  );
+  assert.deepEqual(admittedOk.map(String), [], "a non-boolean ok is now admitted");
+});
+
+test("validateResultLines: a provenance field of the wrong type is reported by its line", () => {
+  const ok = {
+    id: "t",
+    condition: "c",
+    response: "x",
+    checks: [{ type: "regex_must", pattern: "x" }],
+  };
+  const rows = [
+    { ...ok, law: {} },
+    { ...ok, lawSha256: 1 },
+    { ...ok, lawSha256: null },
+    { ...ok, pluginSha256: [] },
+    { ...ok, trial: "1" },
+    { ...ok, trial: 0 },
+    { id: "e", condition: "c", error: "boom", law: 5 },
+  ];
+  const { lines, errors } = validateResultLines(rows.map((record, i) => ({ record, line: i + 1 })));
+  assert.deepEqual(
+    errors,
+    [
+      'line 1: "law" must be a string when present',
+      'line 2: "lawSha256" must be a string or null when present',
+      'line 4: "pluginSha256" must be a string when present',
+      'line 5: "trial" must be a positive integer when present',
+      'line 6: "trial" must be a positive integer when present',
+      'line 7: "law" must be a string when present',
+    ],
+    "a provenance field of the wrong type is no longer reported",
+  );
+  assert.equal(lines.length, 1, "a null lawSha256 (a legacy line) is no longer kept");
+});
+
+test("validateResultLines: a bad check or outcome is reported by line and position", () => {
+  const rows = [
+    {
+      id: "t",
+      condition: "c",
+      response: "x",
+      checks: [{ type: "regex_must", pattern: "x" }, null],
+    },
+    { id: "u", condition: "c", response: "x", checks: [{ type: "regex_must" }] },
+    { id: "v", condition: "c", response: "x", checks: [{ type: "declared_tier", tier: "major" }] },
+    { id: "a", condition: "c", mode: "agentic", checkOutcomes: [{ ok: "false", detail: "d" }] },
+    { id: "b", condition: "c", mode: "agentic", checkOutcomes: [{ ok: true }] },
+  ];
+  assert.deepEqual(
+    validateResultLines(rows.map((record, i) => ({ record, line: i + 1 }))).errors,
+    [
+      "line 1: check #2: not an object",
+      'line 2: check #1: missing/empty string "pattern"',
+      'line 3: check #1: "type" must be one of regex_must, regex_must_not',
+      'line 4: checkOutcome #1: needs a boolean "ok" and a string "detail"',
+      'line 5: checkOutcome #1: needs a boolean "ok" and a string "detail"',
+    ],
+    "a bad element is no longer reported by its line and position",
+  );
+});
+
+test("scoreResults: an errored row is a failing trial, whatever it carries", () => {
+  const scored = scoreResults([
+    { id: "ag", condition: "candidate", mode: "agentic", error: "timed out" },
+    { id: "t", condition: "candidate", error: "", response: "x" },
+    {
+      id: "tp",
+      condition: "candidate",
+      error: "boom",
+      response: "x",
+      checks: [{ type: "regex_must", pattern: "x" }],
+    },
+    {
+      id: "ap",
+      condition: "candidate",
+      mode: "agentic",
+      error: "boom",
+      checkOutcomes: [{ check: { type: "regex_must", pattern: "x" }, ok: true, detail: "" }],
+    },
+  ]);
+  assert.deepEqual(
+    scored.groups.map((g) => [g.id, g.pass, g.errors]),
+    [
+      ["ag", false, 1],
+      ["t", false, 1],
+      ["tp", false, 1],
+      ["ap", false, 1],
+    ],
+    "an errored row now crashes the scorer, passes, or is not counted as an error",
+  );
+});
+
+test("score CLI: exits non-zero on a results row with nothing to score", () => {
+  const dir = tmpDir("harry-evals-score-");
+  try {
+    const results = path.join(dir, "r.jsonl");
+    writeFileSync(
+      results,
+      `${JSON.stringify({ id: "a", condition: "candidate", response: "x" })}\n`,
+    );
+    const run = spawnSync(
+      process.execPath,
+      [path.join(pluginRoot, "scripts", "run-evals.mts"), "score", "--results", results],
+      {
+        encoding: "utf8",
+      },
+    );
+    assert.equal(run.status, 1, "a row with no checks → exit 1");
+    assert.match(run.stderr, /line 1: no "checks" to judge/, "score no longer names the bad row");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("score CLI: exits non-zero when a candidate result fails a check", () => {
@@ -549,8 +833,9 @@ test("runEvals: appends both conditions into ONE --out file so score contrasts t
     runEvals({ condition: "baseline", model: "m", cases: ["destructive-confirmation"], out }, env);
     runEvals({ condition: "candidate", model: "m", cases: ["destructive-confirmation"], out }, env);
 
-    const { cases: lines, errors } = parseCasesJsonl(readFileSync(out, "utf8"));
-    assert.equal(errors.length, 0);
+    const parsed = parseCasesJsonl(readFileSync(out, "utf8"));
+    const { lines, errors } = validateResultLines(parsed.entries);
+    assert.deepEqual([...parsed.errors, ...errors], []);
     assert.equal(lines.length, 2, "both runs survive in the one file");
     const scored = scoreResults(lines);
     assert.equal(scored.summary.baselineTotal, 1, "baseline contrast arm is populated");
@@ -578,7 +863,7 @@ test("runEvals: writes one result line per case with the response and embedded c
       env,
     );
     assert.equal(lines.length, 1);
-    const { cases } = parseCasesJsonl(readFileSync(out, "utf8"));
+    const cases = parseCasesJsonl(readFileSync(out, "utf8")).entries.map((e) => e.record);
     assert.equal(cases[0].id, "tier-cross-subsystem");
     assert.ok(cases[0].response.includes("Major"), "response captured from the shim");
     assert.ok(Array.isArray(cases[0].checks) && cases[0].checks.length > 0, "checks embedded");
@@ -743,12 +1028,12 @@ test("runEvals: a result line embeds a declared_tier check as its regex pair", (
     );
     const [line] = lines;
     assert.deepEqual(
-      line?.checks.map((k: { type: string }) => k.type),
+      line?.checks?.map((k) => k.type),
       ["regex_must", "regex_must_not"],
       "the matcher travels in the result line as data",
     );
     assert.deepEqual(
-      line?.checkOutcomes.map((o: { ok: boolean; detail: string }) => [o.ok, o.detail]),
+      line?.checkOutcomes?.map((o) => [o.ok, o.detail]),
       [
         [true, "pattern matched"],
         [false, "pattern matched"],
@@ -809,7 +1094,7 @@ test("score table: an all-errored group reads FAIL (0/N, N error), not a bare 0/
 
     // scoreResults tallies the errors.
     const scored = scoreResults(
-      [mk(1), mk(2), mk(3)].map((l) => JSON.parse(l) as Record<string, unknown>),
+      validateResultLines(parseCasesJsonl([mk(1), mk(2), mk(3)].join("\n")).entries).lines,
     );
     const g = scored.groups.find((x) => x.condition === "candidate");
     assert.equal(g?.errors, 3, "all three trials errored");
@@ -1085,7 +1370,7 @@ test("validateCases: informative must be boolean; pathPattern only on repo_grep(
       checks: [{ type: "file_contains", path: "a", pattern: "x", pathPattern: "\\.test\\." }],
     },
   ];
-  const violations = validateCases(bad);
+  const violations = validateCases(bad.map((record, i) => ({ record, line: i + 1 })));
   assert.ok(
     violations.some((v) => v.includes("bad-informative") && v.includes("informative")),
     "non-boolean informative is a violation",
@@ -1549,7 +1834,7 @@ test("runEvals: every trial gets its own config, work and temp dirs, never anoth
       }
     }
     assert.ok(
-      lines.every((l: Record<string, string>) =>
+      lines.every((l) =>
         readFileSync(path.join(l.configDir, "CLAUDE.md"), "utf8").includes("Resident"),
       ),
       "each trial's own config dir carries its own copy of the laws",
@@ -2196,10 +2481,14 @@ test("runEvals --agentic --trials 2: each trial materializes a FRESH fixture rep
 
 test("the shipped agentic cases validate and reference existing fixtures", () => {
   const text = readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf8");
-  const { cases } = parseCasesJsonl(text);
-  const agentic = cases.filter((c) => c.mode === "agentic");
+  const { entries } = parseCasesJsonl(text);
+  const agentic = entries.map((e) => e.record).filter((c) => c.mode === "agentic");
   assert.ok(agentic.length >= 5, "at least 5 agentic cases shipped");
-  assert.deepEqual(validateCases(cases), [], "all shipped cases (text + agentic) are schema-valid");
+  assert.deepEqual(
+    validateCases(entries),
+    [],
+    "all shipped cases (text + agentic) are schema-valid",
+  );
   for (const c of agentic) {
     assert.ok(
       existsSync(path.join(pluginRoot, "evals", "fixtures", c.fixture)),
@@ -2957,7 +3246,7 @@ test("runEvals: an is_error result (e.g. 'Not logged in') lands as a case error,
     );
     const line = lines[0];
     assert.ok(line.error, "an is_error:true result is recorded as a case error");
-    assert.match(line.error, /Not logged in/, "the error carries the readable result text");
+    assert.match(line.error ?? "", /Not logged in/, "the error carries the readable result text");
     assert.equal(line.response, "", "and is NOT scored as a genuine response");
     // Scoring: an errored candidate fails the run (exit 1 territory).
     assert.equal(scoreResults(lines).candidateFailed, true, "an auth error fails the candidate");
@@ -3007,7 +3296,7 @@ test("text cases are tautology-free: no regex_must literal appears in its own pr
   // and assert none appear in that case's prompt. (Positive checks only — a
   // regex_must_not token in the prompt is harmless, the check judges the reply.)
   const text = readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf8");
-  const { cases } = parseCasesJsonl(text);
+  const cases = parseCasesJsonl(text).entries.map((e) => e.record);
   for (const c of cases.filter((x) => x.mode === "text")) {
     const prompt = String(c.prompt).toLowerCase();
     for (const check of c.checks as Array<{ type: string; pattern: string }>) {
@@ -3043,7 +3332,7 @@ test("runEvals: a nonzero exit surfaces stdout/stderr tails in the error message
     );
     assert.ok(lines[0].error, "a crashing claude is a case error");
     assert.match(
-      lines[0].error,
+      lines[0].error ?? "",
       /boom: some diagnostic on stderr/,
       "stderr tail is surfaced, not a bare 'Command failed'",
     );
@@ -3236,9 +3525,7 @@ test(
       assert.equal(calls[0].apiKey, "sk-ant-test", "the EVALS_ key reached the jailed child");
       assert.equal(calls[0].oauthToken, null, "the inherited token was stripped under the jail");
       assert.equal(calls[0].evalsApiKeyForwarded, false, "EVALS_ANTHROPIC_API_KEY not forwarded");
-      const testRun = lines[0].checkOutcomes.find(
-        (o: { check: { type: string } }) => o.check.type === "test_command_passes",
-      );
+      const testRun = lines[0].checkOutcomes?.find((o) => o.check.type === "test_command_passes");
       assert.equal(testRun?.ok, true, "the fixture's own tests pass under the jail");
       assert.ok(
         calls[0].cwd?.includes("harry-evals-fx-tiny-node"),
@@ -3291,7 +3578,7 @@ function runJailedTrial(
   fxRoot: string,
   extraEnv: Record<string, string> = {},
   extraOpts: Record<string, unknown> = {},
-): Record<string, unknown>[] {
+): RunLine[] {
   const env = {
     ...authFreeEnv(),
     EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
@@ -3722,9 +4009,10 @@ test(
       const [line] = runJailedTrial(binDir, fxRoot, {
         PATH: [denied, process.env.PATH, stray].join(path.delimiter),
       });
-      const seen = JSON.parse(
-        readFileSafe(path.join(String(line.trialDir), "tmp", record)) || "{}",
-      ) as { PATH?: string; git?: string };
+      const seen = JSON.parse(readFileSafe(path.join(line.trialDir, "tmp", record)) || "{}") as {
+        PATH?: string;
+        git?: string;
+      };
       const entries = (seen.PATH ?? "").split(path.delimiter);
       assert.equal(entries[0], NODE_DIR, "the running node's dir stays first");
       assert.ok(!entries.includes(denied), `a $HOME dir the jail denies is dropped: ${seen.PATH}`);
@@ -3767,7 +4055,7 @@ test(
       );
       installFakeClaude(binDir, undefined, { script, callsInConfigDir: true });
       const [line] = runJailedTrial(binDir, fxRoot, { PATH: process.env.PATH ?? "" });
-      const trialTmp = path.join(String(line.trialDir), "tmp");
+      const trialTmp = path.join(line.trialDir, "tmp");
       const seen = JSON.parse(readFileSafe(path.join(trialTmp, record)) || "{}") as {
         TMPDIR?: string;
       };
@@ -3919,7 +4207,7 @@ test(
       );
       installFakeClaude(binDir, undefined, { script: session, callsInConfigDir: true });
       const [line] = runJailedTrial(binDir, fxRoot);
-      const log = path.join(String(line.trialDir), "tmp", logName);
+      const log = path.join(line.trialDir, "tmp", logName);
       const deadline = Date.now() + 10_000;
       while (Date.now() < deadline && !readFileSafe(log).includes("bg-done")) sleepMs(50);
       const status = readFileSafe(log).trim().split("\n");
@@ -3994,7 +4282,7 @@ test(
       );
       installFakeClaude(binDir, undefined, { script: session, callsInConfigDir: true });
       const [line] = runJailedTrial(binDir, fxRoot);
-      trialDir = String(line.trialDir);
+      trialDir = line.trialDir;
       // Not vacuous: the session did make both attempts.
       const attempts = readFileSafe(path.join(trialDir, "tmp", logName));
       assert.match(attempts, /^open-tried /m, "the session tried `open`");
@@ -4067,9 +4355,9 @@ const POSITIVE_CHECK_TYPES = new Set([
 ]);
 
 test("every case carries at least one POSITIVE check (absence alone certifies nothing)", () => {
-  const { cases } = parseCasesJsonl(
+  const cases = parseCasesJsonl(
     readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf-8"),
-  );
+  ).entries.map((e) => e.record);
   assert.ok(cases.length > 0, "no cases parsed — the guard would be vacuous");
   const absenceOnly = cases
     .filter((c) => !c.checks.some((k: { type: string }) => POSITIVE_CHECK_TYPES.has(k.type)))
@@ -4090,9 +4378,9 @@ test("every text case REJECTS a degenerate reply corpus", () => {
     "Error: 429 rate_limit_error: number of request tokens has exceeded your per-minute rate limit",
     "I cannot write files in this environment. Nothing has been created yet.",
   ];
-  const { cases } = parseCasesJsonl(
+  const cases = parseCasesJsonl(
     readFileSync(path.join(pluginRoot, "evals", "cases.jsonl"), "utf-8"),
-  );
+  ).entries.map((e) => e.record);
   const textCases = cases.filter((c) => c.mode === "text");
   assert.ok(textCases.length > 0, "no text cases — the guard would be vacuous");
   const leaks: string[] = [];

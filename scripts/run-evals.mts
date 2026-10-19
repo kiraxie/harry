@@ -51,7 +51,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   type CheckInput,
   compileCheck,
-  type EvalRecord,
   evaluateChecks,
   expandChecks,
   parseCasesJsonl,
@@ -60,18 +59,22 @@ import {
 } from "./lib/evals-cases.mts";
 import { buildBaseEnv, buildGitEnv, type Env, requireOnPath } from "./lib/evals-env.mts";
 import { type Jail, sandboxContext, trialJail, wrapWithSandbox } from "./lib/evals-jail.mts";
-import { type ScoreGroup, scoreResults } from "./lib/evals-score.mts";
+import {
+  isErrored,
+  isOutcome,
+  type Outcome,
+  type ResultLine,
+  type ScoreGroup,
+  scoreResults,
+  validateResultLines,
+} from "./lib/evals-score.mts";
 
 const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // One agentic artifact-check outcome. `detail` is a human-readable trace of what
 // the check saw (matched file, failing branch list, test exit); `matched` from
 // the text shape is absent here.
-export interface ArtifactCheckOutcome {
-  check: CheckInput;
-  ok: boolean;
-  detail: string;
-}
+export type ArtifactCheckOutcome = Outcome & { check: CheckInput };
 
 // A snapshot of a fixture repo after a session, the input the artifact checks
 // judge. `newCommitMessages` excludes the seed commit; `files` is tracked +
@@ -230,10 +233,7 @@ const POST_SESSION = "__post-session";
 // its own trial's dirs; judge under a separate profile that can read the fixture but
 // write only a fresh judge dir outside the session's writable set, copy the fixture
 // there first, and judge the copy.
-export function judgeFixture(
-  payload: PostSessionPayload,
-  env: Env = process.env,
-): { ok: boolean; detail: string }[] {
+export function judgeFixture(payload: PostSessionPayload, env: Env = process.env): Outcome[] {
   const { fixtureDir, fixtureId, gitConfig, initialBranch, initialCommit, checks, gitBin } =
     payload;
   const now = lstatOrNull(fixtureDir, { bigint: true });
@@ -274,10 +274,7 @@ function untrustedText(value: unknown, max = 1000): string {
 // Validate the jailed child's stdout by shape, as untrusted input: exactly
 // { outcomes: [{ ok: boolean, detail: string }] } with one outcome per check, or
 // { error: string }. Anything else is refused without being echoed back.
-export function parsePostSessionOutput(
-  stdout: string,
-  count: number,
-): { ok: boolean; detail: string }[] {
+export function parsePostSessionOutput(stdout: string, count: number): Outcome[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
@@ -291,19 +288,7 @@ export function parsePostSessionOutput(
     throw new Error(`jailed post-session step: ${untrustedText(record.error)}`);
   }
   const outcomes = record && "outcomes" in record ? record.outcomes : undefined;
-  if (
-    !Array.isArray(outcomes) ||
-    outcomes.length !== count ||
-    !outcomes.every(
-      (o: unknown): o is { ok: boolean; detail: string } =>
-        o !== null &&
-        typeof o === "object" &&
-        "ok" in o &&
-        typeof o.ok === "boolean" &&
-        "detail" in o &&
-        typeof o.detail === "string",
-    )
-  ) {
+  if (!Array.isArray(outcomes) || outcomes.length !== count || !outcomes.every(isOutcome)) {
     throw new Error(
       `the jailed post-session step printed output of the wrong shape (${stdout.length} bytes)`,
     );
@@ -317,11 +302,7 @@ export function parsePostSessionOutput(
 // outside the fixture; --preserve-symlinks-main and --preserve-symlinks stop node's
 // entry and import lookups from lstat-ing the jailed $HOME ancestors of this script
 // and of the modules it imports.
-function runPostSession(
-  payload: PostSessionPayload,
-  jail: Jail | null,
-  env: Env,
-): { ok: boolean; detail: string }[] {
+function runPostSession(payload: PostSessionPayload, jail: Jail | null, env: Env): Outcome[] {
   if (!jail) return judgeFixture(payload, env);
   if (!jail.script) throw new Error("the jail names no runner script for the post-session child");
   const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, process.execPath, [
@@ -374,7 +355,7 @@ function runPostSession(
 // The jailed child's side: read the payload from stdin, judge, print one JSON line.
 // A refusal is reported as { error } so the parent can surface it on the result line.
 function cmdPostSession() {
-  let out: { outcomes: { ok: boolean; detail: string }[] } | { error: string };
+  let out: { outcomes: Outcome[] } | { error: string };
   try {
     out = { outcomes: judgeFixture(JSON.parse(readFileSync(0, "utf8"))) };
   } catch (caught) {
@@ -1084,10 +1065,20 @@ function runAgenticCase(
 
 // ---- run (side-effecting) --------------------------------------------------
 
+export type RunLine = ResultLine & {
+  trialDir: string;
+  configDir: string;
+  workDir: string;
+  checks: CheckInput[];
+  checkOutcomes?: ArtifactCheckOutcome[];
+  response?: string;
+  error?: string;
+};
+
 export function runEvals(
   opts: RunOpts,
   env: Env = process.env,
-): { outPath: string; lines: EvalRecord[]; skipped: string[] } {
+): { outPath: string; lines: RunLine[]; skipped: string[] } {
   const condition = opts.condition;
   if (!CONDITIONS.has(condition)) {
     throw new Error(`--condition must be one of ${[...CONDITIONS].join(", ")}`);
@@ -1100,10 +1091,11 @@ export function runEvals(
       ? requested
       : DEFAULT_POST_SESSION_TIMEOUT_MS;
 
-  const { cases, errors } = parseCasesJsonl(readFileSync(casesPath(), "utf8"));
+  const { entries, errors } = parseCasesJsonl(readFileSync(casesPath(), "utf8"));
   if (errors.length) throw new Error(`cases.jsonl parse errors:\n${errors.join("\n")}`);
-  const violations = validateCases(cases);
+  const violations = validateCases(entries);
   if (violations.length) throw new Error(`cases.jsonl is invalid:\n${violations.join("\n")}`);
+  const cases = entries.map((e) => e.record);
 
   const explicitSelection = Boolean(opts.cases);
   const wanted = opts.cases;
@@ -1207,14 +1199,14 @@ export function runEvals(
     join(pluginRoot, "evals", "results", `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
   mkdirSync(dirname(outPath), { recursive: true });
 
-  const written = [];
+  const written: RunLine[] = [];
   for (const c of runnable) {
     if (!SUPPORTED_MODES.has(c.mode)) throw new Error(`case "${c.id}": unsupported mode ${c.mode}`);
     // Trials are 1-based on the wire (trial: 1..N); score treats a legacy line
     // with no `trial` field as trial 1, so the two formats pool coherently.
     for (let trial = 1; trial <= trials; trial++) {
       const dirs = prepareTrialDirs(condition, lawsText, trialsRoot);
-      const line: EvalRecord = {
+      const line: RunLine = {
         id: c.id,
         mode: c.mode,
         condition,
@@ -1371,20 +1363,20 @@ function parseArgs(argv: string[]): CliOpts {
 }
 
 function cmdValidate() {
-  const { cases, errors } = parseCasesJsonl(readFileSync(casesPath(), "utf8"));
-  const violations = [...errors, ...validateCases(cases)];
+  const { entries, errors } = parseCasesJsonl(readFileSync(casesPath(), "utf8"));
+  const violations = [...errors, ...validateCases(entries)];
   if (violations.length) {
     console.error(`cases.jsonl: ${violations.length} problem(s):`);
     for (const v of violations) console.error(`  - ${v}`);
     return 1;
   }
-  console.log(`cases.jsonl: OK (${cases.length} cases)`);
+  console.log(`cases.jsonl: OK (${entries.length} cases)`);
   return 0;
 }
 
 function cmdRun(opts: CliOpts, env: Env) {
   const { outPath, lines, skipped } = runEvals({ ...opts, condition: opts.condition ?? "" }, env);
-  const failed = lines.filter((l) => l.error).length;
+  const failed = lines.filter(isErrored).length;
   if (skipped.length) {
     console.log(
       `Skipped ${skipped.length} agentic case(s) — pass --agentic to run them (real spend): ${skipped.join(", ")}`,
@@ -1401,9 +1393,10 @@ function cmdScore(opts: CliOpts) {
     console.error("score: --results <path> is required");
     return 1;
   }
-  const { cases: lines, errors } = parseCasesJsonl(readFileSync(opts.results, "utf8"));
-  if (errors.length) {
-    for (const e of errors) console.error(`  - ${e}`);
+  const parsed = parseCasesJsonl(readFileSync(opts.results, "utf8"));
+  const { lines, errors } = validateResultLines(parsed.entries);
+  if (parsed.errors.length || errors.length) {
+    for (const e of [...parsed.errors, ...errors]) console.error(`  - ${e}`);
     return 1;
   }
   const { groups, summary, candidateFailed, pluginFailed } = scoreResults(lines);

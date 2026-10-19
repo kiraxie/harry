@@ -174,11 +174,19 @@ test("a law citation names a HARRY.md ## heading", () => {
   );
 });
 
-test("an eval case with a non-string id is named by its position", () => {
+test("an eval case with a non-string id is named by its source line", () => {
   assert.deepEqual(
-    lawLabelFailures('{"id":5,"law":"Tier"}\n').failures,
-    ["case #1 -> law Tier"],
-    "a non-string id now names the case",
+    lawLabelFailures('\n{"id":5,"law":"Tier"}\n').failures,
+    ["line 2 -> law Tier"],
+    "a case without a string id is no longer named by its source line",
+  );
+});
+
+test("a non-object eval case line is a parse error, not thrown on", () => {
+  assert.deepEqual(
+    lawLabelFailures("null\n[]\n5\n").failures,
+    ["line 1: not an object", "line 2: not an object", "line 3: not an object"],
+    "a non-object line now throws, passes or is read as a case",
   );
 });
 
@@ -189,7 +197,7 @@ test("an eval case's law label names a law or a known non-law label", () => {
   assert.equal(seen, 6, "the law-label check no longer counts each non-empty line once");
   assert.deepEqual(
     failures.map((f) => f.replace(/^(line 6: not valid JSON) \(.*\)$/, "$1")),
-    ["line 6: not valid JSON", "case #3 -> law Tier", 'case "x" -> law undefined'],
+    ["line 6: not valid JSON", "line 4 -> law Tier", 'case "x" -> law undefined'],
     "the law-label check no longer accepts a law or known label, or reports a bad one",
   );
 });

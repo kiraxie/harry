@@ -1,7 +1,94 @@
 // Scoring a results file: one verdict per (case id, condition) group, pooled across
 // trials. Pure; the runner's `score` command (scripts/run-evals.mts) uses it.
 
-import { type EvalRecord, evaluateChecks } from "./evals-cases.mts";
+import {
+  type CaseEntry,
+  type CheckInput,
+  checkViolations,
+  type EvalRecord,
+  evaluateChecks,
+  REGEX_CHECK_TYPES,
+} from "./evals-cases.mts";
+
+export type Outcome = { check?: unknown; ok: boolean; detail: string };
+
+export const isOutcome = (o: unknown): o is Outcome =>
+  o !== null &&
+  typeof o === "object" &&
+  "ok" in o &&
+  typeof o.ok === "boolean" &&
+  "detail" in o &&
+  typeof o.detail === "string";
+
+export interface ResultLine {
+  [field: string]: unknown;
+  id: string;
+  condition: string;
+}
+
+const isResultLine = (r: EvalRecord): r is ResultLine =>
+  typeof r.id === "string" && r.id !== "" && typeof r.condition === "string";
+
+export const isErrored = (r: { [field: string]: unknown }): boolean => typeof r.error === "string";
+
+const isAgentic = (r: ResultLine): boolean => r.mode === "agentic";
+
+const judgedField = (r: ResultLine): string => (isAgentic(r) ? "checkOutcomes" : "checks");
+
+const elementProblems = (r: ResultLine): string[] => {
+  const list = r[judgedField(r)];
+  if (!Array.isArray(list) || list.length === 0) return [`no "${judgedField(r)}" to judge`];
+  return isAgentic(r)
+    ? list.flatMap((o, k) =>
+        isOutcome(o) ? [] : [`checkOutcome #${k + 1}: needs a boolean "ok" and a string "detail"`],
+      )
+    : list.flatMap((c, k) =>
+        checkViolations(c, REGEX_CHECK_TYPES).map((v) => `check #${k + 1}: ${v}`),
+      );
+};
+
+const judgedAgentic = (r: ResultLine): r is ResultLine & { checkOutcomes: Outcome[] } =>
+  isAgentic(r) && elementProblems(r).length === 0;
+
+const judgedText = (r: ResultLine): r is ResultLine & { checks: CheckInput[] } =>
+  !isAgentic(r) && elementProblems(r).length === 0;
+
+const fieldProblems = (r: ResultLine): string[] => [
+  ...(["law", "pluginSha256"] as const).flatMap((f) =>
+    r[f] === undefined || typeof r[f] === "string" ? [] : [`"${f}" must be a string when present`],
+  ),
+  ...(r.lawSha256 === undefined || r.lawSha256 === null || typeof r.lawSha256 === "string"
+    ? []
+    : ['"lawSha256" must be a string or null when present']),
+  ...(r.trial === undefined || (Number.isInteger(r.trial) && Number(r.trial) > 0)
+    ? []
+    : ['"trial" must be a positive integer when present']),
+];
+
+export function validateResultLines(entries: CaseEntry[]): {
+  lines: ResultLine[];
+  errors: string[];
+} {
+  const lines: ResultLine[] = [];
+  const errors: string[] = [];
+  for (const { record, line } of entries) {
+    if (!isResultLine(record)) {
+      const missing =
+        typeof record.id !== "string" || record.id === ""
+          ? 'missing/empty string "id"'
+          : 'missing string "condition"';
+      errors.push(`line ${line}: ${missing}`);
+    } else {
+      const problems = [
+        ...fieldProblems(record),
+        ...(isErrored(record) ? [] : elementProblems(record)),
+      ];
+      if (problems.length) errors.push(...problems.map((p) => `line ${line}: ${p}`));
+      else lines.push(record);
+    }
+  }
+  return { lines, errors };
+}
 
 // One (case id, condition) group: all its trial lines pooled (from a --trials N
 // run and/or several appended runs of the same condition). Its verdict is a
@@ -48,22 +135,30 @@ export interface ScoreSummary {
 // Score one result line to a single-trial pass. Each result carries its own
 // checks (embedded at run time) so scoring is self-contained and never drifts
 // from a mutated cases file. A legacy line with no `trial` field is trial 1.
-function scoreTrial(line: EvalRecord) {
+function scoreTrial(line: ResultLine) {
   // Agentic lines can't be re-judged offline (the fixture temp dir is gone), so
   // the run recorded per-check outcomes; text lines re-evaluate the response so
   // scoring stays independent of a later-edited cases file.
-  const pass =
-    line.mode === "agentic"
-      ? (line.checkOutcomes ?? []).every((o: { ok: boolean }) => o.ok)
-      : evaluateChecks(line.checks, line.response).pass;
+  const errored = isErrored(line);
+  const pass = errored
+    ? false
+    : judgedAgentic(line)
+      ? line.checkOutcomes.every((o) => o.ok)
+      : judgedText(line)
+        ? evaluateChecks(line.checks, typeof line.response === "string" ? line.response : undefined)
+            .pass
+        : null;
+  if (pass === null) {
+    throw new Error(`result "${line.id}" (${line.condition}) has nothing to judge`);
+  }
   return {
     id: line.id,
     condition: line.condition,
-    trial: line.trial ?? 1,
-    law: line.law,
+    trial: typeof line.trial === "number" ? line.trial : 1,
+    law: typeof line.law === "string" ? line.law : undefined,
     informative: line.informative === true,
-    pass: line.error ? false : pass,
-    error: line.error ?? null,
+    pass,
+    errored,
   };
 }
 
@@ -75,8 +170,13 @@ function scoreTrial(line: EvalRecord) {
 // trial counts as a failing trial. candidateFailed and pluginFailed (the CLI exit code) derive
 // only from graded (non-informative) candidate and plugin GROUP verdicts; informative
 // groups are tallied separately and never gate.
-export function scoreResults(lines: EvalRecord[]): ScoreSummary {
-  const groupMap = new Map();
+type Tally = Omit<
+  ScoreGroup,
+  "lawShas" | "pluginShas" | "toolSetups" | "mixedLaw" | "mixedPlugin" | "mixedTools" | "pass"
+> & { lawShas: Set<string>; pluginShas: Set<string>; toolSetups: Set<string> };
+
+export function scoreResults(lines: ResultLine[]): ScoreSummary {
+  const groupMap = new Map<string, Tally>();
   for (const line of lines) {
     const t = scoreTrial(line);
     // JSON-array key: an unambiguous (id, condition) tuple that can never
@@ -110,9 +210,10 @@ export function scoreResults(lines: EvalRecord[]): ScoreSummary {
     }
     g.trials += 1;
     if (t.pass) g.passCount += 1;
-    if (t.error) g.errors += 1;
-    if (line.lawSha256) g.lawShas.add(line.lawSha256);
-    if (line.pluginSha256) g.pluginShas.add(line.pluginSha256);
+    if (t.errored) g.errors += 1;
+    if (typeof line.lawSha256 === "string" && line.lawSha256) g.lawShas.add(line.lawSha256);
+    if (typeof line.pluginSha256 === "string" && line.pluginSha256)
+      g.pluginShas.add(line.pluginSha256);
     g.toolSetups.add(typeof line.toolSetup === "string" ? line.toolSetup : "(unrecorded)");
     // Backfill law/informative from any trial that carries them (a legacy line
     // may omit law; a later trial may supply it).

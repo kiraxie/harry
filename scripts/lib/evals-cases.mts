@@ -41,7 +41,8 @@ export interface CheckOutcome {
 }
 
 // Text cases judge the model's first-response prose with regexes.
-const CHECK_TYPES = new Set(["regex_must", "regex_must_not", "declared_tier"]);
+export const REGEX_CHECK_TYPES: ReadonlySet<string> = new Set(["regex_must", "regex_must_not"]);
+const CHECK_TYPES = new Set([...REGEX_CHECK_TYPES, "declared_tier"]);
 const TIERS = ["trivial", "standard", "major"];
 // A tier declaration: "**Tier: Major**", "**Tier:** Major", "tier is Major", "Tier: Major".
 // A bare tier word ("a major change") is not one.
@@ -72,22 +73,32 @@ export const SUPPORTED_MODES: ReadonlySet<string> = new Set(["text", "agentic"])
 
 // ---- parsing & validation (pure) -------------------------------------------
 
-// Parse JSONL into { cases, errors }. Blank lines are skipped; a malformed line
-// becomes a parse error rather than throwing, so `validate` can report them all.
-export function parseCasesJsonl(text: string): { cases: EvalRecord[]; errors: string[] } {
-  const cases: EvalRecord[] = [];
+const isRecord = (v: unknown): v is EvalRecord =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+export type CaseEntry = { record: EvalRecord; line: number };
+
+// Parse JSONL into { entries, errors }, each entry an object case with its source line. Blank
+// lines are skipped; a malformed line becomes a parse error rather than throwing, so `validate`
+// can report them all.
+export function parseCasesJsonl(text: string): { entries: CaseEntry[]; errors: string[] } {
+  const entries: CaseEntry[] = [];
   const errors: string[] = [];
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = (lines[i] ?? "").trim();
     if (!line) continue;
+    let value: unknown;
     try {
-      cases.push(JSON.parse(line));
+      value = JSON.parse(line);
     } catch (err) {
       errors.push(`line ${i + 1}: not valid JSON (${(err as Error).message})`);
+      continue;
     }
+    if (isRecord(value)) entries.push({ record: value, line: i + 1 });
+    else errors.push(`line ${i + 1}: not an object`);
   }
-  return { cases, errors };
+  return { entries, errors };
 }
 
 // Compile a check's pattern; throws on an invalid regex or flags.
@@ -95,13 +106,76 @@ export function compileCheck(check: CheckInput): RegExp {
   return new RegExp(check.pattern ?? "", check.flags ?? "");
 }
 
+export function caseName(c: unknown, line: number): string {
+  const id = (c as EvalRecord | null)?.id;
+  return typeof id === "string" ? `case "${id}"` : `line ${line}`;
+}
+
+export function checkViolations(check: unknown, allowedTypes: ReadonlySet<string>): string[] {
+  const v: string[] = [];
+  if (!isRecord(check)) return ["not an object"];
+  if (!allowedTypes.has(check.type)) {
+    v.push(`"type" must be one of ${[...allowedTypes].join(", ")}`);
+  }
+  // Pattern-bearing checks need a compilable regex; git_created_branch and
+  // test_command_passes carry no pattern.
+  if (PATTERN_CHECK_TYPES.has(check.type)) {
+    if (typeof check.pattern !== "string" || !check.pattern) {
+      v.push(`missing/empty string "pattern"`);
+    } else {
+      try {
+        compileCheck(check as CheckInput);
+      } catch (err) {
+        v.push(`invalid regex (${(err as Error).message})`);
+      }
+    }
+  }
+  // file_contains/file_not_contains target a specific file.
+  if (
+    (check.type === "file_contains" || check.type === "file_not_contains") &&
+    (typeof check.path !== "string" || !check.path)
+  ) {
+    v.push(`"${check.type}" needs a non-empty string "path"`);
+  }
+  if (
+    check.type === "test_command_passes" &&
+    check.command !== undefined &&
+    typeof check.command !== "string"
+  ) {
+    v.push(`"command" must be a string when present`);
+  }
+  // repo_grep/repo_grep_absent may narrow to files whose relative path
+  // matches an optional pathPattern regex before content-grepping.
+  if (check.pathPattern !== undefined) {
+    if (check.type !== "repo_grep" && check.type !== "repo_grep_absent") {
+      v.push(`"pathPattern" only applies to repo_grep/repo_grep_absent`);
+    } else if (typeof check.pathPattern !== "string" || !check.pathPattern) {
+      v.push(`"pathPattern" must be a non-empty string when present`);
+    } else {
+      try {
+        new RegExp(check.pathPattern);
+      } catch (err) {
+        v.push(`invalid pathPattern regex (${(err as Error).message})`);
+      }
+    }
+  }
+  if (check.type === "declared_tier" && !TIERS.includes(check.tier)) {
+    v.push(`"tier" must be one of ${TIERS.join(", ")}`);
+  }
+  if (check.flags !== undefined && typeof check.flags !== "string") {
+    v.push(`"flags" must be a string when present`);
+  }
+  return v;
+}
+
 // Return a list of human-readable schema violations ([] means valid).
-export function validateCases(cases: unknown[]): string[] {
+export function validateCases(entries: { record: unknown; line: number }[]): string[] {
   const violations: string[] = [];
   const seen = new Set();
-  (cases as EvalRecord[]).forEach((c, idx) => {
-    const where = c && typeof c.id === "string" ? `case "${c.id}"` : `case #${idx + 1}`;
-    if (!c || typeof c !== "object") {
+  entries.forEach(({ record, line }) => {
+    const c = record as EvalRecord;
+    const where = caseName(c, line);
+    if (!isRecord(c)) {
       violations.push(`${where}: not an object`);
       return;
     }
@@ -135,63 +209,9 @@ export function validateCases(cases: unknown[]): string[] {
       return;
     }
     const allowedTypes = isAgentic ? AGENTIC_CHECK_TYPES : CHECK_TYPES;
-    c.checks.forEach((check: EvalRecord, ci: number) => {
-      const cw = `${where} check #${ci + 1}`;
-      if (!check || typeof check !== "object") {
-        violations.push(`${cw}: not an object`);
-        return;
-      }
-      if (!allowedTypes.has(check.type)) {
-        violations.push(`${cw}: "type" must be one of ${[...allowedTypes].join(", ")}`);
-      }
-      // Pattern-bearing checks need a compilable regex; git_created_branch and
-      // test_command_passes carry no pattern.
-      if (PATTERN_CHECK_TYPES.has(check.type)) {
-        if (typeof check.pattern !== "string" || !check.pattern) {
-          violations.push(`${cw}: missing/empty string "pattern"`);
-        } else {
-          try {
-            compileCheck(check as CheckInput);
-          } catch (err) {
-            violations.push(`${cw}: invalid regex (${(err as Error).message})`);
-          }
-        }
-      }
-      // file_contains/file_not_contains target a specific file.
-      if (
-        (check.type === "file_contains" || check.type === "file_not_contains") &&
-        (typeof check.path !== "string" || !check.path)
-      ) {
-        violations.push(`${cw}: "${check.type}" needs a non-empty string "path"`);
-      }
-      if (
-        check.type === "test_command_passes" &&
-        check.command !== undefined &&
-        typeof check.command !== "string"
-      ) {
-        violations.push(`${cw}: "command" must be a string when present`);
-      }
-      // repo_grep/repo_grep_absent may narrow to files whose relative path
-      // matches an optional pathPattern regex before content-grepping.
-      if (check.pathPattern !== undefined) {
-        if (check.type !== "repo_grep" && check.type !== "repo_grep_absent") {
-          violations.push(`${cw}: "pathPattern" only applies to repo_grep/repo_grep_absent`);
-        } else if (typeof check.pathPattern !== "string" || !check.pathPattern) {
-          violations.push(`${cw}: "pathPattern" must be a non-empty string when present`);
-        } else {
-          try {
-            new RegExp(check.pathPattern);
-          } catch (err) {
-            violations.push(`${cw}: invalid pathPattern regex (${(err as Error).message})`);
-          }
-        }
-      }
-      if (check.type === "declared_tier" && !TIERS.includes(check.tier)) {
-        violations.push(`${cw}: "tier" must be one of ${TIERS.join(", ")}`);
-      }
-      if (check.flags !== undefined && typeof check.flags !== "string") {
-        violations.push(`${cw}: "flags" must be a string when present`);
-      }
+    c.checks.forEach((check: unknown, ci: number) => {
+      for (const v of checkViolations(check, allowedTypes))
+        violations.push(`${where} check #${ci + 1}: ${v}`);
     });
   });
   return violations;
@@ -221,7 +241,7 @@ export function expandChecks(checks: CheckInput[]): CheckInput[] {
 // regex_must_not → pattern must NOT match. Any other type (an unexpanded
 // declared_tier included) is refused rather than judged as an absence check.
 export function evaluateCheck(check: CheckInput, responseText: string | undefined): CheckOutcome {
-  if (check.type !== "regex_must" && check.type !== "regex_must_not")
+  if (!REGEX_CHECK_TYPES.has(check.type))
     throw new Error(`evaluateCheck judges regex checks only, got "${check.type}"`);
   const re = compileCheck(check);
   const matched = re.test(responseText ?? "");

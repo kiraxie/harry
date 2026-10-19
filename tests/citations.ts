@@ -1,4 +1,4 @@
-import { parseCasesJsonl } from "../scripts/lib/evals-cases.mts";
+import { caseName, parseCasesJsonl } from "../scripts/lib/evals-cases.mts";
 import { outline } from "./section.ts";
 
 export type Name = { name: string; full: string; level?: number };
@@ -150,18 +150,17 @@ export const lawFailures = (text: string): Checked =>
   });
 
 export const lawLabelFailures = (jsonl: string): Checked => {
-  const { cases, errors } = parseCasesJsonl(jsonl);
+  const { entries, errors } = parseCasesJsonl(jsonl);
   return {
-    seen: cases.length + errors.length,
+    seen: entries.length + errors.length,
     failures: [
       ...errors,
-      ...cases.flatMap((c, i) => {
-        const where = typeof c.id === "string" ? `case "${c.id}"` : `case #${i + 1}`;
-        const law: unknown = c.law;
+      ...entries.flatMap(({ record, line }) => {
+        const law: unknown = record.law;
         return typeof law === "string" &&
           (LAW_HEADINGS.includes(law) || NON_LAW_LABELS.includes(law))
           ? []
-          : [`${where} -> law ${String(law)}`];
+          : [`${caseName(record, line)} -> law ${String(law)}`];
       }),
     ],
   };

@@ -39,7 +39,7 @@ export function outline(text: string): OutlineLine[] {
 
 export function headingSection(text: string, rel: string, heading: string | RegExp): string {
   assert.ok(
-    /\r\n|\r|\n/.test(text),
+    /[\r\n]/.test(text),
     `${rel} has no line breaks: pass the raw text, not a flattened copy`,
   );
   const lines = outline(text);

@@ -113,6 +113,7 @@ type Literal = {
   at: number;
   end: number;
   group: number;
+  arg: number;
 };
 
 const REGEX_BEFORE = /(?:^|[(,=:[!&|?{};+\-*%<>~^]|\breturn)\s*$/;
@@ -127,6 +128,7 @@ const scan = (
   from: number,
   found: Literal[],
   open: number[],
+  commas: Map<number, number>,
   stopAt: number,
 ): number => {
   let i = from;
@@ -145,6 +147,7 @@ const scan = (
         at: i,
         end: k + 1,
         group,
+        arg: commas.get(group) ?? 0,
       });
       i = k + 1;
     } else if (c === "`") {
@@ -153,7 +156,7 @@ const scan = (
         if (src[k] === "\\") k += 2;
         else if (src[k] === "$" && src[k + 1] === "{") {
           open.push(k + 1);
-          k = scan(src, k + 2, found, open, open.length);
+          k = scan(src, k + 2, found, open, commas, open.length);
         } else k += 1;
       }
       found.push({
@@ -163,6 +166,7 @@ const scan = (
         at: i,
         end: k + 1,
         group,
+        arg: commas.get(group) ?? 0,
       });
       i = k + 1;
     } else if (c === "/" && REGEX_BEFORE.test(src.slice(Math.max(0, i - 12), i))) {
@@ -182,10 +186,14 @@ const scan = (
         at: i,
         end: k + 1 + flags.length,
         group,
+        arg: commas.get(group) ?? 0,
       });
       i = k + 1 + flags.length;
     } else if (c === "(" || c === "[" || c === "{") {
       open.push(i);
+      i += 1;
+    } else if (c === ",") {
+      commas.set(group, (commas.get(group) ?? 0) + 1);
       i += 1;
     } else if (c === ")" || c === "]" || c === "}") {
       open.pop();
@@ -198,28 +206,54 @@ const scan = (
 
 const literals = (src: string): Literal[] => {
   const found: Literal[] = [];
-  scan(src, 0, found, [], 0);
+  scan(src, 0, found, [], new Map(), 0);
   return found;
 };
 
 const JOINS =
   /\(\?(?:[:=]|<[A-Za-z_$][\w$]*>)|[()|]|(?:\\s| |\[[ \\t]+\])(?:[*+?]|\{\d*,?\d*\})|(?<=\\n)[+*]/g;
-const CALL_BEFORE = /\b(split|RegExp)\(\s*(?:String\.raw\s*)?$/;
 const FLAGS = /^[dgimsuvy]*$/;
 
+const plainClasses = (source: string): string =>
+  source.replace(/\\\\|\\.|\[(?:\\.|[^\]\\])*\]/g, (m) =>
+    m === "\\\\"
+      ? ""
+      : m.startsWith("\\") || /^\[[ \\t]+\]$/.test(m)
+        ? m
+        : !m.startsWith("[^") && /^\[(?:\\.|[^\\])*?\\n/.test(m)
+          ? "\\n"
+          : "C",
+  );
+
 const anchoredHash = (source: string, flags: string): boolean =>
-  (flags.includes("m") ? /(?:\\n|\^)+#/ : /\\n\^*#/).test(source.replace(JOINS, ""));
+  (flags.includes("m") ? /(?:\\n|\^)+#/ : /\\n\^*#/).test(plainClasses(source).replace(JOINS, ""));
+
+const skipSpace = (src: string, at: number): number => {
+  let j = at;
+  while (j > 0 && /\s/.test(src[j - 1] as string)) j -= 1;
+  return j;
+};
+
+const callBefore = (src: string, at: number): { call: string | undefined; raw: boolean } => {
+  let j = skipSpace(src, at);
+  const raw = src.slice(Math.max(0, j - 10), j) === "String.raw";
+  if (raw) j = skipSpace(src, j - 10);
+  return { call: /\b(split|RegExp)\($/.exec(src.slice(Math.max(0, j - 8), j))?.[1], raw };
+};
 
 const headingReads = (src: string): { line: number; text: string }[] => {
   const all = literals(src);
   return all.flatMap((lit) => {
     const body = lit.body;
-    const call = CALL_BEFORE.exec(src.slice(Math.max(0, lit.at - 40), lit.at))?.[1];
-    const last = all.filter((l) => l.group === lit.group && l.at > lit.at).at(-1);
-    const flags = call === "RegExp" && last && FLAGS.test(last.body) ? last.body : "";
+    const { call, raw } = callBefore(src, lit.at);
+    const flags = all
+      .filter((l) => l.group === lit.group && l.arg === 1 && l.at > lit.at && FLAGS.test(l.body))
+      .map((l) => l.body)
+      .join("");
+    const source = lit.kind === "string" && !raw ? body.replace(/\\\\/g, "\\") : body;
     const reads =
       (lit.kind === "regex" && anchoredHash(body, lit.flags)) ||
-      (call === "RegExp" && anchoredHash(body, flags)) ||
+      (call === "RegExp" && anchoredHash(source, flags)) ||
       /^(?:\\n)?#+ $/.test(body) ||
       (call === "split" &&
         (lit.kind === "regex"
@@ -287,6 +321,19 @@ const HEADING_READS = [
   'new RegExp("^## " + name + "$", "m");',
   "t.split(/(?=##\\s)/);",
   "assert.match(out, /\\n## Focus\\n/);",
+  'new RegExp("^## " + n, multi ? "m" : "");',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: source text under scan, as a test would write it.
+  "const m = `${/\\n## /.test(t)}`;",
+  "{ /\\n## /.test(t) }",
+  "const r = [/\\n## /, /x/];",
+  "text.match(/\\n## .*/gm);",
+  `t.split(${" ".repeat(50)}"## Output");`,
+  `new RegExp(${" ".repeat(50)}String.raw\`^## x\`, "m");`,
+  'new RegExp(String.raw `^## x`, "m");',
+  'new RegExp("\\\\n## ");',
+  "/\\[x\\]\\n## [A-Z]/.test(t);",
+  "/[\\r\\n]## /.test(t);",
+  "t.split(/[\\r\\n]+## /);",
 ];
 const NOT_HEADING_READS = [
   'const docs = { "x.md": "## Steps\\n## Review\\n" };',
@@ -315,6 +362,15 @@ const NOT_HEADING_READS = [
   // biome-ignore lint/suspicious/noTemplateCurlyInString: source text under scan, as a test would write it.
   'const t = `${"#".repeat(level)} heading`;',
   "t.split(/^## /);",
+  "t.split(/[\\n#]/);",
+  "/[^#\\n]+/m.test(t);",
+  "/\\\\n## /.test(t);",
+  'new RegExp("\\\\\\\\n## ");',
+  "new RegExp(String.raw`\\\\n## `);",
+  "new RegExp(String.raw `\\\\n## `);",
+  'new RegExp("^## " + n + "m", "g");',
+  "/[\\\\n]## /.test(t);",
+  "/[^\\n]## /.test(t);",
 ];
 
 test("the heading scan catches each known shape and nothing else", () => {
