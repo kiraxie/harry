@@ -15,9 +15,9 @@
     },
     "openclaw": {
       "repo": "https://github.com/openclaw/openclaw",
-      "synced_version": "2026.9.8",
-      "synced_commit": "f19013d9deec97c8f1d6b4b48c6b05978505ea0a",
-      "synced_date": "2026-10-07"
+      "synced_version": "2026.10.5",
+      "synced_commit": "f7968d7f0f9a7e36a608bbfc9abf1ea3a105c464",
+      "synced_date": "2026-10-20"
     }
   },
   "historical_sources": {
