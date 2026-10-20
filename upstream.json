@@ -13,12 +13,6 @@
       "synced_commit": "7a030a8b0dcaa601bb0dda9aaf174affb3d61145",
       "synced_date": "2026-10-07"
     },
-    "anthropics-skills": {
-      "repo": "https://github.com/anthropics/skills",
-      "synced_version": "none (repo declares no version or tags)",
-      "synced_commit": "683bc88e56f3e09ba94f7055977f3d3aa499f202",
-      "synced_date": "2026-10-07"
-    },
     "openclaw": {
       "repo": "https://github.com/openclaw/openclaw",
       "synced_version": "2026.9.8",
@@ -33,6 +27,13 @@
       "last_harvested_commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
       "retired_date": "2026-09-15",
       "note": "Retired as a pinned upstream: harry's derived laws and skills have diverged to near-zero shared lines, so tracking yielded only alerts harry mostly declined. v6.3.0 was harvested once before retiring. Kept for attribution of the derived[] entries naming superpowers; do not sync. Re-compare on demand only."
+    },
+    "anthropics-skills": {
+      "repo": "https://github.com/anthropics/skills",
+      "last_harvested_version": "none (repo declares no version or tags)",
+      "last_harvested_commit": "683bc88e56f3e09ba94f7055977f3d3aa499f202",
+      "retired_date": "2026-10-20",
+      "note": "Retired as a pinned upstream: the official skill-creator is installed alongside harry and covers scaffolding, packaging and optimization, so there is no upstream diff left to pull. The distilled rules stay in .claude/references/skill-authoring.md as harry's own, with the deviations recorded in the derived[] entry. Kept for attribution of that entry and for NOTICE (Apache-2.0); do not sync."
     },
     "codex-plugin-cc": {
       "repo": "https://github.com/openai/codex-plugin-cc",
