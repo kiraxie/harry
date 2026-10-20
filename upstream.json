@@ -3,9 +3,9 @@
   "sources": {
     "ponytail": {
       "repo": "https://github.com/DietrichGebert/ponytail",
-      "synced_version": "4.13.0",
-      "synced_commit": "552acd5efd0aeae2583a12efe39373d2f076f25e",
-      "synced_date": "2026-10-07"
+      "synced_version": "5.3.2",
+      "synced_commit": "09c434ab73ca43761c5d8b0c5d341926c2fba710",
+      "synced_date": "2026-10-20"
     },
     "mattpocock-skills": {
       "repo": "https://github.com/mattpocock/skills",
@@ -140,9 +140,9 @@
       "note": "2026-10 adaptation: references/pr-body.md holds the Summary / Evidence / Merge Danger template that finishing's PR draft follows; the visual principle lives once as plain-language's 'Show the structure' bullet and pr-body.md points to it. Rephrased; the GLOSSARY.md line is dropped (harry keeps no glossary)."
     },
     {
-      "skill": "review numbering",
+      "skill": "review numbering / review-rubric (2026-10 re-sync)",
       "from": "ponytail:skills/ponytail-review + ponytail-audit",
-      "note": "2026-10: findings numbered straight across severities (references/review-rubric.md) and finishing's rulings list numbered, so a ruling cites a number. Skipped: the reuse: tag (/audit dimension **Reusability & hoist candidates** covers it) and grep-before-delete (/audit dimension **Dead code & unused surface** + the SUBSTRATE TEST cover it)."
+      "note": "2026-10: findings numbered straight across severities (references/review-rubric.md) and finishing's rulings list numbered, so a ruling cites a number. Skipped: the reuse: tag (/audit dimension **Reusability & hoist candidates** covers it) and grep-before-delete (/audit dimension **Dead code & unused surface** + the SUBSTRATE TEST cover it). v5.3.2 re-sync adaptations into references/review-rubric.md: a concrete case per finding, read callers beyond the diff, name the assumed load, and a DEBT: shortcut with a named ceiling is a decision, not a finding. Skipped: ponytail's debt scan changes (harry's git grep already skips untracked paths), the marker rename to shortcut: (harry's DEBT: is already neutral), the main skill rewrite (covered by harry's red lines and Honesty law), and the priority order (harry's severity scale stands)."
     },
     {
       "skill": "init",

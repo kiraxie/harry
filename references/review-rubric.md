@@ -29,6 +29,10 @@ mutation; its report is its final message.
    where the language offers it; integrates cleanly with surrounding code. Flag a
    comment that restates the code, justifies a workaround, or resists a change —
    code carries no comment by default (HARRY.md **Code**).
+   Read the code the diff touches, not only the diff: when a signature, return
+   value or behavior changes, grep every caller. Judge scale and concurrency
+   against the load the repo itself shows (README, deploy config) and name the
+   load you assumed.
 3. **YAGNI / altitude** (**Engineering judgment**, below). Speculative abstraction (interface with
    one impl, factory for one product, config for a constant), premature
    generality or optimization (a cache/index/clever rewrite with no measured
@@ -37,6 +41,8 @@ mutation; its report is its final message.
    A cross-boundary contract, trust-boundary validation, or correctness
    infrastructure stays even if currently uncalled (HARRY.md **Tiers**). Do not YAGNI away a
    red line.
+   A shortcut carrying a `DEBT:` note that names its ceiling is a decision, not a
+   finding, unless the load the repo shows already crosses that ceiling.
 4. **Test hygiene**. Judge every test the diff adds or changes
    against `references/red-green.md` — what a good test is, one owner per
    contract, and the patterns that pass without guarding anything. Flag tests
@@ -108,7 +114,9 @@ never Critical. In a fresh review, acknowledge what was done well before listing
   think a finding is a false positive, let it surface and adjudicate it after the
   fix wave.
 - **Be specific:** `file:line`, what's wrong, why it matters, and the long-term
-  structural fix — never a workaround (**Engineering judgment**).
+  structural fix — never a workaround (**Engineering judgment**). Every finding
+  names a concrete case: this input or situation leads to this wrong result. No
+  case, no finding.
 - A finding that **conflicts with an AC** is the human's call — present the
   finding beside the AC text; do not silently fix against the AC, or dismiss
   the finding because the AC mandated it.
