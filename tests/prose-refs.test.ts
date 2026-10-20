@@ -5,6 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  CONNECTORS,
+  CORE_NAME_STRIPS,
   citationAttempts,
   citeFailures,
   dimensionFailures,
@@ -20,6 +22,7 @@ import {
   type Repo,
   resolveCitation,
   stepAttempts,
+  strayBold,
 } from "./citations.ts";
 import {
   PROSE_DIRS as INSTRUCTION_DIRS,
@@ -29,7 +32,7 @@ import {
   SHIPPED_PROSE_DIRS,
   SHIPPED_TOP_LEVEL,
 } from "./prose-dirs.ts";
-import { outline } from "./section.ts";
+import { headingSection, outline } from "./section.ts";
 
 // The plugin's real product is ~3,000 lines of markdown that an AI agent follows,
 // full of file-path references (references/tier-gates.md, ${CLAUDE_PLUGIN_ROOT}/...,
@@ -246,8 +249,9 @@ test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
 // section's content moved to the next number, the old number still resolved, to the wrong law. A name moves with its
 // content, and a renamed heading fails here.
 //
-// Fences are NOT skipped, unlike the path scan above: there is no reason to
-// write a law citation that does not resolve, even illustratively.
+// Fences, and code spans holding more than a path, are skipped, as in every citation
+// check: `tests/citations.ts` reads Markdown as it renders, and text in code is shown,
+// not cited.
 
 test("every HARRY.md citation names a heading HARRY.md actually has", () => {
   const laws = readFileSync(path.join(repoRoot, "HARRY.md"), "utf-8");
@@ -378,6 +382,28 @@ test("no prose cites a step or category by its number", () => {
     [],
     "a step cited by number; cite it by its label",
   );
+});
+
+test("the Citations section names every connector and core-name strip the check reads", () => {
+  const rel = ".claude/references/skill-authoring.md";
+  const prose = headingSection(
+    readFileSync(path.join(repoRoot, rel), "utf-8"),
+    rel,
+    "## Citations",
+  ).replace(/\s+/g, " ");
+  const named = (name: string): boolean =>
+    new RegExp(
+      String.raw`(?<![\p{L}\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\p{L}\p{N}])`,
+      "u",
+    ).test(prose);
+  const missing = [...Object.values(CONNECTORS).flat(), ...CORE_NAME_STRIPS]
+    .map((entry) => entry.name)
+    .filter((name) => !named(name));
+  assert.deepEqual(missing, [], `${rel} Citations must name every entry the check reads`);
+});
+
+test("no prose leaves a ** unpaired", () => {
+  assert.deepEqual(scanCorpus(strayBold), [], "a ** that renders as asterisks");
 });
 
 test("every bold law name has HARRY.md before it", () => {

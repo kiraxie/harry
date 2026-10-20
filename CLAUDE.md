@@ -123,7 +123,7 @@ repo's workflow uses ships. When writing or editing a skill or command, follow
 
 ## Plugin content (`HARRY.md`, `skills/`, `commands/`, `references/`)
 
-`HARRY.md` is the resident law file. It holds only what a session must know before acting, under nine `##` headings; procedure lives in the skills and review judgment in `references/review-rubric.md` **Engineering judgment**. Prose cites a law as HARRY.md **Evidence**, and another file's section by its path and bold name — the forms are in `.claude/references/skill-authoring.md` **(f) Citations**, and `tests/prose-refs.test.ts` checks each one. `scripts/install.mjs` (`pnpm run install-laws` / the plugin's
+`HARRY.md` is the resident law file. It holds only what a session must know before acting, under nine `##` headings; procedure lives in the skills and review judgment in `references/review-rubric.md` **Engineering judgment**. Prose cites a law as HARRY.md **Evidence**, and another file's section by its path and bold name — the forms are in `.claude/references/skill-authoring.md` **Citations**, and `tests/prose-refs.test.ts` checks each one. `scripts/install.mjs` (`pnpm run install-laws` / the plugin's
 own `/sync` command) **deploys a snapshot** of it to `~/.claude/harry/HARRY.md` and `@`-imports that
 deployed copy into a consumer's global `~/.claude/CLAUDE.md`, so it applies every session without
 needing a keyword. The import points at the deployed snapshot, NOT the live plugin checkout: editing

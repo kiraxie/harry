@@ -17,6 +17,7 @@ import {
   type Repo,
   resolveName,
   stepAttempts,
+  strayBold,
 } from "./citations.ts";
 
 const docs: Record<string, string> = {
@@ -24,6 +25,7 @@ const docs: Record<string, string> = {
   "commands/review.md": "## Target\n",
   "references/grilling.md": "## Handoff\n",
   "references/pr-body.md": "## Evidence\n",
+  "references/red-green.md": "1. **Run *all* tests.** a\n2. **Use `**` marks.** b\n",
   "references/architecture-review.md": "## System level\n",
   "references/audit/SCAN-DIMENSIONS.md":
     "## 11. Low-value tests\n### Choosing dimensions and shaping agents\n" +
@@ -83,10 +85,17 @@ test("citations.ts is pure: nothing it reaches reads git or the disk", () => {
 test("a cited name resolves to one heading or step", () => {
   assert.deepEqual(
     namesIn(
-      "# Title\n## \n## 2. Top — sub (x)\n1. **Step one.** a\n   1. **Nested.** b\n**Paragraph.** c\n```\n1. **Fenced.** d\n```\n",
+      "# Title\n## \n## 2. Top — sub (x)\n1. **Step one.** a\n   1. **Nested.** b\n**Paragraph.** c\n```\n1. **Fenced.** d\n```\n" +
+        "2. **Run *all* tests.** e\n3. **A label\n   that wraps.** f\n4. **Use `**` marks.** g\n5. **After\n\n** gap\n## Last\n",
     ).map((n) => n.name),
-    ["Top", "Step one"],
-    "a name now comes from a title, an empty heading, a nested item, a bold paragraph or a fenced line",
+    ["Top", "Step one", "Run *all* tests", "A label that wraps", "Use `**` marks", "Last"],
+    "a name now comes from a title, an empty heading, a nested item, a bold paragraph, a fenced " +
+      "line or bold across a blank line, or a label with italics, a code span or a wrap is lost",
+  );
+  assert.deepEqual(
+    namesIn("1. **a\n2. b** c\n"),
+    [],
+    "a label's bold runs on into the next list item",
   );
   const doc = namesIn(
     "## Install\n### Flow (full depth)\n1. **One fix wave.** a\n## 3. Install — again\n### Check\n",
@@ -120,6 +129,22 @@ test("each legacy form matches its samples and names the form to use", () => {
     ],
     "a legacy hit no longer carries its line or the form to use",
   );
+  assert.deepEqual(
+    legacyHits("intro\n```\nHARRY.md Tiers\n```\nrun `dimension 10` and ` HARRY.md` Tiers"),
+    [],
+    "a legacy form inside a fence or a code span holding more than a path is read",
+  );
+  assert.deepEqual(
+    legacyHits("per `skills/executing` step 4"),
+    ["1 -> a skill's step with no path; cite it as `path` **Name**"],
+    "a legacy form in a code span holding only a path is no longer read",
+  );
+  for (const at of ["~/.claude/harry", "~kira/.claude/harry", "$HOME/.claude/harry", "/Users/x"])
+    assert.equal(
+      legacyHits(`see \`${at}/HARRY.md\` Tiers`).length,
+      1,
+      `a law named after a code span holding only ${at}/HARRY.md is no longer read`,
+    );
 });
 
 test("a dimension citation names a SCAN-DIMENSIONS ## heading", () => {
@@ -164,11 +189,19 @@ test("a cross-file citation names a heading or step its file has", () => {
     },
     "the cross-file check no longer counts, cleans the name, resolves it or reports the line",
   );
+  assert.deepEqual(
+    citeFailures(
+      repo,
+      "per `references/red-green.md` **Run *all* tests** and `references/red-green.md` **Use `**` marks**",
+    ),
+    { seen: 2, failures: [] },
+    "a step label with italics or a code span is no longer read as bold, or no longer resolves",
+  );
 });
 
 test("a law citation names a HARRY.md ## heading", () => {
   assert.deepEqual(
-    lawFailures("per HARRY.md **Tiers** and `HARRY.md` **Evidence\n**,\nHARRY.md **Tier**"),
+    lawFailures("per HARRY.md **Tiers** and `HARRY.md` **Ask\nfirst**,\nHARRY.md **Tier**"),
     { seen: 3, failures: ["3 -> HARRY.md **Tier**"] },
     "the law check no longer counts, cleans the name, resolves it or reports the line",
   );
@@ -212,9 +245,18 @@ test("a heading or step named in plain text after a path is caught", () => {
     ["at `skills/executing` Review, the", ['1 -> skills/executing/SKILL.md "Review"']],
     ["at `skills/executing/` Review, the", ['1 -> skills/executing/SKILL.md "Review"']],
     ["per `references/grilling.md` — Handoff", ['1 -> references/grilling.md "Handoff"']],
+    ["per `references/grilling.md` – Handoff", ['1 -> references/grilling.md "Handoff"']],
+    ["per `references/grilling.md` - Handoff", ['1 -> references/grilling.md "Handoff"']],
+    ["per references/grilling.md's Handoff, then", ['1 -> references/grilling.md "Handoff"']],
+    ["at skills/executing Review, the", ['1 -> skills/executing/SKILL.md "Review"']],
+    ["per `references/grilling.md`\nHandoff, then", ['1 -> references/grilling.md "Handoff"']],
+    ["per ``references/grilling.md`` Handoff, then", ['1 -> references/grilling.md "Handoff"']],
     ["see `skills/executing/SKILL.md` review step", []],
     ["`references/grilling.md` covers it", []],
     ["`references/grilling.md` Handoffs list", []],
+    ["run `cat references/grilling.md Handoff` here", []],
+    ["run ``cat `references/grilling.md` Handoff`` here", []],
+    ["intro\n```\ncat references/grilling.md Handoff\n```\n", []],
     [
       "intro\nper `references/grilling.md`'s Handoff, then",
       ['2 -> references/grilling.md "Handoff"'],
@@ -271,6 +313,9 @@ test("a citation attempt next to a path must be in the one form", () => {
       "per `skills/executing/`'s **Steps**",
       "per `skills/executing` (**Steps**)",
       "per `references/grilling.md` — **Handof** here",
+      "per `references/grilling.md` – **Handof** here",
+      "per `references/grilling.md`–**Handof** here",
+      "per `references/grilling.md` - **Handof** here",
       "per `references/grilling.md`: **Handof** here",
       "per `references/grilling.md` (**Handof**) here",
       "at `references/audit` **Recon** here",
@@ -286,6 +331,13 @@ test("a citation attempt next to a path must be in the one form", () => {
       "per `references/grilling.md`, then run `x` **Handoff** here",
       "see `skills/brainstorming/SKILL.md` and its **Full Flow (full depth)** part",
       'per `references/grilling.md` and `x` "Handoff" here',
+      "per references/grilling.md **Handoff** here",
+      "per skills/executing **Steps** here",
+      "run `x` then references/grilling.md **Handoff** here",
+      "per ``references/grilling.md`` **Handoff** here",
+      "per ` references/grilling.md ` **Handoff** here",
+      "per ` skills/x ` **Steps** here",
+      "per `\nreferences/grilling.md\n` **Handoff** here",
     ],
     [
       "simplify dual-lane — **Claude Code build:** in `commands/review.md`; **Codex build:**",
@@ -300,6 +352,21 @@ test("a citation attempt next to a path must be in the one form", () => {
       'see `references/grilling.md` and its **"Handoff"** rule',
       "see `references/grilling.md` for it\n\n**Handoff** opens the next paragraph",
       'per `references/grilling.md` " and more" here',
+      "and/or **x** here",
+      "the `references/grilling.md`-**x** link",
+      "the `references/grilling.md` -**x** link",
+      "a URL like https://x.io/references/grilling.md **Handoff** here",
+      "per $HOME/references/grilling.md **x** here",
+      "per file:references/grilling.md **x** here",
+      "per ~kira/references/grilling.md **x** here",
+      "```\nsee references/grilling.md\n```\nthe **Handoff** rule",
+      "see ``x `references/grilling.md` y`` then **Handoff** applies",
+      "per `references/grilling.md`:\n```\ncode\n```\nthe **Handoff** rule applies.",
+      "per `references/grilling.md`\n```\n(step 4)\n```\n",
+      "per `references/grilling.md`` x` **Handoff** here",
+      "per `  references/grilling.md  ` **Handoff** here",
+      "see `references/grilling.md` for it\n- **Handoff** opens the item",
+      "see `references/grilling.md` for it\n- (step 4) opens the item",
     ],
   );
   assert.deepEqual(
@@ -326,6 +393,10 @@ test("a citation attempt next to a path must be in the one form", () => {
       "at `.local/INDEX.md`, **In flight** here",
       "at `tests/../.git`, **x** here",
       "at `./references/grilling.md`, **Handoff** here",
+      "per references/grilling.md **Handoff** here",
+      "per skills/executing **Steps** here",
+      "per ``references/grilling.md`` **Handoff** here",
+      "per ` skills/x ` **Steps** here",
     ].flatMap((sample) => attempts(sample)),
     [
       "1 -> a name next to references/grilling.md; cite it as `path` **Name**",
@@ -337,9 +408,106 @@ test("a citation attempt next to a path must be in the one form", () => {
       "1 -> a name next to .local/INDEX.md; .local/INDEX.md is not tracked",
       "1 -> a name next to tests/../.git; tests/../.git is not tracked",
       "1 -> a name next to ./references/grilling.md; cite it as `path` **Name**",
+      "1 -> a name next to references/grilling.md; cite it as `path` **Name**",
+      "1 -> a name next to skills/executing; cite it as `dir/SKILL.md` **Name**",
+      "1 -> a name next to references/grilling.md; cite it as `path` **Name**",
+      "1 -> a name next to skills/x; skills/x is not tracked",
     ],
     "a hint no longer follows the kind of path it names",
   );
+});
+
+test("bold is read where it renders", () => {
+  assert.deepEqual(
+    laws("a ** stray\n\nthe **Tiers** law holds"),
+    ["3 -> **Tiers** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**"],
+    "a stray ** swallows the next paragraph's bold",
+  );
+  for (const sample of [
+    "run `a**b` here",
+    "run ``a**`b`` here",
+    "```\na ** b\n\nc\n```\n",
+    "**a** and **Ask\nfirst** and **`--x`** and ***c***",
+    "the **a *b* c** rule",
+    "intro\n***\nafter",
+    "****",
+    "** *",
+    "> **a\n> b** c",
+    "**a\n-b** c",
+    "**a\n#b** c",
+    "**a\n__\nb** c",
+    "> **a\nlazy\n> b** c",
+    "> ***",
+    "x **a\n2. item\nb** y",
+    "x **a\n2) item\nb** y",
+    "x **a\n    - item\nb** y",
+    "x **a\n=-=\nb** y",
+    "x **a\n   b\n2. c** d",
+    "- a\n\nx **b\n2. c** d",
+  ])
+    assert.deepEqual(strayBold(sample), [], `a ** that renders as bold is called stray: ${sample}`);
+});
+
+test("quotes are read where they render", () => {
+  checkFixtures(
+    attempts,
+    [
+      "per `references/grilling.md` “Handoff” here",
+      "per `references/grilling.md` ‘Handoff’ here",
+      "per `references/grilling.md` 'Handoff' here",
+      "per `references/grilling.md`, it's the 'Handoff' rule",
+      'see `skills/brainstorming/SKILL.md` and its "Full\nFlow" part',
+      'a " stray\n\nper `references/grilling.md`, **Handoff** "x"',
+    ],
+    [
+      "it's the users' rule, `references/grilling.md` says",
+      'see `references/grilling.md` and run `x "Handoff"` here',
+      "see `references/grilling.md` and run `x 'Handoff'` here",
+      "per `references/grilling.md`, the 'Handoff's rule' here",
+      "per `references/grilling.md`, see l'Handoff' here",
+    ],
+  );
+});
+
+test("a ** that pairs with nothing is caught", () => {
+  const hit = (line: number) =>
+    `${line} -> a ** that pairs with nothing renders as asterisks; bold opens before a ` +
+    "non-space and closes after one, in the same paragraph";
+  const fixtures: [string, string[]][] = [
+    ["per HARRY.md ** Tiers** here", [hit(1), hit(1)]],
+    ["per HARRY.md **Evidence\n** here", [hit(1), hit(2)]],
+    ["a **b\n\nc** d", [hit(1), hit(3)]],
+    ["intro\nthe **Tiers law", [hit(2)]],
+    ...[
+      "* * *",
+      "* item",
+      "+ item",
+      "- item",
+      "   - item",
+      "1. item",
+      "1) item",
+      "## Head",
+      "#",
+      "> q",
+      ">",
+      "---",
+      "___",
+      "==",
+      "-",
+    ].map((line): [string, string[]] => [`x **a\n${line}\nb** y`, [hit(1), hit(3)]]),
+    ["***\nx **", [hit(2)]],
+    ["intro\n    ***", [hit(2)]],
+    ["> x **a\n>\n> b** y", [hit(1), hit(3)]],
+    ["> x **a\n> - item\n> b** y", [hit(1), hit(3)]],
+    ["> x **a\n> ## h\n> b** y", [hit(1), hit(3)]],
+    ["> 1. a **x\n> 2. b** c", [hit(1), hit(2)]],
+    ["- a **x\n2. b** z", [hit(1), hit(2)]],
+    ["1. a **x\n   b\n2. c** d", [hit(1), hit(3)]],
+    ["   - a **x\n     - b\n     c** d", [hit(1), hit(3)]],
+    ["> q\n\nx **a\n> b** c", [hit(3), hit(4)]],
+  ];
+  for (const [sample, hits] of fixtures)
+    assert.deepEqual(strayBold(sample), hits, `the stray ** check misjudges: ${sample}`);
 });
 
 test("a step or category cited by its number is caught", () => {
@@ -354,12 +522,15 @@ test("a step or category cited by its number is caught", () => {
       "the **Steps** step 4 applies",
       "per `references/architecture-review.md` category 4",
       "per `skills/executing/SKILL.md`, step 2",
+      "per skills/executing/SKILL.md, step 2",
       "per `skills/executing` step 4",
       "the **Steps** (step 4) applies",
       "per `skills/executing/SKILL.md`'s step 4",
       "per `references/grilling.md` (category 4)",
       "per `references/grilling.md`: step 4",
       "per `references/grilling.md` — step 4",
+      "per `references/grilling.md` – step 4",
+      "per `references/grilling.md` - step 4",
       "the **Steps**: step 4 applies",
       'say "the **Steps** step 4" here',
       "the **Seams** step 4 applies",
@@ -367,6 +538,7 @@ test("a step or category cited by its number is caught", () => {
       "per `skills/x/SKILL.md`, step 2",
       "per `skills/x` step 4",
       "`references/x.md` covers it (steps 2-3)",
+      "per ``skills/executing`` step 4",
     ],
     [
       "then `skills/finishing/SKILL.md` **Verify tests first** runs, and finishing again from step 1",
@@ -384,11 +556,14 @@ test("a bold law name needs HARRY.md before it", () => {
       "run `x` **Tiers** now",
       'say "the **Tiers** law holds" here',
       "the **Ask\nfirst** law holds",
+      "the copy at ~/.claude/harry/HARRY.md, **Code** included",
+      "the ***Tiers*** law holds",
+      "per XHARRY.md **Code** here",
     ],
     [
       "per HARRY.md **Tiers** and `references/grilling.md` **Handoff**",
       "per `references/pr-body.md` **Evidence** here",
-      "the copy at ~/.claude/harry/HARRY.md, **Code** included",
+      "the copy at ~/.claude/harry/HARRY.md **Code** included",
     ],
   );
 });

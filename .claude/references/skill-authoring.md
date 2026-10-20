@@ -8,7 +8,7 @@ What harry keeps is the part the official tooling doesn't cover: the **Superpowe
 behavior-shaping methodology**. A skill is not prose, it is code that shapes agent behavior, so
 it gets developed and verified like code.
 
-## (a) TDD for skills — no skill without a failing baseline test
+## TDD for skills — no skill without a failing baseline test
 
 Writing a skill IS test-driven development applied to documentation.
 
@@ -28,7 +28,7 @@ The cycle:
 
 Iron law: **no skill without a failing test first** — applies to new skills *and* edits.
 
-## (b) Bulletproofing discipline skills
+## Bulletproofing discipline skills
 
 Discipline skills (rules the agent will be tempted to skip under pressure) need to resist
 rationalization. Build in:
@@ -44,7 +44,7 @@ rationalization. Build in:
 - **Close loopholes explicitly** — don't just say "delete it"; forbid the named workarounds
   ("don't keep it as reference, don't adapt it, don't look at it").
 
-## (c) Match the form to the failure
+## Match the form to the failure
 
 The form that bulletproofs one failure type backfires on another. Classify the baseline failure
 first:
@@ -63,7 +63,7 @@ negotiate. Also: no nuance clauses ("don't X unless it matters" reopens the nego
 exemption clauses don't scope ("doesn't apply to code blocks" still suppresses code blocks —
 restructure instead).
 
-## (d) SDO — description = WHEN to use, not WHAT it does
+## SDO — description = WHEN to use, not WHAT it does
 
 The `description` field decides whether an agent loads the skill. It must describe **only the
 triggering conditions** ("Use when…"), never summarize the workflow.
@@ -99,11 +99,12 @@ Write **one trigger per branch** — synonyms that rename one case are one branc
 so collapse them — and cut identity the body already carries. When the agent misses a target it
 must reach, sharpen the pointer's wording first; inline the material only if that fails.
 
-## (e) Editorial vocabulary — how the prose is written
+## Editorial vocabulary — how the prose is written
 
-Sections (a)–(d) verify a skill like code; this axis governs how its text is *written*. Both
-serve one end — **predictability**, the agent taking the same process every run. Sharpen the
-words *after* the baseline test is green, not instead of it.
+The TDD, bulletproofing, form-to-failure and SDO sections verify a skill like code; this axis
+governs how its text is *written*. Both serve one end — **predictability**, the agent taking
+the same process every run.
+Sharpen the words *after* the baseline test is green, not instead of it.
 
 The same levers apply to every document an agent consumes, not only skills: `HARRY.md`,
 `CLAUDE.md`, `AGENTS.md`, a reference reached by a pointer. An always-loaded one pays context
@@ -114,8 +115,8 @@ load on every word, every turn, so it earns the hardest pruning.
   its own. A user-invoked skill (`disable-model-invocation: true`) spends **cognitive load**
   instead: zero context, but *you* are the index that must remember it exists. Pick
   model-invocation only when the agent or another skill must reach it autonomously; if it only
-  ever fires by hand, pay no context load. (Complements (d): that governs *what* a model-facing
-  description says; this governs *whether* to have one.)
+  ever fires by hand, pay no context load. (Complements the SDO section: that governs *what* a
+  model-facing description says; this governs *whether* to have one.)
 - **Leading words.** A compact concept already in the model's pretraining (*tight*, *relentless*,
   *fog of war*, *tracer bullets*) anchors a whole region of behaviour in a few tokens by
   recruiting priors the model already holds. Hunt restatements that collapse into one:
@@ -136,13 +137,13 @@ load on every word, every turn, so it earns the hardest pruning.
 - **Negation names the elephant.** *Don't think of an elephant* makes it more available, not less —
   steering by prohibition backfires. Prompt the **positive**: state the target behaviour so the
   banned one is never spoken. Keep a prohibition only as a hard guardrail you can't phrase
-  positively, and even then pair it with what to do instead. (This is the general form of (c)'s
-  "prohibitions backfire on output-shape problems.")
+  positively, and even then pair it with what to do instead. (This is the general form of the
+  form-to-failure section's "prohibitions backfire on output-shape problems.")
 - **Explain the why — capability skills.** A capability skill earns generalization by saying
   why each instruction matters: the model extends reasons to cases the text never named, so an
   unexplained all-caps MUST is a smell there. Discipline skills are the deliberate exception —
-  (b)/(c) hold because their failure is knowing better and doing it anyway, where
-  pressure-tested prohibition forms outperform explanation.
+  the bulletproofing and form-to-failure sections hold because their failure is knowing better
+  and doing it anyway, where pressure-tested prohibition forms outperform explanation.
 - **Point-of-use placement.** A principle restated in a recap section (Key Principles /
   Remember / The Bottom Line) is sediment in section form — delete the section, moving any
   sole-carrier line to the step where it acts. Guard sections (Common Mistakes / Red Flags)
@@ -158,7 +159,7 @@ load on every word, every turn, so it earns the hardest pruning.
   helper script from scratch; that repetition IS the signal to bundle it once under the skill's
   `scripts/` and point the body at it, so no future invocation reinvents it.
 
-## (f) Citations — how prose names another file's section
+## Citations — how prose names another file's section
 
 A name in prose that points into another file is checked by `tests/prose-refs.test.ts`, so each
 kind has exactly one form:
@@ -176,10 +177,23 @@ The name is the core name: the heading or bold step label without a leading `N. 
 ` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
 standing. It must be unique in its file.
 
+The test reads Markdown as it renders. Bold opens with a `**` before a non-space and closes with
+one after a non-space; a `**` that pairs with nothing fails. A quote is `“…”`, `‘…’`, `"…"` or
+`'…'`, and a straight single quote opens only after a character that is not a letter or digit
+and closes only before one, so an apostrophe never opens one. Neither runs past the end of its
+paragraph. A paragraph ends at a blank line or a line of only `>`, and at a line that starts,
+after any `>` and at most three spaces, with a heading's `#`, a `>` that opens a block quote, a
+`*`, `+`, `-`, `1.` or `1)` list marker, a `***`, `---` or `___` rule, or an `===` or `---`
+underline; one that began on a list item also ends at any list marker, at any indent. A path
+counts with or without backticks; without them, only when it ends in `.md` or names a tracked
+file or directory. Nothing inside a fenced block, or inside a code span that holds more than a
+path, is read.
+
 The test reads three things as citation attempts, and each must be in the form above:
 
 - a bold or quoted string right after a path, even through an apostrophe-s, a comma, a colon, an
-  em dash or an opening parenthesis — whether it names anything or not;
+  em dash, an en dash, a hyphen with a space on each side or an opening parenthesis — whether
+  it names anything or not;
 - a plain word right after a path that names a heading or step of that file;
 - a bold or quoted heading or step name of the path's file anywhere else in the same sentence.
 
