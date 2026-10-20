@@ -113,7 +113,22 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "**Flush Follow-ups** — read",
+    snippet: "A kept leftover is appended to the item's `## Follow-ups`",
+    writer: ["finishing's leftover check"],
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "Skip anything already in `## Follow-ups`",
+    reader: "skips what Follow-ups and the backlog already hold",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "- **Conversation leftovers, before `gh pr create`.**",
+    writer: ["finishing's leftover check"],
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "Then flush: read the item's `## Follow-ups` section",
     rule: "Follow-ups flush",
   },
   {

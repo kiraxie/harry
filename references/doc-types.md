@@ -156,6 +156,8 @@ milestone edit.
       - findings of any severity outside the fix range;
       - findings adjudicated to Follow-ups;
     - finishing's architecture review from round 2 on (its Minor findings);
+    - finishing's leftover check, on the user's say (work from the session or the
+      files with no outcome, in step c and before a PR opens);
     - an author copying in a Non-Goal (**Non-Goals do not survive archiving**, below).
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
