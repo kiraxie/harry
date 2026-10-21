@@ -6,9 +6,9 @@ below, and every review lane gets each of them in full: `dist/companion.cjs revi
 them verbatim into the prompt it sends codex (`src/lib/review-modes.ts`), so the
 analyst and Codex lanes judge by the same standard even though they run in isolated
 sessions. On the Codex build there is no `analyst` at all, so this embedded prompt is
-what binds that build's single review lane. Hand the reviewer those files, the item's
-`### Acceptance criteria` verbatim, the diff range, and the item's Constraints verbatim
-when it has them. The reviewer reviews **read-only** — no working-tree, index, or HEAD
+what binds that build's single review lane. What each lane is handed besides these files
+is listed once, in `skills/executing/SKILL.md` **Review**, and for a re-review in
+`skills/executing/SKILL.md` **One fix wave**. The reviewer reviews **read-only** — no working-tree, index, or HEAD
 mutation; its report is its final message.
 
 **Standard files:** `references/review-rubric.md`, `references/red-green.md`.
@@ -18,8 +18,11 @@ mutation; its report is its final message.
 1. **Spec compliance** (primary). Does the diff satisfy the acceptance criteria
    it was given — no more, no less? Judge **per AC**: pass / fail / partial, each
    with the evidence you read. An instruction edit's AC is judged on its probe line
-   (`skills/executing/SKILL.md` **Build**), handed beside the AC; a `no probe ran`
-   line, on its reason. An AC that a later AC supersedes is judged by
+   (`skills/executing/SKILL.md` **Build**), handed beside the AC. The line is its
+   author's report, so check it: the prompt tests the behavior the AC states, the new
+   answer follows from the changed text, and the old answer from the base's text. An
+   answer the text does not give fails the AC. A `no probe ran` line is judged on its
+   reason. An AC that a later AC supersedes is judged by
    its successor, not on its own (`references/doc-types.md`): its line reads
    `superseded by AC-<m>`, never `fail`, and only the successor's verdict
    counts. Flag unmet criteria AND unrequested extras
@@ -152,8 +155,8 @@ Quality: Approved / Changes requested
 Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 ```
 
-**Re-review** (`skills/executing/SKILL.md` **One fix wave**) — handed the fix range, the open findings under
-their numbers, the fix check's verdicts and the last number in use, the reviewer reports in the form below instead — no Strengths section, since it judges only the fix.
+**Re-review** (`skills/executing/SKILL.md` **One fix wave**, which lists what it is handed) — the
+reviewer reports in the form below instead — no Strengths section, since it judges only the fix.
 
 **Re-review standard:** the standard files, plus `references/fix-check.md` **Three levels**.
 

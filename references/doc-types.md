@@ -47,8 +47,8 @@ an AC it supersedes (finishing's **fix now** ruling drafts one that way); the
 superseded AC keeps its text and is judged by its successor, not on its own.
 
 `## Why / What` holds only `### Acceptance criteria` unless a real design decision was
-weighed (alternatives existed); then `skills/brainstorming/SKILL.md` **Item Template**'s
-sections 1-5 precede them, section 2 being the decision record. The tier does not change
+weighed (alternatives existed); then the sections above `skills/brainstorming/SKILL.md`
+**Item Template**'s `### Acceptance criteria` precede them. The tier does not change
 this: a Major unit that weighed no decision holds the AC list alone.
 
 `## Progress` is append-only and cites AC IDs and commit ranges. Approved AC

@@ -214,9 +214,9 @@ test("AC-6: the re-review accepts a fix as ADDRESSED only when the cause is gone
 
 test("AC-6: the re-review is handed the fix check's verdicts", () => {
   assert.match(
-    flat(read("references/review-rubric.md")),
-    /handed the fix range, the open findings under their numbers, the fix check's verdicts and the last number in use/,
-    "the rubric's re-review form no longer lists the fix check's verdicts among its inputs",
+    executingStep4(),
+    /handed the open-findings list under its merged-list numbers, the fix check's verdicts and the merged list's last number/,
+    "executing's re-review no longer lists the fix check's verdicts among its inputs",
   );
 });
 

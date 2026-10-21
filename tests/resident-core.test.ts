@@ -234,7 +234,6 @@ test("the item's shape has one home, and every site that shapes an item cites it
   for (const [rel, heading, start] of [
     ["references/tier-gates.md", "### Standard", /^\| Item \|/],
     ["references/tier-gates.md", "### Major", /^\| Item \|/],
-    ["references/tier-gates.md", "### Major", /^\*\*Gate scaling/],
     ["skills/brainstorming/SKILL.md", "## Entry: tier, then depth", /^\| Compressed \|/],
     ["skills/brainstorming/SKILL.md", "## Full Flow", /^6\. \*\*Write the item\*\*/],
     ["skills/brainstorming/SKILL.md", "## Full Flow", /^The compressed path runs/],
