@@ -31,7 +31,7 @@ about stale global entries harry supersedes).
 
 **Snapshot semantics (shared with the Claude Code build):** this embeds
 HARRY.md's content as of the moment `/sync` ran — a snapshot, not a live
-reference. The Claude Code build now works the same way: it deploys a HARRY.md
+reference. The Claude Code build works the same way: it deploys a HARRY.md
 snapshot and `@`-imports that copy, rather than the live plugin checkout. The only
 difference is form — Codex inlines the content (no `@`-import syntax), Claude Code
 `@`-imports a deployed copy — but both require a re-run to resync after HARRY.md
