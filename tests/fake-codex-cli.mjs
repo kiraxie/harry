@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Fake `codex` CLI for the companion tests — stands in for `codex exec`,
- * `codex exec review`, `codex --version` and `codex login status`.
+ * `codex --version` and `codex login status`.
  *
  * Installed by a test as a `codex` shell shim first on PATH. Behaviour is
  * driven entirely by env:

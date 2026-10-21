@@ -38,8 +38,7 @@ function printUsage(): void {
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
-      "  review      Review the branch or working tree via `codex exec review`",
-      "              (a re-review via `codex exec`)",
+      "  review      Review the branch or working tree via `codex exec`",
       "  ask         Ask a single prompt (read-only) and print the answer",
     ].join("\n"),
   );

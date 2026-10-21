@@ -11,13 +11,15 @@ Raw slash-command arguments:
 
 ## What this does
 
-`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review` spawns `codex exec review`
-read-only (`sandbox_mode="read-only"`, `--ephemeral`) with a prompt built from the
+`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review` spawns `codex exec`
+read-only (`-s read-only`, `--ephemeral`) with a prompt built from the
 target diff, every file `references/review-rubric.md` declares as its standard, in full,
 a `## Background` section from
-`--context`, and a `## Focus` section from the focus text. It never passes a
+`--context`, and a `## Focus` section from the focus text. Not `codex exec review`:
+it answers in its own review-comment format and ignores the form the prompt asks for.
+It never passes a
 model — `~/.codex/config.toml` decides which one runs; `--reasoning` overrides
-effort for that one call. A re-review spawns `codex exec` instead (`--rereview`, below). Each run writes its findings to its own
+effort for that one call. Each run writes its findings to its own
 `codex-review-<YYYYMMDD-HHMMSS>.md` (codex's session transcript goes to the
 matching `.log`, never to the terminal), and stderr ends with
 `Review written to <path>` and `Log: <path>`; this command's job is to run it,
@@ -54,9 +56,7 @@ prompt carries the per-diff standard plus `references/fix-check.md` **Three leve
 says it is a re-review, and puts the file under its own heading, so the reviewer
 answers in the rubric's re-review form (`references/review-rubric.md`). It needs
 `--base`: the head the review it follows reviewed. It excludes `--architecture` and
-`--fix-check`. A re-review runs as `codex exec`, not `codex exec review`, still read-only
-(`-s read-only`, `--ephemeral`): `codex exec review` answers in its own review-comment
-format and ignores the re-review form.
+`--fix-check`.
 
 ## `--fix-check`
 

@@ -603,7 +603,7 @@ function fixCheckTarget(target) {
     "",
     `This is a fix check, not a review. An earlier review of this branch raised the findings handed below, each with a proposed fix that is not built yet. The unit's changes are \`git diff ${target.baseRef}...HEAD\` \u2014 run it to see the code the findings point at.`,
     "",
-    "Read the whole repo as far as you need to trace the data flow and the system around each fix: callers, producers and copies of the same knowledge, wherever they live. Judge only the handed fixes, one line per fix in the output form of the fix check standard below; raise no new findings."
+    "Read the whole repo as far as you need to trace the data flow and the system around each fix: callers, producers and copies of the same knowledge, wherever they live. Judge only the handed fixes: one line per handed fix, in the output form of the fix check standard below, under its finding's number \u2014 the number the handed text gives the finding (its `1.`, `2.` \u2026), never a number from the handed file's title or name; raise no new findings."
   ].join("\n");
 }
 var REREVIEW_MODE = [
@@ -615,11 +615,7 @@ var REREVIEW_MODE = [
   "- Judge each handed finding at the levels in the Three levels section above: ADDRESSED means the cause is gone, not only this instance.",
   "- Number new issues on from the last number handed, never from 1."
 ].join("\n");
-var CODEX_EXEC_REVIEW = {
-  label: "codex exec review",
-  args: ["exec", "review", "--ephemeral", "-c", 'sandbox_mode="read-only"']
-};
-var CODEX_EXEC = {
+var REVIEW_SPAWN = {
   label: "codex exec",
   args: ["exec", "--ephemeral", "-s", "read-only"]
 };
@@ -627,15 +623,13 @@ var MODES = {
   review: {
     files: PER_DIFF,
     target: (target) => reviewTarget(target, OUTSIDE_THE_DIFF),
-    onEmpty: "summary",
-    spawn: CODEX_EXEC_REVIEW
+    onEmpty: "summary"
   },
   architecture: {
     flag: "--architecture",
     files: [{ file: "architecture-review.md", heading: "Review standard" }],
     target: (target) => reviewTarget(target, OUTSIDE_THE_SHAPES),
-    onEmpty: "summary",
-    spawn: CODEX_EXEC_REVIEW
+    onEmpty: "summary"
   },
   rereview: {
     flag: "--rereview",
@@ -651,8 +645,7 @@ var MODES = {
     baseReason: "the head the review it follows reviewed",
     modeSection: REREVIEW_MODE,
     heading: "Open findings handed to this re-review",
-    onEmpty: "fail",
-    spawn: CODEX_EXEC
+    onEmpty: "fail"
   },
   "fix-check": {
     flag: "--fix-check",
@@ -660,8 +653,7 @@ var MODES = {
     target: fixCheckTarget,
     baseReason: "the unit's branch point",
     heading: "Fixes handed to this fix check",
-    onEmpty: "fail",
-    spawn: CODEX_EXEC_REVIEW
+    onEmpty: "fail"
   }
 };
 function takesHanded(standard) {
@@ -760,10 +752,10 @@ No changes to review under ${target.label}.
     );
   }
   const { reviewPath: outputPath, logPath } = reserveReviewFiles(resolveOutputDir(repoRoot));
-  const args = [...mode.spawn.args, "-o", outputPath];
+  const args = [...REVIEW_SPAWN.args, "-o", outputPath];
   if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
   args.push("-");
-  process.stderr.write(`Reviewing ${target.label} with ${mode.spawn.label}\u2026
+  process.stderr.write(`Reviewing ${target.label} with ${REVIEW_SPAWN.label}\u2026
 `);
   const review = await runCodexExec({
     args,
@@ -771,7 +763,7 @@ No changes to review under ${target.label}.
     input: prompt,
     outputPath,
     logPath,
-    label: mode.spawn.label,
+    label: REVIEW_SPAWN.label,
     outputNoun: "review"
   });
   process.stdout.write(review);
@@ -975,8 +967,7 @@ function printUsage() {
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
-      "  review      Review the branch or working tree via `codex exec review`",
-      "              (a re-review via `codex exec`)",
+      "  review      Review the branch or working tree via `codex exec`",
       "  ask         Ask a single prompt (read-only) and print the answer"
     ].join("\n")
   );

@@ -282,7 +282,7 @@ export interface CodexExecInput {
   input: string;
   outputPath: string;
   logPath: string;
-  /** Names the run in failure messages, e.g. `codex exec review`. */
+  /** Names the run in failure messages, e.g. `codex exec`. */
   label: string;
   /** Names what `-o` should hold, e.g. `review`. */
   outputNoun: string;

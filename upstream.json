@@ -40,7 +40,7 @@
       "last_harvested_version": "1.0.6",
       "last_harvested_commit": "db52e28f4d9ded852ab3942cea316258ae4ef346",
       "retired_date": "2026-09-17",
-      "note": "Retired as a pinned upstream: the vendored in-process Codex runtime (src/lib/codex/), ported and modified from this repo, is deleted — ask and review now spawn the codex CLI directly (codex exec / codex exec review) instead of running an in-process session against it. Kept for attribution of the derived[] entries naming codex-plugin-cc; do not sync."
+      "note": "Retired as a pinned upstream: the vendored in-process Codex runtime (src/lib/codex/), ported and modified from this repo, is deleted — ask and review now spawn the codex CLI directly (codex exec) instead of running an in-process session against it. Kept for attribution of the derived[] entries naming codex-plugin-cc; do not sync."
     }
   },
   "derived": [
@@ -77,7 +77,7 @@
     {
       "skill": "review",
       "from": "codex-plugin-cc (historical)",
-      "note": "REVIEW'S TRUE UPSTREAM IS codex-plugin-cc (copilot review is ported from it), now retired to historical_sources — codex-plugin-cc is not synced any more. review no longer runs any code ported from it: it spawns `codex exec review` directly, read-only. Kept for attribution only."
+      "note": "REVIEW'S TRUE UPSTREAM IS codex-plugin-cc (copilot review is ported from it), now retired to historical_sources — codex-plugin-cc is not synced any more. review no longer runs any code ported from it: it spawns `codex exec` directly, read-only. Kept for attribution only."
     },
     {
       "skill": "debate",

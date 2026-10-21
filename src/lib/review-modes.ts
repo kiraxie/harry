@@ -4,16 +4,13 @@
  * `MODES` holds one record per mode: the flag that asks for it, the references
  * embedded as its standard (each verbatim, or the one section an entry names), its
  * target section, for a re-review or fix check the handed text's heading and the
- * `--base` it needs, what an empty range does, and the codex process it spawns with
- * its read-only sandbox — `codex exec review` for every mode but the re-review,
- * which spawns `codex exec`, since `codex exec review` answers in its own
- * review-comment format and ignores the re-review form. This is where review's
- * spawn and sandbox are set.
+ * `--base` it needs, and what an empty range does. Every mode runs `REVIEW_SPAWN`,
+ * `codex exec` with its read-only sandbox — not `codex exec review`, which answers
+ * in its own review-comment format and ignores the form a mode asks for. This is
+ * where review's spawn and sandbox are set.
  *
- * The Codex CLI rejects a prompt combined with its own target flags
- * (`--base`/`--uncommitted`/`--commit`), so the prompt itself has to name the
- * target: which git command shows the change, and that everything outside it is
- * context only.
+ * `codex exec` takes no review target, so the prompt itself names it: which git
+ * command shows the change, and that everything outside it is context only.
  */
 
 import { readFileSync, realpathSync } from "node:fs";
@@ -125,7 +122,7 @@ function fixCheckTarget(target: ReviewTarget): string {
     "",
     `This is a fix check, not a review. An earlier review of this branch raised the findings handed below, each with a proposed fix that is not built yet. The unit's changes are \`git diff ${target.baseRef}...HEAD\` — run it to see the code the findings point at.`,
     "",
-    "Read the whole repo as far as you need to trace the data flow and the system around each fix: callers, producers and copies of the same knowledge, wherever they live. Judge only the handed fixes, one line per fix in the output form of the fix check standard below; raise no new findings.",
+    "Read the whole repo as far as you need to trace the data flow and the system around each fix: callers, producers and copies of the same knowledge, wherever they live. Judge only the handed fixes: one line per handed fix, in the output form of the fix check standard below, under its finding's number — the number the handed text gives the finding (its `1.`, `2.` …), never a number from the handed file's title or name; raise no new findings.",
   ].join("\n");
 }
 
@@ -139,26 +136,15 @@ const REREVIEW_MODE = [
   "- Number new issues on from the last number handed, never from 1.",
 ].join("\n");
 
-interface Spawn {
-  label: string;
-  args: readonly string[];
-}
-
-const CODEX_EXEC_REVIEW: Spawn = {
-  label: "codex exec review",
-  args: ["exec", "review", "--ephemeral", "-c", 'sandbox_mode="read-only"'],
-};
-
-const CODEX_EXEC: Spawn = {
+export const REVIEW_SPAWN = {
   label: "codex exec",
   args: ["exec", "--ephemeral", "-s", "read-only"],
-};
+} as const;
 
 interface Mode {
   files: ReadonlyArray<StandardFile>;
   target: (target: ReviewTarget) => string;
   onEmpty: "summary";
-  spawn: Spawn;
 }
 
 interface FlaggedMode extends Mode {
@@ -182,14 +168,12 @@ export const MODES: {
     files: PER_DIFF,
     target: (target) => reviewTarget(target, OUTSIDE_THE_DIFF),
     onEmpty: "summary",
-    spawn: CODEX_EXEC_REVIEW,
   },
   architecture: {
     flag: "--architecture",
     files: [{ file: "architecture-review.md", heading: "Review standard" }],
     target: (target) => reviewTarget(target, OUTSIDE_THE_SHAPES),
     onEmpty: "summary",
-    spawn: CODEX_EXEC_REVIEW,
   },
   rereview: {
     flag: "--rereview",
@@ -206,7 +190,6 @@ export const MODES: {
     modeSection: REREVIEW_MODE,
     heading: "Open findings handed to this re-review",
     onEmpty: "fail",
-    spawn: CODEX_EXEC,
   },
   "fix-check": {
     flag: "--fix-check",
@@ -215,7 +198,6 @@ export const MODES: {
     baseReason: "the unit's branch point",
     heading: "Fixes handed to this fix check",
     onEmpty: "fail",
-    spawn: CODEX_EXEC_REVIEW,
   },
 };
 

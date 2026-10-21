@@ -1,5 +1,5 @@
 /**
- * `companion review` is a thin wrapper over the Codex CLI's `codex exec review`.
+ * `companion review` is a thin wrapper over the Codex CLI's `codex exec`.
  *
  * These run the real CLI (`node src/companion.ts review …`) in temp git repos
  * with `tests/fake-codex-cli.mjs` installed as `codex` first on PATH, and pin
@@ -247,16 +247,7 @@ test("A2: without --reasoning the argv carries no effort override and never -m",
   const run = runReview(repo, []);
   assert.equal(run.status, 0, run.stderr);
   const argv = recordedArgv(run);
-  assert.deepEqual(argv, [
-    "exec",
-    "review",
-    "--ephemeral",
-    "-c",
-    'sandbox_mode="read-only"',
-    "-o",
-    outputPathOf(run),
-    "-",
-  ]);
+  assert.deepEqual(argv, ["exec", "--ephemeral", "-s", "read-only", "-o", outputPathOf(run), "-"]);
   assert.ok(!argv.includes("-m"));
 });
 
@@ -267,10 +258,9 @@ test("A2: --reasoning adds exactly one TOML-quoted effort override before the st
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(recordedArgv(run), [
     "exec",
-    "review",
     "--ephemeral",
-    "-c",
-    'sandbox_mode="read-only"',
+    "-s",
+    "read-only",
     "-o",
     outputPathOf(run),
     "-c",
@@ -468,10 +458,9 @@ test("A3: --architecture embeds architecture-review.md as the review standard, n
   // Same read-only spawn as the per-diff review.
   assert.deepEqual(recordedArgv(run), [
     "exec",
-    "review",
     "--ephemeral",
-    "-c",
-    'sandbox_mode="read-only"',
+    "-s",
+    "read-only",
     "-o",
     outputPathOf(run),
     "-",
@@ -610,10 +599,9 @@ test("AC-2: --fix-check embeds fix-check.md in full, then the handed fixes, Back
   assert.ok(!prompt.includes(RED_GREEN.trim()), "a fix check must not embed red-green.md");
   assert.deepEqual(recordedArgv(run), [
     "exec",
-    "review",
     "--ephemeral",
-    "-c",
-    'sandbox_mode="read-only"',
+    "-s",
+    "read-only",
     "-o",
     outputPathOf(run),
     "-",
@@ -635,6 +623,8 @@ test("AC-2: the fix-check target sends the reader through the whole repo and jud
     "Read the whole repo",
     "trace the data flow",
     "Judge only the handed fixes",
+    "under its finding's number",
+    "never a number from the handed file's title",
   ])
     assert.ok(target.includes(needle), `the fix-check target must say "${needle}": ${target}`);
   // The fix check traces the flow beyond the diff on purpose; the per-diff ban would forbid it.
@@ -1082,7 +1072,7 @@ test("A5: a codex that exits non-zero without reading its prompt still reports i
   const logs = logsIn(run);
   assert.equal(logs.length, 1, run.stderr);
   assert.ok(run.stderr.includes(`${cause}\nLog: ${path.join(run.dataDir, logs[0])}\n`), run.stderr);
-  assert.match(run.stderr, /codex exec review failed \(exit 2\)/);
+  assert.match(run.stderr, /codex exec failed \(exit 2\)/);
 });
 
 test("A5: a non-zero codex exit propagates with codex's error line and no fallback", () => {
@@ -1093,7 +1083,11 @@ test("A5: a non-zero codex exit propagates with codex's error line and no fallba
     fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: cause },
   });
   assert.notEqual(run.status, 0);
-  assert.deepEqual(recordedArgv(run).slice(0, 2), ["exec", "review"], "codex was never driven");
+  assert.deepEqual(
+    recordedArgv(run).slice(0, 2),
+    ["exec", "--ephemeral"],
+    "codex was never driven",
+  );
   assert.ok(run.stderr.includes(cause), run.stderr);
   assert.doesNotMatch(run.stderr, /continu|fall(ing)? ?back/i);
   assert.equal(run.stdout, "", "no markdown may pretend to be a review");
@@ -1125,7 +1119,7 @@ test("F1: codex's clap `error:` line reaches stderr", () => {
   const run = runReview(repo, [], {
     fake: {
       FAKE_CODEX_CLI_EXIT: "2",
-      FAKE_CODEX_CLI_STDERR: `${cause}\n\nUsage: codex exec review [OPTIONS]\n`,
+      FAKE_CODEX_CLI_STDERR: `${cause}\n\nUsage: codex exec [OPTIONS] [PROMPT]\n`,
     },
   });
   assert.notEqual(run.status, 0);
@@ -1337,18 +1331,28 @@ test("both review doors say an empty range fails --rereview and --fix-check inst
   }
 });
 
-test("AC-9: both review doors and CLAUDE.md say a re-review runs as codex exec, and why", () => {
+test("AC-15: the review doors, CLAUDE.md and README say review runs as codex exec, and why", () => {
+  const because =
+    "Not `codex exec review`: it answers in its own review-comment format and ignores the form the prompt asks for";
   for (const [rel, part] of [
-    ...REVIEW_DOORS.map((door) => [door, "## `--rereview`"]),
+    ...REVIEW_DOORS.map((door) => [door, "## What this does"]),
     ["CLAUDE.md", "## Runtime architecture"],
+    ["README.md", "## Codex"],
   ]) {
     const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
     const own = headingSection(raw, rel, part).replace(/\s+/g, " ");
-    for (const needle of [
-      "A re-review runs as `codex exec`, not `codex exec review`, still read-only",
-      "`codex exec review` answers in its own review-comment format and ignores the re-review form",
-    ])
-      assert.ok(own.includes(needle), `${rel} (${part}) must say "${needle}"`);
+    assert.ok(
+      own.includes("spawns `codex exec") && !own.includes("spawns `codex exec review`"),
+      `${rel} (${part}) must say review runs codex exec`,
+    );
+    assert.ok(own.includes(because), `${rel} (${part}) must say why`);
+  }
+  for (const door of REVIEW_DOORS) {
+    const raw = readFileSync(path.join(REPO_ROOT, door), "utf8");
+    assert.ok(
+      !headingSection(raw, door, "## `--rereview`").includes("codex exec"),
+      `${door}'s --rereview section still singles out the re-review's spawn`,
+    );
   }
 });
 
@@ -1375,7 +1379,22 @@ test("AC-11: only the review doors, CLAUDE.md's runtime section and README name 
       .filter((para) => para.includes("codex exec review"))
       .map((para) => `${rel}: ${para.slice(0, 80)}`);
   });
-  assert.deepEqual(hits, [], "callers name the review mode they run, not the codex subcommand");
+  const strings = (value: unknown): string[] =>
+    typeof value === "string"
+      ? [value]
+      : Array.isArray(value)
+        ? value.flatMap(strings)
+        : value && typeof value === "object"
+          ? Object.values(value).flatMap(strings)
+          : [];
+  const upstream = strings(JSON.parse(readFileSync(path.join(REPO_ROOT, "upstream.json"), "utf8")))
+    .filter((text) => text.includes("codex exec review"))
+    .map((text) => `upstream.json: ${text.slice(0, 80)}`);
+  assert.deepEqual(
+    [...hits, ...upstream],
+    [],
+    "callers name the review mode they run, not the codex subcommand",
+  );
 });
 
 test("AC-5: both review doors send a re-review's open findings to --rereview, not --context", () => {
@@ -1586,4 +1605,28 @@ test("AC-12: the re-review mode section and executing quote only what the rubric
         `${rel} quotes the verdict word "${word}", which the rubric's re-review form does not hold`,
       );
   }
+});
+
+test("the fix-check target quotes only what fix-check.md's Output holds", () => {
+  const output = headingSection(FIX_CHECK, "references/fix-check.md", "## Output");
+  const target = section(
+    buildReviewPrompt({
+      target: { mode: "branch", label: "branch diff against main", baseRef: "main" },
+      standard: "fix-check",
+      handed: "1 · a.txt:1 · fix",
+    }),
+    "the fix-check prompt",
+    "Judge only the handed fixes",
+    "raise no new findings.",
+  );
+  const phrase = "under its finding's number";
+  assert.ok(flatProse(target).includes(phrase), `the fix-check target no longer says "${phrase}"`);
+  assert.ok(flatProse(output).includes(phrase), `fix-check.md's Output no longer says "${phrase}"`);
+  for (const heading of headingsIn(target))
+    assert.ok(
+      headingsIn(output).has(heading),
+      `the fix-check target quotes the heading "${heading}"`,
+    );
+  for (const word of capsWordsIn(target))
+    assert.ok(capsWordsIn(output).has(word), `the fix-check target quotes the word "${word}"`);
 });

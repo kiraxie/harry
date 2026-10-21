@@ -91,18 +91,17 @@ Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/comma
 Both `ask` and `review` spawn the `codex` CLI as a separate, ephemeral, read-only
 subprocess and read its output back. `ask` runs
 `codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
-with the prompt on stdin. `review` spawns `codex exec review` (`sandbox_mode="read-only"`),
+with the prompt on stdin. `review` spawns `codex exec --ephemeral -s read-only` too,
 with every file `references/review-rubric.md` declares as its standard and the context
 built into its prompt, and writes findings to a file
-rather than streaming a session turn. Two `review` modes build their own prompt around a
+rather than streaming a session turn. Not `codex exec review`: it answers in its own
+review-comment format and ignores the form the prompt asks for. Neither passes a model — `~/.codex/config.toml`
+decides which one runs. There is no fix backend or apply path in-runtime; both commands are
+read-only, full stop. Two `review` modes build their own prompt around a
 handed file: `--rereview` (executing's scoped re-review: the per-diff standard plus
 `references/fix-check.md` **Three levels**, and the open findings) and `--fix-check`
 (the fix check on the Codex build: `references/fix-check.md` in full, and the proposed
-fixes). A re-review runs as `codex exec`, not `codex exec review`, still read-only:
-`codex exec review` answers in its own review-comment format and ignores the re-review
-form. Neither passes a model — `~/.codex/config.toml`
-decides which one runs. There is no fix backend or apply path in-runtime; both commands are
-read-only, full stop.
+fixes).
 
 Everything in the repo is MIT except `.claude/references/skill-authoring.md`, which distills
 parts of an Apache-2.0 source (`anthropics/skills`) — see `NOTICE`.
