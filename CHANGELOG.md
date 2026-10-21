@@ -5,6 +5,54 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-10-21
+
+### Added
+
+- **A referee checks a finding's fix before it is built.** A new `referee` role, bound
+  to fable so its blind spots differ from the opus reviewer's, checks every non-small
+  Standard or Major fix at the finding's site, in the data flow around it and in the
+  system (`references/fix-check.md`).
+- **Finishing's merge tail lists leftovers and offers lessons.** Before the Follow-ups
+  flush it lists what the session raised and left without an outcome (an unpassed AC,
+  a deferral in `## Progress`, a `DEBT:` with no ceiling or upgrade path, a question or
+  request dropped in the conversation), and the user keeps or drops each. On Claude
+  Code it then offers lessons worth keeping in `CLAUDE.local.md`, one short line each.
+  A PR runs the conversation half before `gh pr create`.
+- **Architecture review stops after three main-loop rounds** while a Critical or
+  Important finding is still open, and reports the rounds run, the open findings and
+  the area that kept returning, so the user rules on each.
+- **Brainstorming splits work by vertical slice**, makes the change easy before making
+  it, and runs a wide mechanical change as expand, migrate, contract. In a long session
+  the item review gate offers to `/clear` and build from the item.
+
+### Changed
+
+- **Tiers follow risk, not file count.** Trivial is any mechanical, no-branching change
+  with a one-glance revert, whatever its size. Major covers red lines, failures that are
+  hard to see or undo, and edits to always-loaded agent instructions that change what a
+  model is asked.
+- **`HARRY.md` is a nine-heading resident core** (Priority, Tiers, Ask first, Secrets,
+  Root cause, Evidence, Clarify first, Code, Talk), 980 words from 2353. Procedure moved
+  into the skills and references that run it, and prose cites a law by its heading
+  name. Run `/harry:sync` to deploy it.
+- **A local merge pushes its base** once the merged result is green, after a
+  fast-forward-only pull; a rejected push stops before any cleanup.
+- **The review rubric** wants a concrete case for every finding, a reading of the
+  callers and the load the repo shows, and the repo's own documented standards. A
+  `DEBT:` note naming its ceiling and upgrade path is a decision, not a finding.
+  Re-reviews have their own report form.
+- **References** add test seams and module-cutting guidance (`red-green.md`,
+  `architecture-review.md`), minimise-then-hypothesise debugging, a diff proof for a
+  forced red, and a row for external facts in `claim-evidence.md`.
+
+### Fixed
+
+- **`/sync` stops when init rejects its target**, and the installers skip writes that
+  change nothing, and say so.
+- **The companion forwards signals that arrive before `codex` is spawned**, so a kill
+  no longer leaves `codex` orphaned.
+
 ## [0.24.2] - 2026-10-02
 
 ### Fixed
