@@ -356,6 +356,23 @@ const KNOWN_FLAG_CASES: KnownFlagCase[] = [
     throws: /Unknown flag --timeout for 'ask'/,
   },
   {
+    name: "review accepts --rereview and --fix-check",
+    command: "review",
+    flags: { base: "main", rereview: "@open.md", "fix-check": "@fixes.md" },
+  },
+  {
+    name: "ask rejects --rereview",
+    command: "ask",
+    flags: { rereview: "@open.md" },
+    throws: /Unknown flag --rereview for 'ask'/,
+  },
+  {
+    name: "ask rejects --fix-check",
+    command: "ask",
+    flags: { "fix-check": "@fixes.md" },
+    throws: /Unknown flag --fix-check for 'ask'/,
+  },
+  {
     name: "an unknown command has no allow-list and defers to the dispatch switch",
     command: "bogus",
     flags: { whatever: true },

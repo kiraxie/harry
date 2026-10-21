@@ -94,7 +94,13 @@ subprocess and read its output back. `ask` runs
 with the prompt on stdin. `review` spawns `codex exec review` (`sandbox_mode="read-only"`),
 with every file `references/review-rubric.md` declares as its standard and the context
 built into its prompt, and writes findings to a file
-rather than streaming a session turn. Neither passes a model — `~/.codex/config.toml`
+rather than streaming a session turn. Two `review` modes build their own prompt around a
+handed file: `--rereview` (executing's scoped re-review: the per-diff standard plus
+`references/fix-check.md` **Three levels**, and the open findings) and `--fix-check`
+(the fix check on the Codex build: `references/fix-check.md` in full, and the proposed
+fixes). A re-review runs as `codex exec`, not `codex exec review`, still read-only:
+`codex exec review` answers in its own review-comment format and ignores the re-review
+form. Neither passes a model — `~/.codex/config.toml`
 decides which one runs. There is no fix backend or apply path in-runtime; both commands are
 read-only, full stop.
 
@@ -222,8 +228,8 @@ commands. This is a **deliberate partial-parity build**, not full feature parity
   (`commands/grill.md` vs `codex-skills/grill/SKILL.md`).
 - `review` is read-only on both builds — it has no fix backend and no in-runtime
   path to apply what it finds. On both
-  builds the review itself is held read-only by the spawned `codex exec review`
-  process's own `sandbox_mode="read-only"` override. On Claude Code,
+  builds the review itself is held read-only by the spawned codex process's own
+  read-only sandbox. On Claude Code,
   `commands/review.md`'s `allowed-tools` only **pre-approves** the review
   invocation (`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review`), read-only
   `git status`/`git diff`, and `Read` — it does not block other tools, so the

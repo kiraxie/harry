@@ -288,6 +288,7 @@ const HOISTED: Record<string, string[]> = {
   debt: ["references/debt-audit.md", "references/doc-types.md"],
   review: [
     "references/review-rubric.md",
+    "references/fix-check.md",
     "references/architecture-review.md",
     "references/doc-types.md",
     "references/debt-audit.md",
@@ -308,6 +309,7 @@ const HOISTED: Record<string, string[]> = {
     "references/red-green.md",
     "references/architecture-review.md",
     "references/review-rubric.md",
+    "references/fix-check.md",
     "references/doc-types.md",
     "references/debt-audit.md",
     "references/tier-gates.md",
@@ -316,6 +318,7 @@ const HOISTED: Record<string, string[]> = {
   grill: [
     "references/grilling.md",
     "references/review-rubric.md",
+    "references/fix-check.md",
     "references/red-green.md",
     "references/tier-gates.md",
     "references/doc-types.md",
@@ -325,6 +328,7 @@ const HOISTED: Record<string, string[]> = {
     "references/plain-language.md",
     "references/grilling.md",
     "references/review-rubric.md",
+    "references/fix-check.md",
     "references/red-green.md",
     "references/tier-gates.md",
     "references/doc-types.md",

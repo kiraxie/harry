@@ -1,7 +1,7 @@
 /**
  * The one place the companion spawns the Codex CLI: `spawnCodexSync` for
- * `setup`'s quick queries, `spawnCodex` for the one-shot run (`codex exec …`,
- * `codex exec review …`) with signal forwarding, and `runCodexExec`'s failure
+ * `setup`'s quick queries, `spawnCodex` for the one-shot run (`codex exec …` and
+ * its subcommands) with signal forwarding, and `runCodexExec`'s failure
  * handling. Both spawn the absolute path `resolveOnPath` finds, never the bare
  * name (execvp would search the cwd); finding `codex` on PATH lives in
  * `path-search.ts`; the run files it writes into live in `run-files.ts`.
@@ -289,10 +289,11 @@ export interface CodexExecInput {
 }
 
 /**
- * Spawn codex and return the non-empty contents of its `-o` file. On `exit` and
- * `empty` failures the log tail's error lines and `Log:` path are already on
- * stderr when the {@link CodexRunError} is thrown. Any other spawn error is
- * rethrown as is, after the same report when codex wrote to its log.
+ * Spawn codex and return the non-empty contents of its `-o` file, ending with a
+ * newline so a marker the caller writes to stderr after it starts its own line.
+ * On `exit` and `empty` failures the log tail's error lines and `Log:` path are
+ * already on stderr when the {@link CodexRunError} is thrown. Any other spawn
+ * error is rethrown as is, after the same report when codex wrote to its log.
  */
 export async function runCodexExec(opts: CodexExecInput): Promise<string> {
   // stdout is ignored: codex echoes its final message there, and the output is
@@ -339,7 +340,7 @@ export async function runCodexExec(opts: CodexExecInput): Promise<string> {
   }
   // Loud: a run whose output may stay readable by others does not succeed.
   narrowOutput(opts.outputPath);
-  return output;
+  return output.endsWith("\n") ? output : `${output}\n`;
 }
 
 /**

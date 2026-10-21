@@ -2,7 +2,7 @@
 
 /**
  * companion — CLI entry point for the harry Claude Code plugin; each command
- * is a thin wrapper over the Codex CLI (`codex exec`, `codex exec review`).
+ * is a thin wrapper over the Codex CLI.
  */
 
 import process from "node:process";
@@ -31,12 +31,15 @@ function printUsage(): void {
       "Usage:",
       "  companion setup [--json]",
       "  companion review [--base <ref>] [--reasoning <low|medium|high|xhigh>]",
-      "                   [--context <text|@file|@->] [--architecture] [focus...]",
+      "                   [--context <text|@file|@->]",
+      "                   [--architecture | --rereview <text|@file|@-> | --fix-check <text|@file|@->]",
+      "                   [focus...]",
       '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
       "  review      Review the branch or working tree via `codex exec review`",
+      "              (a re-review via `codex exec`)",
       "  ask         Ask a single prompt (read-only) and print the answer",
     ].join("\n"),
   );
@@ -70,6 +73,8 @@ async function main(): Promise<void> {
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
         context: flagRequiredString(flags, "context"),
         architecture: flags.architecture === true,
+        rereview: flagRequiredString(flags, "rereview"),
+        fixCheck: flagRequiredString(flags, "fix-check"),
         focusText: args.join(" "),
       });
       break;

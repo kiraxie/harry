@@ -167,7 +167,10 @@ function runExec(
   outputPath: string,
   logPath: string,
   opts: { fake?: Record<string, string>; shim?: string } = {},
-): { stderr: string; result: { ok?: true; name?: string; kind?: string; message?: string } } {
+): {
+  stderr: string;
+  result: { ok?: true; output?: string; name?: string; kind?: string; message?: string };
+} {
   const dir = tempDir("harry-rc-exec-");
   const bin = path.join(dir, "bin");
   const codex = path.join(bin, "codex");
@@ -185,9 +188,9 @@ function runExec(
     `import { runCodexExec } from ${JSON.stringify(path.join(REPO_ROOT, "src/lib/run-codex.ts"))};
 const [outputPath, logPath] = process.argv.slice(2);
 try {
-  await runCodexExec({ args: ["exec", "-o", outputPath, "-"], cwd: process.cwd(), input: "p\\n",
+  const output = await runCodexExec({ args: ["exec", "-o", outputPath, "-"], cwd: process.cwd(), input: "p\\n",
     outputPath, logPath, label: "codex exec", outputNoun: "answer" });
-  console.log(JSON.stringify({ ok: true }));
+  console.log(JSON.stringify({ ok: true, output }));
 } catch (e) {
   console.log(JSON.stringify({ name: e.name, kind: e.kind, message: e.message }));
 }
@@ -202,6 +205,22 @@ try {
   assert.equal(res.status, 0, res.stderr);
   return { stderr: res.stderr, result: JSON.parse(res.stdout) };
 }
+
+test("the output ends with a newline even when codex's file does not, so a marker after it starts its own line", () => {
+  const dir = tempDir("harry-rc-newline-");
+  const { result } = runExec(path.join(dir, "out.md"), path.join(dir, "run.log"), {
+    fake: { FAKE_CODEX_CLI_REVIEW: "The diff is fine." },
+  });
+  assert.equal(result.output, "The diff is fine.\n");
+});
+
+test("an output that already ends with a newline gets no second one", () => {
+  const dir = tempDir("harry-rc-newline-");
+  const { result } = runExec(path.join(dir, "out.md"), path.join(dir, "run.log"), {
+    fake: { FAKE_CODEX_CLI_REVIEW: "The diff is fine.\n" },
+  });
+  assert.equal(result.output, "The diff is fine.\n");
+});
 
 /** An output path whose parent is a regular file: chmod on it fails ENOTDIR, never ENOENT. */
 function unnarrowablePaths(): { outputPath: string; logPath: string } {

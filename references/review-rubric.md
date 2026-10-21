@@ -3,7 +3,7 @@
 The rubric the `analyst` reviewer applies at executing's review (`skills/executing/SKILL.md` **Review**,
 and its scoped re-review in `skills/executing/SKILL.md` **One fix wave**). The review standard is the files listed
 below, and every review lane gets each of them in full: `dist/companion.cjs review` embeds
-them verbatim into its `codex exec review` prompt (`src/lib/review-prompts.ts`), so the
+them verbatim into the prompt it sends codex (`src/lib/review-modes.ts`), so the
 analyst and Codex lanes judge by the same standard even though they run in isolated
 sessions. On the Codex build there is no `analyst` at all, so this embedded prompt is
 what binds that build's single review lane. Hand the reviewer those files, the item's
@@ -151,11 +151,13 @@ Verdict: Ready to merge — Yes / No / With fixes  ·  1-2 sentence reasoning
 ```
 
 **Re-review** (`skills/executing/SKILL.md` **One fix wave**) — handed the fix range, the open findings under
-their numbers, the fix check's verdicts and the last number in use, the reviewer reports in this form instead — no Strengths section, since it judges only the fix:
+their numbers, the fix check's verdicts and the last number in use, the reviewer reports in the form below instead — no Strengths section, since it judges only the fix.
+
+**Re-review standard:** the standard files, plus `references/fix-check.md` **Three levels**.
 
 ```
 ### Open findings
-[one line per handed finding, under its handed number: ADDRESSED / NOT ADDRESSED · evidence read — attempted is not addressed; ADDRESSED means the cause is gone, not only this instance, judged at the levels the handed verdicts name]
+[one line per handed finding, under its handed number: ADDRESSED / NOT ADDRESSED · evidence read — attempted is not addressed; ADDRESSED means the cause is gone, not only this instance, judged at the three levels of `references/fix-check.md` **Three levels**]
 
 ### New issues
 #### Critical (must fix)

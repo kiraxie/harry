@@ -85,7 +85,7 @@ Claude-native or local scripts.
 
 | Command | What it does |
 |---------|--------------|
-| `/harry:review [--base <ref>] [--reasoning <effort>] [--context <text\|@file\|@->]` | Read-only code review via `codex exec review` — working tree, a branch against its default, or a diff against `--base` |
+| `/harry:review [--base <ref>] [--reasoning <effort>] [--context <text\|@file\|@->]` | Read-only code review via `codex exec review` (a re-review via `codex exec`) — working tree, a branch against its default, or a diff against `--base` |
 | `/harry:ask "<prompt>" [--reasoning <effort>] [--context <text\|@file\|@->]` | One read-only prompt to Codex via `codex exec` |
 | `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
@@ -102,7 +102,8 @@ Cheap-first smoke test: `/harry:ask` → `/harry:review`/`/harry:debate`.
 read-only subprocess — no SDK dependency, no in-process session, only the
 `codex` binary on `PATH`. `ask` runs
 `codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> [-c model_reasoning_effort="<v>"] -`
-with the prompt on stdin; `review` spawns `codex exec review`. Read-only means
+with the prompt on stdin; `review` spawns `codex exec review`, and a re-review
+`codex exec -s read-only`. Read-only means
 the model may read files and run read-only commands under Codex's own
 read-only sandbox, but cannot write; the command itself writes only its output
 file and a transcript log beside it.

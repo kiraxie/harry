@@ -1,6 +1,6 @@
 ---
 name: review
-description: Run a read-only code review through harry's companion runtime (codex exec review) — reviews the working tree, a branch against its default, or a diff against --base. Use when the user asks for a code review.
+description: Run a read-only code review through harry's companion runtime (the Codex CLI) — reviews the working tree, a branch against its default, or a diff against --base. Use when the user asks for a code review.
 ---
 
 # Review
@@ -21,7 +21,7 @@ target diff, every file `references/review-rubric.md` declares as its standard, 
 a `## Background` section from
 `--context`, and a `## Focus` section from the focus text. It never passes a
 model — `~/.codex/config.toml` decides which one runs; `--reasoning` overrides
-effort for that one call. Each run writes its findings to its own
+effort for that one call. A re-review spawns `codex exec` instead (`--rereview`, below). Each run writes its findings to its own
 `codex-review-<YYYYMMDD-HHMMSS>.md` (codex's session transcript goes to the
 matching `.log`, never to the terminal), and stderr ends with
 `Review written to <path>` and `Log: <path>`; your job is to run it, wait, and
@@ -49,12 +49,40 @@ skill's architecture review (`skills/finishing/SKILL.md` **Architecture review**
 passes the context file its **Reviewer.** paragraph lists for the Codex build
 (`skills/finishing/SKILL.md` **Architecture review**) through `--context @<file>`.
 
+## `--rereview`
+
+`--rereview <text|@file|@->` runs the scoped re-review of executing's fix wave
+(`skills/executing/SKILL.md` **One fix wave**). Its file holds the open findings
+under their numbers, the fix check's verdicts and the last number in use. The
+prompt carries the per-diff standard plus `references/fix-check.md` **Three levels**,
+says it is a re-review, and puts the file under its own heading, so the reviewer
+answers in the rubric's re-review form (`references/review-rubric.md`). It needs
+`--base`: the head the review it follows reviewed. It excludes `--architecture` and
+`--fix-check`. A re-review runs as `codex exec`, not `codex exec review`, still read-only
+(`-s read-only`, `--ephemeral`): `codex exec review` answers in its own review-comment
+format and ignores the re-review form.
+
+## `--fix-check`
+
+`--fix-check <text|@file|@->` runs the fix check of executing's fix wave on
+this build (`skills/executing/SKILL.md` **One fix wave**), before a finding's fix
+is built. Its file holds each finding with its proposed fix, and the paths of the
+unit's earlier findings files. The prompt carries `references/fix-check.md` in full
+and tells the reviewer to read the whole repo to trace each fix; it judges only the
+handed fixes. It needs `--base`: the unit's branch point. It excludes `--architecture`
+and `--rereview`.
+
+`--rereview` and `--fix-check` both read their value as `--context` does, and as
+strictly: an `@file` that cannot be read, or an `@-` or `@file` with nothing in it,
+fails the run before codex starts. `--context` can go with either, but only one of
+the two can read stdin (`@-`).
+
 ## Run it
 
 Codex has no background-task tool — just run it and wait:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--architecture] [focus...]
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review [--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--architecture] [--rereview <text|@file|@->] [--fix-check <text|@file|@->] [focus...]
 ```
 
 A run can take several minutes — a five-file branch has taken ~5.5 minutes, a
@@ -63,7 +91,8 @@ return it verbatim (markdown). No paraphrase, summary, or commentary (HARRY.md *
 
 **Nothing to review:** when the output has no `Review written to` line and prints
 a `# Review Summary` saying there are no changes to review, the target is empty —
-return that summary as-is. It is not a failure.
+return that summary as-is. It is not a failure. With `--rereview` or `--fix-check`, an
+empty range fails instead: those modes judge committed changes.
 
 ## Failure
 
@@ -84,7 +113,8 @@ if the user asks.
 have: constraints, decisions already taken, a prior round's ruling and its
 reasoning. It never carries verdicts — never tell the reviewer what *not* to
 flag ("this is deliberate, skip it"). Focus text says where to look; context
-says what is true.
+says what is true. A re-review's open findings go in `--rereview`, not
+`--context`: they are a prior reviewer's verdicts.
 
 An `@file` that cannot be read, or an `@-` or `@file` with nothing in it, fails
 the run before codex starts — the review never runs without the context it was

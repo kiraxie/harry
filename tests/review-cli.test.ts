@@ -28,9 +28,10 @@ import path from "node:path";
 import test from "node:test";
 
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
-import { buildReviewPrompt } from "../src/lib/review-prompts.ts";
+import { buildReviewPrompt, type ReviewPromptInput } from "../src/lib/review-modes.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
-import { inOrder, section } from "./section.ts";
+import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { headingSection, inOrder, outline, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI = path.join(REPO_ROOT, "src/companion.ts");
@@ -38,6 +39,8 @@ const FAKE = path.join(REPO_ROOT, "tests/fake-codex-cli.mjs");
 const RUBRIC = readFileSync(path.join(REPO_ROOT, "references/review-rubric.md"), "utf8");
 const ARCH_RUBRIC = readFileSync(path.join(REPO_ROOT, "references/architecture-review.md"), "utf8");
 const RED_GREEN = readFileSync(path.join(REPO_ROOT, "references/red-green.md"), "utf8");
+const FIX_CHECK = readFileSync(path.join(REPO_ROOT, "references/fix-check.md"), "utf8");
+const THREE_LEVELS = headingSection(FIX_CHECK, "references/fix-check.md", "## Three levels").trim();
 
 const cleanup: string[] = [];
 test.after(() => {
@@ -155,6 +158,20 @@ function logPathOf(run: Run): string {
 /** One file per run: `codex-review-<YYYYMMDD-HHMMSS>[-N].md`. */
 const REVIEW_FILE_RE = /codex-review-\d{8}-\d{6}(-\d+)?\.md$/;
 
+function makeBranchRepo(): string {
+  const repo = makeRepo();
+  git(repo, ["checkout", "-q", "-b", "feature"]);
+  writeFileSync(path.join(repo, "a.txt"), "v2\n");
+  git(repo, ["commit", "-q", "-am", "change"]);
+  return repo;
+}
+
+function handedFile(text: string): string {
+  const file = path.join(tempDir("harry-rcli-handed-"), "handed.md");
+  writeFileSync(file, text);
+  return file;
+}
+
 /** A credential-shaped transcript line (codex echoing a `.env` it read). Fake value. */
 const PLANTED_SECRET = "API_KEY=fake-planted-secret";
 
@@ -192,7 +209,7 @@ test("A1: an invalid --reasoning value errors naming the flag", () => {
   assert.ok(!existsSync(path.join(run.record, "argv.json")));
 });
 
-for (const flag of ["--base", "--context"]) {
+for (const flag of ["--base", "--context", "--rereview", "--fix-check"]) {
   test(`F6: ${flag} with no value errors naming the flag instead of being ignored`, () => {
     const repo = makeRepo();
     writeFileSync(path.join(repo, "a.txt"), "v2\n");
@@ -203,7 +220,7 @@ for (const flag of ["--base", "--context"]) {
   });
 }
 
-for (const flag of ["--base", "--context"]) {
+for (const flag of ["--base", "--context", "--rereview", "--fix-check"]) {
   for (const form of ["space", "equals"] as const) {
     test(`F6: ${flag} with an empty value (${form} form) errors instead of reviewing another target`, () => {
       const repo = makeRepo();
@@ -392,6 +409,8 @@ for (const { missing, args } of [
   { missing: "review-rubric.md", args: [] },
   { missing: "red-green.md", args: [] },
   { missing: "architecture-review.md", args: ["--architecture"] },
+  { missing: "fix-check.md", args: ["--base", "main", "--rereview", "4 · open"] },
+  { missing: "fix-check.md", args: ["--base", "main", "--fix-check", "2 · fix"] },
 ]) {
   test(`A3: a missing ${missing} fails loudly and never spawns codex (${args.join(" ") || "review"})`, () => {
     const root = tempDir("harry-rcli-plugin-");
@@ -401,8 +420,7 @@ for (const { missing, args } of [
       recursive: true,
     });
     rmSync(path.join(root, "references", missing));
-    const repo = makeRepo();
-    writeFileSync(path.join(repo, "a.txt"), "v2\n");
+    const repo = makeBranchRepo();
     const run = runReview(repo, args, { cli: path.join(root, "src/companion.ts") });
     assert.notEqual(run.status, 0);
     assert.ok(run.stderr.includes(missing), run.stderr);
@@ -475,6 +493,321 @@ test("A3: without --architecture the prompt embeds the review rubric and not arc
     prompt.includes("must not be reported"),
     "a plain review keeps its outside-the-diff ban",
   );
+});
+
+// ─── Re-review and fix check ────────────────────────────────────────────────
+
+const OPEN_FINDINGS =
+  "4 · a.txt:1 · the value is stale\nfix check: 4 · holds at all three levels\nlast number: 6";
+
+test("AC-1: --rereview embeds the per-diff standard, Three levels, the mode, then the handed findings, in order", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, [
+    "--base",
+    "main",
+    "--rereview",
+    `@${handedFile(`${OPEN_FINDINGS}\n`)}`,
+    "--context",
+    "AC-1: a.txt holds v2",
+    "watch",
+    "zebra-lock",
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  assert.ok(prompt.startsWith("# Review target\n"), prompt.slice(0, 200));
+  assert.match(prompt, /git diff main\.\.\.HEAD/);
+  assert.match(prompt, /must not be reported/, "a re-review keeps the per-diff rule");
+  inOrder(
+    prompt,
+    "the re-review prompt",
+    "# Review standard\n",
+    RUBRIC.trim(),
+    "# Test standard (`references/red-green.md`)\n",
+    RED_GREEN.trim(),
+    THREE_LEVELS,
+    "# Re-review mode\n",
+    "# Open findings handed to this re-review\n",
+    OPEN_FINDINGS,
+    "## Background (settled facts from the working session)\n",
+    "AC-1: a.txt holds v2",
+    "## Focus\n",
+    "watch zebra-lock",
+  );
+});
+
+test("AC-1: the re-review mode section names the re-review form, its verdicts, the numbering and the levels", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--rereview", OPEN_FINDINGS]);
+  assert.equal(run.status, 0, run.stderr);
+  const mode = section(
+    recordedPrompt(run),
+    "the re-review prompt",
+    "# Re-review mode\n",
+    "# Open findings handed to this re-review\n",
+  ).replace(/\s+/g, " ");
+  for (const needle of [
+    "re-review form",
+    "ADDRESSED",
+    "NOT ADDRESSED",
+    "under its handed number",
+    "on from the last number handed",
+    "Three levels",
+  ])
+    assert.ok(mode.includes(needle), `the mode section must say "${needle}": ${mode}`);
+});
+
+test("AC-1: a re-review carries fix-check.md's Three levels section and no other part of that file", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--rereview", OPEN_FINDINGS]);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  assert.ok(prompt.includes(THREE_LEVELS), "the Three levels section must be embedded whole");
+  const rest = FIX_CHECK.replace(THREE_LEVELS, "\n\n");
+  const paragraphs = rest
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 40);
+  assert.ok(paragraphs.length >= 5, "expected the rest of fix-check.md to hold several paragraphs");
+  for (const paragraph of paragraphs)
+    assert.ok(
+      !prompt.includes(paragraph),
+      `a re-review must embed no part of fix-check.md outside Three levels: "${paragraph.slice(0, 60)}"`,
+    );
+});
+
+const HANDED_FIXES =
+  "2 · a.txt:1 · stale value · fix: read v2 from the source\nearlier findings: none";
+
+test("AC-2: --fix-check embeds fix-check.md in full, then the handed fixes, Background and Focus, in order", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, [
+    "--base",
+    "main",
+    "--fix-check",
+    `@${handedFile(`${HANDED_FIXES}\n`)}`,
+    "--context",
+    "ruling: v2 is the source of truth",
+    "watch",
+    "zebra-lock",
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  inOrder(
+    prompt,
+    "the fix-check prompt",
+    "# Fix check target\n",
+    "git diff main...HEAD",
+    "# Fix check standard (`references/fix-check.md`)\n",
+    FIX_CHECK.trim(),
+    "# Fixes handed to this fix check\n",
+    HANDED_FIXES,
+    "## Background (settled facts from the working session)\n",
+    "ruling: v2 is the source of truth",
+    "## Focus\n",
+    "watch zebra-lock",
+  );
+  assert.ok(!prompt.includes(RUBRIC.trim()), "a fix check must not embed the review rubric");
+  assert.ok(!prompt.includes(RED_GREEN.trim()), "a fix check must not embed red-green.md");
+  assert.deepEqual(recordedArgv(run), [
+    "exec",
+    "review",
+    "--ephemeral",
+    "-c",
+    'sandbox_mode="read-only"',
+    "-o",
+    outputPathOf(run),
+    "-",
+  ]);
+});
+
+test("AC-2: the fix-check target sends the reader through the whole repo and judges only the handed fixes", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--fix-check", HANDED_FIXES]);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  const target = section(
+    prompt,
+    "the fix-check prompt",
+    "# Fix check target\n",
+    "# Fix check standard",
+  ).replace(/\s+/g, " ");
+  for (const needle of [
+    "Read the whole repo",
+    "trace the data flow",
+    "Judge only the handed fixes",
+  ])
+    assert.ok(target.includes(needle), `the fix-check target must say "${needle}": ${target}`);
+  // The fix check traces the flow beyond the diff on purpose; the per-diff ban would forbid it.
+  assert.ok(
+    !prompt.includes("must not be reported"),
+    "a fix check must not carry the per-diff ban on findings outside the changes",
+  );
+});
+
+for (const { flag, base } of [
+  { flag: "--rereview", base: "the head the review it follows reviewed" },
+  { flag: "--fix-check", base: "the unit's branch point" },
+]) {
+  test(`AC-3: ${flag} without --base fails naming the cause and never spawns codex`, () => {
+    // A clean branch one commit ahead of main: without the guard, auto would review it.
+    const repo = makeBranchRepo();
+    const run = runReview(repo, [flag, "4 · open"]);
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.ok(run.stderr.includes(`${flag} requires --base <ref>: ${base}.`), run.stderr);
+    assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+  });
+}
+
+for (const pair of [
+  ["--rereview", "--fix-check"],
+  ["--rereview", "--architecture"],
+  ["--fix-check", "--architecture"],
+]) {
+  test(`AC-3: ${pair.join(" with ")} fails naming both and never spawns codex`, () => {
+    const repo = makeBranchRepo();
+    const args = ["--base", "main"];
+    for (const flag of pair)
+      args.push(...(flag === "--architecture" ? [flag] : [flag, "4 · open"]));
+    const run = runReview(repo, args);
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.match(run.stderr, /cannot be combined/, run.stderr);
+    for (const flag of pair) assert.ok(run.stderr.includes(flag), `${flag}: ${run.stderr}`);
+    assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+  });
+}
+
+for (const flag of ["--rereview", "--fix-check"]) {
+  test(`AC-3: an unreadable ${flag} @file fails naming the flag and path, and never spawns codex`, () => {
+    const repo = makeBranchRepo();
+    const missing = path.join(tempDir("harry-rcli-handed-"), "nope.md");
+    const run = runReview(repo, ["--base", "main", flag, `@${missing}`]);
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.ok(run.stderr.includes(`Could not read ${flag} file ${missing}`), run.stderr);
+    assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+  });
+
+  test(`AC-3: an empty ${flag} @file or @- fails naming the flag and source, and never spawns codex`, () => {
+    const repo = makeBranchRepo();
+    const empty = handedFile("  \n");
+    for (const [value, source] of [
+      [`@${empty}`, `file ${empty}`],
+      ["@-", "from stdin"],
+    ]) {
+      const run = runReview(repo, ["--base", "main", flag, value], { input: "" });
+      assert.notEqual(run.status, 0, `${value}: ${run.stderr}`);
+      assert.ok(run.stderr.includes(`${flag} ${source} is empty`), `${value}: ${run.stderr}`);
+      assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+    }
+  });
+}
+
+test("AC-3: a fix-check.md with no `## Three levels` heading fails a re-review and never spawns codex", () => {
+  const root = tempDir("harry-rcli-plugin-");
+  cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
+  cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
+  cpSync(path.join(REPO_ROOT, "references"), path.join(root, "references"), { recursive: true });
+  const copy = path.join(root, "references", "fix-check.md");
+  const renamed = FIX_CHECK.replace("## Three levels\n", "## Levels\n");
+  assert.notEqual(renamed, FIX_CHECK, "the fixture must remove the heading");
+  writeFileSync(copy, renamed);
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--rereview", "4 · open"], {
+    cli: path.join(root, "src/companion.ts"),
+  });
+  assert.notEqual(run.status, 0, run.stderr);
+  assert.ok(run.stderr.includes(copy), run.stderr);
+  assert.ok(run.stderr.includes("## Three levels"), run.stderr);
+  assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+});
+
+for (const flag of ["--rereview", "--fix-check"]) {
+  test(`${flag} with no changes under --base fails naming the flag instead of reporting nothing to review`, () => {
+    const repo = makeBranchRepo();
+    const run = runReview(repo, ["--base", "HEAD", flag, "4 · open"]);
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.ok(run.stderr.includes(`${flag} has no changes to judge`), run.stderr);
+    assert.ok(!run.stdout.includes("No changes to review"), run.stdout);
+    assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+  });
+}
+
+test("a re-review with no changes still fails on a fix-check.md with no `## Three levels` heading first", () => {
+  const root = tempDir("harry-rcli-plugin-");
+  cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
+  cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
+  cpSync(path.join(REPO_ROOT, "references"), path.join(root, "references"), { recursive: true });
+  const copy = path.join(root, "references", "fix-check.md");
+  writeFileSync(copy, FIX_CHECK.replace("## Three levels\n", "## Levels\n"));
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "HEAD", "--rereview", "4 · open"], {
+    cli: path.join(root, "src/companion.ts"),
+  });
+  assert.notEqual(run.status, 0, run.stderr);
+  assert.ok(run.stderr.includes(copy), run.stderr);
+  assert.ok(run.stderr.includes("## Three levels"), run.stderr);
+});
+
+for (const flag of ["--rereview", "--fix-check"]) {
+  test(`${flag} @- with --context @- fails naming both flags instead of an empty stdin`, () => {
+    const repo = makeBranchRepo();
+    const run = runReview(repo, ["--base", "main", flag, "@-", "--context", "@-"], {
+      input: "4 · open\n",
+    });
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.ok(run.stderr.includes(`--context and ${flag} cannot both read stdin`), run.stderr);
+    assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+  });
+}
+
+test("AC-8: --rereview runs codex exec read-only, not codex exec review, and names the review file", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--rereview", OPEN_FINDINGS]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(recordedArgv(run), [
+    "exec",
+    "--ephemeral",
+    "-s",
+    "read-only",
+    "-o",
+    outputPathOf(run),
+    "-",
+  ]);
+  assert.ok(run.stderr.includes(`${REVIEW_WRITTEN} ${outputPathOf(run)}`), run.stderr);
+});
+
+test("AC-8: --rereview with --reasoning adds one effort override before the stdin marker", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, [
+    "--base",
+    "main",
+    "--rereview",
+    OPEN_FINDINGS,
+    "--reasoning",
+    "high",
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(recordedArgv(run), [
+    "exec",
+    "--ephemeral",
+    "-s",
+    "read-only",
+    "-o",
+    outputPathOf(run),
+    "-c",
+    'model_reasoning_effort="high"',
+    "-",
+  ]);
+});
+
+test("AC-8: a failed re-review names codex exec, the process that ran, not codex exec review", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--rereview", OPEN_FINDINGS], {
+    fake: { FAKE_CODEX_CLI_EXIT: "1", FAKE_CODEX_CLI_STDERR: "Error: quota\n" },
+  });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /with codex exec…/);
+  assert.match(run.stderr, /codex exec failed \(exit 1\)/);
+  assert.doesNotMatch(run.stderr, /codex exec review/);
 });
 
 // ─── A4: output path ────────────────────────────────────────────────────────
@@ -951,6 +1284,111 @@ test("both review doors document --architecture and the standard it embeds", () 
   }
 });
 
+const REVIEW_DOORS = ["commands/review.md", "codex-skills/review/SKILL.md"];
+
+function doorSynopsis(door: string, prose: string): string {
+  const line =
+    door === "commands/review.md"
+      ? prose.match(/^argument-hint: (.+)$/m)?.[1]
+      : prose.match(/^node "\$\{CLAUDE_PLUGIN_ROOT\}\/dist\/companion\.cjs" review \[.+$/m)?.[0];
+  assert.ok(line, `${door} has no synopsis line`);
+  return line;
+}
+
+test("AC-5: both review doors list --rereview and --fix-check in their synopsis", () => {
+  for (const door of REVIEW_DOORS) {
+    const synopsis = doorSynopsis(door, readFileSync(path.join(REPO_ROOT, door), "utf8"));
+    for (const flag of ["[--rereview <text|@file|@->]", "[--fix-check <text|@file|@->]"])
+      assert.ok(synopsis.includes(flag), `${door}'s synopsis must list ${flag}: ${synopsis}`);
+  }
+});
+
+for (const { flag, others, holds } of [
+  {
+    flag: "--rereview",
+    others: "`--architecture` and `--fix-check`",
+    holds:
+      "holds the open findings under their numbers, the fix check's verdicts and the last number in use",
+  },
+  {
+    flag: "--fix-check",
+    others: "`--architecture` and `--rereview`",
+    holds: "holds each finding with its proposed fix",
+  },
+]) {
+  test(`AC-5: both review doors say what ${flag}'s file holds, that it needs --base and what it excludes`, () => {
+    for (const door of REVIEW_DOORS) {
+      const raw = readFileSync(path.join(REPO_ROOT, door), "utf8");
+      const own = headingSection(raw, door, `## \`${flag}\``).replace(/\s+/g, " ");
+      for (const needle of [holds, "needs `--base`", `excludes ${others}`])
+        assert.ok(own.includes(needle), `${door}'s \`${flag}\` section must say "${needle}"`);
+    }
+  });
+}
+
+test("both review doors say an empty range fails --rereview and --fix-check instead of reporting nothing", () => {
+  for (const door of REVIEW_DOORS) {
+    const prose = readFileSync(path.join(REPO_ROOT, door), "utf8").replace(/\s+/g, " ");
+    const nothing = section(prose, door, "**Nothing to review:**", "## Failure");
+    assert.ok(
+      nothing.includes("With `--rereview` or `--fix-check`, an empty range fails instead"),
+      `${door}'s Nothing to review paragraph must say an empty range fails the two handed modes`,
+    );
+  }
+});
+
+test("AC-9: both review doors and CLAUDE.md say a re-review runs as codex exec, and why", () => {
+  for (const [rel, part] of [
+    ...REVIEW_DOORS.map((door) => [door, "## `--rereview`"]),
+    ["CLAUDE.md", "## Runtime architecture"],
+  ]) {
+    const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
+    const own = headingSection(raw, rel, part).replace(/\s+/g, " ");
+    for (const needle of [
+      "A re-review runs as `codex exec`, not `codex exec review`, still read-only",
+      "`codex exec review` answers in its own review-comment format and ignores the re-review form",
+    ])
+      assert.ok(own.includes(needle), `${rel} (${part}) must say "${needle}"`);
+  }
+});
+
+test("AC-11: only the review doors, CLAUDE.md's runtime section and README name review's codex subcommand", () => {
+  const owners = new Set(["commands/review.md", "codex-skills/review/SKILL.md", "README.md"]);
+  const corpus = [
+    ...SHIPPED_TOP_LEVEL,
+    ...REPO_TOP_LEVEL,
+    ...PROSE_DIRS.flatMap((dir) =>
+      readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => path.join(dir, f)),
+    ),
+  ].filter((rel) => !owners.has(rel));
+  const hits = corpus.flatMap((rel) => {
+    const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
+    const text =
+      rel === "CLAUDE.md"
+        ? raw.replace(headingSection(raw, rel, "## Runtime architecture"), "")
+        : raw;
+    return text
+      .split(/\n\s*\n/)
+      .map((para) => para.replace(/\s+/g, " "))
+      .filter((para) => para.includes("codex exec review"))
+      .map((para) => `${rel}: ${para.slice(0, 80)}`);
+  });
+  assert.deepEqual(hits, [], "callers name the review mode they run, not the codex subcommand");
+});
+
+test("AC-5: both review doors send a re-review's open findings to --rereview, not --context", () => {
+  for (const door of REVIEW_DOORS) {
+    const raw = readFileSync(path.join(REPO_ROOT, door), "utf8");
+    const context = headingSection(raw, door, "## `--context`").replace(/\s+/g, " ");
+    assert.ok(
+      context.includes("A re-review's open findings go in `--rereview`, not `--context`"),
+      `${door}'s \`--context\` section must route a re-review's open findings to --rereview`,
+    );
+  }
+});
+
 test("F1: every review and ask door quotes the no-error-line notice and names no tail size", () => {
   // The notice is run-codex's, printed by both commands, so all four doors are
   // pinned here. A door quoting a stale copy tells its consumer to watch for a
@@ -1013,4 +1451,139 @@ test("the per-diff prompt embeds exactly the files the rubric declares as its st
     prompt.includes(readFileSync(path.join(REPO_ROOT, rel), "utf8").trim()),
   );
   assert.deepEqual(embedded.sort(), [...declared].sort());
+});
+
+function declaredRereviewSections(): Array<{ file: string; heading: string }> {
+  const line = RUBRIC.split("\n").find((l) => l.startsWith("**Re-review standard:**"));
+  assert.ok(line, "review-rubric.md declares no **Re-review standard:** line");
+  return [...line.matchAll(/`([^`]+\.md)` \*\*([^*]+)\*\*/g)].map((m) => ({
+    file: m[1],
+    heading: m[2],
+  }));
+}
+
+test("AC-4: the re-review prompt embeds the declared standard files whole and exactly the declared sections", () => {
+  const declared = declaredStandardFiles();
+  const sections = declaredRereviewSections();
+  assert.ok(sections.length > 0, "the **Re-review standard:** line names no section");
+  const prompt = buildReviewPrompt({
+    target: { mode: "branch", label: "branch diff against main", baseRef: "main" },
+    standard: "rereview",
+    handed: "4 · open",
+  });
+  const refs = readdirSync(path.join(REPO_ROOT, "references"))
+    .filter((f) => f.endsWith(".md"))
+    .map((f) => `references/${f}`);
+  const read = (rel: string): string => readFileSync(path.join(REPO_ROOT, rel), "utf8");
+  const whole = refs.filter((rel) => prompt.includes(read(rel).trim()));
+  assert.deepEqual(whole.sort(), [...declared].sort());
+  const embedded: Array<{ file: string; heading: string }> = [];
+  for (const rel of refs.filter((r) => !declared.includes(r))) {
+    const text = read(rel);
+    for (const line of outline(text).filter((l) => l.level === 2))
+      if (prompt.includes(headingSection(text, rel, line.text).trim()))
+        embedded.push({ file: rel, heading: line.title });
+  }
+  assert.deepEqual(embedded, sections);
+});
+
+for (const standard of ["rereview", "fix-check"] as const) {
+  test(`the builder refuses blank handed text for a ${standard}, naming the standard`, () => {
+    assert.throws(
+      () =>
+        buildReviewPrompt({
+          target: { mode: "branch", label: "branch diff against main", baseRef: "main" },
+          standard,
+          handed: "  ",
+        }),
+      { message: `A ${standard} prompt requires its handed text.` },
+    );
+  });
+}
+
+test("AC-10: typecheck holds the builder's handed text to the re-review and the fix check", () => {
+  const target = { mode: "branch" as const, label: "branch diff against main", baseRef: "main" };
+  // @ts-expect-error a re-review needs its handed text
+  const rereview: ReviewPromptInput = { target, standard: "rereview" };
+  // @ts-expect-error a fix check needs its handed text
+  const fixCheck: ReviewPromptInput = { target, standard: "fix-check" };
+  // @ts-expect-error the plain review takes no handed text
+  const review: ReviewPromptInput = { target, standard: "review", handed: "4 · open" };
+  assert.deepEqual(
+    [rereview.standard, fixCheck.standard, review.standard],
+    ["rereview", "fix-check", "review"],
+  );
+});
+
+const flatProse = (text: string): string => text.replace(/\s+/g, " ").replace(/\*+|`/g, "");
+const headingsIn = (raw: string): Set<string> => new Set(raw.match(/#{2,} [^`\n]+/g) ?? []);
+const capsWordsIn = (raw: string): Set<string> => new Set(raw.match(/\b[A-Z]{2,}\b/g) ?? []);
+
+function rubricRereviewForm(): string {
+  const lines = section(RUBRIC, "references/review-rubric.md", "**Re-review standard:**").split(
+    "\n",
+  );
+  const open = lines.findIndex((l) => l.startsWith("```"));
+  const close = lines.findIndex((l, i) => i > open && l.startsWith("```"));
+  assert.ok(open !== -1 && close !== -1, "the rubric's re-review form block is gone");
+  return lines.slice(open + 1, close).join("\n");
+}
+
+test("AC-12: the re-review mode section and executing quote only what the rubric's re-review form holds", () => {
+  const formRaw = rubricRereviewForm();
+  const form = flatProse(formRaw);
+  const modeRaw = section(
+    buildReviewPrompt({
+      target: { mode: "branch", label: "branch diff against main", baseRef: "main" },
+      standard: "rereview",
+      handed: "4 · open",
+    }),
+    "the re-review prompt",
+    "# Re-review mode\n",
+    "# Open findings handed to this re-review\n",
+  );
+  const executingRaw = section(
+    readFileSync(path.join(REPO_ROOT, "skills/executing/SKILL.md"), "utf8"),
+    "skills/executing/SKILL.md",
+    "It reports in the rubric's re-review form",
+    "adjudication.",
+  );
+  for (const [rel, raw, tokens] of [
+    [
+      "the re-review mode section",
+      modeRaw,
+      [
+        "### Open findings",
+        "ADDRESSED",
+        "NOT ADDRESSED",
+        "is not addressed",
+        "on from the last number handed",
+        "Three levels",
+      ],
+    ],
+    [
+      "skills/executing/SKILL.md",
+      executingRaw,
+      ["ADDRESSED / NOT ADDRESSED", "attempted is not addressed"],
+    ],
+  ] as const) {
+    const restated = flatProse(raw);
+    for (const token of tokens) {
+      assert.ok(restated.includes(token), `${rel} no longer says "${token}"`);
+      assert.ok(
+        form.includes(token),
+        `${rel} says "${token}", which the rubric's re-review form does not`,
+      );
+    }
+    for (const heading of headingsIn(raw))
+      assert.ok(
+        headingsIn(formRaw).has(heading),
+        `${rel} quotes the heading "${heading}", which the rubric's re-review form does not hold`,
+      );
+    for (const word of capsWordsIn(raw))
+      assert.ok(
+        capsWordsIn(formRaw).has(word),
+        `${rel} quotes the verdict word "${word}", which the rubric's re-review form does not hold`,
+      );
+  }
 });

@@ -14,7 +14,7 @@
  */
 
 import { join } from "node:path";
-import { resolveExtraContext } from "../lib/context.ts";
+import { resolveTextFlag } from "../lib/context.ts";
 import {
   CodexRunError,
   lastErrorLine,
@@ -27,7 +27,7 @@ import { ensureDir, resolveStateDir } from "../lib/state.ts";
 export interface AskOptions {
   prompt: string;
   reasoning?: ReasoningEffort;
-  /** Background for the model: literal text, or `@file` / `@-` — see `resolveExtraContext`. */
+  /** Background for the model: literal text, or `@file` / `@-` — see `resolveTextFlag`. */
   context?: string;
 }
 
@@ -74,7 +74,7 @@ async function ask(cwd: string, options: AskOptions): Promise<void> {
   if (!prompt) throw new Error("ask: empty prompt");
 
   // Strict: a model silently missing its facts would answer a different question.
-  const context = resolveExtraContext(cwd, options.context);
+  const context = resolveTextFlag(cwd, "--context", options.context);
 
   // Every run leaves an answer .md and a transcript .log (up to ~1 MB); runs
   // older than a week are pruned first so asks/ does not grow without bound.

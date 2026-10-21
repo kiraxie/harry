@@ -85,12 +85,12 @@ test("the both-verdicts rule names the re-review as its one exception", () => {
   );
 });
 
-test("executing hands the re-review the numbered open list and cites the rubric's form", () => {
+test("executing hands the re-review the numbered open list and Three levels, and cites the rubric's form", () => {
   const wave = line("skills/executing/SKILL.md", "exactly one scoped re-review");
   assert.match(
     wave,
-    /handed the open-findings list under its merged-list numbers, the fix check's verdicts and the merged list's last number; it reports in the rubric's re-review form \(`references\/review-rubric\.md`\)/,
-    "executing no longer hands the numbered open list or cites the rubric's re-review form",
+    /handed the open-findings list under its merged-list numbers, the fix check's verdicts and the merged list's last number; the analyst lane is also handed, beside the standard files, `references\/fix-check\.md` \*\*Three levels\*\* in full, as the rubric's re-review standard declares\. It reports in the rubric's re-review form \(`references\/review-rubric\.md`\)/,
+    "executing no longer hands the numbered open list and Three levels, or cites the rubric's re-review form",
   );
   assert.doesNotMatch(
     wave,
@@ -107,10 +107,16 @@ test("two re-review lanes' new issues are merged into one numbering", () => {
   );
 });
 
-test("the Codex lane's re-review is handed the step-3 head and the numbered open list", () => {
+test("the Codex lane's re-review gets the step-3 head and the open list through --rereview, not --context", () => {
+  const wave = line("skills/executing/SKILL.md", "exactly one scoped re-review");
   assert.match(
-    line("skills/executing/SKILL.md", "exactly one scoped re-review"),
-    /The Codex lane's re-review runs with `--base <the head step 3 reviewed>`, its context file carrying, as facts, everything the re-review is handed above/,
-    "the Codex re-review lane gets no open list, so it falls back to the fresh form",
+    wave,
+    /The Codex lane's re-review writes the open list, the fix check's verdicts and the last number to `<store>\/\.local\/tmp\/<branch>\/open-findings-<k>\.md` and runs `\/harry:review --base <the head step 3 reviewed> --rereview @<that file> --context @<the facts file>`/,
+    "the Codex re-review lane gets no open list, or gets it in the facts-only --context channel",
+  );
+  assert.match(
+    wave,
+    /facts only, never the open list/,
+    "the Codex re-review's facts file may carry the open list, a prior reviewer's verdicts",
   );
 });

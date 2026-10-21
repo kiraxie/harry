@@ -170,17 +170,22 @@ test("AC-5: a failed dispatch falls back to the session, recorded as not indepen
   );
 });
 
-test("AC-5: on the Codex build the fix check runs in a separate read-only codex exec through ask", () => {
+test("AC-5: on the Codex build the fix check runs as a separate read-only run of the review skill's --fix-check", () => {
   const text = read("skills/executing/SKILL.md");
   const codex = flat(section(text, "skills/executing/SKILL.md", "**Codex build.**"));
   assert.match(
     codex,
-    /The fix check runs in a separate read-only codex exec through that build's ask skill \(codex-skills\/ask\)/,
-    "the Codex build no longer runs the fix check out of session",
+    /The fix check runs as a separate read-only run of that review skill's --fix-check, with --base <base> --fix-check @<store>\/\.local\/tmp\/<branch>\/fix-check-<k>\.md --context @<store>\/\.local\/tmp\/<branch>\/fix-check-context\.md, <base> being the branch point/,
+    "the Codex build no longer runs the fix check out of session through the review skill's --fix-check, with both files in the store",
+  );
+  assert.doesNotMatch(
+    codex,
+    /codex-skills\/ask/,
+    "the Codex build's fix check goes back through ask, whose preamble forbids exploring the repo",
   );
   assert.match(
     codex,
-    /its failure falls back to the session applying references\/fix-check\.md itself, recorded as not independent/,
+    /Its failure falls back to the session applying references\/fix-check\.md itself, recorded as not independent/,
     "the Codex build's fix check no longer falls back with a not-independent record",
   );
 });
@@ -239,12 +244,12 @@ test("executing's fix-check Progress line counts the fixes that stopped", () => 
   );
 });
 
-test("the Codex fix-check prompt tells the model to read and trace the repo, rulings as facts", () => {
+test("the Codex fix check hands the fixes in --fix-check and the rulings as facts, and the runtime traces the repo", () => {
   const text = read("skills/executing/SKILL.md");
   assert.match(
     flat(section(text, "skills/executing/SKILL.md", "**Codex build.**")),
-    /its prompt naming references\/fix-check\.md, the inputs it lists and an explicit instruction to read and trace the repo, with rulings passed as facts/,
-    "the Codex fix check may answer at level 1 only, since ask's preamble forbids exploring unless the prompt asks",
+    /the first file holds each finding with its proposed fix and the paths of the unit's earlier findings files, the second, as facts, the item's Why \/ What, its AC verbatim and every ruling so far with its reason, and the runtime embeds references\/fix-check\.md and tells the reviewer to read and trace the repo/,
+    "the Codex fix check loses an input fix-check.md lists, or answers at level 1 only without the instruction to trace the repo",
   );
 });
 
@@ -264,10 +269,10 @@ test("AC-12: a failing verdict line names its level as well as its number", () =
   );
 });
 
-test("AC-12: the re-review judges ADDRESSED at the levels the handed verdicts name", () => {
+test("AC-12: the re-review judges ADDRESSED at the three levels of fix-check's Three levels", () => {
   assert.match(
     flat(read("references/review-rubric.md")),
-    /judged at the levels the handed verdicts name/,
+    /judged at the three levels of references\/fix-check\.md Three levels/,
     "the rubric points the re-reviewer at levels it was never told the meaning of",
   );
 });

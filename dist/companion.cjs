@@ -32,8 +32,7 @@ var import_node_path5 = require("node:path");
 // src/lib/context.ts
 var import_node_fs = require("node:fs");
 var import_node_path = require("node:path");
-function resolveExtraContext(cwd, context) {
-  const raw = context;
+function resolveTextFlag(cwd, flag, raw) {
   if (!raw?.trim()) return void 0;
   if (!raw.startsWith("@")) return raw.trim();
   const ref = raw.slice(1);
@@ -42,9 +41,9 @@ function resolveExtraContext(cwd, context) {
   try {
     text = (0, import_node_fs.readFileSync)(ref === "-" ? 0 : (0, import_node_path.resolve)(cwd, ref), "utf-8").trim();
   } catch (err) {
-    throw new Error(`Could not read --context ${source}: ${err.message}`);
+    throw new Error(`Could not read ${flag} ${source}: ${err.message}`);
   }
-  if (!text) throw new Error(`--context ${source} is empty.`);
+  if (!text) throw new Error(`${flag} ${source} is empty.`);
   return text;
 }
 
@@ -308,7 +307,8 @@ async function runCodexExec(opts) {
     );
   }
   narrowOutput(opts.outputPath);
-  return output;
+  return output.endsWith("\n") ? output : `${output}
+`;
 }
 function reportNarrowFailure(outputPath) {
   try {
@@ -391,7 +391,7 @@ function failureReason(err) {
 async function ask(cwd, options) {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");
-  const context = resolveExtraContext(cwd, options.context);
+  const context = resolveTextFlag(cwd, "--context", options.context);
   const dir = (0, import_node_path5.join)(resolveStateDir(cwd), "asks");
   ensureDir(dir);
   pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
@@ -530,19 +530,16 @@ function resolveReviewTarget(cwd, options = {}) {
   return { mode: "branch", label: `branch diff against ${detected}`, baseRef: detected };
 }
 
-// src/lib/review-prompts.ts
+// src/lib/review-modes.ts
 var import_node_fs6 = require("node:fs");
 var import_node_path7 = require("node:path");
 function pluginRoot() {
   return (0, import_node_path7.dirname)((0, import_node_path7.dirname)((0, import_node_fs6.realpathSync)(process.argv[1])));
 }
-var STANDARD_FILES = {
-  review: [
-    { file: "review-rubric.md", heading: "Review standard" },
-    { file: "red-green.md", heading: "Test standard (`references/red-green.md`)" }
-  ],
-  architecture: [{ file: "architecture-review.md", heading: "Review standard" }]
-};
+var PER_DIFF = [
+  { file: "review-rubric.md", heading: "Review standard" },
+  { file: "red-green.md", heading: "Test standard (`references/red-green.md`)" }
+];
 function loadReference(file) {
   const refPath = (0, import_node_path7.join)(pluginRoot(), "references", file);
   let text;
@@ -556,10 +553,26 @@ function loadReference(file) {
   if (!text.trim()) throw new Error(`Review reference at ${refPath} is empty.`);
   return text.trim();
 }
+function cutSection(file, text, title) {
+  const lines = text.split("\n");
+  const start = lines.indexOf(`## ${title}`);
+  if (start === -1) {
+    throw new Error(
+      `Review reference ${(0, import_node_path7.join)(pluginRoot(), "references", file)} has no \`## ${title}\` section. Reinstall the harry plugin.`
+    );
+  }
+  const end = lines.findIndex((line, i) => i > start && /^#{1,2} /.test(line));
+  return lines.slice(start, end === -1 ? void 0 : end).join("\n").trim();
+}
+function embed({ file, heading, section }) {
+  const text = loadReference(file);
+  return `# ${heading}
+
+${section ? cutSection(file, text, section) : text}`;
+}
 var OUTSIDE_THE_DIFF = "Code outside those changes is context, not a review target: read it to understand the change, but problems that live only outside the changes must not be reported.";
 var OUTSIDE_THE_SHAPES = "Code outside those changes is context for judging the shapes this change adds or alters: read it, one level up and through the recent history, as the review standard below asks. Report findings about those shapes only, not unrelated problems elsewhere.";
-function targetSection(target, standard) {
-  const outside = standard === "architecture" ? OUTSIDE_THE_SHAPES : OUTSIDE_THE_DIFF;
+function reviewTarget(target, outside) {
   if (target.mode === "branch") {
     if (!target.baseRef) throw new Error("Branch target requires baseRef.");
     return [
@@ -582,15 +595,89 @@ function targetSection(target, standard) {
     outside
   ].join("\n");
 }
+function fixCheckTarget(target) {
+  if (target.mode !== "branch" || !target.baseRef)
+    throw new Error("A fix check requires a branch target.");
+  return [
+    "# Fix check target",
+    "",
+    `This is a fix check, not a review. An earlier review of this branch raised the findings handed below, each with a proposed fix that is not built yet. The unit's changes are \`git diff ${target.baseRef}...HEAD\` \u2014 run it to see the code the findings point at.`,
+    "",
+    "Read the whole repo as far as you need to trace the data flow and the system around each fix: callers, producers and copies of the same knowledge, wherever they live. Judge only the handed fixes, one line per fix in the output form of the fix check standard below; raise no new findings."
+  ].join("\n");
+}
+var REREVIEW_MODE = [
+  "# Re-review mode",
+  "",
+  "This is a scoped re-review, not a fresh review. The diff above is the fix range: the fixes made for the open findings handed below, after an earlier review of this branch. Report in the review standard's re-review form, not its fresh form:",
+  "",
+  "- Under `### Open findings`, one line per handed finding, under its handed number: ADDRESSED or NOT ADDRESSED, with the evidence read. Attempted is not addressed.",
+  "- Judge each handed finding at the levels in the Three levels section above: ADDRESSED means the cause is gone, not only this instance.",
+  "- Number new issues on from the last number handed, never from 1."
+].join("\n");
+var CODEX_EXEC_REVIEW = {
+  label: "codex exec review",
+  args: ["exec", "review", "--ephemeral", "-c", 'sandbox_mode="read-only"']
+};
+var CODEX_EXEC = {
+  label: "codex exec",
+  args: ["exec", "--ephemeral", "-s", "read-only"]
+};
+var MODES = {
+  review: {
+    files: PER_DIFF,
+    target: (target) => reviewTarget(target, OUTSIDE_THE_DIFF),
+    onEmpty: "summary",
+    spawn: CODEX_EXEC_REVIEW
+  },
+  architecture: {
+    flag: "--architecture",
+    files: [{ file: "architecture-review.md", heading: "Review standard" }],
+    target: (target) => reviewTarget(target, OUTSIDE_THE_SHAPES),
+    onEmpty: "summary",
+    spawn: CODEX_EXEC_REVIEW
+  },
+  rereview: {
+    flag: "--rereview",
+    files: [
+      ...PER_DIFF,
+      {
+        file: "fix-check.md",
+        heading: "Fix levels (`references/fix-check.md` **Three levels**)",
+        section: "Three levels"
+      }
+    ],
+    target: (target) => reviewTarget(target, OUTSIDE_THE_DIFF),
+    baseReason: "the head the review it follows reviewed",
+    modeSection: REREVIEW_MODE,
+    heading: "Open findings handed to this re-review",
+    onEmpty: "fail",
+    spawn: CODEX_EXEC
+  },
+  "fix-check": {
+    flag: "--fix-check",
+    files: [{ file: "fix-check.md", heading: "Fix check standard (`references/fix-check.md`)" }],
+    target: fixCheckTarget,
+    baseReason: "the unit's branch point",
+    heading: "Fixes handed to this fix check",
+    onEmpty: "fail",
+    spawn: CODEX_EXEC_REVIEW
+  }
+};
+function takesHanded(standard) {
+  return "heading" in MODES[standard];
+}
 function buildReviewPrompt(input) {
-  const sections = [
-    targetSection(input.target, input.standard),
-    ...STANDARD_FILES[input.standard].map(
-      ({ file, heading }) => `# ${heading}
+  const mode = MODES[input.standard];
+  const sections = [mode.target(input.target), ...mode.files.map(embed)];
+  if ("handed" in input && "heading" in mode) {
+    if (mode.modeSection) sections.push(mode.modeSection);
+    const handed = input.handed.trim();
+    if (!handed) throw new Error(`A ${input.standard} prompt requires its handed text.`);
+    sections.push(`# ${mode.heading}
 
-${loadReference(file)}`
-    )
-  ];
+${handed}`);
+  }
   const context = input.context?.trim();
   if (context) {
     sections.push(`## Background (settled facts from the working session)
@@ -606,6 +693,35 @@ ${focus}`);
 }
 
 // src/commands/review.ts
+function resolveStandard(cwd, options) {
+  const handedRaw = {
+    rereview: options.rereview,
+    "fix-check": options.fixCheck
+  };
+  const given = {
+    architecture: options.architecture === true,
+    rereview: handedRaw.rereview !== void 0,
+    "fix-check": handedRaw["fix-check"] !== void 0
+  };
+  const chosen = Object.keys(given).filter(
+    (standard2) => given[standard2]
+  );
+  if (chosen.length > 1) {
+    const flags = chosen.map((standard2) => MODES[standard2].flag);
+    throw new Error(`${flags.join(" and ")} cannot be combined: each is its own review.`);
+  }
+  const standard = chosen[0] ?? "review";
+  if (!takesHanded(standard)) return { standard };
+  const mode = MODES[standard];
+  const raw = handedRaw[standard];
+  if (options.context === "@-" && raw === "@-") {
+    throw new Error(`--context and ${mode.flag} cannot both read stdin (@-): pass one as @file.`);
+  }
+  if (!options.base) {
+    throw new Error(`${mode.flag} requires --base <ref>: ${mode.baseReason}.`);
+  }
+  return { standard, handed: resolveTextFlag(cwd, mode.flag, raw) ?? "" };
+}
 var REVIEW_WRITTEN = "Review written to";
 function resolveOutputDir(repoRoot) {
   const branch = getBranchOrShortSha(repoRoot);
@@ -619,9 +735,12 @@ function reserveReviewFiles(dir, now = /* @__PURE__ */ new Date()) {
   return { reviewPath: outputPath, logPath };
 }
 async function runReview(cwd, options = {}) {
+  const selected = resolveStandard(cwd, options);
+  const mode = MODES[selected.standard];
   const target = resolveReviewTarget(cwd, { base: options.base });
   const repoRoot = getRepoRoot(cwd);
-  if (target.mode === "branch" && countBranchChanges(repoRoot, target.baseRef ?? "") === 0) {
+  const empty = target.mode === "branch" && countBranchChanges(repoRoot, target.baseRef ?? "") === 0;
+  if (empty && mode.onEmpty === "summary") {
     process.stdout.write(`# Review Summary
 
 No changes to review under ${target.label}.
@@ -629,25 +748,22 @@ No changes to review under ${target.label}.
     return;
   }
   const prompt = buildReviewPrompt({
+    ...selected,
     target,
-    standard: options.architecture ? "architecture" : "review",
     // Strict: a reviewer silently missing its facts would review a different question.
-    context: resolveExtraContext(cwd, options.context),
+    context: resolveTextFlag(cwd, "--context", options.context),
     focusText: options.focusText
   });
+  if (empty && mode.onEmpty === "fail") {
+    throw new Error(
+      `${mode.flag} has no changes to judge under ${target.label}: commit them first, or check --base.`
+    );
+  }
   const { reviewPath: outputPath, logPath } = reserveReviewFiles(resolveOutputDir(repoRoot));
-  const args = [
-    "exec",
-    "review",
-    "--ephemeral",
-    "-c",
-    'sandbox_mode="read-only"',
-    "-o",
-    outputPath
-  ];
+  const args = [...mode.spawn.args, "-o", outputPath];
   if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
   args.push("-");
-  process.stderr.write(`Reviewing ${target.label} with codex exec review\u2026
+  process.stderr.write(`Reviewing ${target.label} with ${mode.spawn.label}\u2026
 `);
   const review = await runCodexExec({
     args,
@@ -655,7 +771,7 @@ No changes to review under ${target.label}.
     input: prompt,
     outputPath,
     logPath,
-    label: "codex exec review",
+    label: mode.spawn.label,
     outputNoun: "review"
   });
   process.stdout.write(review);
@@ -758,7 +874,7 @@ async function runSetup(options = {}) {
 var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "json", "architecture"]);
 var KNOWN_FLAGS = {
   setup: /* @__PURE__ */ new Set(["json"]),
-  review: /* @__PURE__ */ new Set(["base", "reasoning", "context", "architecture"]),
+  review: /* @__PURE__ */ new Set(["base", "reasoning", "context", "architecture", "rereview", "fix-check"]),
   ask: /* @__PURE__ */ new Set(["task", "reasoning", "context"])
 };
 function assertKnownFlags(command, flags) {
@@ -852,12 +968,15 @@ function printUsage() {
       "Usage:",
       "  companion setup [--json]",
       "  companion review [--base <ref>] [--reasoning <low|medium|high|xhigh>]",
-      "                   [--context <text|@file|@->] [--architecture] [focus...]",
+      "                   [--context <text|@file|@->]",
+      "                   [--architecture | --rereview <text|@file|@-> | --fix-check <text|@file|@->]",
+      "                   [focus...]",
       '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
       "  review      Review the branch or working tree via `codex exec review`",
+      "              (a re-review via `codex exec`)",
       "  ask         Ask a single prompt (read-only) and print the answer"
     ].join("\n")
   );
@@ -882,6 +1001,8 @@ async function main() {
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
         context: flagRequiredString(flags, "context"),
         architecture: flags.architecture === true,
+        rereview: flagRequiredString(flags, "rereview"),
+        fixCheck: flagRequiredString(flags, "fix-check"),
         focusText: args.join(" ")
       });
       break;

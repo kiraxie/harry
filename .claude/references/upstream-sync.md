@@ -28,7 +28,7 @@ Then compare that upstream diff against harry's customized version and decide â€
 - **`review`'s design upstream was `codex-plugin-cc`** â€” originally ported for the (now-removed)
   Copilot backend. `codex-plugin-cc` is retired to `historical_sources` (2026-09-17): the vendored
   in-process runtime it fed (`src/lib/codex/`) is deleted, and `review` now spawns
-  `codex exec review` directly, running no code ported from it. Attribution only â€” do not sync.
+  the Codex CLI directly, running no code ported from it. Attribution only â€” do not sync.
 - `debate` / `ask` / `status` / historically `result` (retired for lack of a shipped producer, 2026-07;
   `status` itself retired 2026-09-17 alongside the vendored runtime it read quota off of) were
   originally designed against `copilot-plugin-cc` (see `upstream.json`'s `derived[].from` for that
@@ -45,7 +45,7 @@ Then compare that upstream diff against harry's customized version and decide â€
 
 | Source | Tracks |
 |--------|--------|
-| ponytail | HARRY.md philosophy, `debt`, review finding numbering, historically `lean` (absorbed into `/audit` dimension **Over-engineering / unearned abstraction** + `/review`'s simplify lane, 2026-07; the simplify lane was itself retired 2026-09 when `/review` collapsed onto `codex exec review`) |
+| ponytail | HARRY.md philosophy, `debt`, review finding numbering, historically `lean` (absorbed into `/audit` dimension **Over-engineering / unearned abstraction** + `/review`'s simplify lane, 2026-07; the simplify lane was itself retired 2026-09 when `/review` collapsed onto the Codex CLI's review run) |
 | mattpocock-skills | `grill` (+ distills into `root-cause-tracing.md`, `skill-authoring.md`, `red-green.md`, brainstorming, `/audit` dimension **Over-engineering / unearned abstraction**, `pr-body.md` + plain-language's Show the structure) |
 | openclaw | `red-green.md` (test-audit authoring gate: one owner per contract, test-only seams, junk patterns); `/audit` dimension **Low-value tests** (its pruning method) |
 

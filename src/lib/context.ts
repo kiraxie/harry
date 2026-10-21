@@ -1,15 +1,16 @@
 /**
- * Resolves the caller-supplied `--context` value that `review` and `ask` put
- * into their prompt as a Background section: decisions, constraints and intent
- * from the Claude Code session that never made it into a repo file.
+ * Resolves a caller-supplied text flag: the `--context` value that `review` and
+ * `ask` put into their prompt as a Background section (decisions, constraints and
+ * intent from the Claude Code session that never made it into a repo file), and
+ * the handed text of `review --rereview` / `--fix-check`.
  */
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
- * Resolve `--context` into text. Following the curl/gh convention, an `@`
- * prefix means "read from", everything else is literal:
+ * Resolve a text flag (`flag` names it in errors) into text. Following the
+ * curl/gh convention, an `@` prefix means "read from", everything else is literal:
  *   - `--context "some text"` → the literal string
  *   - `--context @path/to/file.md` → the file's contents (resolved vs cwd)
  *   - `--context @-` → read from stdin
@@ -18,8 +19,11 @@ import { resolve } from "node:path";
  * string that starts with `@`, there is no escape today — use `@-` and pipe it,
  * or a file.)
  */
-export function resolveExtraContext(cwd: string, context: string | undefined): string | undefined {
-  const raw = context;
+export function resolveTextFlag(
+  cwd: string,
+  flag: string,
+  raw: string | undefined,
+): string | undefined {
   if (!raw?.trim()) return undefined;
   if (!raw.startsWith("@")) return raw.trim();
 
@@ -29,8 +33,8 @@ export function resolveExtraContext(cwd: string, context: string | undefined): s
   try {
     text = readFileSync(ref === "-" ? 0 : resolve(cwd, ref), "utf-8").trim();
   } catch (err) {
-    throw new Error(`Could not read --context ${source}: ${(err as Error).message}`);
+    throw new Error(`Could not read ${flag} ${source}: ${(err as Error).message}`);
   }
-  if (!text) throw new Error(`--context ${source} is empty.`);
+  if (!text) throw new Error(`${flag} ${source} is empty.`);
   return text;
 }
