@@ -17,7 +17,9 @@ mutation; its report is its final message.
 
 1. **Spec compliance** (primary). Does the diff satisfy the acceptance criteria
    it was given — no more, no less? Judge **per AC**: pass / fail / partial, each
-   with the evidence you read. An AC that a later AC supersedes is judged by
+   with the evidence you read. An instruction edit's AC is judged on its probe line
+   (`skills/executing/SKILL.md` **Build**), handed beside the AC; a `no probe ran`
+   line, on its reason. An AC that a later AC supersedes is judged by
    its successor, not on its own (`references/doc-types.md`): its line reads
    `superseded by AC-<m>`, never `fail`, and only the successor's verdict
    counts. Flag unmet criteria AND unrequested extras

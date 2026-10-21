@@ -17,7 +17,7 @@ takes the path its brainstorm depth names:
 
 | Depth | Path |
 |-------|------|
-| Compressed | **Compressed path** — the exact sequence, and what the item holds, are spelled out in the paragraph after the Full Flow steps below. |
+| Compressed | **Compressed path** — the exact sequence is spelled out in the paragraph after the Full Flow steps below; the item's shape, in `references/doc-types.md` **The item model**. |
 | Full | **Full Flow** below. |
 
 Which depth a task takes, what each one holds (the approach count included), and what
@@ -34,15 +34,15 @@ Complete these in order:
 
 1. **Explore context** — files, docs, recent commits, existing patterns. If the request is really several independent subsystems, flag it and decompose first; each sub-project gets its own item → execute cycle.
 2. **Grill the idea** — run the adversarial interview per `references/grilling.md`. Diverge first (destination pinning, adversarial probing, code cross-examination, live scope labeling), then converge (frontier questions, one per round). Steps 2-4 are a loop, per the reference: a design pass can send you back into the interview, and the loop only exits once the reference's termination conditions hold. Follow the reference's rules; do not re-derive them here. The interview closes at step 5. **Convergence also produces the acceptance criteria** — the settled decisions restated as outcomes (template below); they are approved with the design, not written afterwards.
-3. **Propose approaches** — as many as your depth sets (`references/tier-gates.md`), with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here.
+3. **Propose approaches** — as many as your depth sets (`references/tier-gates.md`), with tradeoffs and your recommendation; lead with the recommended one and say why. YAGNI ruthlessly — cut speculative features here. Steps 3-4 weigh approaches and the design by `references/review-rubric.md` **Engineering judgment**, the standard the build and the review use: its ladder makes that cut, and it allows a design-time scale decision against a known workload.
 4. **Present the design** — section by section, scaled to complexity; ask after each whether it holds. Cover architecture, components, data flow, error handling, testing. Break the system into small units each with one clear purpose and a defined interface, cut and tested as the reviews will judge them: `references/architecture-review.md` **Abstraction timing** for module shape. For seams and how to test across them, see `references/red-green.md` **Seams and what sits behind them**. Follow the codebase's existing patterns; fix in-scope rough edges in the design, propose no unrelated refactoring.
 5. **Get approval** — close the interview per `references/grilling.md`'s exit gate: the residue manifest presented alongside the numbered acceptance criteria. The AC approved here is the contract execution builds and review verdicts are read against, and executing may not change it (`references/doc-types.md`). The manifest's dispositions are *commitments* recorded here but discharged at step 6, because the item file does not exist yet: deferred-in-scope lines land in a `## Follow-ups` section created on the item at step 6; destination-outside lines become new `status: backlog` items (the manifest's approval is the user's nod for each). Revise and re-present until the user approves. Only then proceed.
-6. **Write the item** (template below). Read `references/doc-types.md` **Naming & location** first: resolve the store inside the command that writes the item and the INDEX line, and run its no-`.local/` check. → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What` including its `### Acceptance criteria`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
+6. **Write the item** (template below). Read `references/doc-types.md` **Naming & location** first: resolve the store inside the command that writes the item and the INDEX line, and run its no-`.local/` check. → `.local/items/<slug>.md` (create it, or promote an existing `status: backlog` item in place — same path, no rename). Fill `## Why / What`, shaped as `references/doc-types.md` **The item model** sets, including its `### Acceptance criteria`, set `status: active`. Discharge step 5's manifest commitments: create `## Follow-ups` holding the deferred-in-scope lines, and open the committed `status: backlog` items. Gitignored — do NOT commit it. Add one line to `.local/INDEX.md` (topic · path · one-line summary · `active`).
 7. **Item self-review** — fix inline (see below).
 8. **User reviews the item** — ask, wait, revise if needed.
 9. **Premise check, then transition** — before handing off, confirm the base is up to date (rebase/refresh from the base branch) and that the premises the design rests on still hold in that base. AC cannot catch a wrong premise: it is built on them. A premise that moved sends you back to step 4 with the user. Then invoke `executing`.
 
-The compressed path runs steps 1 → (2 at compressed depth ⇄ steps 3-4, propose and present) → residue manifest + AC per `references/grilling.md`'s exit gate, unabridged → approve → step 6, which always writes the item: `### Acceptance criteria` always, the `## Why / What` prose sections **only when a real design decision was weighed** (alternatives existed); with no such decision, `## Why / What` holds the AC list alone. Then steps 7-9 as usual. The ⇄ is the reference's loop running on this path too, not a one-shot pass: a design that surfaces a gap or moves the destination sends you back into the interview, and the close comes only once the reference's three termination conditions hold. The manifest's deferred lines land the same way as the Full Flow's — create `## Follow-ups` on the item when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items.
+The compressed path runs steps 1 → (2 at compressed depth ⇄ steps 3-4, propose and present) → residue manifest + AC per `references/grilling.md`'s exit gate, unabridged → approve → step 6, which always writes the item, shaped as `references/doc-types.md` **The item model** sets. Then steps 7-9 as usual. The ⇄ is the reference's loop running on this path too, not a one-shot pass: a design that surfaces a gap or moves the destination sends you back into the interview, and the close comes only once the reference's three termination conditions hold. The manifest's deferred lines land the same way as the Full Flow's — create `## Follow-ups` on the item when a deferred-in-scope line needs a home; destination-outside lines become `status: backlog` items.
 
 ## Decision Aids (opt-in, cost quota)
 
@@ -97,8 +97,8 @@ cite AC IDs.
 ## Progress   <!-- heading only; executing appends the lines -->
 ```
 
-On the compressed path with no design decision weighed, the `## Why / What` header stays — the AC list
-nests under it; sections 1-5 are what is skipped.
+When `references/doc-types.md` **The item model** gives the AC list alone, the `## Why / What`
+header stays — the AC list nests under it; sections 1-5 are what is skipped.
 
 `## Progress` is written here as an empty heading only — its lines are `executing`'s to append. `## Follow-ups`
 MAY be created here at step 6 to hold the residue manifest's deferred-in-scope lines;

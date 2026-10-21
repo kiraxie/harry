@@ -14,8 +14,8 @@ Every non-trivial task is classified; the tier decides how much process applies 
 | Tier | Trigger | What runs |
 |------|---------|-----------|
 | **Trivial** | mechanical, no branching, no behavior change, one-glance revert — any file count | just do it + verify |
-| **Standard** | the default: real logic or a behavior change that checks catch and a revert undoes, including an on-demand skill or reference edit that changes what a model is asked | compressed brainstorm, acceptance criteria, one test, the session builds + one independent review |
-| **Major** | a red line, a failure hard to see or undo, or an edit to always-loaded agent instructions that changes what a model is asked | full brainstorm → item `## Why / What` + numbered acceptance criteria → the session builds test-first → two review lanes (analyst + Codex) → finish |
+| **Standard** | the default: real logic or a behavior change that checks catch and a revert undoes, including an on-demand skill or reference edit that changes what a model is asked | compressed or full brainstorm, acceptance criteria, one test, the session builds + one independent review |
+| **Major** | a red line, a failure hard to see or undo, or an edit to always-loaded agent instructions that changes what a model is asked | full brainstorm (scaled on promotion) → item `## Why / What` + numbered acceptance criteria → the session builds test-first → two review lanes (analyst + Codex) → finish |
 
 Any red line (security/auth/money/delete/migration/external contract/cross-boundary contract) forces **Major** however small the diff.
 

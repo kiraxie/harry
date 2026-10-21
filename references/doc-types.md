@@ -29,7 +29,7 @@ milestone: <slug>      # optional key — omit entirely if standalone
 
 ## Notes           <!-- backlog stage: freeform accumulation — findings,
                         research, open questions -->
-## Why / What      <!-- filled when promoted to active — the design and its acceptance criteria -->
+## Why / What      <!-- filled when promoted to active — its acceptance criteria, after the design when one was weighed (below) -->
 ### Acceptance criteria  <!-- last subsection of Why / What; approved with the design -->
 ## Progress        <!-- append-only, filled during execution -->
 ## Follow-ups      <!-- sources: Writers, below; flushed to new backlog items at finish -->
@@ -46,11 +46,18 @@ them (a wrong or impossible AC stops and asks). An AC appended later may name
 an AC it supersedes (finishing's **fix now** ruling drafts one that way); the
 superseded AC keeps its text and is judged by its successor, not on its own.
 
+`## Why / What` holds only `### Acceptance criteria` unless a real design decision was
+weighed (alternatives existed); then `skills/brainstorming/SKILL.md` **Item Template**'s
+sections 1-5 precede them, section 2 being the decision record. The tier does not change
+this: a Major unit that weighed no decision holds the AC list alone.
+
 `## Progress` is append-only and cites AC IDs and commit ranges. Approved AC
 text is never edited to record progress — progress goes here instead. The
 lines that rules read back: `complete (commits …)` (the AC is done; resuming
 builds from the first AC without one), the review and fix-wave lines (where
-the review stands, and the findings file each names, holding what is open), and adjudication rulings. `small fix: <what> (commit
+the review stands, and the findings file each names, holding what is open), the probe
+lines `AC-<n>: probe: …` and `AC-<n>: no probe ran: …` (handed to the review beside
+their AC, whose spec verdict reads them), and adjudication rulings. `small fix: <what> (commit
 <sha7>)` is a record only; no rule reads it back.
 
 **Legacy items.** An item written under the older shape keeps its `## Plan` and
@@ -124,10 +131,8 @@ milestone edit.
 
 - **Backlog → active promotion**: brainstorming fills `## Why / What`,
   ending in its `### Acceptance criteria`, and sets `status: active` once the
-  user approves the design and those criteria (Standard tier with no real
-  alternatives weighed writes only the criteria under `## Why / What`, no
-  decision record, per tier-gates) — the file does
-  not move, same path, updated frontmatter + sections.
+  user approves the design and those criteria (its shape: **The item model**
+  above) — the file does not move, same path, updated frontmatter + sections.
 - **Active → done (archive)**: on finishing (wired into the finishing
   skill), set `status: done` and move `.local/items/<slug>.md` →
   `.local/archive/<slug>.md`.

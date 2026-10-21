@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
-import { headingSection } from "./section.ts";
+import { headingSection, section } from "./section.ts";
 
 // HARRY.md is loaded into every session, so it holds only what a session must know
 // before acting. Each heading keeps its rule; everything that moved out keeps one home
@@ -18,6 +18,17 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const flatten = (text: string): string => text.replace(/\s+/g, " ").replace(/[*`]/g, "");
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 const plain = (rel: string): string => flatten(raw(rel));
+const proseFiles = [
+  ...SHIPPED_TOP_LEVEL,
+  ...REPO_TOP_LEVEL,
+  ...PROSE_DIRS.flatMap((dir) =>
+    readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf-8" })
+      .filter((rel) => rel.endsWith(".md"))
+      .map((rel) => path.join(dir, rel)),
+  ),
+];
+const holders = (phrase: string): string[] =>
+  proseFiles.filter((rel) => plain(rel).includes(phrase));
 
 test("each resident heading holds the rule the core keeps", () => {
   const rules: [string, RegExp][] = [
@@ -54,6 +65,7 @@ test("each resident heading holds the rule the core keeps", () => {
       "Code",
       /Optimize on evidence, never on imagination: before any cache, index, virtualization or clever rewrite — even one the user asks for — get a measurement of this path/,
     ],
+    ["Code", /Exceptions to measuring first → references\/review-rubric\.md Engineering judgment/],
     ["Talk", /Prose addressed to the user opens with the outcome/],
     ["Talk", /Never invent a remediation/],
     ["Talk", /Open with the outcome and stop when the content stops/],
@@ -128,16 +140,14 @@ test("procedure that left the core lives in the skill that runs it", () => {
 });
 
 test("judgment that left the core lives in the review standard", () => {
-  const judgment = flatten(
-    headingSection(
-      raw("references/review-rubric.md"),
-      "references/review-rubric.md",
-      "## Engineering judgment",
-    ),
+  const judgmentRaw = headingSection(
+    raw("references/review-rubric.md"),
+    "references/review-rubric.md",
+    "## Engineering judgment",
   );
+  const judgment = flatten(judgmentRaw);
   for (const [rule, what] of [
     [/The ladder/, "the solution ladder"],
-    [/Optimize on evidence, never on imagination/, "evidence before optimizing"],
     [/Clean legacy in the scope you touch/, "clean legacy in scope"],
     [/Pull related changes into the same PR/, "related changes in one PR"],
     [/Drift test: "if these two copies silently diverge/, "the DRY drift test"],
@@ -146,6 +156,33 @@ test("judgment that left the core lives in the review standard", () => {
     [/Automated findings are suggestions/, "automated findings as suggestions"],
   ] as const)
     assert.match(judgment, rule, `the review standard lost ${what}`);
+  assert.equal(
+    flatten(
+      section(
+        raw("references/review-rubric.md"),
+        "references/review-rubric.md",
+        "- **Optimize on evidence",
+        "\n- **",
+      ),
+    ).trim(),
+    '- Optimize on evidence, never on imagination. No cache, index, memoization or clever rewrite without a measurement naming this path on a real workload — "should be faster" is a banned claim. Ship the simple version, with a DEBT: ceiling when it has one worth naming, and upgrade when N actually approaches it. Not banned: design-time scale decisions against a known workload, an explicit perf budget or SLO, and choosing the equally clear faster idiom — declining to waste is not optimizing.',
+    "the Optimize on evidence bullet changed. HARRY.md Code hands it its exceptions to measuring first, so an edit that changes what it allows tiers Major (references/tier-gates.md Promotion rules): re-pin on purpose",
+  );
+  assert.deepEqual(
+    [...judgmentRaw.matchAll(/^- \*\*([^*]+)\*\*/gm)].map((m) => m[1]),
+    [
+      "Correctness and leaving no legacy outrank saving cost",
+      "The ladder",
+      "Optimize on evidence, never on imagination.",
+      "Clean legacy in the scope you touch.",
+      "Pull related changes into the same PR.",
+      "DRY is about knowledge, not code.",
+      "A fix stays pure.",
+      "Findings carry their structural fix.",
+      "Automated findings are suggestions.",
+    ],
+    "Engineering judgment gained or lost a bullet. HARRY.md Code hands this section its exceptions to measuring first, so a bullet that changes what measuring first allows tiers Major (references/tier-gates.md Promotion rules): re-pin on purpose",
+  );
   assert.match(
     plain("references/red-green.md"),
     /\| Major \/ any red line \| full red-green, watch-it-fail mandatory \|/,
@@ -154,20 +191,8 @@ test("judgment that left the core lives in the review standard", () => {
 });
 
 test("the main-checkout store rule has one home, and every first writer reads it", () => {
-  const files = [
-    ...SHIPPED_TOP_LEVEL,
-    ...REPO_TOP_LEVEL,
-    ...PROSE_DIRS.flatMap((dir) =>
-      readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf-8" })
-        .filter((rel) => rel.endsWith(".md"))
-        .map((rel) => path.join(dir, rel)),
-    ),
-  ];
-  const holders = files.filter((rel) =>
-    readFileSync(path.join(repoRoot, rel), "utf-8").includes("--git-common-dir"),
-  );
   assert.deepEqual(
-    holders,
+    holders("--git-common-dir"),
     ["references/doc-types.md"],
     "the store rule is restated outside doc-types",
   );
@@ -186,6 +211,44 @@ test("the main-checkout store rule has one home, and every first writer reads it
     plain("references/doc-types.md"),
     /If the project has no \.local\/ at all, set it up or confirm it with the user first/,
     "the no-.local check left the store rule's home",
+  );
+});
+
+// A site's own block: its table row or list item, or the paragraph it opens.
+const site = (rel: string, heading: string, start: RegExp): string => {
+  const lines = headingSection(raw(rel), rel, heading).split("\n");
+  const at = lines.findIndex((line) => start.test(line));
+  assert.ok(at !== -1, `${rel} ${heading} lost the site ${start}`);
+  const end = lines.findIndex(
+    (line, i) => i > at && (!line.trim() || /^(\||\d+\. |- )/.test(line)),
+  );
+  return flatten(lines.slice(at, end === -1 ? undefined : end).join("\n"));
+};
+
+test("the item's shape has one home, and every site that shapes an item cites it", () => {
+  assert.deepEqual(
+    holders("unless a real design decision was weighed"),
+    ["references/doc-types.md"],
+    "the item's shape is restated outside doc-types The item model",
+  );
+  for (const [rel, heading, start] of [
+    ["references/tier-gates.md", "### Standard", /^\| Item \|/],
+    ["references/tier-gates.md", "### Major", /^\| Item \|/],
+    ["references/tier-gates.md", "### Major", /^\*\*Gate scaling/],
+    ["skills/brainstorming/SKILL.md", "## Entry: tier, then depth", /^\| Compressed \|/],
+    ["skills/brainstorming/SKILL.md", "## Full Flow", /^6\. \*\*Write the item\*\*/],
+    ["skills/brainstorming/SKILL.md", "## Full Flow", /^The compressed path runs/],
+    ["skills/brainstorming/SKILL.md", "## Item Template", /gives the AC list alone/],
+  ] as const)
+    assert.match(
+      site(rel, heading, start),
+      /references\/doc-types\.md The item model/,
+      `${rel} ${heading} ${start} no longer cites the item's shape`,
+    );
+  assert.match(
+    site("references/doc-types.md", "## Lifecycle rules", /Backlog → active promotion/),
+    /The item model/,
+    "doc-types' promotion bullet no longer points at The item model",
   );
 });
 
