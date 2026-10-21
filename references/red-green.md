@@ -145,7 +145,8 @@ Do not add behavior. Then move to the next failing test for the next behavior.
 ### Agree the seams
 
 **Agree the seams before writing tests.** Name the public boundaries under test
-and confirm them with the user up front — testing effort lands on critical paths
+and confirm them with the user up front, each with a one-line note on what it
+catches and what it misses — testing effort lands on critical paths
 and complex logic, not every edge; an unconfirmed seam gets no test. When no
 correct seam exists for a needed test, that absence is itself the finding to
 report — it never waives the mandatory reproduction test. The one exception is set in
@@ -161,6 +162,9 @@ Write → Run (fails) → Apply fix → Run (passes) → Revert fix → Run (MUS
 
 Only after the revert step fails do you know the test actually guards the bug. "I wrote a
 regression test" without this cycle is not evidence.
+
+When you force a red by editing code or a fixture, `diff` against a pristine copy to prove
+the edit landed before you trust the result.
 
 The revert cycle is the bug-fix form of the general **mutation check**: mentally mutate the
 production code (flip a comparison, drop a guard, off-by-one a bound) — each realistic

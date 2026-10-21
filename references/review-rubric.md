@@ -29,6 +29,10 @@ mutation; its report is its final message.
    where the language offers it; integrates cleanly with surrounding code. Flag a
    comment that restates the code, justifies a workaround, or resists a change —
    code carries no comment by default (HARRY.md **Code**).
+   Also judge against the repo's own documented standards: search the repo for every
+   file that says how code is written (`CONTRIBUTING.md`, `CODING_STANDARDS.md`, and the
+   like); where one conflicts with a default here, the repo's wins. Skip anything
+   tooling already enforces.
    Read the code the diff touches, not only the diff: when a signature, return
    value or behavior changes, grep every caller. Judge scale and concurrency
    against the load the repo itself shows (README, deploy config) and name the
@@ -41,8 +45,8 @@ mutation; its report is its final message.
    A cross-boundary contract, trust-boundary validation, or correctness
    infrastructure stays even if currently uncalled (HARRY.md **Tiers**). Do not YAGNI away a
    red line.
-   A shortcut carrying a `DEBT:` note that names its ceiling is a decision, not a
-   finding, unless the load the repo shows already crosses that ceiling.
+   A shortcut carrying a `DEBT:` note that names its ceiling and upgrade path is a
+   decision, not a finding, unless the load the repo shows already crosses that ceiling.
 4. **Test hygiene**. Judge every test the diff adds or changes
    against `references/red-green.md` — what a good test is, one owner per
    contract, and the patterns that pass without guarding anything. Flag tests

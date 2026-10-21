@@ -72,6 +72,19 @@ keep raising the rate until it is.
 it, a redacted captured artifact (HAR, log dump, core dump, timestamped recording), or
 permission for temporary instrumentation. Never hypothesise without a loop.
 
+## Once it is red: minimise, then hypothesise
+
+**Minimise.** Shrink the repro to the smallest scenario that still goes red: cut inputs,
+callers, config, data and steps one at a time, re-running the loop after each cut. Done
+when every remaining element is load-bearing — removing any one turns the loop green. The
+minimal repro leaves fewer parts to suspect and becomes the regression test.
+
+**Hypothesise.** List 3-5 ranked hypotheses before testing any; the first plausible idea
+anchors. Each states its prediction: "if X is the cause, changing Y makes the bug
+disappear." No prediction, no hypothesis — sharpen it or drop it. Show the list to the
+user before testing, since they may re-rank it or rule one out; proceed on your ranking if
+they are away.
+
 ## When to use
 
 - The error happens deep in execution, not at the entry point
@@ -110,6 +123,8 @@ async function gitInit(directory: string) {
 - In tests, use `console.error` — a logger may be suppressed.
 - Include directory, cwd, env vars, timestamps.
 - `new Error().stack` shows the complete chain; grep the run: `npm test 2>&1 | grep 'DEBUG git init'`.
+- A **performance** regression is not found with logs: take a baseline measurement (timing
+  harness, profiler, query plan), then bisect. Measure first, fix second.
 - Give each probe a **unique** tag (e.g. `[DEBUG-a4f2]`, not a bare `DEBUG`) — cleanup is then one grep and no untagged log outlives the fix.
 - Look for test file names and line numbers in the trace; find the repeated pattern (same test? same parameter?).
 

@@ -15,6 +15,7 @@ claim. If you haven't run the verification in this message, you cannot claim it 
 | Regression test works | Full red-green cycle verified (write → fail → fix → pass) | Test passes once |
 | Agent / subagent done | Check the **VCS diff** — the actual changes | The agent's word ("success") |
 | Requirements met | Line-by-line checklist against the spec | Tests passing |
+| An external fact (an API's behavior, a version, what a spec says) | The owning source, read this session: official docs, the library's source, the spec, or running it | A blog post or answer site; memory; a remembered version number |
 
 ## Rationalizations
 
@@ -25,5 +26,6 @@ claim. If you haven't run the verification in this message, you cannot claim it 
 | "Just this once" | No exceptions. |
 | "Linter passed" | Linter ≠ compiler. |
 | "Agent said success" | Verify independently — read the diff. |
+| "I remember how that API works" | Memory is not evidence — read the source that owns it. |
 | "Partial check is enough" | Partial proves nothing. |
 | "I'll commit now and verify after" | The commit / push / PR *is* the claim — verify before it lands, not after. |

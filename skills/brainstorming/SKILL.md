@@ -49,8 +49,9 @@ The compressed path runs steps 1 → (2 at compressed depth ⇄ steps 3-4, propo
 - **`/debate`** — for a Major or genuinely-contested architecture decision at the "propose approaches" step, you MAY suggest convening `/debate` (3 frontier models, surfaces disagreement). User opts in; reserve it for hard calls.
 - **Throwaway prototype** — when a state-model or logic question resists paper
   discussion (the answer needs to be *run*, not argued), offer a minimal throwaway
-  prototype: one command to run (or a single HTML file opened by double-click, which a
-  non-developer can drive and you can share), no polish, state shown after every action. It
+  prototype: it opens by stating the question it answers, then one command to run (or a
+  single HTML file opened by double-click, which a non-developer can drive and you can
+  share), no polish, state shown after every action. It
   lives on a throwaway branch — main keeps only the validated decision — and is
   exploration under the gate, never grown into the implementation.
 
@@ -108,6 +109,7 @@ its other sources are listed in `references/doc-types.md`.
 1. **Placeholders** — any TBD/TODO/vague requirement? Fill it.
 2. **Consistency** — do sections contradict? Does the architecture match the features?
 3. **Scope** — focused enough for one item, or does it need decomposition?
+   If it needs splitting, cut vertical slices: each runs through every layer and can be verified on its own, never one layer at a time. Make the code easy to change first, then make the change. A wide mechanical change (renaming a column, retyping a shared symbol) is not a slice: expand (add the new form beside the old), migrate the callers in batches, then contract (delete the old form once no caller remains).
 4. **Ambiguity** — any requirement readable two ways? Pick one, make it explicit.
 5. **AC** — is every one an outcome rather than a step, and does each name its check? Does the set cover the design?
 
@@ -116,5 +118,7 @@ its other sources are listed in `references/doc-types.md`.
 After self-review, ask the user to review the item before proceeding:
 
 > "Item written to `<path>` (gitignored, not committed) — design, residue manifest and acceptance criteria. Review it, and the AC especially: they are the contract I build and review against, and I won't change them on my own. Tell me if you want changes before execution starts."
+
+When the session is already long (many turns, or many files read), add one line to that message: the item holds the design, residue manifest and AC, so the user may `/clear` and ask to execute it from the item instead of building in this window. Offer it once; never clear or compact on your own, and say nothing of it in a short session.
 
 Wait. On requested changes, revise and re-run self-review. On approval, run step 9's premise check and invoke `executing` — and nothing else.

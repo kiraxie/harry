@@ -68,7 +68,7 @@ for fear of silent expansion.
 
 **Ask one question at a time, and wait for the answer before asking the next.** A
 question carries its recommended answer, so the user reacts to a proposal, not a blank
-prompt. This holds in both phases and on both builds — a single question needs no
+prompt. Word it so "yes" accepts that recommendation. This holds in both phases and on both builds — a single question needs no
 picker and no numbering, so there is nothing for a harness to do differently.
 
 **Batching is opt-in only**, on the user's explicit request, never a default. The
