@@ -171,31 +171,29 @@ kind has exactly one form:
 - A law: HARRY.md **Evidence**, with only whitespace between — no possessive, comma or colon,
   and never the law name in plain text or a section number (`§N`).
 - An audit dimension: dimension **Low-value tests**, by the name of a `##` heading of
-  `references/audit/SCAN-DIMENSIONS.md`, never by number, wherever the text names the
-  dimension: sending a reader to its section, assigning it to an agent, weighting a run toward
-  it. The one exception is the literal `dimension` value a finding carries, as in "a
-  `low-value-tests` finding": write the slug from its Slug line, in a code span.
-  `tests/audit-dimension-slugs.test.ts` reads the audit prose, and the text of a fence that
-  opens and closes with a line of three backticks at the left margin: a hyphenated code span
-  must be a term the schema defines; the sites that list which dimensions a rule applies to must
-  name the dimensions `validate-findings.cjs` NAMES applies it to; a hyphenated slug outside a
-  code span fails unless it is plain English there, as `dead-code` is; and a citation such as
-  dimension **Low-value tests** inside such a fence must name a `##` heading of
-  `references/audit/SCAN-DIMENSIONS.md`, as one outside a fence must. Any other fence is not
-  read, and no test checks that any other slug names the right dimension.
+  `references/audit/SCAN-DIMENSIONS.md`, never by number, wherever the text names the dimension:
+  sending a reader to its section, assigning it to an agent, weighting a run toward it. The one
+  exception is the literal `dimension` value a finding carries, as in "a `low-value-tests` finding":
+  write the slug from its Slug line, in a code span. `tests/audit-dimension-slugs.test.ts` holds the
+  audit prose to four rules, inside every fence with no info string too: write a hyphenated code
+  span only for a term the schema defines; where the text lists the dimensions a rule applies to,
+  list the ones `validate-findings.cjs` NAMES applies it to; put a hyphenated slug in a code span
+  unless it is plain English there, as `dead-code` is; and cite a dimension by a `##` heading of
+  `references/audit/SCAN-DIMENSIONS.md`. No test checks that any other slug names the right
+  dimension.
 
 The name is the core name: the heading or bold step label without a leading `N. `, a trailing
 ` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
 standing. It must be unique in its file.
 
-The test reads Markdown as GitHub renders it (CommonMark plus GitHub's extensions, such as
-tables): bold is what renders bold, and nothing in a code block or an HTML block is read. It adds
-only these rules. A `**` that renders as asterisks fails. A quote is `“…”`, `‘…’`, `"…"` or
-`'…'` within one paragraph, and a straight single quote opens only after a character that is not
-a letter or digit and closes only before one, so an apostrophe never opens one. A path counts
-with or without backticks; without them, only when it ends in `.md` or names a tracked file or
-directory. A code span that holds only a path is read as that path, and no other code span is
-read. Front matter is read as prose.
+`tests/citations.ts` reads Markdown as GitHub renders it (CommonMark plus GitHub's extensions, such
+as tables): bold is what renders bold, and it reads nothing in a code block or an HTML block. It
+adds only these rules. A `**` that renders as asterisks fails. A quote is `“…”`, `‘…’`, `"…"` or
+`'…'` within one paragraph, and a straight single quote opens only after a character that is not a
+letter or digit and closes only before one, so an apostrophe never opens one. A path counts with or
+without backticks; without them, only when it ends in `.md` or names a tracked file or directory. A
+code span that holds only a path is read as that path, and no other code span is read. Front matter
+is read as prose.
 
 The test reads three things as citation attempts, and each must be in the form above:
 
