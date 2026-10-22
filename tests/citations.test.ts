@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  blockDimensionFailures,
   citationAttempts,
   citeFailures,
   dimensionFailures,
@@ -14,6 +15,7 @@ import {
   lawFailures,
   lawLabelFailures,
   legacyHits,
+  lineOf,
   namesIn,
   plainNameCitations,
   type Repo,
@@ -214,10 +216,12 @@ for (const [label, body, expected] of FENCE_BODY_ROWS)
 
 test("a dimension citation on an indented line of a fence body is checked", () => {
   const body = "intro\n\n    dimension **Dead codes**";
-  assert.deepEqual(dimensionFailures(repo, body, fenceBlocks), {
-    seen: 1,
-    failures: ['3 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Dead codes"'],
-  });
+  assert.deepEqual(
+    fenceBlocks(body).flatMap((b) =>
+      blockDimensionFailures(repo, b).map((f) => `${lineOf(body, b.at + f.at)} -> ${f.failure}`),
+    ),
+    ['3 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Dead codes"'],
+  );
 });
 
 test("each legacy form matches its samples and names the form to use", () => {

@@ -311,9 +311,8 @@ const checkEach = (
   text: string,
   re: RegExp,
   judge: (m: RegExpExecArray, name: string) => string | null,
-  read: (text: string) => Block[] = blocks,
 ): Checked => {
-  const found = read(text).flatMap((b) => leads(b, re));
+  const found = blocks(text).flatMap((b) => leads(b, re));
   return {
     seen: found.length,
     failures: found.flatMap(({ at, m, bold }) => {
@@ -348,17 +347,17 @@ export const lawLabelFailures = (jsonl: string): Checked => {
   };
 };
 
-export const dimensionFailures = (
-  repo: Repo,
-  text: string,
-  read: (text: string) => Block[] = blocks,
-): Checked =>
-  checkEach(
-    text,
-    DIMENSION_CITE_RE,
-    (_, name) => resolveCitation(repo, SCAN_DIMENSIONS, name, 2),
-    read,
-  );
+const dimensionFailure = (repo: Repo, name: string): string | null =>
+  resolveCitation(repo, SCAN_DIMENSIONS, name, 2);
+
+export const dimensionFailures = (repo: Repo, text: string): Checked =>
+  checkEach(text, DIMENSION_CITE_RE, (_, name) => dimensionFailure(repo, name));
+
+export const blockDimensionFailures = (repo: Repo, b: Block): { at: number; failure: string }[] =>
+  leads(b, DIMENSION_CITE_RE).flatMap(({ at, bold }) => {
+    const failure = dimensionFailure(repo, cleanName(bold.name));
+    return failure ? [{ at: at - b.at, failure }] : [];
+  });
 
 const citeTarget = (repo: Repo, cited: string): string | null => {
   const target = cited.endsWith(".md") ? cited : `${cited}/SKILL.md`;

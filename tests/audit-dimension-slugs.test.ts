@@ -5,8 +5,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   type Block,
+  blockDimensionFailures,
   blocks,
-  dimensionFailures,
+  type Fence,
   fenceBlocks,
   fences,
   lineOf,
@@ -67,6 +68,8 @@ test("each scan dimension opens with its schema slug, in the schema's order", ()
 
 type Read = { rel: string; block: Block; fenced: boolean; lineAt: (i: number) => number };
 
+const untagged = (text: string): Fence[] => fences(text).filter((fence) => !fence.info);
+
 const proseOf = (rel: string, text: string): Read[] => [
   ...blocks(text).map((block) => ({
     rel,
@@ -74,16 +77,14 @@ const proseOf = (rel: string, text: string): Read[] => [
     fenced: false,
     lineAt: (i: number) => lineOf(text, block.at + i),
   })),
-  ...fences(text)
-    .filter((fence) => !fence.info)
-    .flatMap((fence) =>
-      fenceBlocks(fence.text).map((block) => ({
-        rel,
-        block,
-        fenced: true,
-        lineAt: (i: number) => fence.line + lineOf(fence.text, block.at + i) - 1,
-      })),
-    ),
+  ...untagged(text).flatMap((fence) =>
+    fenceBlocks(fence.text).map((block) => ({
+      rel,
+      block,
+      fenced: true,
+      lineAt: (i: number) => fence.line + lineOf(fence.text, block.at + i) - 1,
+    })),
+  ),
 ];
 const AUDIT_READS = AUDIT_PROSE.flatMap((rel) => proseOf(rel, raw(rel)));
 
@@ -220,9 +221,7 @@ test("a hyphenated slug in audit prose sits in a code span unless it is plain En
 });
 
 const UNTAGGED = AUDIT_PROSE.flatMap((rel) =>
-  fences(raw(rel))
-    .filter((fence) => !fence.info)
-    .map((fence) => ({ rel, ...fence })),
+  untagged(raw(rel)).map((fence) => ({ rel, ...fence })),
 );
 
 test("every line holding a word in an untagged audit fence is read", () => {
@@ -248,14 +247,29 @@ const scanDimensions: Repo = {
   names: () => namesIn(raw(SCAN_DIMENSIONS)),
 };
 
+const fencedDimensions = (reads: Read[]): string[] =>
+  reads
+    .filter((read) => read.fenced)
+    .flatMap(({ rel, block, lineAt }) =>
+      blockDimensionFailures(scanDimensions, block).map(
+        ({ at, failure }) => `${rel}:${lineAt(at)} -> ${failure}`,
+      ),
+    );
+
+test("the fenced dimension check reads a fence as an agent does", () => {
+  assert.deepEqual(
+    fencedDimensions(proseOf("x.md", "```\nintro\n\n    dimension **Dead codes**\n```\n")),
+    ['x.md:4 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Dead codes"'],
+  );
+  assert.deepEqual(
+    fencedDimensions(proseOf("x.md", "```json\ndimension **Dead codes**\n```\n")),
+    [],
+  );
+});
+
 test("a dimension named inside a fence in audit prose is a SCAN-DIMENSIONS heading", () => {
   assert.deepEqual(
-    UNTAGGED.flatMap(({ rel, text, line }) =>
-      dimensionFailures(scanDimensions, text, fenceBlocks).failures.map((failure) => {
-        const [, at = "1", message] = /^(\d+) -> (.*)$/s.exec(failure) ?? [];
-        return `${rel}:${line + Number(at) - 1} -> ${message}`;
-      }),
-    ),
+    fencedDimensions(AUDIT_READS),
     [],
     "a fenced dimension name no SCAN-DIMENSIONS ## heading has",
   );
