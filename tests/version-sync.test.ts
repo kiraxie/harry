@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 // `src/lib/version.ts` single-sources PLUGIN_VERSION from package.json, but the
 // plugin manifests each carry an independently hand-maintained `version`.
@@ -37,4 +38,13 @@ test("package.json and every version-carrying manifest declare the same version"
     pkg,
     ".claude-plugin/marketplace.json plugins[harry].version",
   );
+});
+
+test("the bundle inlines package.json's version and nothing else from it", () => {
+  const bundle = readFileSync(new URL("../dist/companion.cjs", import.meta.url), "utf-8");
+  const inlined = /\/\/ package\.json\nvar \w+ = (\{[\s\S]*?\});\n/.exec(bundle);
+  assert.ok(inlined, "dist/companion.cjs inlines no package.json object");
+  const pkg = runInNewContext(`(${inlined[1]})`) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(pkg), ["version"]);
+  assert.equal(pkg.version, versionOf("../package.json"));
 });

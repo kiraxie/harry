@@ -761,41 +761,7 @@ Log: ${logPath}
 }
 
 // package.json
-var package_default = {
-  name: "harry",
-  version: "0.25.0",
-  description: "Personal engineering workflow plugin distilled from Superpowers + ponytail, fused with multi-model review/debate.",
-  type: "module",
-  license: "MIT",
-  author: "kiraxie <kiraxie11287@gmail.com>",
-  homepage: "https://github.com/kiraxie/harry",
-  repository: "https://github.com/kiraxie/harry",
-  engines: {
-    node: ">=26.0.0"
-  },
-  packageManager: "pnpm@12.5.1",
-  scripts: {
-    build: "node build.mjs",
-    test: "node --test",
-    typecheck: "tsc -p tsconfig.json --noEmit",
-    lint: "biome check .",
-    format: "biome format --write .",
-    "install-laws": "node scripts/install.mjs",
-    "install-laws-codex": "node scripts/install-codex.mjs",
-    "init-ignore": "node scripts/init.mjs",
-    evals: "node scripts/run-evals.mts"
-  },
-  dependencies: {},
-  devDependencies: {
-    "@biomejs/biome": "^2.5.14",
-    "@types/node": "^26.6.2",
-    esbuild: "^0.28.2",
-    "mdast-util-from-markdown": "^2.1.0",
-    "mdast-util-gfm": "^3.1.0",
-    "micromark-extension-gfm": "^3.0.0",
-    typescript: "^7.0.2"
-  }
-};
+var package_default = { version: "0.25.0" };
 
 // src/lib/version.ts
 var PLUGIN_VERSION = package_default.version;
