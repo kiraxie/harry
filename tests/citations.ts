@@ -124,8 +124,13 @@ const sources = (text: string): string[] => {
   return [blank(open) + body, blank(all) + text.slice(all.length)];
 };
 
-const parse = (src: string): MdNode =>
-  fromMarkdown(src, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
+const FENCE_BODY = { disable: { null: ["codeIndented", "definition", "htmlFlow", "htmlText"] } };
+
+const parse = (src: string, body = false): MdNode =>
+  fromMarkdown(src, {
+    extensions: body ? [gfm(), FENCE_BODY] : [gfm()],
+    mdastExtensions: [gfmFromMarkdown()],
+  });
 
 const offset = (node: MdNode, edge: "start" | "end"): number => node.position?.[edge].offset ?? 0;
 
@@ -142,7 +147,7 @@ const contentRange = (node: MdNode): [number, number] | null => {
 
 const PATH_ONLY_RE = new RegExp(String.raw`^(?:~[\w.-]*\/|\$\w+\/|\/)?${PATH_SRC}\/?$`);
 
-export type CodeSpan = { from: number; to: number; path: boolean };
+export type CodeSpan = { from: number; to: number; value: string; path: boolean };
 type Bold = { at: number; end: number; name: string };
 export type Block = {
   at: number;
@@ -172,7 +177,7 @@ const toBlock = (src: string, node: MdNode): Block | null => {
     const from = offset(n, "start") - at;
     const end = offset(n, "end") - at;
     if (n.type === "inlineCode")
-      code.push({ from, to: end, path: PATH_ONLY_RE.test(n.value ?? "") });
+      code.push({ from, to: end, value: n.value ?? "", path: PATH_ONLY_RE.test(n.value ?? "") });
     else if (n.type === "strong") bold.push({ at: from, end, name: text.slice(from + 2, end - 2) });
     else if (n.type === "text")
       for (const run of text.slice(from, end).matchAll(/\*{2,}/g))
@@ -186,8 +191,8 @@ const toBlock = (src: string, node: MdNode): Block | null => {
   return { at, text, masked, code, bold, stray };
 };
 
-export const blocks = (text: string): Block[] =>
-  sources(text).flatMap((src) => {
+export const blocks = (text: string, body = false): Block[] =>
+  (body ? [text] : sources(text)).flatMap((src) => {
     const found: Block[] = [];
     const visit = (node: MdNode): void => {
       if (!PROSE_BLOCKS.has(node.type)) for (const child of node.children ?? []) visit(child);
@@ -196,9 +201,11 @@ export const blocks = (text: string): Block[] =>
         if (block) found.push(block);
       }
     };
-    visit(parse(src));
+    visit(parse(src, body));
     return found;
   });
+
+export const fenceBlocks = (text: string): Block[] => blocks(text, true);
 
 export type Fence = { info: string; text: string; line: number };
 
@@ -304,8 +311,9 @@ const checkEach = (
   text: string,
   re: RegExp,
   judge: (m: RegExpExecArray, name: string) => string | null,
+  read: (text: string) => Block[] = blocks,
 ): Checked => {
-  const found = blocks(text).flatMap((b) => leads(b, re));
+  const found = read(text).flatMap((b) => leads(b, re));
   return {
     seen: found.length,
     failures: found.flatMap(({ at, m, bold }) => {
@@ -340,8 +348,17 @@ export const lawLabelFailures = (jsonl: string): Checked => {
   };
 };
 
-export const dimensionFailures = (repo: Repo, text: string): Checked =>
-  checkEach(text, DIMENSION_CITE_RE, (_, name) => resolveCitation(repo, SCAN_DIMENSIONS, name, 2));
+export const dimensionFailures = (
+  repo: Repo,
+  text: string,
+  read: (text: string) => Block[] = blocks,
+): Checked =>
+  checkEach(
+    text,
+    DIMENSION_CITE_RE,
+    (_, name) => resolveCitation(repo, SCAN_DIMENSIONS, name, 2),
+    read,
+  );
 
 const citeTarget = (repo: Repo, cited: string): string | null => {
   const target = cited.endsWith(".md") ? cited : `${cited}/SKILL.md`;

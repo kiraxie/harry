@@ -7,6 +7,7 @@ import {
   citationAttempts,
   citeFailures,
   dimensionFailures,
+  fenceBlocks,
   fences,
   LEGACY_FORMS,
   lawAttempts,
@@ -181,6 +182,43 @@ for (const [label, src, expected] of FENCE_ROWS)
   test(`fences: ${label}`, () => {
     assert.deepEqual(fences(src), expected);
   });
+
+const FENCE_BODY_ROWS: [string, string, { text: string; code: string[] }[]][] = [
+  [
+    "an indented line, an HTML line and a link definition in a fence are read as prose",
+    "Agent brief:\n\n    focus on `low-value-tests` first\n\n<low-value-tests>\n\n[x]: url",
+    [
+      { text: "Agent brief:", code: [] },
+      { text: "focus on `low-value-tests` first", code: ["`low-value-tests`"] },
+      { text: "<low-value-tests>", code: [] },
+      { text: "[x]: url", code: [] },
+    ],
+  ],
+  [
+    "a three-backtick fence inside a fence body is not read",
+    "a\n```\nb\n```",
+    [{ text: "a", code: [] }],
+  ],
+];
+
+for (const [label, body, expected] of FENCE_BODY_ROWS)
+  test(`fence body: ${label}`, () => {
+    assert.deepEqual(
+      fenceBlocks(body).map((b) => ({
+        text: b.text,
+        code: b.code.map((c) => b.text.slice(c.from, c.to)),
+      })),
+      expected,
+    );
+  });
+
+test("a dimension citation on an indented line of a fence body is checked", () => {
+  const body = "intro\n\n    dimension **Dead codes**";
+  assert.deepEqual(dimensionFailures(repo, body, fenceBlocks), {
+    seen: 1,
+    failures: ['3 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Dead codes"'],
+  });
+});
 
 test("each legacy form matches its samples and names the form to use", () => {
   for (const { label, re, samples } of LEGACY_FORMS)
