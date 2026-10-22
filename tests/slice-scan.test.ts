@@ -450,3 +450,92 @@ test("every allowlist entry matches exactly one line in its file", () => {
     "remove a stale entry; give a repeated line its own reason or route it through tests/section.ts",
   );
 });
+
+const SPAN_OWNER = "citations.ts";
+const CODE_SPAN = /`[([]/;
+
+const codeSpanReads = (src: string): { line: number; text: string }[] =>
+  literals(src)
+    .filter((lit) => lit.kind === "regex" && CODE_SPAN.test(lit.body))
+    .map((lit) => ({
+      line: src.slice(0, lit.at).split("\n").length,
+      text: src.slice(lit.at, lit.end),
+    }));
+
+test("the code-span scan catches a read of a span's content and nothing else", () => {
+  assert.deepEqual(
+    ["const m = /`([^`]+)`/g;", "line.match(/`[a-z-]+`/);"].filter(
+      (src) => codeSpanReads(src).length === 0,
+    ),
+    [],
+    "a known code-span read now passes the scan",
+  );
+  assert.deepEqual(
+    ["assert.match(text, /`low-value-tests`/);"].filter((src) => codeSpanReads(src).length > 0),
+    [],
+    "the scan now flags a regex that reads no code span's content",
+  );
+});
+
+const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
+  {
+    file: "audit-dimension-slugs.test.ts",
+    text: "/^\\*\\*Slug:\\*\\* `([^`]+)`$/",
+    why: "the Slug line's exact form is the contract under test",
+  },
+  {
+    file: "release-state.test.ts",
+    text: "/`([^`]*<version>[^`]*)`/",
+    why: "the commit subject release.md writes, compared with the script's",
+  },
+  {
+    file: "release-state.test.ts",
+    text: "/`((?:git )?grep [^`]*)`/g",
+    why: "the grep commands release.md runs, compared with the script's token boundary",
+  },
+  {
+    file: "release-state.test.ts",
+    text: "/`([a-z-]+)`/g",
+    why: "the state names release.md lists, compared with the script's",
+  },
+  {
+    file: "review-cli.test.ts",
+    text: "/`([^`]+\\.md)`/g",
+    why: "the paths on the rubric's Standard files line",
+  },
+  {
+    file: "review-cli.test.ts",
+    text: "/`([^`]+\\.md)` \\*\\*([^*]+)\\*\\*/g",
+    why: "the path and heading pairs on the rubric's Re-review standard line",
+  },
+  {
+    file: "session-writes.test.ts",
+    text: "/`(mech|writer|security)`/",
+    why: "three retired role names in a code span; it reads no span's content",
+  },
+];
+
+const spanReads = (): { file: string; line: number; text: string }[] =>
+  [...scanned(), OWNER]
+    .filter((file) => file !== SPAN_OWNER)
+    .flatMap((file) =>
+      codeSpanReads(readFileSync(path.join(testsDir, file), "utf-8")).map((r) => ({
+        file,
+        ...r,
+      })),
+    );
+
+test("no test in tests/ reads code spans on its own", () => {
+  const own = spanReads()
+    .filter((r) => !CODE_SPAN_ALLOWED.some((a) => a.file === r.file && a.text === r.text))
+    .map((r) => `${r.file}:${r.line}: ${r.text}`);
+  assert.deepEqual(
+    own,
+    [],
+    `read code spans through tests/citations.ts blocks(), or add an allowlist entry with its reason:\n${own.join("\n")}`,
+  );
+});
+
+test("every code-span allowlist entry matches exactly one read", () => {
+  assert.deepEqual(staleEntries(CODE_SPAN_ALLOWED, spanReads()), [], "remove a stale entry");
+});
