@@ -10,7 +10,8 @@ export type Repo = {
   names: (rel: string) => Name[];
 };
 
-const lineOf = (text: string, index?: number): number => text.slice(0, index).split("\n").length;
+export const lineOf = (text: string, index?: number): number =>
+  text.slice(0, index).split("\n").length;
 
 export const LAW_HEADINGS = [
   "Priority",
@@ -108,6 +109,8 @@ type MdNode = {
   children?: MdNode[];
   value?: string;
   depth?: number;
+  lang?: string | null;
+  meta?: string | null;
 };
 
 const FRONT_MATTER_RE = /^(---\r?\n)([\s\S]*?\r?\n)---[ \t]*(?=\r?\n|$)/;
@@ -139,9 +142,9 @@ const contentRange = (node: MdNode): [number, number] | null => {
 
 const PATH_ONLY_RE = new RegExp(String.raw`^(?:~[\w.-]*\/|\$\w+\/|\/)?${PATH_SRC}\/?$`);
 
-type CodeSpan = { from: number; to: number; path: boolean };
+export type CodeSpan = { from: number; to: number; path: boolean };
 type Bold = { at: number; end: number; name: string };
-type Block = {
+export type Block = {
   at: number;
   text: string;
   masked: string;
@@ -183,7 +186,7 @@ const toBlock = (src: string, node: MdNode): Block | null => {
   return { at, text, masked, code, bold, stray };
 };
 
-const blocks = (text: string): Block[] =>
+export const blocks = (text: string): Block[] =>
   sources(text).flatMap((src) => {
     const found: Block[] = [];
     const visit = (node: MdNode): void => {
@@ -196,6 +199,22 @@ const blocks = (text: string): Block[] =>
     visit(parse(src));
     return found;
   });
+
+export type Fence = { info: string; text: string; line: number };
+
+const FENCE_OPEN_RE = /^(?:`{3,}|~{3,})/;
+
+export const fences = (text: string): Fence[] => {
+  const src = sources(text).at(-1) ?? text;
+  const found: Fence[] = [];
+  walk(parse(src), (node) => {
+    const at = offset(node, "start");
+    if (node.type !== "code" || !FENCE_OPEN_RE.test(src.slice(at))) return;
+    const info = [node.lang, node.meta].filter(Boolean).join(" ");
+    found.push({ info, text: node.value ?? "", line: lineOf(src, at) + 1 });
+  });
+  return found;
+};
 
 const spanAt = (spans: CodeSpan[], at: number): CodeSpan | undefined =>
   spans.find((s) => at >= s.from && at < s.to);
@@ -269,7 +288,7 @@ export const legacyHits = (text: string): string[] => {
 
 const DIMENSION_CITE_RE = /\bdimensions?\s+/gi;
 
-const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
+export const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
 
 type Checked = { seen: number; failures: string[] };
 

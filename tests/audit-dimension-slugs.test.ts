@@ -3,7 +3,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { dimensionFailures, namesIn, type Repo } from "./citations.ts";
+import {
+  blocks,
+  dimensionFailures,
+  fences,
+  lineOf,
+  namesIn,
+  type Repo,
+  SCAN_DIMENSIONS,
+} from "./citations.ts";
 import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, under } from "./prose-dirs.ts";
 import { confirmedBranch, NAMES, SCHEMA } from "./report-schema.ts";
 import { headingSection, outline } from "./section.ts";
@@ -118,13 +126,31 @@ const PLAIN_ENGLISH = [
   "test-coverage",
 ];
 
+type Unit = { rel: string; text: string; line: number; fenced: boolean };
+
+const units = (rel: string): Unit[] => [
+  { rel, text: raw(rel), line: 1, fenced: false },
+  ...fences(raw(rel))
+    .filter((fence) => !fence.info)
+    .map((fence) => ({ rel, text: fence.text, line: fence.line, fenced: true })),
+];
+const AUDIT_UNITS = AUDIT_PROSE.flatMap(units);
+const at = (unit: Unit, line: number): string => `${unit.rel}:${unit.line + line - 1}`;
+
 test("a hyphenated slug in audit prose sits in a code span unless it is plain English", () => {
-  const bare = AUDIT_PROSE.flatMap((rel) =>
-    outline(raw(rel)).flatMap((line, i) => {
-      const prose = line.text.replace(/`[^`]*`/g, " ");
-      return SLUGS.filter(
-        (slug) => slug.includes("-") && new RegExp(`(?<![\\w-])${slug}(?![\\w-])`, "i").test(prose),
-      ).map((slug) => ({ slug, at: `${rel}:${i + 1}` }));
+  const bare = AUDIT_UNITS.flatMap((unit) =>
+    blocks(unit.text).flatMap((block) => {
+      const prose = block.code.reduce(
+        (text, span) =>
+          text.slice(0, span.from) + " ".repeat(span.to - span.from) + text.slice(span.to),
+        block.text,
+      );
+      return SLUGS.filter((slug) => slug.includes("-")).flatMap((slug) =>
+        [...prose.matchAll(new RegExp(`(?<![\\w-])${slug}(?![\\w-])`, "gi"))].map((m) => ({
+          slug,
+          at: at(unit, lineOf(unit.text, block.at + (m.index ?? 0))),
+        })),
+      );
     }),
   );
   assert.deepEqual(
@@ -141,37 +167,19 @@ test("a hyphenated slug in audit prose sits in a code span unless it is plain En
   );
 });
 
-type Fence = { at: number; text: string };
-
-const fences = (rel: string): Fence[] => {
-  const found: Fence[] = [];
-  let open: { at: number; lines: string[] } | undefined;
-  for (const [i, line] of outline(raw(rel)).entries()) {
-    if (!line.fenced) continue;
-    if (!/^\s*`{3,}/.test(line.text)) open?.lines.push(line.text);
-    else if (!open) open = { at: i + 2, lines: [] };
-    else {
-      found.push({ at: open.at, text: open.lines.join("\n") });
-      open = undefined;
-    }
-  }
-  return found;
-};
-
-const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
 const scanDimensions: Repo = {
   kind: (rel) => (rel === SCAN_DIMENSIONS ? "file" : "untracked"),
   names: () => namesIn(raw(SCAN_DIMENSIONS)),
 };
 
 test("a dimension named inside a fence in audit prose is a SCAN-DIMENSIONS heading", () => {
-  const fenced = AUDIT_PROSE.flatMap((rel) => fences(rel).map((fence) => ({ rel, ...fence })));
-  assert.ok(fenced.length > 0, "the audit prose holds no fenced block");
+  const fenced = AUDIT_UNITS.filter((unit) => unit.fenced);
+  assert.ok(fenced.length > 0, "the audit prose holds no untagged fence");
   assert.deepEqual(
-    fenced.flatMap(({ rel, at, text }) =>
-      dimensionFailures(scanDimensions, text).failures.map((failure) => {
+    fenced.flatMap((unit) =>
+      dimensionFailures(scanDimensions, unit.text).failures.map((failure) => {
         const [, line = "1", message] = /^(\d+) -> (.*)$/s.exec(failure) ?? [];
-        return `${rel}:${at + Number(line) - 1} -> ${message}`;
+        return `${at(unit, Number(line))} -> ${message}`;
       }),
     ),
     [],

@@ -7,6 +7,7 @@ import {
   citationAttempts,
   citeFailures,
   dimensionFailures,
+  fences,
   LEGACY_FORMS,
   lawAttempts,
   lawFailures,
@@ -149,6 +150,37 @@ test("Markdown is read as GitHub renders it", () => {
     "a citation in a heading or a table cell is not read",
   );
 });
+
+const FENCE_ROWS: [string, string, { info: string; text: string; line: number }[]][] = [
+  [
+    "a four-backtick fence holding a three-backtick line is one fence",
+    "````\na\n```\nb\n````\n",
+    [{ info: "", text: "a\n```\nb", line: 2 }],
+  ],
+  [
+    "a fence under a nested list item is read",
+    "- a\n  - b\n\n    ```\n    x\n    ```\n",
+    [{ info: "", text: "x", line: 5 }],
+  ],
+  [
+    "an unclosed fence runs to the end of its container",
+    "> ```\n> x\n\nafter\n",
+    [{ info: "", text: "x", line: 2 }],
+  ],
+  ["a ~~~ fence is read", "~~~\nx\n~~~\n", [{ info: "", text: "x", line: 2 }]],
+  [
+    "a fence tagged json carries its tag",
+    "```json\n{}\n```\n",
+    [{ info: "json", text: "{}", line: 2 }],
+  ],
+  ["an untagged fence is read", "intro\n\n```\nx\ny\n```\n", [{ info: "", text: "x\ny", line: 4 }]],
+  ["an indented code block is not read", "intro\n\n    x\n", []],
+];
+
+for (const [label, src, expected] of FENCE_ROWS)
+  test(`fences: ${label}`, () => {
+    assert.deepEqual(fences(src), expected);
+  });
 
 test("each legacy form matches its samples and names the form to use", () => {
   for (const { label, re, samples } of LEGACY_FORMS)
