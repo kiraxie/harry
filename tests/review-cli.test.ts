@@ -30,7 +30,13 @@ import test from "node:test";
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
 import { buildReviewPrompt, type ReviewPromptInput } from "../src/lib/review-modes.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import {
+  PROSE_DIRS,
+  PROSE_NON_MD_FILES,
+  proseStrings,
+  REPO_TOP_LEVEL,
+  SHIPPED_TOP_LEVEL,
+} from "./prose-dirs.ts";
 import { headingSection, inOrder, outline, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -1379,19 +1385,15 @@ test("AC-11: only the review doors, CLAUDE.md's runtime section and README name 
       .filter((para) => para.includes("codex exec review"))
       .map((para) => `${rel}: ${para.slice(0, 80)}`);
   });
-  const strings = (value: unknown): string[] =>
-    typeof value === "string"
-      ? [value]
-      : Array.isArray(value)
-        ? value.flatMap(strings)
-        : value && typeof value === "object"
-          ? Object.values(value).flatMap(strings)
-          : [];
-  const upstream = strings(JSON.parse(readFileSync(path.join(REPO_ROOT, "upstream.json"), "utf8")))
-    .filter((text) => text.includes("codex exec review"))
-    .map((text) => `upstream.json: ${text.slice(0, 80)}`);
+  const nonMdHits = PROSE_NON_MD_FILES.flatMap((rel) =>
+    proseStrings(rel)
+      .flatMap((text) => text.split(/\n\s*\n/))
+      .map((text) => text.replace(/\s+/g, " "))
+      .filter((text) => text.includes("codex exec review"))
+      .map((text) => `${rel}: ${text.slice(0, 80)}`),
+  );
   assert.deepEqual(
-    [...hits, ...upstream],
+    [...hits, ...nonMdHits],
     [],
     "callers name the review mode they run, not the codex subcommand",
   );

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { PROSE_DIRS, PROSE_NON_MD_FILES, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 import { headingSection, section } from "./section.ts";
 
 // `references/grilling.md` owns the adversarial interview end to end; four callers
@@ -217,7 +217,7 @@ test("AC-5: only the user may defer a question", () => {
  * grill family only (see `PICKER_RE`'s comment).
  */
 const CADENCE_DIRS = PROSE_DIRS;
-const CADENCE_TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, "upstream.json"];
+const CADENCE_TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, ...PROSE_NON_MD_FILES];
 
 function cadenceCorpus(): string[] {
   const files = [...CADENCE_TOP_LEVEL];

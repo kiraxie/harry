@@ -26,9 +26,12 @@ import {
 } from "./citations.ts";
 import {
   PROSE_DIRS as INSTRUCTION_DIRS,
+  PROSE_NON_MD_FILES,
+  REPO_LOCAL_DATA_FILES,
   REPO_LOCAL_DIRS,
   REPO_LOCAL_PROSE_DIRS,
   REPO_TOP_LEVEL,
+  SHIPPED_DATA_FILES,
   SHIPPED_PROSE_DIRS,
   SHIPPED_TOP_LEVEL,
 } from "./prose-dirs.ts";
@@ -71,17 +74,20 @@ const resolves = (candidate: string, fileDir: string): boolean =>
   isTracked(path.join(repoRoot, candidate)) || isTracked(path.join(fileDir, candidate));
 
 const TOP_LEVEL_FILES = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
+// evals stays out of prose-dirs.ts: REPO_LOCAL_PROSE_DIRS holds only .claude/ subdirs,
+// and plain-language's corpus reads every file, where evals/cases.jsonl would trip it.
 const PROSE_DIRS = [...INSTRUCTION_DIRS, "evals"];
 
 function listMarkdownFiles(dir: string): string[] {
   return trackedFiles.filter((rel) => rel.startsWith(`${dir}/`) && rel.endsWith(".md"));
 }
 
-const proseFiles = [
+const markdownFiles = [
   ...TOP_LEVEL_FILES.filter((f) => isTracked(path.join(repoRoot, f))),
   ...PROSE_DIRS.flatMap(listMarkdownFiles),
 ].filter((f) => f !== "CHANGELOG.md");
-const citeCorpus = [...proseFiles, "upstream.json"];
+const proseFiles = [...markdownFiles, ...PROSE_NON_MD_FILES];
+const citeCorpus = proseFiles;
 
 // Three reference shapes:
 // 1. `${CLAUDE_PLUGIN_ROOT}/<path>` — path is everything after the prefix. Checked
@@ -200,7 +206,11 @@ const REPO_LOCAL_CITE_EXEMPTIONS: ReadonlyArray<{ path: string; text: string; re
 ];
 
 test("no shipped file cites a repo-local .claude/ path", () => {
-  const shipped = [...SHIPPED_TOP_LEVEL, ...SHIPPED_PROSE_DIRS.flatMap(listMarkdownFiles)];
+  const shipped = [
+    ...SHIPPED_TOP_LEVEL,
+    ...SHIPPED_DATA_FILES,
+    ...SHIPPED_PROSE_DIRS.flatMap(listMarkdownFiles),
+  ];
   const failures: string[] = [];
   const used = new Set<(typeof REPO_LOCAL_CITE_EXEMPTIONS)[number]>();
   for (const relFile of shipped) {
@@ -233,6 +243,30 @@ test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
   const prose = [...new Set(tracked.filter((f) => f.endsWith(".md")).map(dirOf))].sort();
   assert.deepEqual(all, [...REPO_LOCAL_DIRS].sort());
   assert.deepEqual(prose, [...REPO_LOCAL_PROSE_DIRS].sort());
+});
+
+test("prose-dirs.ts names every tracked non-markdown file in the prose and manifest dirs", () => {
+  const code = ["references/audit/validate-findings.cjs"];
+  assert.deepEqual(
+    code.filter((f) => !trackedFiles.includes(f)),
+    [],
+    "a stale code exemption names no tracked file — delete it",
+  );
+  const nonMd = (dirs: string[]) =>
+    trackedFiles
+      .filter((f) => dirs.some((d) => f.startsWith(`${d}/`)) && !f.endsWith(".md"))
+      .filter((f) => !code.includes(f))
+      .sort();
+  assert.deepEqual(
+    nonMd([...SHIPPED_PROSE_DIRS, ".claude-plugin", ".codex-plugin", ".agents"]),
+    [...SHIPPED_DATA_FILES].sort(),
+  );
+  assert.deepEqual(
+    nonMd(REPO_LOCAL_PROSE_DIRS),
+    REPO_LOCAL_DATA_FILES.filter((f) =>
+      REPO_LOCAL_PROSE_DIRS.some((d) => f.startsWith(`${d}/`)),
+    ).sort(),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -435,7 +469,10 @@ test("no tracked file but the changelog cites a law by the retired section-numbe
   // (test messages, scripts, eval notes, upstream.json). CHANGELOG.md is release
   // history and quotes the numbering of its day.
   const tracked = trackedFiles.filter((rel) => rel !== "CHANGELOG.md");
-  assert.ok(tracked.includes("upstream.json"), "the scan lost the tracked files");
+  assert.ok(
+    [...SHIPPED_TOP_LEVEL, ...PROSE_NON_MD_FILES].every((rel) => tracked.includes(rel)),
+    "the scan lost the tracked files",
+  );
   const hits = tracked.flatMap((rel) => {
     const text = readFileSync(path.join(repoRoot, rel), "utf-8");
     if (text.includes("\0")) return [];
