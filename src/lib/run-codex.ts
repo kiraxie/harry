@@ -1,10 +1,11 @@
 /**
  * The one place the companion spawns the Codex CLI: `spawnCodexSync` for
- * `setup`'s quick queries, `spawnCodex` for the one-shot run (`codex exec …` and
- * its subcommands) with signal forwarding, and `runCodexExec`'s failure
- * handling. Both spawn the absolute path `resolveOnPath` finds, never the bare
- * name (execvp would search the cwd); finding `codex` on PATH lives in
- * `path-search.ts`; the run files it writes into live in `run-files.ts`.
+ * `setup`'s quick queries, and `runCodexExec`, which builds the read-only
+ * `codex exec` argv every review mode and `ask` runs, spawns it with signal
+ * forwarding, and handles its failures. Both spawn the absolute path
+ * `resolveOnPath` finds, never the bare name (execvp would search the cwd);
+ * finding `codex` on PATH lives in `path-search.ts`; the run files it writes
+ * into live in `run-files.ts`.
  *
  * codex writes its whole session transcript to stderr (prompt echo, every
  * command's output) — hundreds of KB on a real run — so stderr goes to the run's
@@ -36,8 +37,8 @@ export const CODEX_CLI_MISSING =
 
 /**
  * Whether a spawn result means codex is not installed: ENOENT, which
- * {@link spawnCodex} and {@link spawnCodexSync} also report when PATH holds no
- * `codex`. A non-zero exit is never one: codex ran and failed on its own terms.
+ * {@link runCodexExec}'s spawn and {@link spawnCodexSync} also report when PATH
+ * holds no `codex`. A non-zero exit is never one: codex ran and failed on its own terms.
  */
 export function codexMissing(res: { error?: Error; status: number | null }): boolean {
   return (res.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
@@ -50,7 +51,7 @@ function codexNotFound(syscall: string): Error {
 
 /**
  * `spawnSync` for codex: `setup`'s short queries. A long run goes through
- * {@link spawnCodex}, which a signal can interrupt.
+ * {@link runCodexExec}, which a signal can interrupt.
  */
 export function spawnCodexSync(
   args: readonly string[],
@@ -65,7 +66,7 @@ export function spawnCodexSync(
 }
 
 /** How a {@link spawnCodex} run ended, in `spawnSync`'s terms. */
-export interface CodexResult {
+interface CodexResult {
   /** The exit code; null when codex never started or was killed by a signal. */
   status: number | null;
   signal: NodeJS.Signals | null;
@@ -89,11 +90,11 @@ const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ["SIGTERM", "SIGINT", "SIGH
  * own process group and signal the group — at the cost of taking codex out of
  * the terminal's foreground group, so Ctrl-C would reach it only through us.
  */
-export function spawnCodex(
+function spawnCodex(
   args: readonly string[],
-  options: { cwd: string; input: string; logFd: number; env?: NodeJS.ProcessEnv },
+  options: { cwd: string; input: string; logFd: number },
 ): Promise<CodexResult> {
-  const command = resolveOnPath("codex", options.env ?? process.env);
+  const command = resolveOnPath("codex", process.env);
   if (command === null) {
     return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
   }
@@ -117,7 +118,6 @@ export function spawnCodex(
     try {
       child = spawn(command, args, {
         cwd: options.cwd,
-        env: options.env,
         stdio: ["pipe", "ignore", options.logFd],
       });
     } catch (err) {
@@ -274,22 +274,33 @@ export function lastErrorLine(logPath: string): string | undefined {
   return last === undefined ? undefined : capLogLine(last);
 }
 
+export const CODEX_EXEC = "codex exec";
+
 export interface CodexExecInput {
-  /** Arguments after `codex`; must carry `-o <outputPath>`. */
-  args: string[];
+  /** Arguments a caller adds after the read-only sandbox, e.g. `--skip-git-repo-check`. */
+  extraArgs?: readonly string[];
+  /** Passed as `-c model_reasoning_effort="<v>"` when set. */
+  reasoning?: ReasoningEffort;
   cwd: string;
-  /** Sent on stdin (the prompt, with a trailing `-` in `args`). */
+  /** Sent on stdin: the argv ends in `-`. */
   input: string;
   outputPath: string;
   logPath: string;
-  /** Names the run in failure messages, e.g. `codex exec`. */
-  label: string;
   /** Names what `-o` should hold, e.g. `review`. */
   outputNoun: string;
 }
 
+/** The argv every `codex exec` run spawns with, behind codex's read-only sandbox. */
+function codexExecArgs(opts: CodexExecInput): string[] {
+  const args = ["exec", "--ephemeral", "-s", "read-only", ...(opts.extraArgs ?? [])];
+  args.push("-o", opts.outputPath);
+  if (opts.reasoning) args.push("-c", `model_reasoning_effort="${opts.reasoning}"`);
+  args.push("-");
+  return args;
+}
+
 /**
- * Spawn codex and return the non-empty contents of its `-o` file, ending with a
+ * Spawn `codex exec` read-only and return the non-empty contents of its `-o` file, ending with a
  * newline so a marker the caller writes to stderr after it starts its own line.
  * On `exit` and `empty` failures the log tail's error lines and `Log:` path are
  * already on stderr when the {@link CodexRunError} is thrown. Any other spawn
@@ -301,7 +312,7 @@ export async function runCodexExec(opts: CodexExecInput): Promise<string> {
   const logFd = openSync(opts.logPath, "w", 0o600);
   let res: CodexResult;
   try {
-    res = await spawnCodex(opts.args, { cwd: opts.cwd, input: opts.input, logFd });
+    res = await spawnCodex(codexExecArgs(opts), { cwd: opts.cwd, input: opts.input, logFd });
   } finally {
     closeSync(logFd);
   }
@@ -322,7 +333,7 @@ export async function runCodexExec(opts: CodexExecInput): Promise<string> {
     reportLogTail(opts.logPath);
     reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
-      `${opts.label} failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
+      `${CODEX_EXEC} failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
       "exit",
       { logPath: opts.logPath, exitStatus: res.status },
     );
@@ -333,7 +344,7 @@ export async function runCodexExec(opts: CodexExecInput): Promise<string> {
     reportLogTail(opts.logPath);
     reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
-      `${opts.label} exited 0 but wrote no ${opts.outputNoun} to ${opts.outputPath}.`,
+      `${CODEX_EXEC} exited 0 but wrote no ${opts.outputNoun} to ${opts.outputPath}.`,
       "empty",
       { logPath: opts.logPath },
     );

@@ -4,8 +4,8 @@
  * Works out the mode from its flags and checks them (the modes exclude each
  * other; a re-review or fix check needs `--base` and its handed text), resolves
  * what to review (branch vs working tree), builds the mode's prompt from its record
- * (`MODES` in `src/lib/review-modes.ts`), and runs `REVIEW_SPAWN`, the one
- * read-only codex process every mode runs, at the repo root with the prompt on stdin.
+ * (`MODES` in `src/lib/review-modes.ts`), and runs the one read-only `codex exec`
+ * every mode runs (`runCodexExec`), at the repo root with the prompt on stdin.
  * The review file is printed verbatim.
  *
  * Spawning and the loud no-fallback failure handling live in
@@ -27,11 +27,10 @@ import {
   buildReviewPrompt,
   type HandedStandard,
   MODES,
-  REVIEW_SPAWN,
   type ReviewStandard,
   takesHanded,
 } from "../lib/review-modes.ts";
-import { type ReasoningEffort, runCodexExec } from "../lib/run-codex.ts";
+import { CODEX_EXEC, type ReasoningEffort, runCodexExec } from "../lib/run-codex.ts";
 import { reserveRunFiles } from "../lib/run-files.ts";
 import { ensureDir, resolveStateDir } from "../lib/state.ts";
 
@@ -141,18 +140,13 @@ export async function runReview(cwd: string, options: ReviewOptions = {}): Promi
 
   const { reviewPath: outputPath, logPath } = reserveReviewFiles(resolveOutputDir(repoRoot));
 
-  const args = [...REVIEW_SPAWN.args, "-o", outputPath];
-  if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
-  args.push("-");
-
-  process.stderr.write(`Reviewing ${target.label} with ${REVIEW_SPAWN.label}…\n`);
+  process.stderr.write(`Reviewing ${target.label} with ${CODEX_EXEC}…\n`);
   const review = await runCodexExec({
-    args,
+    reasoning: options.reasoning,
     cwd: repoRoot,
     input: prompt,
     outputPath,
     logPath,
-    label: REVIEW_SPAWN.label,
     outputNoun: "review",
   });
   process.stdout.write(review);

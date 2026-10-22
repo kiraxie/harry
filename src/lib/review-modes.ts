@@ -4,10 +4,10 @@
  * `MODES` holds one record per mode: the flag that asks for it, the references
  * embedded as its standard (each verbatim, or the one section an entry names), its
  * target section, for a re-review or fix check the handed text's heading and the
- * `--base` it needs, and what an empty range does. Every mode runs `REVIEW_SPAWN`,
- * `codex exec` with its read-only sandbox — not `codex exec review`, which answers
- * in its own review-comment format and ignores the form a mode asks for. This is
- * where review's spawn and sandbox are set.
+ * `--base` it needs, and what an empty range does. Every mode runs `codex exec`
+ * with its read-only sandbox (`runCodexExec` in `src/lib/run-codex.ts` builds it) —
+ * not `codex exec review`, which answers in its own review-comment format and
+ * ignores the form a mode asks for.
  *
  * `codex exec` takes no review target, so the prompt itself names it: which git
  * command shows the change, and that everything outside it is context only.
@@ -135,11 +135,6 @@ const REREVIEW_MODE = [
   "- Judge each handed finding at the levels in the Three levels section above: ADDRESSED means the cause is gone, not only this instance.",
   "- Number new issues on from the last number handed, never from 1.",
 ].join("\n");
-
-export const REVIEW_SPAWN = {
-  label: "codex exec",
-  args: ["exec", "--ephemeral", "-s", "read-only"],
-} as const;
 
 interface Mode {
   files: ReadonlyArray<StandardFile>;

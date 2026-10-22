@@ -160,7 +160,7 @@ function spawnCodexSync(args, options) {
 }
 var FORWARDED_SIGNALS = ["SIGTERM", "SIGINT", "SIGHUP"];
 function spawnCodex(args, options) {
-  const command = resolveOnPath("codex", options.env ?? process.env);
+  const command = resolveOnPath("codex", process.env);
   if (command === null) {
     return Promise.resolve({ status: null, signal: null, error: codexNotFound("spawn codex") });
   }
@@ -181,7 +181,6 @@ function spawnCodex(args, options) {
     try {
       child = (0, import_node_child_process.spawn)(command, args, {
         cwd: options.cwd,
-        env: options.env,
         stdio: ["pipe", "ignore", options.logFd]
       });
     } catch (err) {
@@ -270,11 +269,19 @@ function lastErrorLine(logPath) {
   const last = errors.filter((l) => l.startsWith("ERROR:")).at(-1);
   return last === void 0 ? void 0 : capLogLine(last);
 }
+var CODEX_EXEC = "codex exec";
+function codexExecArgs(opts) {
+  const args = ["exec", "--ephemeral", "-s", "read-only", ...opts.extraArgs ?? []];
+  args.push("-o", opts.outputPath);
+  if (opts.reasoning) args.push("-c", `model_reasoning_effort="${opts.reasoning}"`);
+  args.push("-");
+  return args;
+}
 async function runCodexExec(opts) {
   const logFd = (0, import_node_fs4.openSync)(opts.logPath, "w", 384);
   let res;
   try {
-    res = await spawnCodex(opts.args, { cwd: opts.cwd, input: opts.input, logFd });
+    res = await spawnCodex(codexExecArgs(opts), { cwd: opts.cwd, input: opts.input, logFd });
   } finally {
     (0, import_node_fs4.closeSync)(logFd);
   }
@@ -291,7 +298,7 @@ async function runCodexExec(opts) {
     reportLogTail(opts.logPath);
     reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
-      `${opts.label} failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
+      `${CODEX_EXEC} failed (${res.status === null ? `signal ${res.signal}` : `exit ${res.status}`}).`,
       "exit",
       { logPath: opts.logPath, exitStatus: res.status }
     );
@@ -301,7 +308,7 @@ async function runCodexExec(opts) {
     reportLogTail(opts.logPath);
     reportNarrowFailure(opts.outputPath);
     throw new CodexRunError(
-      `${opts.label} exited 0 but wrote no ${opts.outputNoun} to ${opts.outputPath}.`,
+      `${CODEX_EXEC} exited 0 but wrote no ${opts.outputNoun} to ${opts.outputPath}.`,
       "empty",
       { logPath: opts.logPath }
     );
@@ -396,24 +403,13 @@ async function ask(cwd, options) {
   ensureDir(dir);
   pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
   const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
-  const args = [
-    "exec",
-    "--ephemeral",
-    "-s",
-    "read-only",
-    "--skip-git-repo-check",
-    "-o",
-    outputPath
-  ];
-  if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
-  args.push("-");
   const answer = await runCodexExec({
-    args,
+    extraArgs: ["--skip-git-repo-check"],
+    reasoning: options.reasoning,
     cwd,
     input: buildAskPrompt(prompt, context),
     outputPath,
     logPath,
-    label: "codex exec",
     outputNoun: "answer"
   });
   process.stdout.write(answer);
@@ -615,10 +611,6 @@ var REREVIEW_MODE = [
   "- Judge each handed finding at the levels in the Three levels section above: ADDRESSED means the cause is gone, not only this instance.",
   "- Number new issues on from the last number handed, never from 1."
 ].join("\n");
-var REVIEW_SPAWN = {
-  label: "codex exec",
-  args: ["exec", "--ephemeral", "-s", "read-only"]
-};
 var MODES = {
   review: {
     files: PER_DIFF,
@@ -752,18 +744,14 @@ No changes to review under ${target.label}.
     );
   }
   const { reviewPath: outputPath, logPath } = reserveReviewFiles(resolveOutputDir(repoRoot));
-  const args = [...REVIEW_SPAWN.args, "-o", outputPath];
-  if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
-  args.push("-");
-  process.stderr.write(`Reviewing ${target.label} with ${REVIEW_SPAWN.label}\u2026
+  process.stderr.write(`Reviewing ${target.label} with ${CODEX_EXEC}\u2026
 `);
   const review = await runCodexExec({
-    args,
+    reasoning: options.reasoning,
     cwd: repoRoot,
     input: prompt,
     outputPath,
     logPath,
-    label: REVIEW_SPAWN.label,
     outputNoun: "review"
   });
   process.stdout.write(review);

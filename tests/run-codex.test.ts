@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -22,13 +23,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { resolveOnPath } from "../src/lib/path-search.ts";
-import {
-  capLogLine,
-  codexMissing,
-  NO_ERROR_LINE,
-  spawnCodex,
-  spawnCodexSync,
-} from "../src/lib/run-codex.ts";
+import { capLogLine, codexMissing, NO_ERROR_LINE, spawnCodexSync } from "../src/lib/run-codex.ts";
 
 /**
  * A fresh dir holding a `codex` shell script with `mode` that, when run, drops
@@ -87,31 +82,6 @@ for (const [label, entry] of [
   });
 }
 
-test("spawnCodex never runs a cwd `codex` through an empty PATH entry, and runs the PATH one", async () => {
-  const markers = tempDir("harry-rc-markers-");
-  const trap = codexDir("harry-rc-trap-", markers);
-  const bin = codexDir("harry-rc-bin-", markers);
-  const env = { PATH: `:bin:${bin}` };
-  const res = await spawnCodex(["exec", "-"], { cwd: trap, input: "", logFd: 2, env });
-  assert.equal(res.status, 0, String(res.error));
-  assert.deepEqual(readdirSync(markers), [`ran-${path.basename(bin)}`]);
-});
-
-test("spawnCodex removes its signal listeners when spawn throws synchronously", async () => {
-  const markers = tempDir("harry-rc-markers-");
-  const bin = codexDir("harry-rc-bin-", markers);
-  const signals = ["SIGTERM", "SIGINT", "SIGHUP"] as const;
-  const before = signals.map((s) => process.listenerCount(s));
-  await assert.rejects(
-    spawnCodex(["exec", "bad\0arg"], { cwd: bin, input: "", logFd: 2, env: { PATH: bin } }),
-    { code: "ERR_INVALID_ARG_VALUE" },
-  );
-  assert.deepEqual(
-    signals.map((s) => process.listenerCount(s)),
-    before,
-  );
-});
-
 test("codexMissing: only ENOENT — a non-zero exit is a real failure, not a missing CLI", () => {
   const enoent = { error: Object.assign(new Error("spawn codex ENOENT"), { code: "ENOENT" }) };
   assert.equal(codexMissing({ ...enoent, status: null }), true);
@@ -166,15 +136,37 @@ function tempDir(prefix: string): string {
 function runExec(
   outputPath: string,
   logPath: string,
-  opts: { fake?: Record<string, string>; shim?: string } = {},
+  opts: {
+    fake?: Record<string, string>;
+    shim?: string;
+    exec?: Record<string, unknown>;
+    trap?: boolean;
+  } = {},
 ): {
   stderr: string;
-  result: { ok?: true; output?: string; name?: string; kind?: string; message?: string };
+  trapped: boolean;
+  result: {
+    ok?: true;
+    output?: string;
+    name?: string;
+    kind?: string;
+    code?: string;
+    message?: string;
+    listeners: number[];
+  };
 } {
   const dir = tempDir("harry-rc-exec-");
   const bin = path.join(dir, "bin");
   const codex = path.join(bin, "codex");
   mkdirSync(bin);
+  const trapMarker = path.join(dir, "trap-ran");
+  if (opts.trap) {
+    mkdirSync(path.join(dir, "rel"));
+    for (const trap of [path.join(dir, "codex"), path.join(dir, "rel", "codex")]) {
+      writeFileSync(trap, `#!/bin/sh\n: > "${trapMarker}"\nexit 0\n`);
+      chmodSync(trap, 0o755);
+    }
+  }
   writeFileSync(
     codex,
     opts.shim === undefined
@@ -187,24 +179,71 @@ function runExec(
     driver,
     `import { runCodexExec } from ${JSON.stringify(path.join(REPO_ROOT, "src/lib/run-codex.ts"))};
 const [outputPath, logPath] = process.argv.slice(2);
+let result;
 try {
-  const output = await runCodexExec({ args: ["exec", "-o", outputPath, "-"], cwd: process.cwd(), input: "p\\n",
-    outputPath, logPath, label: "codex exec", outputNoun: "answer" });
-  console.log(JSON.stringify({ ok: true, output }));
+  const output = await runCodexExec({ ...${JSON.stringify(opts.exec ?? {})}, cwd: process.cwd(), input: "p\\n",
+    outputPath, logPath, outputNoun: "answer" });
+  result = { ok: true, output };
 } catch (e) {
-  console.log(JSON.stringify({ name: e.name, kind: e.kind, message: e.message }));
+  result = { name: e.name, kind: e.kind, code: e.code, message: e.message };
 }
+const listeners = ["SIGTERM", "SIGINT", "SIGHUP"].map((s) => process.listenerCount(s));
+console.log(JSON.stringify({ ...result, listeners }));
 `,
   );
+  const PATH = opts.trap
+    ? `${path.delimiter}rel${path.delimiter}${bin}`
+    : `${bin}${path.delimiter}${process.env.PATH ?? ""}`;
   const res = spawnSync(process.execPath, [driver, outputPath, logPath], {
     cwd: dir,
     encoding: "utf8",
     timeout: 15_000,
-    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, ...opts.fake },
+    env: { ...process.env, PATH, ...opts.fake },
   });
   assert.equal(res.status, 0, res.stderr);
-  return { stderr: res.stderr, result: JSON.parse(res.stdout) };
+  return { stderr: res.stderr, trapped: existsSync(trapMarker), result: JSON.parse(res.stdout) };
 }
+
+test("runCodexExec never runs a `codex` in the cwd or a relative PATH entry, and runs the PATH one", () => {
+  const dir = tempDir("harry-rc-trap-");
+  const { result, trapped } = runExec(path.join(dir, "out.md"), path.join(dir, "run.log"), {
+    trap: true,
+  });
+  assert.equal(trapped, false, "a cwd-reachable codex ran");
+  assert.equal(result.ok, true, String(result.message));
+});
+
+test("runCodexExec removes its signal listeners when spawn throws synchronously", () => {
+  const dir = tempDir("harry-rc-throw-");
+  const { result } = runExec(path.join(dir, "out.md"), path.join(dir, "run.log"), {
+    exec: { extraArgs: ["bad\0arg"] },
+  });
+  assert.equal(result.code, "ERR_INVALID_ARG_VALUE", String(result.message));
+  assert.deepEqual(result.listeners, [0, 0, 0]);
+});
+
+test("runCodexExec spawns codex exec ephemeral behind the read-only sandbox, a caller's flags after it and stdin last", () => {
+  const dir = tempDir("harry-rc-argv-");
+  const record = path.join(dir, "record");
+  const outputPath = path.join(dir, "out.md");
+  const { result } = runExec(outputPath, path.join(dir, "run.log"), {
+    fake: { FAKE_CODEX_CLI_RECORD_DIR: record },
+    exec: { extraArgs: ["--skip-git-repo-check"], reasoning: "high" },
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(record, "argv.json"), "utf8")), [
+    "exec",
+    "--ephemeral",
+    "-s",
+    "read-only",
+    "--skip-git-repo-check",
+    "-o",
+    outputPath,
+    "-c",
+    'model_reasoning_effort="high"',
+    "-",
+  ]);
+});
 
 test("the output ends with a newline even when codex's file does not, so a marker after it starts its own line", () => {
   const dir = tempDir("harry-rc-newline-");
@@ -415,6 +454,15 @@ for (const [command, signal] of [
   });
 }
 
+const runCodexExecCall = (dir: string): string =>
+  `runCodexExec(${JSON.stringify({
+    cwd: dir,
+    input: "",
+    outputPath: path.join(dir, "out.md"),
+    logPath: path.join(dir, "run.log"),
+    outputNoun: "answer",
+  })})`;
+
 test("a signal that lands as spawn returns still takes codex with it", async () => {
   const dir = tempDir("harry-rc-spawnrace-");
   const bin = path.join(dir, "bin");
@@ -426,7 +474,7 @@ test("a signal that lands as spawn returns still takes codex with it", async () 
   const script = `
     import { ChildProcess } from "node:child_process";
     import { writeFileSync } from "node:fs";
-    import { spawnCodex } from ${JSON.stringify(runCodex)};
+    import { runCodexExec } from ${JSON.stringify(runCodex)};
     const spawn = ChildProcess.prototype.spawn;
     ChildProcess.prototype.spawn = function (...args) {
       const result = spawn.apply(this, args);
@@ -434,10 +482,11 @@ test("a signal that lands as spawn returns still takes codex with it", async () 
       process.kill(process.pid, "SIGTERM");
       return result;
     };
-    spawnCodex(["exec", "-"], { cwd: ${JSON.stringify(dir)}, input: "", logFd: 2, env: { PATH: ${JSON.stringify(`${bin}${path.delimiter}${process.env.PATH ?? ""}`)} } });
+    ${runCodexExecCall(dir)};
   `;
   const companion = spawn(process.execPath, ["--input-type=module", "-e", script], {
     stdio: ["ignore", "ignore", "pipe"],
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
   });
   let stderr = "";
   companion.stderr.on("data", (d) => {
@@ -471,11 +520,11 @@ test("a signal whose forward to codex throws still re-raises on the companion", 
   const script = `
     import { ChildProcess } from "node:child_process";
     import { readFileSync } from "node:fs";
-    import { spawnCodex } from ${JSON.stringify(runCodex)};
+    import { runCodexExec } from ${JSON.stringify(runCodex)};
     ChildProcess.prototype.kill = function () {
       throw Object.assign(new Error("kill ENOSYS"), { code: "ENOSYS" });
     };
-    spawnCodex(["exec", "-"], { cwd: ${JSON.stringify(dir)}, input: "", logFd: 2, env: { PATH: ${JSON.stringify(`${bin}${path.delimiter}${process.env.PATH ?? ""}`)} } });
+    ${runCodexExecCall(dir)};
     const poll = setInterval(() => {
       let pid = "";
       try {
@@ -488,6 +537,7 @@ test("a signal whose forward to codex throws still re-raises on the companion", 
   `;
   const companion = spawn(process.execPath, ["--input-type=module", "-e", script], {
     stdio: ["ignore", "ignore", "pipe"],
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
   });
   let stderr = "";
   companion.stderr.on("data", (d) => {

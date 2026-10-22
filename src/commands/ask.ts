@@ -3,9 +3,9 @@
  * read-only, and the answer printed verbatim. The reasoning backend for the
  * `/harry:debate` skill's gpt voice, and a generic single-prompt query command.
  *
- * Runs `codex exec --ephemeral -s read-only --skip-git-repo-check -o <file> -`
- * in the invoking cwd with the prompt on stdin. The answer and codex's
- * transcript log land under the plugin state dir (`asks/`), never in a `.local/`.
+ * Runs it through `runCodexExec` with `--skip-git-repo-check`, in the invoking
+ * cwd with the prompt on stdin. The answer and codex's transcript log land under
+ * the plugin state dir (`asks/`), never in a `.local/`.
  *
  * The stdout contract `/debate` depends on: success prints the answer file
  * verbatim; ANY failure prints `# Ask Failed`, a blank line and one reason line,
@@ -83,25 +83,13 @@ async function ask(cwd: string, options: AskOptions): Promise<void> {
   pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
   const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
 
-  const args = [
-    "exec",
-    "--ephemeral",
-    "-s",
-    "read-only",
-    "--skip-git-repo-check",
-    "-o",
-    outputPath,
-  ];
-  if (options.reasoning) args.push("-c", `model_reasoning_effort="${options.reasoning}"`);
-  args.push("-");
-
   const answer = await runCodexExec({
-    args,
+    extraArgs: ["--skip-git-repo-check"],
+    reasoning: options.reasoning,
     cwd,
     input: buildAskPrompt(prompt, context),
     outputPath,
     logPath,
-    label: "codex exec",
     outputNoun: "answer",
   });
   process.stdout.write(answer);
