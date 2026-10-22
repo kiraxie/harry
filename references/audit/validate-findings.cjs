@@ -29,23 +29,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const file = process.argv[2];
-if (!file) {
-	console.error("Usage: node validate-findings.cjs <path-to-findings.json>");
-	process.exit(1);
-}
-
 const schemaPath = path.join(__dirname, "report-schema.json");
-let itemSchema;
-try {
-	const doc = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
-	itemSchema = doc.output_schema;
-	if (!itemSchema) throw new Error('report-schema.json is missing top-level "output_schema"');
-} catch (e) {
-	console.error(`Failed to load schema from ${schemaPath}:`, e.message);
-	process.exit(1);
-}
-
 const patterns = new Map();
 const isObject = (v) => typeOf(v) === "object";
 const is = (value, type) => (type === "integer" ? Number.isInteger(value) : typeOf(value) === type);
@@ -221,10 +205,14 @@ const NAMES = {
 	noContract: "none",
 };
 
-function checkSemanticNames() {
+function confirmedBranch(outputSchema) {
+	return (outputSchema?.oneOf || []).find((b) => b?.properties?.verdict?.const === NAMES.confirmedVerdict);
+}
+
+function checkSemanticNames(itemSchema) {
 	const missing = (what) =>
 		new Error(`output_schema: the semantic layer reads ${what}, which the schema does not define`);
-	const confirmed = (itemSchema.oneOf || []).find((b) => b.properties?.verdict?.const === NAMES.confirmedVerdict);
+	const confirmed = confirmedBranch(itemSchema);
 	if (!confirmed) throw missing(`a "${NAMES.confirmedVerdict}" verdict branch`);
 	const props = confirmed.properties;
 	const dims = props.dimension?.enum || [];
@@ -246,35 +234,6 @@ function checkSemanticNames() {
 		incidentalVerdict: NAMES.incidentalVerdict,
 		retainedContracts: contracts.filter((c) => c !== NAMES.noContract),
 	};
-}
-
-for (const [key, keyword] of Object.entries(KEYWORDS)) {
-	if (typeof keyword.apply !== "function") {
-		console.error(`validate-findings.cjs is broken: KEYWORDS.${key} has no apply step`);
-		process.exit(1);
-	}
-}
-
-let semantic;
-try {
-	checkSchema(itemSchema, "output_schema");
-	semantic = checkSemanticNames();
-} catch (e) {
-	console.error(`Schema ${schemaPath} is outside the subset this script enforces:`, e.message);
-	process.exit(1);
-}
-
-let findings;
-try {
-	findings = JSON.parse(fs.readFileSync(file, "utf8"));
-} catch (e) {
-	console.error("Failed to parse JSON:", e.message);
-	process.exit(1);
-}
-
-if (!Array.isArray(findings)) {
-	console.error("findings.json must be an array");
-	process.exit(1);
 }
 
 // --- Generic JSON Schema interpreter (the subset used by report-schema.json) ---
@@ -309,48 +268,99 @@ function collect(value, schema, p) {
 
 // --- Run ----------------------------------------------------------------------
 
-let errorCount = 0;
+function main() {
+	const file = process.argv[2];
+	if (!file) {
+		console.error("Usage: node validate-findings.cjs <path-to-findings.json>");
+		process.exit(1);
+	}
 
-findings.forEach((f, i) => {
-	const label = `[${i}] ${(f && f.title) || "(untitled)"}`;
-	console.log(`Checking ${label}`);
+	let itemSchema;
+	try {
+		const doc = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
+		itemSchema = doc.output_schema;
+		if (!itemSchema) throw new Error('report-schema.json is missing top-level "output_schema"');
+	} catch (e) {
+		console.error(`Failed to load schema from ${schemaPath}:`, e.message);
+		process.exit(1);
+	}
 
-	const errs = collect(f, itemSchema, `[${i}]`);
-
-	// Semantic layer — constraints the schema subset can't express.
-	if (f && f.verdict === semantic.confirmedVerdict) {
-		if (semantic.reuseDimensions.has(f.dimension)) {
-			if (!f.drift_test) {
-				errs.push(`[${i}]: dimension "${f.dimension}" requires a drift_test`);
-			} else if (f.drift_test.verdict === semantic.incidentalVerdict) {
-				errs.push(
-					`[${i}].drift_test.verdict is "${semantic.incidentalVerdict}" — that is incidental duplication and must be rejected, not confirmed`,
-				);
-			}
-		}
-		if (f.dimension === semantic.lowValueDimension) {
-			const r = f.retention_check;
-			if (!r) {
-				errs.push(`[${i}]: dimension "${f.dimension}" requires a retention_check`);
-			} else if (semantic.retainedContracts.includes(r.contract)) {
-				errs.push(
-					`[${i}].retention_check.contract is "${r.contract}" — a test guarding a retained contract stays and must be rejected, not confirmed`,
-				);
-			}
-		}
-		if (semantic.reuseDimensions.has(f.dimension) && Array.isArray(f.evidence) && f.evidence.length < 2) {
-			errs.push(`[${i}]: a "${f.dimension}" finding needs >=2 evidence sites, got ${f.evidence.length}`);
+	for (const [key, keyword] of Object.entries(KEYWORDS)) {
+		if (typeof keyword.apply !== "function") {
+			console.error(`validate-findings.cjs is broken: KEYWORDS.${key} has no apply step`);
+			process.exit(1);
 		}
 	}
 
-	for (const msg of errs) console.error("  ERROR:", msg);
-	errorCount += errs.length;
-});
+	let semantic;
+	try {
+		checkSchema(itemSchema, "output_schema");
+		semantic = checkSemanticNames(itemSchema);
+	} catch (e) {
+		console.error(`Schema ${schemaPath} is outside the subset this script enforces:`, e.message);
+		process.exit(1);
+	}
 
-console.log();
-if (errorCount === 0) {
-	console.log(`PASS: ${findings.length} findings valid`);
-} else {
-	console.error(`FAIL: ${errorCount} error(s) across ${findings.length} findings`);
-	process.exit(1);
+	let findings;
+	try {
+		findings = JSON.parse(fs.readFileSync(file, "utf8"));
+	} catch (e) {
+		console.error("Failed to parse JSON:", e.message);
+		process.exit(1);
+	}
+
+	if (!Array.isArray(findings)) {
+		console.error("findings.json must be an array");
+		process.exit(1);
+	}
+
+	let errorCount = 0;
+
+	findings.forEach((f, i) => {
+		const label = `[${i}] ${(f && f.title) || "(untitled)"}`;
+		console.log(`Checking ${label}`);
+
+		const errs = collect(f, itemSchema, `[${i}]`);
+
+		// Semantic layer — constraints the schema subset can't express.
+		if (f && f.verdict === semantic.confirmedVerdict) {
+			if (semantic.reuseDimensions.has(f.dimension)) {
+				if (!f.drift_test) {
+					errs.push(`[${i}]: dimension "${f.dimension}" requires a drift_test`);
+				} else if (f.drift_test.verdict === semantic.incidentalVerdict) {
+					errs.push(
+						`[${i}].drift_test.verdict is "${semantic.incidentalVerdict}" — that is incidental duplication and must be rejected, not confirmed`,
+					);
+				}
+			}
+			if (f.dimension === semantic.lowValueDimension) {
+				const r = f.retention_check;
+				if (!r) {
+					errs.push(`[${i}]: dimension "${f.dimension}" requires a retention_check`);
+				} else if (semantic.retainedContracts.includes(r.contract)) {
+					errs.push(
+						`[${i}].retention_check.contract is "${r.contract}" — a test guarding a retained contract stays and must be rejected, not confirmed`,
+					);
+				}
+			}
+			if (semantic.reuseDimensions.has(f.dimension) && Array.isArray(f.evidence) && f.evidence.length < 2) {
+				errs.push(`[${i}]: a "${f.dimension}" finding needs >=2 evidence sites, got ${f.evidence.length}`);
+			}
+		}
+
+		for (const msg of errs) console.error("  ERROR:", msg);
+		errorCount += errs.length;
+	});
+
+	console.log();
+	if (errorCount === 0) {
+		console.log(`PASS: ${findings.length} findings valid`);
+	} else {
+		console.error(`FAIL: ${errorCount} error(s) across ${findings.length} findings`);
+		process.exit(1);
+	}
 }
+
+if (require.main === module) main();
+
+module.exports = { NAMES, confirmedBranch };

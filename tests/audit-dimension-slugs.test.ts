@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { dimensionFailures, namesIn, type Repo } from "./citations.ts";
 import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, under } from "./prose-dirs.ts";
-import { confirmedBranch, SCHEMA } from "./report-schema.ts";
+import { confirmedBranch, NAMES, SCHEMA } from "./report-schema.ts";
 import { headingSection, outline } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -70,15 +70,8 @@ test("a kebab-case code span in audit prose is a schema term or a listed name", 
   );
 });
 
-const validator = raw(path.join(AUDIT, "validate-findings.cjs"));
-const reuseMatch = /reuseDimensions:\s*\[([^\]]+)\]/.exec(validator);
-const lowValueMatch = /lowValueDimension:\s*"([^"]+)"/.exec(validator);
-assert.ok(
-  reuseMatch && lowValueMatch,
-  "validate-findings.cjs NAMES lost its reuse or low-value dimension",
-);
-const REUSE: string[] = JSON.parse(`[${reuseMatch[1]}]`);
-const LOW_VALUE = [lowValueMatch[1]];
+const REUSE = NAMES.reuseDimensions;
+const LOW_VALUE = [NAMES.lowValueDimension];
 
 const block = (rel: string, start: string): string => {
   const lines = raw(rel).split("\n");

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const REL = "references/audit/report-schema.json";
@@ -23,8 +24,15 @@ export type Branch = {
   };
 };
 
+const validator: {
+  NAMES: { reuseDimensions: string[]; lowValueDimension: string };
+  confirmedBranch: (outputSchema: unknown) => Branch | undefined;
+} = createRequire(import.meta.url)("../references/audit/validate-findings.cjs");
+
+export const { NAMES } = validator;
+
 export const confirmedBranch = (doc: { output_schema?: { oneOf: Branch[] } } = SCHEMA): Branch => {
-  const branch = doc.output_schema?.oneOf.find((b) => b.properties.verdict.const === "confirmed");
+  const branch = validator.confirmedBranch(doc.output_schema);
   assert.ok(branch, `${REL} has no output_schema.oneOf branch whose verdict is "confirmed"`);
   return branch;
 };
