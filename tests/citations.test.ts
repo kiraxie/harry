@@ -72,13 +72,13 @@ test("citations.ts is pure: nothing it reaches reads git or the disk", () => {
   const root = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(
     [...reached].map((f) => path.relative(root, f)).sort(),
-    ["scripts/lib/evals-cases.mts", "tests/citations.ts", "tests/section.ts"],
+    ["scripts/lib/evals-cases.mts", "tests/citations.ts"],
     "citations.ts reaches a new module; keep git and the disk out, take them through Repo",
   );
   assert.deepEqual(
     [...builtins].sort(),
-    ["node:assert/strict"],
-    "a module citations.ts reaches imports more than node:assert; it may read git or the disk",
+    ["mdast-util-from-markdown", "mdast-util-gfm", "micromark-extension-gfm"],
+    "a module citations.ts reaches imports more than the Markdown parser; it may read git or the disk",
   );
 });
 
@@ -115,6 +115,39 @@ test("a cited name resolves to one heading or step", () => {
       expected,
       `the resolver misjudges "${name}" at level ${level}`,
     );
+});
+
+test("Markdown is read as GitHub renders it", () => {
+  assert.deepEqual(
+    citeFailures(repo, "intro\n\n    per `references/grilling.md` **Handof**\n"),
+    { seen: 0, failures: [] },
+    "a citation in an indented code block is read",
+  );
+  assert.deepEqual(
+    citeFailures(repo, "> - per `references/grilling.md`\n>   **Handof** here"),
+    { seen: 1, failures: ['1 -> references/grilling.md has no heading or step "Handof"'] },
+    "a citation in a list item inside a quote is not read",
+  );
+  assert.deepEqual(
+    namesIn("---\nname: x\ndescription: y\n---\n## A\n").map((n) => n.name),
+    ["A"],
+    "front matter is read as a heading",
+  );
+  assert.deepEqual(
+    attempts('---\ndescription: per `references/grilling.md` "Handoff"\n---\n'),
+    ["2 -> a name next to references/grilling.md; cite it as `path` **Name**"],
+    "front matter is no longer read as prose",
+  );
+  assert.deepEqual(
+    namesIn("- **Bullet.** a\n1) **Paren.** b\n\n1. see **Inside.** c\n"),
+    [],
+    "a bold name in a bullet item, a 1) item or past an item's start is read as a step label",
+  );
+  assert.deepEqual(
+    lawFailures("## per HARRY.md **Tier**\n\n| a |\n|---|\n| per HARRY.md **Code** |\n"),
+    { seen: 2, failures: ["1 -> HARRY.md **Tier**"] },
+    "a citation in a heading or a table cell is not read",
+  );
 });
 
 test("each legacy form matches its samples and names the form to use", () => {
