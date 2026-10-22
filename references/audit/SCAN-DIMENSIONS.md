@@ -166,4 +166,4 @@ reason); the audit is read-only, so the unit that deletes runs the mutation.
 
 - Weight toward dimensions the substrate lit up (many cycles → dimension **Coupling & dependency structure**; a recent repo merge → dimension **Reusability & hoist candidates**; a repo with a lot of unused-but-maintained flexibility → dimension **Over-engineering / unearned abstraction**; a large test suite that rarely catches a regression → dimension **Low-value tests**) and toward high-churn areas.
 - One agent may own one dimension across a subsystem, or two related ones (dimension **Coupling & dependency structure** with dimension **Layout & module boundaries**, dimension **Error-handling consistency** with dimension **Observability gaps**) in one scope — but don't hand an agent everything, or it goes shallow.
-- Every agent's scope is a *focus, not a fence*: if a `coupling` agent trips over a swallowed error, it reports it. Attackers-of-badness don't respect category lines.
+- Every agent's scope is a *focus, not a fence*: if an agent on dimension **Coupling & dependency structure** trips over a swallowed error, it reports it. Attackers-of-badness don't respect category lines.

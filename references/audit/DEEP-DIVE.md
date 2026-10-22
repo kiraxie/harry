@@ -65,8 +65,8 @@ How to hunt structure:
 DON'T HOLD EVERYTHING IN CONTEXT. When a thread needs more depth than you can hold, return it
 as a lead: its location and the open question. Don't guess, and don't drop it.
 
-YOUR SCOPE IS A FOCUS, NOT A FENCE. If while auditing `coupling` you spot a swallowed error or
-a dead export, report it. Don't drop a real problem because it's "not your dimension."
+YOUR SCOPE IS A FOCUS, NOT A FENCE. If while auditing dimension **Coupling & dependency
+structure** you spot a swallowed error or a dead export, report it. Don't drop a real problem because it's "not your dimension."
 ```
 
 ## Finding contract — include in every agent prompt

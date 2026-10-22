@@ -26,7 +26,7 @@ Tools are pulled on-demand (npx / go run / uvx) so the audit **adds nothing to t
 
 `madge --circular` has no built-in exclude flag and will report every cycle inside generated code (ORM clients, compiled `dist/` output) alongside real ones — on a codebase with a generated Prisma/protobuf/etc. client this can be 90%+ noise. Filter the raw output for `generated/`, `dist/`, `build/` path segments before treating the cycle count as a fact (keep the raw output too — note the filtering in `substrate/README.md`). Also note in the README whether path aliases (`@app/*`-style tsconfig paths) were passed to madge — without them, cross-package cycles via aliased imports are invisible and only relative-import cycles are caught.
 
-`semgrep` is the strongest cross-language lever for the `pattern-fit` dimension: it turns "should this have used a Repository?" into a concrete rule you can run over TS, Go, and Python uniformly. Where the target has stated architecture rules (see Step 2), translate the most important ones into semgrep rules and run them — a rule hit is a fact, not an opinion.
+`semgrep` is the strongest cross-language lever for dimension **Design-pattern fit**: it turns "should this have used a Repository?" into a concrete rule you can run over TS, Go, and Python uniformly. Where the target has stated architecture rules (see Step 2), translate the most important ones into semgrep rules and run them — a rule hit is a fact, not an opinion.
 
 ### Churn is for ranking, not filtering
 

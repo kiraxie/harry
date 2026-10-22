@@ -171,11 +171,15 @@ kind has exactly one form:
 - A law: HARRY.md **Evidence**, with only whitespace between — no possessive, comma or colon,
   and never the law name in plain text or a section number (`§N`).
 - An audit dimension: dimension **Low-value tests**, by the name of a `##` heading of
-  `references/audit/SCAN-DIMENSIONS.md`, never by number, where the text sends a reader to the
-  dimension's section. Where the text states the literal `dimension` value a finding carries,
-  that value is no citation: write the dimension's slug from its Slug line in a code span,
-  `low-value-tests`. `tests/audit-dimension-slugs.test.ts` checks only that a hyphenated code
-  span in the audit prose is a term the schema defines, not that it names the right dimension.
+  `references/audit/SCAN-DIMENSIONS.md`, never by number, wherever the text names the
+  dimension: sending a reader to its section, assigning it to an agent, weighting a run toward
+  it. The one exception is the literal `dimension` value a finding carries, as in "a
+  `low-value-tests` finding": write the slug from its Slug line, in a code span.
+  `tests/audit-dimension-slugs.test.ts` checks the slugs in the audit prose three ways: a
+  hyphenated code span must be a term the schema defines; the sites that list which dimensions
+  a rule applies to must name the dimensions `validate-findings.cjs` NAMES applies it to; and a
+  hyphenated slug outside a code span fails unless it is plain English there, as `dead-code`
+  is. No test checks that any other slug names the right dimension.
 
 The name is the core name: the heading or bold step label without a leading `N. `, a trailing
 ` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
