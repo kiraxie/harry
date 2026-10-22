@@ -181,17 +181,14 @@ The name is the core name: the heading or bold step label without a leading `N. 
 ` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
 standing. It must be unique in its file.
 
-The test reads Markdown as it renders. Bold opens with a `**` before a non-space and closes with
-one after a non-space; a `**` that pairs with nothing fails. A quote is `“…”`, `‘…’`, `"…"` or
-`'…'`, and a straight single quote opens only after a character that is not a letter or digit
-and closes only before one, so an apostrophe never opens one. Neither runs past the end of its
-paragraph. A paragraph ends at a blank line or a line of only `>`, and at a line that starts,
-after any `>` and at most three spaces, with a heading's `#`, a `>` that opens a block quote, a
-`*`, `+`, `-`, `1.` or `1)` list marker, a `***`, `---` or `___` rule, or an `===` or `---`
-underline; one that began on a list item also ends at any list marker, at any indent. A path
-counts with or without backticks; without them, only when it ends in `.md` or names a tracked
-file or directory. Nothing inside a fenced block, or inside a code span that holds more than a
-path, is read.
+The test reads Markdown as GitHub renders it (CommonMark plus GitHub's extensions, such as
+tables): bold is what renders bold, and nothing in a code block or an HTML block is read. It adds
+only these rules. A `**` that renders as asterisks fails. A quote is `“…”`, `‘…’`, `"…"` or
+`'…'` within one paragraph, and a straight single quote opens only after a character that is not
+a letter or digit and closes only before one, so an apostrophe never opens one. A path counts
+with or without backticks; without them, only when it ends in `.md` or names a tracked file or
+directory. A code span that holds only a path is read as that path, and no other code span is
+read. Front matter is read as prose.
 
 The test reads three things as citation attempts, and each must be in the form above:
 
