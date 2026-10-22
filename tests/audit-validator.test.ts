@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { confirmedBranch } from "./report-schema.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const VALIDATOR = path.join(repoRoot, "references/audit/validate-findings.cjs");
@@ -207,7 +208,7 @@ function validateAgainst(
   return { status: run.status, out: `${run.stdout}${run.stderr}` };
 }
 
-const confirmed = (doc: Schema): Schema => doc.output_schema.oneOf[0].properties;
+const confirmed = (doc: Schema): Schema => confirmedBranch(doc).properties;
 
 test("the unedited schema copy passes, so each refusal below comes from its edit", () => {
   const run = validateAgainst(() => {});
@@ -317,7 +318,7 @@ for (const { name, edit, reason } of [
   {
     name: "two oneOf branches with the same discriminator",
     edit: (doc: Schema) => {
-      doc.output_schema.oneOf[1].properties.verdict.const = "confirmed";
+      for (const branch of doc.output_schema.oneOf) branch.properties.verdict.const = "confirmed";
     },
     reason: /output_schema: oneOf branches share the "verdict" value "confirmed"/,
   },
@@ -393,7 +394,8 @@ for (const { name, edit, reason } of [
     name: "a moved retention_check.contract",
     edit: (doc: Schema) => {
       const r = confirmed(doc).retention_check;
-      r.properties.proof.oneOf[0].properties.contract = r.properties.contract;
+      const [proof] = r.properties.proof.oneOf;
+      proof.properties.contract = r.properties.contract;
       delete r.properties.contract;
     },
     reason:
@@ -411,7 +413,7 @@ for (const { name, edit, reason } of [
   {
     name: "no confirmed verdict branch",
     edit: (doc: Schema) => {
-      doc.output_schema.oneOf[0].properties.verdict.const = "accepted";
+      confirmedBranch(doc).properties.verdict.const = "accepted";
     },
     reason: /semantic layer reads a "confirmed" verdict branch, which the schema does not define/,
   },

@@ -4,25 +4,14 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, under } from "./prose-dirs.ts";
+import { confirmedBranch, SCHEMA } from "./report-schema.ts";
 import { headingSection, outline } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const AUDIT = path.join("references", "audit");
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
-const SCHEMA = JSON.parse(raw(path.join(AUDIT, "report-schema.json")));
-type Branch = {
-  properties: {
-    verdict: { const: string };
-    dimension?: { enum: string[] };
-    evidence?: { description: string };
-    drift_test?: { description: string };
-    retention_check?: { description: string };
-  };
-};
-const confirmed = (SCHEMA.output_schema.oneOf as Branch[]).find(
-  (branch) => branch.properties.verdict.const === "confirmed",
-);
-assert.ok(confirmed?.properties.dimension, "report-schema.json lost its confirmed dimension enum");
+const confirmed = confirmedBranch();
+assert.ok(confirmed.properties.dimension, "report-schema.json lost its confirmed dimension enum");
 const SLUGS = confirmed.properties.dimension.enum;
 
 const schemaTerms = (value: unknown): string[] =>
