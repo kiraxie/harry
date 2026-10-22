@@ -452,7 +452,7 @@ test("every allowlist entry matches exactly one line in its file", () => {
 });
 
 const SPAN_OWNER = "citations.ts";
-const CODE_SPAN = /`[([]/;
+const CODE_SPAN = /`(?:[([.]|\\[wWdDsS])/;
 
 const codeSpanReads = (src: string): { line: number; text: string }[] =>
   literals(src)
@@ -464,20 +464,31 @@ const codeSpanReads = (src: string): { line: number; text: string }[] =>
 
 test("the code-span scan catches a read of a span's content and nothing else", () => {
   assert.deepEqual(
-    ["const m = /`([^`]+)`/g;", "line.match(/`[a-z-]+`/);"].filter(
-      (src) => codeSpanReads(src).length === 0,
-    ),
+    [
+      "const m = /`([^`]+)`/g;",
+      "line.match(/`[a-z-]+`/);",
+      "text.matchAll(/`\\S+`/g);",
+      "text.matchAll(/`.+?`/g);",
+      "text.matchAll(/`\\w[\\w-]*`/g);",
+    ].filter((src) => codeSpanReads(src).length === 0),
     [],
     "a known code-span read now passes the scan",
   );
   assert.deepEqual(
-    ["assert.match(text, /`low-value-tests`/);"].filter((src) => codeSpanReads(src).length > 0),
+    ["assert.match(text, /`low-value-tests`/);", "assert.match(text, /`\\.claude\\/`/);"].filter(
+      (src) => codeSpanReads(src).length > 0,
+    ),
     [],
     "the scan now flags a regex that reads no code span's content",
   );
 });
 
 const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
+  {
+    file: "slice-scan.test.ts",
+    text: "/`(?:[([.]|\\\\[wWdDsS])/",
+    why: "the code-span scan's own pattern",
+  },
   {
     file: "audit-dimension-slugs.test.ts",
     text: "/^\\*\\*Slug:\\*\\* `([^`]+)`$/",
@@ -516,7 +527,7 @@ const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
 ];
 
 const spanReads = (): { file: string; line: number; text: string }[] =>
-  [...scanned(), OWNER]
+  [...scanned(), OWNER, SELF]
     .filter((file) => file !== SPAN_OWNER)
     .flatMap((file) =>
       codeSpanReads(readFileSync(path.join(testsDir, file), "utf-8")).map((r) => ({
