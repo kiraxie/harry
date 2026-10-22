@@ -14,13 +14,13 @@
  *
  * A few constraints can't be expressed in that subset; they're applied as an
  * explicit, clearly-labelled semantic layer after schema validation:
- *   - a reusability-hoist or copy-paste finding needs >=2 evidence sites and a
+ *   - a finding in a NAMES.reuseDimensions dimension needs >=2 evidence sites and a
  *     drift_test (duplication is inherently multi-site — a single location
  *     can't be "duplicated")
  *   - no confirmed reuse/duplication finding may declare drift_test.verdict
  *     "normal-to-diverge" (that means incidental duplication — it should have
  *     been rejected)
- *   - a confirmed low-value-tests finding needs a retention_check whose
+ *   - a confirmed NAMES.lowValueDimension finding needs a retention_check whose
  *     contract is "none" (a test guarding a retained contract stays)
  *
  * Zero dependencies. Exits 0 on success, 1 on any failure.

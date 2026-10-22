@@ -11,7 +11,7 @@ Collapsing them is the single easiest way to waste effort here, because without 
 
 ## Round 3: Adversarial validation
 
-**Consolidate duplicates first.** Round 2 overlaps agent scopes on purpose, and the same root cause surfaces from multiple agents wearing different dimension hats (a "raw SQL in route" is reported as both pattern-fit and layering). Merge findings that share a root cause **before** validating — otherwise you validate and report the same problem twice. This overlap is heavier than in a security audit, because quality dimensions aren't cleanly separable; be aggressive about merging.
+**Consolidate duplicates first.** Round 2 overlaps agent scopes on purpose, and the same root cause surfaces from multiple agents wearing different dimension hats (a "raw SQL in route" is reported as both `pattern-fit` and `coupling`). Merge findings that share a root cause **before** validating — otherwise you validate and report the same problem twice. This overlap is heavier than in a security audit, because quality dimensions aren't cleanly separable; be aggressive about merging.
 
 Then, for each surviving finding, launch a **separate `research` validation agent** whose job is to **disprove** it. Round 2 agents are biased to find; these are biased to kill false positives. Batch findings from the same area into one agent; run independent areas in parallel.
 
@@ -24,7 +24,7 @@ Your job is to DISPROVE this finding. Read the actual source at every cited loca
    reasoning. If the "cost" is just "it's not how I'd write it" with no change made harder and
    no bug caused -> REJECT.
 
-2. DRIFT TEST (reuse/duplication/hoist findings): Would divergence actually be a bug, or is this
+2. DRIFT TEST (`reusability-hoist` and `copy-paste` findings): Would divergence actually be a bug, or is this
    independent evolution that's FINE to diverge? If fine-to-diverge -> REJECT (incidental
    duplication is not a DRY violation).
 
@@ -43,7 +43,7 @@ Your job is to DISPROVE this finding. Read the actual source at every cited loca
 6. SEVERITY TEST: Is blast_radius × change_likelihood consistent with the claim? A real problem
    in cold, never-touched code is LOW, not HIGH.
 
-7. RETENTION TEST (low-value-tests findings): Read the test and its retention_check. Does the
+7. RETENTION TEST (`low-value-tests` findings): Read the test and its retention_check. Does the
    test truly guard none of the retained contracts report-schema.json lists for
    retention_check.contract? Does it pass on the current code — if it fails, it is a product
    bug to report, not a deletion. For proof kind `owner-proves`: does the keeper really prove the
@@ -91,9 +91,9 @@ whether it's worth fixing — only whether its factual claims are TRUE. Read the
    code? Is the scope (function/module) name correct? Does the description match what the code does?
 2. Every count/measurement: are there really N duplication sites? Is the cycle really A->B->C->A
    in the current code? Is the churn rank cited correctly against substrate/churn.txt?
-3. For hoist findings: do the cited implementations actually exist and actually differ as the
+3. For `reusability-hoist` findings: do the cited implementations actually exist and actually differ as the
    drift delta claims?
-   For low-value-tests findings of proof kind `owner-proves`: does the
+   For `low-value-tests` findings of proof kind `owner-proves`: does the
    retention_check.proof.keeper test exist at the cited file, under that name, and
    exercise the contract it is said to keep proving? For `guards-nothing`: does the test
    at the evidence location assert what `detects` says it does?
@@ -126,10 +126,10 @@ Write the human-readable deliverables **last**, so verification (Round 5) never 
   - **fix-now** — cheap and in the blast radius of active work; do it in the next PR touching that area (the "clean legacy in the scope you touch" case).
   - **tracked-debt** — real cost, needs its own effort; belongs in a ticket/debt ledger with the concrete_cost as justification.
   - **accepted** — noted, but the cost is low enough to live with; recorded so it isn't re-litigated next run.
-- **low-value-tests findings**, at any severity — the deletion evidence the deleting unit needs, from the `retention_check`: its proof's `kind`, the `keeper` and the `mutation` (or, for `guards-nothing`, the `reason`), and the `seams_unlocked`.
+- **`low-value-tests` findings**, at any severity — the deletion evidence the deleting unit needs, from the `retention_check`: its proof's `kind`, the `keeper` and the `mutation` (or, for `guards-nothing`, the `reason`), and the `seams_unlocked`.
 - **What the codebase does well** — solid patterns, clean boundaries. This calibrates trust in the findings.
 - **Coverage & next run** — what this run focused on, what it deliberately or accidentally left (cite the substrate README's known gaps, e.g. drifted-beyond-recognition hoist candidates), and a recommendation to re-run weighted toward the gaps.
 
 **`FINDINGS-DETAIL.md`** — for each MODERATE+ finding: the full evidence set with every `file:line`, the drift delta (hoist findings), the traced future-change that demonstrates the cost, and the concrete remediation. Keep it proportional — if the detail is longer than the code deserves, you're padding.
 
-If the target uses a debt ledger convention (e.g. `DEBT:` markers, a debt command), emit the **tracked-debt** findings in that format too, so they flow into the team's existing process instead of dying in a report. A low-value-tests finding carries its `retention_check` fields there too.
+If the target uses a debt ledger convention (e.g. `DEBT:` markers, a debt command), emit the **tracked-debt** findings in that format too, so they flow into the team's existing process instead of dying in a report. A `low-value-tests` finding carries its `retention_check` fields there too.

@@ -65,7 +65,7 @@ How to hunt structure:
 DON'T HOLD EVERYTHING IN CONTEXT. When a thread needs more depth than you can hold, return it
 as a lead: its location and the open question. Don't guess, and don't drop it.
 
-YOUR SCOPE IS A FOCUS, NOT A FENCE. If while auditing coupling you spot a swallowed error or
+YOUR SCOPE IS A FOCUS, NOT A FENCE. If while auditing `coupling` you spot a swallowed error or
 a dead export, report it. Don't drop a real problem because it's "not your dimension."
 ```
 
@@ -78,11 +78,11 @@ Return ONLY findings that clear the cost bar. For each, provide:
 - concrete_cost: the named future change made expensive/dangerous, OR the bug already caused.
   This is mandatory. No concrete_cost -> no finding.
 - evidence: the objective facts — file:line for each site, counts, cycle members, churn rank,
-  the substrate tool line if applicable. At least one; for duplication/hoist, at least the
+  the substrate tool line if applicable. At least one; for `reusability-hoist` and `copy-paste`, at least the
   two (or more) sites.
-- drift_test (for reuse/duplication/hoist findings): "bug if they diverge" or "normal to
+- drift_test (for `reusability-hoist` and `copy-paste` findings): "bug if they diverge" or "normal to
   diverge", with one sentence why. If "normal", you should not be reporting it.
-- retention_check (for low-value-tests findings): what the test checks and can detect;
+- retention_check (for `low-value-tests` findings): what the test checks and can detect;
   the retained contract it guards, or "none" (anything else means keep it — do not
   report it; a test that guards nothing is always "none"); the test-only seams deleting
   it unlocks; and a proof of one of two kinds. `owner-proves`: a stronger test proves the

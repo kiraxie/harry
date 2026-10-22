@@ -171,7 +171,11 @@ kind has exactly one form:
 - A law: HARRY.md **Evidence**, with only whitespace between — no possessive, comma or colon,
   and never the law name in plain text or a section number (`§N`).
 - An audit dimension: dimension **Low-value tests**, by the name of a `##` heading of
-  `references/audit/SCAN-DIMENSIONS.md`, never by number.
+  `references/audit/SCAN-DIMENSIONS.md`, never by number, where the text sends a reader to the
+  dimension's section. Where the text states the literal `dimension` value a finding carries,
+  that value is no citation: write the dimension's slug from its Slug line in a code span,
+  `low-value-tests`. `tests/audit-dimension-slugs.test.ts` checks only that a hyphenated code
+  span in the audit prose is a term the schema defines, not that it names the right dimension.
 
 The name is the core name: the heading or bold step label without a leading `N. `, a trailing
 ` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation

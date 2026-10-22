@@ -36,13 +36,26 @@ test("dimension 9 sends tests that exist but guard nothing to dimension 11", () 
   assert.match(nine, /dimension \*\*Low-value tests\*\*/);
 });
 
-const KINDS = ["`owner-proves`", "`guards-nothing`"];
+type ProofKind = { properties: { kind: { const: string } } };
+type Branch = {
+  properties: {
+    verdict: { const: string };
+    retention_check?: { properties?: { proof?: { oneOf?: ProofKind[] } } };
+  };
+};
+const confirmed = (
+  JSON.parse(raw(path.join("references", "audit", "report-schema.json"))).output_schema
+    .oneOf as Branch[]
+).find((branch) => branch.properties.verdict.const === "confirmed");
+const proofKinds = confirmed?.properties.retention_check?.properties?.proof?.oneOf;
+assert.ok(proofKinds?.length, "report-schema.json lost its retention_check proof kinds");
+const KINDS = proofKinds.map((kind) => `\`${kind.properties.kind.const}\``);
 
 test("Round 3 disproves a low-value-tests finding by its retention_check, per kind", () => {
   const test7 = section(
     ROUNDS,
     "references/audit/VALIDATION-AND-REPORTING.md",
-    "7. RETENTION TEST (low-value-tests findings)",
+    "7. RETENTION TEST (`low-value-tests` findings)",
     "Return one of",
   );
   assert.ok(test7.includes("retention_check"), test7);
@@ -68,7 +81,7 @@ test("dimension-11 agents learn both kinds", () => {
   const brief = section(
     deep,
     "references/audit/DEEP-DIVE.md",
-    "- retention_check (for low-value-tests findings)",
+    "- retention_check (for `low-value-tests` findings)",
     "- remediation:",
   );
   for (const kind of KINDS) assert.ok(brief.includes(kind), brief);
@@ -105,7 +118,7 @@ test("Round 6 hands every low-value-tests finding's deletion evidence to the rep
   const entry = section(
     round6,
     "references/audit/VALIDATION-AND-REPORTING.md",
-    "**low-value-tests findings**",
+    "**`low-value-tests` findings**",
     "`seams_unlocked`",
   );
   assert.match(entry, /at any severity/);
@@ -116,7 +129,7 @@ test("Round 6 hands every low-value-tests finding's deletion evidence to the rep
     "references/audit/VALIDATION-AND-REPORTING.md",
     "If the target uses a debt ledger",
   );
-  assert.match(debt, /low-value-tests finding carries its `retention_check`/);
+  assert.match(debt, /`low-value-tests` finding carries its `retention_check`/);
 });
 
 test("dimension 11's remediation names the keeper and the mutation", () => {

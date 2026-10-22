@@ -2,13 +2,15 @@
 
 The facets a code audit hunts along. In Round 2, fan out by **workspace × dimension** — assign each agent a scope (a subsystem/package) and one or two dimensions, so each stays deep instead of shallow-everywhere.
 
-Not every dimension applies to every codebase. Pick the ones the target's `intended-architecture.md` and substrate make relevant. Each dimension below states **what it is**, **the deterministic seed** (what Round 1 substrate feeds it), and **the falsifiability bar** (what a real finding must show — the ORCHESTRATION.md Principle 1 anchor, specialized).
+Not every dimension applies to every codebase. Pick the ones the target's `intended-architecture.md` and substrate make relevant. Each dimension below states **what it is**, **the deterministic seed** (what Round 1 substrate feeds it), and **the falsifiability bar** (what a real finding must show — the ORCHESTRATION.md Principle 1 anchor, specialized). Its **Slug:** is the exact `dimension` value its findings carry in `references/audit/report-schema.json`.
 
 Every finding, in every dimension, must clear the same bar: name the concrete future change made expensive/dangerous, or the bug already caused.
 
 ---
 
 ## 1. Design-pattern fit
+
+**Slug:** `pattern-fit`
 
 **What:** Places where the code fights a pattern the rest of the codebase (or its stated intent) uses — a wall of `if/else` on a type where a lookup/dispatch is the established idiom; business logic welded directly to the framework (raw SQL in a route handler when a Repository layer exists); polling where an existing event/queue mechanism is the norm.
 
@@ -18,6 +20,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 ## 2. Reusability & hoist candidates (same-intent code that drifted apart)
 
+**Slug:** `reusability-hoist`
+
 **What:** Logic that exists in more than one place with the same purpose but a divergent implementation — the classic outcome of merging two codebases, or of two teams solving the same problem independently. Token-level clone detectors miss these *because* they drifted. This dimension has its own two-stage funnel: Stage A (deterministic candidate generation) runs in Round 1 — see `references/audit/RECON.md` **Step 1b**; Stage B (LLM adjudication) runs in Round 2 — see `references/audit/DEEP-DIVE.md` **Hoist-candidate funnel**.
 
 **Seed:** cross-boundary symbol/filename fuzzy matches; shared-external-dependency fingerprints; git provenance (files merged in from another repo; prior hoist PRs).
@@ -25,6 +29,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 **Bar:** The two implementations must (a) share intent and (b) **fail the drift test** — divergence between them would be a bug, not healthy independent evolution. Then: name the drift delta (how they already differ), the canonical version, and the designated shared destination. Incidental similarity that's fine to diverge is **not** a finding.
 
 ## 3. Copy-paste duplication (token-level)
+
+**Slug:** `copy-paste`
 
 **What:** Literal or near-literal duplicated blocks — the easy case, where the drift test almost always says "bug if they diverge" because they're still identical.
 
@@ -34,6 +40,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 ## 4. Coupling & dependency structure
 
+**Slug:** `coupling`
+
 **What:** Circular dependencies; a module that imports half the codebase (or is imported by half); layering violations (a lower layer reaching up, a product module importing infrastructure it shouldn't, an inner module depending on an outer one).
 
 **Seed:** `madge --circular` / `go mod graph` / `import-linter` cycles; fan-in/fan-out from the dependency graph; `intended-architecture.md`'s stated dependency boundaries.
@@ -41,6 +49,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 **Bar:** Name what the coupling blocks. "This cycle means `A` can't be built/tested/moved without `B`, and the team split PR #X had to be reverted because of it." A cycle with no demonstrated cost, in cold code, is LOW at most.
 
 ## 5. Layout & module boundaries
+
+**Slug:** `layout`
 
 **What:** Directory structure that fights the real domain boundaries — logic for one concern scattered across "technical" folders; "fake modules" (a folder whose responsibility overlaps another's); inconsistent import styles (relative vs alias) that signal unclear boundaries.
 
@@ -50,6 +60,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 ## 6. Dead code & unused surface
 
+**Slug:** `dead-code`
+
 **What:** Unreachable code, unused exports, orphaned files, feature flags for shipped/abandoned features.
 
 **Seed:** `knip` / `ts-prune` / `deadcode` / `vulture` directly.
@@ -57,6 +69,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 **Bar:** Mostly self-proving from the tool, but **verify** before reporting — dynamic imports, reflection, DI registration, and public-API/library exports produce false positives in every dead-code tool. A finding is: confirmed-unreachable **and** it carries maintenance weight (it's read, updated, or tested as if live). Cite the tool line and the confirmation.
 
 ## 7. Error-handling consistency
+
+**Slug:** `error-handling`
 
 **What:** Divergent strategies across modules — some throw, some return error tuples, some swallow; empty catch blocks; errors caught and logged then re-thrown (double handling); inconsistent error envelopes across an API boundary.
 
@@ -66,6 +80,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 ## 8. Observability gaps
 
+**Slug:** `observability`
+
 **What:** Critical paths (auth, payment, data-mutation, external calls, queue consumption) with no log/trace/metric — when it breaks in production, nobody can tell where.
 
 **Seed:** the critical-path list from `intended-architecture.md`; grep for logging/tracing calls and find the hot paths that have none.
@@ -73,6 +89,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 **Bar:** Identify a concrete incident-response failure: "if this payment-capture call fails, there is no log line and no metric — the first signal is a customer complaint." Not "more logging would be nice."
 
 ## 9. Structural test-coverage holes
+
+**Slug:** `test-coverage`
 
 **What:** Not a coverage *percentage* — a *type* of logic branch that is entirely untested (all error paths in a subsystem, a whole state-machine transition class, the concurrency guards). Also: tests that don't actually exercise the real code (mock-only tests that reimplement the logic they claim to test).
 
@@ -83,6 +101,8 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 A test that exists but guards nothing is not a hole — it belongs to dimension **Low-value tests**.
 
 ## 10. Over-engineering / unearned abstraction
+
+**Slug:** `over-engineering`
 
 **What:** The mirror image of dimension **Design-pattern fit** and
 dimension **Reusability & hoist candidates** — code that carries *more*
@@ -111,6 +131,8 @@ that prevents data loss, security/access checks, or a single smoke test — appl
 the drift test before recommending any deletion.
 
 ## 11. Low-value tests
+
+**Slug:** `low-value-tests`
 
 **What:** Tests that exist but guard nothing — they pass whether or not the behavior
 they name still works. Judge each against
@@ -144,4 +166,4 @@ reason); the audit is read-only, so the unit that deletes runs the mutation.
 
 - Weight toward dimensions the substrate lit up (many cycles → dimension **Coupling & dependency structure**; a recent repo merge → dimension **Reusability & hoist candidates**; a repo with a lot of unused-but-maintained flexibility → dimension **Over-engineering / unearned abstraction**; a large test suite that rarely catches a regression → dimension **Low-value tests**) and toward high-churn areas.
 - One agent may own one dimension across a subsystem, or two related ones (dimension **Coupling & dependency structure** with dimension **Layout & module boundaries**, dimension **Error-handling consistency** with dimension **Observability gaps**) in one scope — but don't hand an agent everything, or it goes shallow.
-- Every agent's scope is a *focus, not a fence*: if a coupling agent trips over a swallowed error, it reports it. Attackers-of-badness don't respect category lines.
+- Every agent's scope is a *focus, not a fence*: if a `coupling` agent trips over a swallowed error, it reports it. Attackers-of-badness don't respect category lines.

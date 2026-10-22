@@ -92,7 +92,7 @@ Like a security audit, one run does not find everything: which agents dig where 
 **If prior runs exist** for this repo (check sibling `run-*` directories), read their `findings.json` before Round 2 and use them to:
 
 1. **Skip known findings** — don't re-derive the same god-object. Mention it, but spend agents on new ground.
-2. **Target gaps** — if prior runs leaned on dead-code and coupling, weight this run toward hoist-candidates, pattern-fit, and observability.
+2. **Target gaps** — if prior runs leaned on `dead-code` and `coupling`, weight this run toward `reusability-hoist`, `pattern-fit`, and `observability`.
 3. **Track progress** — was a prior finding fixed? A finding that disappeared is a win worth recording; one still present after N runs is hardening the case that it's real.
 
 **Also mine the repo's own audit trail**, whether or not a prior `run-*` exists — most real codebases already have one, and it's often richer than anything this audit produced before: existing tech-debt ledgers, `DEBT:`-marker sweeps, prior manual reuse/hoist audits, architecture-review docs, or a debt-tracking convention (check any project-specific instruction files for where these live). Treat their open items as leads and their explicitly-rejected items as a skip-list — re-report a rejected item only with genuinely new evidence. This is frequently the single highest-value input to Round 1, because it's targeted where the team already knows the pain is.
