@@ -174,13 +174,14 @@ kind has exactly one form:
   `references/audit/SCAN-DIMENSIONS.md`, never by number, wherever the text names the dimension:
   sending a reader to its section, assigning it to an agent, weighting a run toward it. The one
   exception is the literal `dimension` value a finding carries, as in "a `low-value-tests` finding":
-  write the slug from its Slug line, in a code span. `tests/audit-dimension-slugs.test.ts` holds the
-  audit prose to four rules, inside every fence with no info string too: write a hyphenated code
-  span only for a term the schema defines; where the text lists the dimensions a rule applies to,
-  list the ones `validate-findings.cjs` NAMES applies it to; put a hyphenated slug in a code span
-  unless it is plain English there, as `dead-code` is; and cite a dimension by a `##` heading of
-  `references/audit/SCAN-DIMENSIONS.md`. No test checks that any other slug names the right
-  dimension.
+  write the slug from its Slug line, in a code span. In the audit prose, and in every fence there
+  with no info string, write a hyphenated code span only for a term the schema defines; put a
+  hyphenated slug in a code span unless it is plain English there, as `dead-code` is; and cite a
+  dimension by a `##` heading of `references/audit/SCAN-DIMENSIONS.md`. In the finding-field lists
+  of `references/audit/DEEP-DIVE.md` and `references/audit/VALIDATION-AND-REPORTING.md` and the
+  field descriptions of `references/audit/report-schema.json`, list the dimensions
+  `validate-findings.cjs` NAMES applies the rule to. `tests/audit-dimension-slugs.test.ts` checks
+  these four rules; no test checks that any other slug names the right dimension.
 
 The name is the core name: the heading or bold step label without a leading `N. `, a trailing
 ` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
