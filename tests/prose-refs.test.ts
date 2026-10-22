@@ -25,8 +25,11 @@ import {
   strayBold,
 } from "./citations.ts";
 import {
+  CODE_EXEMPTIONS,
   PROSE_DIRS as INSTRUCTION_DIRS,
+  MANIFEST_DIRS,
   PROSE_NON_MD_FILES,
+  READER_CORPUS,
   REPO_LOCAL_DATA_FILES,
   REPO_LOCAL_DIRS,
   REPO_LOCAL_PROSE_DIRS,
@@ -34,6 +37,7 @@ import {
   SHIPPED_DATA_FILES,
   SHIPPED_PROSE_DIRS,
   SHIPPED_TOP_LEVEL,
+  under,
 } from "./prose-dirs.ts";
 import { headingSection, outline } from "./section.ts";
 
@@ -82,11 +86,7 @@ function listMarkdownFiles(dir: string): string[] {
   return trackedFiles.filter((rel) => rel.startsWith(`${dir}/`) && rel.endsWith(".md"));
 }
 
-const markdownFiles = [
-  ...TOP_LEVEL_FILES.filter((f) => isTracked(path.join(repoRoot, f))),
-  ...PROSE_DIRS.flatMap(listMarkdownFiles),
-].filter((f) => f !== "CHANGELOG.md");
-const proseFiles = [...markdownFiles, ...PROSE_NON_MD_FILES];
+const proseFiles = [...READER_CORPUS, ...listMarkdownFiles("evals")];
 const citeCorpus = proseFiles;
 
 // Three reference shapes:
@@ -245,27 +245,47 @@ test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
   assert.deepEqual(prose, [...REPO_LOCAL_PROSE_DIRS].sort());
 });
 
-test("prose-dirs.ts names every tracked non-markdown file in the prose and manifest dirs", () => {
-  const code = ["references/audit/validate-findings.cjs"];
+const DATA_FILE_DIRS = [...SHIPPED_PROSE_DIRS, ...MANIFEST_DIRS, ...REPO_LOCAL_PROSE_DIRS];
+const nonMarkdown = (dirs: string[]): string[] =>
+  trackedFiles
+    .filter((f) => under(dirs)(f) && !f.endsWith(".md") && !CODE_EXEMPTIONS.includes(f))
+    .sort();
+
+test("every code exemption is a tracked file under a dir the data-file check reads", () => {
   assert.deepEqual(
-    code.filter((f) => !trackedFiles.includes(f)),
+    CODE_EXEMPTIONS.filter((f) => !trackedFileSet.has(f) || !under(DATA_FILE_DIRS)(f)),
     [],
-    "a stale code exemption names no tracked file — delete it",
+    "a code exemption the data-file check never reaches exempts nothing — delete it",
   );
-  const nonMd = (dirs: string[]) =>
-    trackedFiles
-      .filter((f) => dirs.some((d) => f.startsWith(`${d}/`)) && !f.endsWith(".md"))
-      .filter((f) => !code.includes(f))
-      .sort();
+});
+
+test("prose-dirs.ts names every tracked non-markdown file in the shipped prose and manifest dirs", () => {
   assert.deepEqual(
-    nonMd([...SHIPPED_PROSE_DIRS, ".claude-plugin", ".codex-plugin", ".agents"]),
+    nonMarkdown([...SHIPPED_PROSE_DIRS, ...MANIFEST_DIRS]),
     [...SHIPPED_DATA_FILES].sort(),
   );
+});
+
+test("prose-dirs.ts names every tracked non-markdown file in the repo-local prose dirs", () => {
   assert.deepEqual(
-    nonMd(REPO_LOCAL_PROSE_DIRS),
-    REPO_LOCAL_DATA_FILES.filter((f) =>
-      REPO_LOCAL_PROSE_DIRS.some((d) => f.startsWith(`${d}/`)),
-    ).sort(),
+    nonMarkdown(REPO_LOCAL_PROSE_DIRS),
+    REPO_LOCAL_DATA_FILES.filter(under(REPO_LOCAL_PROSE_DIRS)).sort(),
+  );
+});
+
+test("only prose-refs reads the side lists of data files", () => {
+  const readers = trackedFiles.filter(
+    (f) =>
+      f.startsWith("tests/") &&
+      !["tests/prose-dirs.ts", "tests/prose-refs.test.ts"].includes(f) &&
+      /\b(?:SHIPPED_DATA_FILES|REPO_LOCAL_DATA_FILES)\b/.test(
+        readFileSync(path.join(repoRoot, f), "utf-8"),
+      ),
+  );
+  assert.deepEqual(
+    readers,
+    [],
+    "a scan takes READER_CORPUS or PROSE_NON_MD_FILES, not a side list",
   );
 });
 

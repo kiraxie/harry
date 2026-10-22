@@ -23,7 +23,7 @@ import test from "node:test";
 import { ASK_PREAMBLE } from "../src/commands/ask.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 import { pruneRunFiles, reserveRunFiles } from "../src/lib/run-files.ts";
-import { PROSE_DIRS } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS, PROSE_DIRS, under } from "./prose-dirs.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -123,12 +123,7 @@ const DOOR_DIRS = PROSE_DIRS.filter((dir) => !NOT_DOOR_DIRS.has(dir));
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 function listMarkdownFiles(dir: string): string[] {
-  const abs = path.join(repoRoot, dir);
-  if (!fs.existsSync(abs)) return [];
-  return fs
-    .readdirSync(abs, { recursive: true, encoding: "utf-8" })
-    .filter((rel) => rel.endsWith(".md"))
-    .map((rel) => path.join(dir, rel));
+  return MARKDOWN_CORPUS.filter(under([dir]));
 }
 
 /** Read prose with whitespace collapsed, so substring checks survive wrapping. */

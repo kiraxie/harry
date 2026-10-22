@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { SHIPPED_PROSE_DIRS, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, SHIPPED_TOP_LEVEL, under } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -11,11 +11,7 @@ const OWNER = path.join("references", "architecture-review.md");
 
 const shippedProse = (): string[] => [
   ...SHIPPED_TOP_LEVEL,
-  ...SHIPPED_PROSE_DIRS.flatMap((dir) =>
-    readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf8" })
-      .filter((f) => f.endsWith(".md"))
-      .map((f) => path.join(dir, f)),
-  ),
+  ...MARKDOWN_CORPUS.filter(under(SHIPPED_PROSE_DIRS)),
 ];
 const flatten = (text: string): string => text.replace(/\s+/g, " ");
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");

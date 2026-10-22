@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { SHIPPED_PROSE_DIRS } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, under } from "./prose-dirs.ts";
 import { headingSection, outline } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -39,11 +39,9 @@ const schemaTerms = (value: unknown): string[] =>
       : [];
 const ALLOWED = new Set([...schemaTerms(SCHEMA), "allowed-tools", "import-linter", "ts-prune"]);
 
-const AUDIT_PROSE = SHIPPED_PROSE_DIRS.flatMap((dir) =>
-  readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf-8" })
-    .filter((rel) => rel.endsWith(".md"))
-    .map((rel) => path.join(dir, rel)),
-).filter((rel) => rel.startsWith(`${AUDIT}/`) || raw(rel).includes("references/audit/"));
+const AUDIT_PROSE = MARKDOWN_CORPUS.filter(under(SHIPPED_PROSE_DIRS)).filter(
+  (rel) => rel.startsWith(`${AUDIT}/`) || raw(rel).includes("references/audit/"),
+);
 
 test("each scan dimension opens with its schema slug, in the schema's order", () => {
   const rel = path.join(AUDIT, "SCAN-DIMENSIONS.md");

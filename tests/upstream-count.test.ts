@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS } from "./prose-dirs.ts";
 
 // upstream.json is the only count of harry's sources. A number written into prose goes
 // stale on the next pin or retirement, and has before.
@@ -35,15 +35,7 @@ test("the count pattern sees the phrasings a count takes", () => {
 });
 
 test("no prose states a count of upstream or historical sources", () => {
-  const files = [
-    ...SHIPPED_TOP_LEVEL,
-    ...REPO_TOP_LEVEL,
-    ...PROSE_DIRS.flatMap((dir) =>
-      readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf-8" })
-        .filter((rel) => rel.endsWith(".md"))
-        .map((rel) => path.join(dir, rel)),
-    ),
-  ];
+  const files = MARKDOWN_CORPUS;
   const hits: string[] = [];
   for (const rel of files) {
     for (const para of readFileSync(path.join(repoRoot, rel), "utf-8").split(/\n\s*\n/)) {

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { PROSE_DIR_FILES, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -215,26 +215,7 @@ test("AC-4: both /wait-what doors are thin pointers that say one-shot, not a mod
   }
 });
 
-const CORPUS_DIRS = PROSE_DIRS;
-const CORPUS_TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
-
-function corpus(): string[] {
-  const files = [...CORPUS_TOP_LEVEL];
-  for (const dir of CORPUS_DIRS) {
-    const abs = path.join(repoRoot, dir);
-    const found = readdirSync(abs, { recursive: true, encoding: "utf-8" })
-      .map((rel) => path.join(dir, rel))
-      .filter((rel) => statSync(path.join(repoRoot, rel)).isFile());
-    assert.ok(
-      found.length > 0,
-      `${dir}/ holds no files — renamed? the scan below is now blind` +
-        " — " +
-        "Non-vacuity, as in grilling-contract.test.ts: a renamed directory would otherwise drop its files and leave every scan below passing on a smaller corpus.",
-    );
-    files.push(...found);
-  }
-  return files;
-}
+const corpus = (): string[] => [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, ...PROSE_DIR_FILES];
 
 const GONE = {
   breaker: /\bbreakers?\b/i,

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -199,18 +199,7 @@ const KNOWN: Entry[] = [
   },
 ];
 
-const prose = (): string[] =>
-  [
-    ...SHIPPED_TOP_LEVEL,
-    ...REPO_TOP_LEVEL,
-    ...PROSE_DIRS.flatMap((dir) =>
-      readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf8" })
-        .filter((f) => f.endsWith(".md"))
-        .map((f) => path.join(dir, f)),
-    ),
-  ]
-    .filter((f) => f !== DOC_TYPES)
-    .sort();
+const prose = (): string[] => MARKDOWN_CORPUS.filter((f) => f !== DOC_TYPES).sort();
 
 const BLOCK_START = /^\s*(?:$|#|[-*] |\d+\. |[a-z]\. |\||```|<!--)/;
 

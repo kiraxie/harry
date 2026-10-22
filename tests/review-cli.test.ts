@@ -30,13 +30,7 @@ import test from "node:test";
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
 import { buildReviewPrompt, type ReviewPromptInput } from "../src/lib/review-modes.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
-import {
-  PROSE_DIRS,
-  PROSE_NON_MD_FILES,
-  proseStrings,
-  REPO_TOP_LEVEL,
-  SHIPPED_TOP_LEVEL,
-} from "./prose-dirs.ts";
+import { proseStrings, READER_CORPUS } from "./prose-dirs.ts";
 import { headingSection, inOrder, outline, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -1364,39 +1358,19 @@ test("AC-15: the review doors, CLAUDE.md and README say review runs as codex exe
 
 test("AC-11: only the review doors, CLAUDE.md's runtime section and README name review's codex subcommand", () => {
   const owners = new Set(["commands/review.md", "codex-skills/review/SKILL.md", "README.md"]);
-  const corpus = [
-    ...SHIPPED_TOP_LEVEL,
-    ...REPO_TOP_LEVEL,
-    ...PROSE_DIRS.flatMap((dir) =>
-      readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
-        .filter((f) => f.endsWith(".md"))
-        .map((f) => path.join(dir, f)),
-    ),
-  ].filter((rel) => !owners.has(rel));
-  const hits = corpus.flatMap((rel) => {
-    const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
-    const text =
-      rel === "CLAUDE.md"
-        ? raw.replace(headingSection(raw, rel, "## Runtime architecture"), "")
-        : raw;
-    return text
-      .split(/\n\s*\n/)
+  const hits = READER_CORPUS.filter((rel) => !owners.has(rel)).flatMap((rel) =>
+    proseStrings(rel)
+      .map((raw) =>
+        rel === "CLAUDE.md"
+          ? raw.replace(headingSection(raw, rel, "## Runtime architecture"), "")
+          : raw,
+      )
+      .flatMap((text) => text.split(/\n\s*\n/))
       .map((para) => para.replace(/\s+/g, " "))
       .filter((para) => para.includes("codex exec review"))
-      .map((para) => `${rel}: ${para.slice(0, 80)}`);
-  });
-  const nonMdHits = PROSE_NON_MD_FILES.flatMap((rel) =>
-    proseStrings(rel)
-      .flatMap((text) => text.split(/\n\s*\n/))
-      .map((text) => text.replace(/\s+/g, " "))
-      .filter((text) => text.includes("codex exec review"))
-      .map((text) => `${rel}: ${text.slice(0, 80)}`),
+      .map((para) => `${rel}: ${para.slice(0, 80)}`),
   );
-  assert.deepEqual(
-    [...hits, ...nonMdHits],
-    [],
-    "callers name the review mode they run, not the codex subcommand",
-  );
+  assert.deepEqual(hits, [], "callers name the review mode they run, not the codex subcommand");
 });
 
 test("AC-5: both review doors send a re-review's open findings to --rereview, not --context", () => {
