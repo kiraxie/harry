@@ -175,13 +175,14 @@ kind has exactly one form:
   dimension: sending a reader to its section, assigning it to an agent, weighting a run toward
   it. The one exception is the literal `dimension` value a finding carries, as in "a
   `low-value-tests` finding": write the slug from its Slug line, in a code span.
-  `tests/audit-dimension-slugs.test.ts` reads the audit prose, its fenced agent prompts
-  included: a hyphenated code span must be a term the schema defines; the sites that list which
-  dimensions a rule applies to must name the dimensions `validate-findings.cjs` NAMES applies it
-  to; a hyphenated slug outside a code span fails unless it is plain English there, as
-  `dead-code` is; and a citation such as dimension **Low-value tests** inside a fence must name
-  a `##` heading of `references/audit/SCAN-DIMENSIONS.md`, as one outside a fence must. No test checks that any
-  other slug names the right dimension.
+  `tests/audit-dimension-slugs.test.ts` reads the audit prose, and the text of a fence that
+  opens and closes with a line of three backticks at the left margin: a hyphenated code span
+  must be a term the schema defines; the sites that list which dimensions a rule applies to must
+  name the dimensions `validate-findings.cjs` NAMES applies it to; a hyphenated slug outside a
+  code span fails unless it is plain English there, as `dead-code` is; and a citation such as
+  dimension **Low-value tests** inside such a fence must name a `##` heading of
+  `references/audit/SCAN-DIMENSIONS.md`, as one outside a fence must. Any other fence is not
+  read, and no test checks that any other slug names the right dimension.
 
 The name is the core name: the heading or bold step label without a leading `N. `, a trailing
 ` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
