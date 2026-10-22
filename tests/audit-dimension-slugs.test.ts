@@ -115,3 +115,35 @@ for (const [site, actual, expected] of NAMES_SITES)
   test(`${site} names the dimensions validate-findings.cjs NAMES applies the rule to`, () => {
     assert.deepEqual([...new Set(actual())].sort(), [...expected].sort());
   });
+
+const PLAIN_ENGLISH = [
+  "copy-paste",
+  "dead-code",
+  "error-handling",
+  "over-engineering",
+  "test-coverage",
+];
+
+test("a hyphenated slug in audit prose sits in a code span unless it is plain English", () => {
+  const bare = AUDIT_PROSE.flatMap((rel) =>
+    outline(raw(rel)).flatMap((line, i) => {
+      if (line.fenced) return [];
+      const prose = line.text.replace(/`[^`]*`/g, " ");
+      return SLUGS.filter(
+        (slug) => slug.includes("-") && new RegExp(`(?<![\\w-])${slug}(?![\\w-])`, "i").test(prose),
+      ).map((slug) => ({ slug, at: `${rel}:${i + 1}` }));
+    }),
+  );
+  assert.deepEqual(
+    bare
+      .filter(({ slug }) => !PLAIN_ENGLISH.includes(slug))
+      .map(({ slug, at }) => `${at}: ${slug}`),
+    [],
+    "a dimension slug outside a code span; write the slug in a code span, or the dimension by name",
+  );
+  assert.deepEqual(
+    PLAIN_ENGLISH.filter((slug) => !bare.some((b) => b.slug === slug)),
+    [],
+    "a listed plain-English slug the audit prose no longer uses bare — delete it",
+  );
+});
