@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, PROSE_NON_MD_FILES, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { READER_CORPUS } from "./prose-dirs.ts";
 import { headingSection, section } from "./section.ts";
 
 // `references/grilling.md` owns the adversarial interview end to end; four callers
@@ -216,23 +216,7 @@ test("AC-5: only the user may defer a question", () => {
  * whole corpus; the context-dependent picker/batch patterns below are scoped to the
  * grill family only (see `PICKER_RE`'s comment).
  */
-const CADENCE_DIRS = PROSE_DIRS;
-const CADENCE_TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, ...PROSE_NON_MD_FILES];
-
-function cadenceCorpus(): string[] {
-  const files = [...CADENCE_TOP_LEVEL];
-  for (const dir of CADENCE_DIRS) {
-    const abs = path.join(repoRoot, dir);
-    const found = readdirSync(abs, { recursive: true, encoding: "utf-8" })
-      .filter((rel) => rel.endsWith(".md"))
-      .map((rel) => path.join(dir, rel));
-    // Same non-vacuity guard as prose-refs.test.ts: a renamed directory would
-    // otherwise drop its files and leave the scan passing on a smaller corpus.
-    assert.ok(found.length > 0, `${dir}/ holds no markdown — renamed? the scan below is now blind`);
-    files.push(...found);
-  }
-  return files;
-}
+const cadenceCorpus = (): string[] => READER_CORPUS;
 
 // Unambiguous on their own, so they are scanned corpus-wide.
 const NUMBERED_ROUNDS_RE = /numbered (?:text )?rounds?/i;

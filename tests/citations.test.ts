@@ -4,14 +4,18 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  blockDimensionFailures,
   citationAttempts,
   citeFailures,
   dimensionFailures,
+  fenceBlocks,
+  fences,
   LEGACY_FORMS,
   lawAttempts,
   lawFailures,
   lawLabelFailures,
   legacyHits,
+  lineOf,
   namesIn,
   plainNameCitations,
   type Repo,
@@ -72,13 +76,13 @@ test("citations.ts is pure: nothing it reaches reads git or the disk", () => {
   const root = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(
     [...reached].map((f) => path.relative(root, f)).sort(),
-    ["scripts/lib/evals-cases.mts", "tests/citations.ts", "tests/section.ts"],
+    ["scripts/lib/evals-cases.mts", "tests/citations.ts"],
     "citations.ts reaches a new module; keep git and the disk out, take them through Repo",
   );
   assert.deepEqual(
     [...builtins].sort(),
-    ["node:assert/strict"],
-    "a module citations.ts reaches imports more than node:assert; it may read git or the disk",
+    ["mdast-util-from-markdown", "mdast-util-gfm", "micromark-extension-gfm"],
+    "a module citations.ts reaches imports more than the Markdown parser; it may read git or the disk",
   );
 });
 
@@ -115,6 +119,109 @@ test("a cited name resolves to one heading or step", () => {
       expected,
       `the resolver misjudges "${name}" at level ${level}`,
     );
+});
+
+test("Markdown is read as GitHub renders it", () => {
+  assert.deepEqual(
+    citeFailures(repo, "intro\n\n    per `references/grilling.md` **Handof**\n"),
+    { seen: 0, failures: [] },
+    "a citation in an indented code block is read",
+  );
+  assert.deepEqual(
+    citeFailures(repo, "> - per `references/grilling.md`\n>   **Handof** here"),
+    { seen: 1, failures: ['1 -> references/grilling.md has no heading or step "Handof"'] },
+    "a citation in a list item inside a quote is not read",
+  );
+  assert.deepEqual(
+    namesIn("---\nname: x\ndescription: y\n---\n## A\n").map((n) => n.name),
+    ["A"],
+    "front matter is read as a heading",
+  );
+  assert.deepEqual(
+    attempts('---\ndescription: per `references/grilling.md` "Handoff"\n---\n'),
+    ["2 -> a name next to references/grilling.md; cite it as `path` **Name**"],
+    "front matter is no longer read as prose",
+  );
+  assert.deepEqual(
+    namesIn("- **Bullet.** a\n1) **Paren.** b\n\n1. see **Inside.** c\n"),
+    [],
+    "a bold name in a bullet item, a 1) item or past an item's start is read as a step label",
+  );
+  assert.deepEqual(
+    lawFailures("## per HARRY.md **Tier**\n\n| a |\n|---|\n| per HARRY.md **Code** |\n"),
+    { seen: 2, failures: ["1 -> HARRY.md **Tier**"] },
+    "a citation in a heading or a table cell is not read",
+  );
+});
+
+const FENCE_ROWS: [string, string, { info: string; text: string; line: number }[]][] = [
+  [
+    "a four-backtick fence holding a three-backtick line is one fence",
+    "````\na\n```\nb\n````\n",
+    [{ info: "", text: "a\n```\nb", line: 2 }],
+  ],
+  [
+    "a fence under a nested list item is read",
+    "- a\n  - b\n\n    ```\n    x\n    ```\n",
+    [{ info: "", text: "x", line: 5 }],
+  ],
+  [
+    "an unclosed fence runs to the end of its container",
+    "> ```\n> x\n\nafter\n",
+    [{ info: "", text: "x", line: 2 }],
+  ],
+  ["a ~~~ fence is read", "~~~\nx\n~~~\n", [{ info: "", text: "x", line: 2 }]],
+  [
+    "a fence tagged json carries its tag",
+    "```json\n{}\n```\n",
+    [{ info: "json", text: "{}", line: 2 }],
+  ],
+  ["an untagged fence is read", "intro\n\n```\nx\ny\n```\n", [{ info: "", text: "x\ny", line: 4 }]],
+  ["an indented code block is not read", "intro\n\n    x\n", []],
+];
+
+for (const [label, src, expected] of FENCE_ROWS)
+  test(`fences: ${label}`, () => {
+    assert.deepEqual(fences(src), expected);
+  });
+
+const FENCE_BODY_ROWS: [string, string, { text: string; code: string[] }[]][] = [
+  [
+    "an indented line, an HTML line and a link definition in a fence are read as prose",
+    "Agent brief:\n\n    focus on `low-value-tests` first\n\n<low-value-tests>\n\n[x]: url",
+    [
+      { text: "Agent brief:", code: [] },
+      { text: "focus on `low-value-tests` first", code: ["`low-value-tests`"] },
+      { text: "<low-value-tests>", code: [] },
+      { text: "[x]: url", code: [] },
+    ],
+  ],
+  [
+    "a three-backtick fence inside a fence body is not read",
+    "a\n```\nb\n```",
+    [{ text: "a", code: [] }],
+  ],
+];
+
+for (const [label, body, expected] of FENCE_BODY_ROWS)
+  test(`fence body: ${label}`, () => {
+    assert.deepEqual(
+      fenceBlocks(body).map((b) => ({
+        text: b.text,
+        code: b.code.map((c) => b.text.slice(c.from, c.to)),
+      })),
+      expected,
+    );
+  });
+
+test("a dimension citation on an indented line of a fence body is checked", () => {
+  const body = "intro\n\n    dimension **Dead codes**";
+  assert.deepEqual(
+    fenceBlocks(body).flatMap((b) =>
+      blockDimensionFailures(repo, b).map((f) => `${lineOf(body, b.at + f.at)} -> ${f.failure}`),
+    ),
+    ['3 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Dead codes"'],
+  );
 });
 
 test("each legacy form matches its samples and names the form to use", () => {

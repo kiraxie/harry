@@ -1,25 +1,14 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-function proseFiles(): string[] {
-  const out: string[] = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
-  const walk = (dir: string) => {
-    for (const name of readdirSync(path.join(repoRoot, dir))) {
-      const rel = path.join(dir, name);
-      if (statSync(path.join(repoRoot, rel)).isDirectory()) walk(rel);
-      else if (rel.endsWith(".md")) out.push(rel);
-    }
-  };
-  for (const dir of PROSE_DIRS) walk(dir);
-  return out;
-}
+const proseFiles = (): string[] => MARKDOWN_CORPUS;
 
 test("AC-8: no prose names a retired dispatch concept", () => {
   const retired: [RegExp, string][] = [

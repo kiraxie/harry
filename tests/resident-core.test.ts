@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS } from "./prose-dirs.ts";
 import { headingSection, section } from "./section.ts";
 
 // HARRY.md is loaded into every session, so it holds only what a session must know
@@ -18,15 +18,7 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const flatten = (text: string): string => text.replace(/\s+/g, " ").replace(/[*`]/g, "");
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 const plain = (rel: string): string => flatten(raw(rel));
-const proseFiles = [
-  ...SHIPPED_TOP_LEVEL,
-  ...REPO_TOP_LEVEL,
-  ...PROSE_DIRS.flatMap((dir) =>
-    readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf-8" })
-      .filter((rel) => rel.endsWith(".md"))
-      .map((rel) => path.join(dir, rel)),
-  ),
-];
+const proseFiles = MARKDOWN_CORPUS;
 const holders = (phrase: string): string[] =>
   proseFiles.filter((rel) => plain(rel).includes(phrase));
 

@@ -13,9 +13,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    backs the `review` and `ask` slash commands by spawning the `codex` CLI.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
-required to install it. Rebuild `dist/` when changing `src/` **or `package.json`** —
-the bundle inlines `package.json`, so every version bump needs a rebuild (CI's dist
-drift gate fails otherwise).
+required to install it. Rebuild `dist/` when changing `src/` **or `package.json`'s version** —
+the bundle inlines that version and nothing else from `package.json`, so every version bump
+needs a rebuild (CI's dist drift gate fails otherwise).
 
 ## Commands
 
@@ -71,7 +71,7 @@ state script `.claude/scripts/release-state.mts`) and no plugin build loads it, 
   `.claude-plugin/marketplace.json`. `tests/version-sync.test.ts` fails if any one of
   them disagrees.
 - **Build**: `pnpm run build`, committing `dist/companion.cjs` — `build.mjs` inlines
-  `package.json`, so a version bump with no rebuild fails CI's drift gate.
+  `package.json`'s version, so a version bump with no rebuild fails CI's drift gate.
 - **CHANGELOG**: `CHANGELOG.md`.
 - **Verify**: `pnpm test`, `pnpm run typecheck`, `pnpm run lint`.
 

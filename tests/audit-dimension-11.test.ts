@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { confirmedBranch } from "./report-schema.ts";
 import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -36,18 +37,7 @@ test("dimension 9 sends tests that exist but guard nothing to dimension 11", () 
   assert.match(nine, /dimension \*\*Low-value tests\*\*/);
 });
 
-type ProofKind = { properties: { kind: { const: string } } };
-type Branch = {
-  properties: {
-    verdict: { const: string };
-    retention_check?: { properties?: { proof?: { oneOf?: ProofKind[] } } };
-  };
-};
-const confirmed = (
-  JSON.parse(raw(path.join("references", "audit", "report-schema.json"))).output_schema
-    .oneOf as Branch[]
-).find((branch) => branch.properties.verdict.const === "confirmed");
-const proofKinds = confirmed?.properties.retention_check?.properties?.proof?.oneOf;
+const proofKinds = confirmedBranch().properties.retention_check?.properties?.proof?.oneOf;
 assert.ok(proofKinds?.length, "report-schema.json lost its retention_check proof kinds");
 const KINDS = proofKinds.map((kind) => `\`${kind.properties.kind.const}\``);
 
@@ -95,13 +85,9 @@ test("no /audit file still encodes guards-nothing as a none sentinel", () => {
 });
 
 test("dimension 11's bar names exactly the schema's retained contracts", () => {
-  const schema = JSON.parse(
-    readFileSync(path.join(repoRoot, "references", "audit", "report-schema.json"), "utf-8"),
-  );
-  const retention = schema.output_schema.oneOf.find(
-    (b: { properties?: { retention_check?: unknown } }) => b.properties?.retention_check,
-  ).properties.retention_check;
-  const enumKinds = retention.properties.contract.enum.filter((c: string) => c !== "none");
+  const contracts = confirmedBranch().properties.retention_check?.properties?.contract?.enum;
+  assert.ok(contracts, "report-schema.json lost its retention_check contract enum");
+  const enumKinds = contracts.filter((c) => c !== "none");
   const bar = section(dimension11(), "references/audit/SCAN-DIMENSIONS.md", "**Bar:**");
   const list = section(bar, "references/audit/SCAN-DIMENSIONS.md", "retained contract (", ")");
   const named = [...list.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]);

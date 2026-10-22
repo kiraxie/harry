@@ -27,6 +27,9 @@
     "@biomejs/biome": "^2.5.14",
     "@types/node": "^26.6.2",
     "esbuild": "^0.28.2",
+    "mdast-util-from-markdown": "^2.1.0",
+    "mdast-util-gfm": "^3.1.0",
+    "micromark-extension-gfm": "^3.0.0",
     "typescript": "^7.0.2"
   }
 }

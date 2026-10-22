@@ -4,7 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import {
+  MARKDOWN_CORPUS,
+  PROSE_DIRS,
+  REPO_TOP_LEVEL,
+  SHIPPED_TOP_LEVEL,
+  under,
+} from "./prose-dirs.ts";
 
 // A gate the model cannot execute is not a gate. `commands/review.md` used to set
 // `disable-model-invocation: true` (inherited from codex-plugin-cc, which sets it on every
@@ -23,15 +29,9 @@ import { PROSE_DIRS, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 function markdownUnder(dir: string): string[] {
-  const abs = path.join(repoRoot, dir);
-  assert.ok(
-    existsSync(abs),
-    `markdownUnder("${dir}"): scanned tree does not exist at ${abs} — a deleted-last-file ` +
-      "tree must fail this assertion, not throw a raw ENOENT out of readdirSync.",
-  );
-  return readdirSync(abs, { recursive: true, encoding: "utf-8" })
-    .filter((rel) => rel.endsWith(".md"))
-    .map((rel) => path.join(dir, rel));
+  const found = MARKDOWN_CORPUS.filter(under([dir]));
+  assert.ok(found.length > 0, `markdownUnder("${dir}"): no tracked markdown — renamed or deleted?`);
+  return found;
 }
 
 /**

@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIRS, PROSE_NON_MD_FILES, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { READER_CORPUS } from "./prose-dirs.ts";
 
 // The pipeline is brainstorm → execute → finish, and an active item carries
 // acceptance criteria instead of a plan. Both halves of that live in prose across
@@ -19,18 +19,7 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 
 /** Files that instruct the model, shipped or repo-local, or describe the product. */
-function proseFiles(): string[] {
-  const files = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, ...PROSE_NON_MD_FILES];
-  for (const dir of PROSE_DIRS) {
-    for (const rel of readdirSync(path.join(repoRoot, dir), {
-      recursive: true,
-      encoding: "utf-8",
-    })) {
-      if (rel.endsWith(".md")) files.push(path.join(dir, rel));
-    }
-  }
-  return files;
-}
+const proseFiles = (): string[] => READER_CORPUS;
 
 /** `brainstorm → plan → execute`, in either arrow spelling. */
 const PLAN_STAGE_RE = /brainstorm\s*(?:→|->)\s*plan\b/i;
