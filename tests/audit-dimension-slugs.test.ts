@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { dimensionFailures, namesIn, type Repo } from "./citations.ts";
 import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, under } from "./prose-dirs.ts";
 import { confirmedBranch, SCHEMA } from "./report-schema.ts";
 import { headingSection, outline } from "./section.ts";
@@ -127,7 +128,6 @@ const PLAIN_ENGLISH = [
 test("a hyphenated slug in audit prose sits in a code span unless it is plain English", () => {
   const bare = AUDIT_PROSE.flatMap((rel) =>
     outline(raw(rel)).flatMap((line, i) => {
-      if (line.fenced) return [];
       const prose = line.text.replace(/`[^`]*`/g, " ");
       return SLUGS.filter(
         (slug) => slug.includes("-") && new RegExp(`(?<![\\w-])${slug}(?![\\w-])`, "i").test(prose),
@@ -145,5 +145,43 @@ test("a hyphenated slug in audit prose sits in a code span unless it is plain En
     PLAIN_ENGLISH.filter((slug) => !bare.some((b) => b.slug === slug)),
     [],
     "a listed plain-English slug the audit prose no longer uses bare — delete it",
+  );
+});
+
+type Fence = { at: number; text: string };
+
+const fences = (rel: string): Fence[] => {
+  const found: Fence[] = [];
+  let open: { at: number; lines: string[] } | undefined;
+  for (const [i, line] of outline(raw(rel)).entries()) {
+    if (!line.fenced) continue;
+    if (!/^\s*`{3,}/.test(line.text)) open?.lines.push(line.text);
+    else if (!open) open = { at: i + 2, lines: [] };
+    else {
+      found.push({ at: open.at, text: open.lines.join("\n") });
+      open = undefined;
+    }
+  }
+  return found;
+};
+
+const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
+const scanDimensions: Repo = {
+  kind: (rel) => (rel === SCAN_DIMENSIONS ? "file" : "untracked"),
+  names: () => namesIn(raw(SCAN_DIMENSIONS)),
+};
+
+test("a dimension named inside a fence in audit prose is a SCAN-DIMENSIONS heading", () => {
+  const fenced = AUDIT_PROSE.flatMap((rel) => fences(rel).map((fence) => ({ rel, ...fence })));
+  assert.ok(fenced.length > 0, "the audit prose holds no fenced block");
+  assert.deepEqual(
+    fenced.flatMap(({ rel, at, text }) =>
+      dimensionFailures(scanDimensions, text).failures.map((failure) => {
+        const [, line = "1", message] = /^(\d+) -> (.*)$/s.exec(failure) ?? [];
+        return `${rel}:${at + Number(line) - 1} -> ${message}`;
+      }),
+    ),
+    [],
+    "a fenced dimension name no SCAN-DIMENSIONS ## heading has",
   );
 });
