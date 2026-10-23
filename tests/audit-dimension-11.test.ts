@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { inDir, PROSE_DIR_FILES } from "./prose-dirs.ts";
 import { confirmedBranch } from "./report-schema.ts";
 import { headingSection, section } from "./section.ts";
 
@@ -78,9 +79,8 @@ test("dimension-11 agents learn both kinds", () => {
 });
 
 test("no /audit file still encodes guards-nothing as a none sentinel", () => {
-  const dir = path.join("references", "audit");
-  for (const file of readdirSync(path.join(repoRoot, dir))) {
-    assert.doesNotMatch(read(path.join(dir, file)), /none: <reason>/, file);
+  for (const rel of PROSE_DIR_FILES.filter(inDir("references/audit"))) {
+    assert.doesNotMatch(read(rel), /none: <reason>/, rel);
   }
 });
 

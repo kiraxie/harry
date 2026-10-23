@@ -1,16 +1,10 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import {
-  MARKDOWN_CORPUS,
-  PROSE_DIRS,
-  REPO_TOP_LEVEL,
-  SHIPPED_TOP_LEVEL,
-  under,
-} from "./prose-dirs.ts";
+import { inDir, MARKDOWN_CORPUS, PROSE_DIRS, TOP_LEVEL, under } from "./prose-dirs.ts";
 
 // A gate the model cannot execute is not a gate. `commands/review.md` used to set
 // `disable-model-invocation: true` (inherited from codex-plugin-cc, which sets it on every
@@ -64,7 +58,7 @@ const GATE_PATH_EXEMPTIONS = new Set(["references", ".claude/references", "READM
 function gateFiles(): string[] {
   const exempt = new Set(GATE_SCAN_EXEMPTIONS.map((e) => e.path));
   return [
-    ...[...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL].filter((f) => !GATE_PATH_EXEMPTIONS.has(f)),
+    ...TOP_LEVEL.filter((f) => !GATE_PATH_EXEMPTIONS.has(f)),
     "references/tier-gates.md",
     ...PROSE_DIRS.filter((dir) => !GATE_PATH_EXEMPTIONS.has(dir)).flatMap(markdownUnder),
   ].filter((rel) => !exempt.has(rel));
@@ -76,11 +70,10 @@ function gateFiles(): string[] {
  */
 const EXTERNAL_BLOCKED = ["code-review"];
 
-function blockedCommandNames(dir = path.join(repoRoot, "commands")): string[] {
-  const names = readdirSync(dir)
-    .filter((f) => f.endsWith(".md"))
+function blockedCommandNames(files = MARKDOWN_CORPUS.filter(inDir("commands"))): string[] {
+  const names = files
     .filter((f) => {
-      const text = readFileSync(path.join(dir, f), "utf-8");
+      const text = readFileSync(path.resolve(repoRoot, f), "utf-8");
       const frontmatter = text.startsWith("---") ? text.slice(3).split("\n---")[0] : "";
       return /^disable-model-invocation:\s*true\s*$/m.test(frontmatter);
     })
@@ -121,15 +114,11 @@ test("the blocked-command scan actually finds the commands it is meant to find",
   // against a fixture — otherwise a broken parse would read as "nothing is blocked".
   const dir = mkdtempSync(path.join(os.tmpdir(), "harry-gates-"));
   try {
-    writeFileSync(
-      path.join(dir, "blocked.md"),
-      "---\ndescription: x\ndisable-model-invocation: true\n---\nbody\n",
-    );
-    writeFileSync(
-      path.join(dir, "open.md"),
-      "---\ndescription: x\n---\ndisable-model-invocation: true\n",
-    );
-    const blocked = blockedCommandNames(dir);
+    const blockedFile = path.join(dir, "blocked.md");
+    const openFile = path.join(dir, "open.md");
+    writeFileSync(blockedFile, "---\ndescription: x\ndisable-model-invocation: true\n---\nbody\n");
+    writeFileSync(openFile, "---\ndescription: x\n---\ndisable-model-invocation: true\n");
+    const blocked = blockedCommandNames([blockedFile, openFile]);
     assert.ok(blocked.includes("blocked"), `frontmatter flag not detected: ${blocked.join(", ")}`);
     assert.ok(!blocked.includes("open"), "a body mention must not count as the frontmatter flag");
     assert.ok(blocked.includes("code-review"), "the external /code-review pin went missing");

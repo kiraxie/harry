@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { PROSE_DIRS } from "./prose-dirs.ts";
 
 const testsDir = fileURLToPath(new URL(".", import.meta.url));
 const OWNER = "section.ts";
@@ -549,4 +550,118 @@ test("no test in tests/ reads code spans on its own", () => {
 
 test("every code-span allowlist entry matches exactly one read", () => {
   assert.deepEqual(staleEntries(CODE_SPAN_ALLOWED, spanReads()), [], "remove a stale entry");
+});
+
+const ROOT_NAMES = /\b(?:repoRoot|REPO_ROOT)\b/;
+
+const namesProseDir = (body: string): boolean =>
+  PROSE_DIRS.some((dir) => body === dir || body.startsWith(`${dir}/`));
+
+const spanEnd = (
+  src: string,
+  ends: Map<number, number>,
+  from: number,
+  stop: (c: string, depth: number) => boolean,
+): number => {
+  let depth = 0;
+  let i = from;
+  while (i < src.length) {
+    const end = ends.get(i);
+    if (end !== undefined) {
+      i = end;
+      continue;
+    }
+    const c = src[i] as string;
+    if ("([{".includes(c)) depth += 1;
+    else if (")]}".includes(c)) depth -= 1;
+    if (stop(c, depth)) return i;
+    i += 1;
+  }
+  return i;
+};
+
+const dirWalks = (src: string): { line: number; text: string }[] => {
+  const lits = literals(src);
+  const ends = new Map(lits.map((l) => [l.at, l.end]));
+  const names = (from: number, to: number): boolean =>
+    ROOT_NAMES.test(src.slice(from, to)) ||
+    lits.some((l) => l.at > from && l.end <= to && l.kind === "string" && namesProseDir(l.body));
+  const aliasNames = (id: string): boolean =>
+    [
+      ...src.matchAll(
+        new RegExp(`\\bconst\\s+${id.replace(/\$/g, "\\$")}\\s*(?::[^=]+)?=\\s*`, "g"),
+      ),
+    ].some((d) => {
+      const from = d.index + d[0].length;
+      return names(
+        from,
+        spanEnd(
+          src,
+          ends,
+          from,
+          (c, depth) => depth < 0 || (depth === 0 && (c === ";" || c === "\n")),
+        ),
+      );
+    });
+  return [...src.matchAll(/\breaddirSync\(/g)].flatMap((m) => {
+    const open = m.index + m[0].length - 1;
+    const close = spanEnd(src, ends, open, (_, depth) => depth === 0);
+    let code = src.slice(open, close);
+    for (const l of lits.filter((l) => l.at > open && l.end <= close))
+      code = code.slice(0, l.at - open) + " ".repeat(l.end - l.at) + code.slice(l.end - open);
+    const walks =
+      names(open, close) || [...new Set(code.match(/[A-Za-z_$][\w$]*/g))].some(aliasNames);
+    return walks
+      ? [{ line: src.slice(0, m.index).split("\n").length, text: src.slice(m.index, close + 1) }]
+      : [];
+  });
+};
+
+test("the dir-walk scan flags a walk of the repo root or a prose dir and nothing else", () => {
+  assert.deepEqual(
+    [
+      'readdirSync(path.join(repoRoot, "commands"));',
+      "fs.readdirSync(path.join(REPO_ROOT, dir));",
+      'readdirSync("agents");',
+      'const ccDir = path.join(repoRoot, "agents");\nreaddirSync(ccDir);',
+      'function f() {\n  return readdirSync(dir);\n}\nconst dir = path.join(root, "references/audit");',
+      'const ccDir: string = path.join(repoRoot, "agents");\nreaddirSync(ccDir);',
+      'const ccDir =\n  process.env.X ?? path.join(repoRoot, "agents");\nreaddirSync(ccDir);',
+      'const ccDir = path.join(\n  repoRoot,\n  "agents",\n);\nreaddirSync(ccDir);',
+    ].filter((src) => dirWalks(src).length === 0),
+    [],
+    "a known walk now passes the scan",
+  );
+  assert.deepEqual(
+    [
+      "readdirSync(markers);",
+      "readdirSync(dir, { recursive: true });",
+      "const markers = mkdtempSync(x);\nreaddirSync(markers);",
+      'const dir = path.join(repoRoot, "x");\nreaddirSync(path.join(tmp, "dir"));',
+    ].filter((src) => dirWalks(src).length > 0),
+    [],
+    "the scan now flags a walk of no prose dir",
+  );
+});
+
+const DIR_WALK_ALLOWED: { file: string; text: string; why: string }[] = [];
+
+const ownWalks = (): { file: string; line: number; text: string }[] =>
+  scanned().flatMap((file) =>
+    dirWalks(readFileSync(path.join(testsDir, file), "utf-8")).map((w) => ({ file, ...w })),
+  );
+
+test("no test in tests/ walks the repo root or a prose dir on disk", () => {
+  const own = ownWalks()
+    .filter((w) => !DIR_WALK_ALLOWED.some((a) => a.file === w.file && a.text === w.text))
+    .map((w) => `${w.file}:${w.line}: ${w.text}`);
+  assert.deepEqual(
+    own,
+    [],
+    `take the files from tests/prose-dirs.ts (TRACKED_FILES, PROSE_DIR_FILES, MARKDOWN_CORPUS), or add an allowlist entry with its reason:\n${own.join("\n")}`,
+  );
+});
+
+test("every dir-walk allowlist entry matches exactly one walk", () => {
+  assert.deepEqual(staleEntries(DIR_WALK_ALLOWED, ownWalks()), [], "remove a stale entry");
 });

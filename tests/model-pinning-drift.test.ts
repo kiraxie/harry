@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { inDir, MARKDOWN_CORPUS, skillFiles } from "./prose-dirs.ts";
 
 // harry passes no model to Codex: `review` and `ask` spawn the Codex CLI without
 // `-m`, so `~/.codex/config.toml` decides. The doors are the prose a consumer
@@ -25,15 +26,10 @@ const MODEL_ID_RE = /gpt-\d+(?:\.\d+)?(?:-[a-z]+)?/g;
 
 const UNAVAILABILITY_MARKERS = [/not supported/i, /\b400\b/, /why not/i, /reject/i];
 
-function doorFiles(): string[] {
-  const files = readdirSync(path.join(repoRoot, "commands"))
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => `commands/${f}`);
-  for (const dir of readdirSync(path.join(repoRoot, "codex-skills"), { withFileTypes: true })) {
-    if (dir.isDirectory()) files.push(`codex-skills/${dir.name}/SKILL.md`);
-  }
-  return files;
-}
+const doorFiles = (): string[] => [
+  ...MARKDOWN_CORPUS.filter(inDir("commands")),
+  ...skillFiles("codex-skills"),
+];
 
 const excused = (line: string): boolean => UNAVAILABILITY_MARKERS.some((m) => m.test(line));
 
@@ -43,17 +39,13 @@ test("no door claims a model harry sends", () => {
 
   const claims: string[] = [];
   for (const rel of files) {
-    let text: string;
-    try {
-      text = readFileSync(path.join(repoRoot, rel), "utf-8");
-    } catch {
-      continue; // a codex-skills entry without a SKILL.md is not a door
-    }
-    text.split("\n").forEach((line, i) => {
-      for (const id of line.match(MODEL_ID_RE) ?? []) {
-        if (!excused(line)) claims.push(`${rel}:${i + 1} names ${id}`);
-      }
-    });
+    readFileSync(path.join(repoRoot, rel), "utf-8")
+      .split("\n")
+      .forEach((line, i) => {
+        for (const id of line.match(MODEL_ID_RE) ?? []) {
+          if (!excused(line)) claims.push(`${rel}:${i + 1} names ${id}`);
+        }
+      });
   }
   assert.deepEqual(
     claims,

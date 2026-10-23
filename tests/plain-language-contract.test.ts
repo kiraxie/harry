@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROSE_DIR_FILES, REPO_TOP_LEVEL, SHIPPED_TOP_LEVEL } from "./prose-dirs.ts";
+import { PROSE_DIR_FILES, TOP_LEVEL } from "./prose-dirs.ts";
 import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -215,7 +215,7 @@ test("AC-4: both /wait-what doors are thin pointers that say one-shot, not a mod
   }
 });
 
-const corpus = (): string[] => [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL, ...PROSE_DIR_FILES];
+const corpus = (): string[] => [...TOP_LEVEL, ...PROSE_DIR_FILES];
 
 const GONE = {
   breaker: /\bbreakers?\b/i,

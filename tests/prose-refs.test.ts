@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -33,10 +32,12 @@ import {
   REPO_LOCAL_DATA_FILES,
   REPO_LOCAL_DIRS,
   REPO_LOCAL_PROSE_DIRS,
-  REPO_TOP_LEVEL,
   SHIPPED_DATA_FILES,
+  SHIPPED_MARKDOWN,
   SHIPPED_PROSE_DIRS,
   SHIPPED_TOP_LEVEL,
+  TOP_LEVEL,
+  TRACKED_FILES,
   under,
 } from "./prose-dirs.ts";
 import { headingSection, outline } from "./section.ts";
@@ -49,15 +50,9 @@ import { headingSection, outline } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const gitFiles = (...args: string[]): string[] =>
-  execFileSync("git", ["ls-files", ...args], { cwd: repoRoot, encoding: "utf-8" })
-    .split("\n")
-    .filter(Boolean);
-const deletedFiles = new Set(gitFiles("--deleted"));
-const trackedFiles = gitFiles().filter((rel) => !deletedFiles.has(rel));
-const trackedFileSet = new Set(trackedFiles);
+const trackedFileSet = new Set(TRACKED_FILES);
 const trackedDirs = new Set(
-  trackedFiles.flatMap((rel) =>
+  TRACKED_FILES.flatMap((rel) =>
     rel
       .split("/")
       .slice(0, -1)
@@ -77,13 +72,12 @@ const isTracked = (abs: string): boolean =>
 const resolves = (candidate: string, fileDir: string): boolean =>
   isTracked(path.join(repoRoot, candidate)) || isTracked(path.join(fileDir, candidate));
 
-const TOP_LEVEL_FILES = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
 // evals stays out of prose-dirs.ts: REPO_LOCAL_PROSE_DIRS holds only .claude/ subdirs,
 // and plain-language's corpus reads every file, where evals/cases.jsonl would trip it.
 const PROSE_DIRS = [...INSTRUCTION_DIRS, "evals"];
 
 function listMarkdownFiles(dir: string): string[] {
-  return trackedFiles.filter((rel) => rel.startsWith(`${dir}/`) && rel.endsWith(".md"));
+  return TRACKED_FILES.filter((rel) => rel.startsWith(`${dir}/`) && rel.endsWith(".md"));
 }
 
 const proseFiles = [...READER_CORPUS, ...listMarkdownFiles("evals")];
@@ -206,11 +200,7 @@ const REPO_LOCAL_CITE_EXEMPTIONS: ReadonlyArray<{ path: string; text: string; re
 ];
 
 test("no shipped file cites a repo-local .claude/ path", () => {
-  const shipped = [
-    ...SHIPPED_TOP_LEVEL,
-    ...SHIPPED_DATA_FILES,
-    ...SHIPPED_PROSE_DIRS.flatMap(listMarkdownFiles),
-  ];
+  const shipped = [...SHIPPED_MARKDOWN, ...SHIPPED_DATA_FILES];
   const failures: string[] = [];
   const used = new Set<(typeof REPO_LOCAL_CITE_EXEMPTIONS)[number]>();
   for (const relFile of shipped) {
@@ -237,7 +227,7 @@ test("no shipped file cites a repo-local .claude/ path", () => {
 // The tracked-path check and every prose scan see a `.claude/` dir only once it is listed,
 // so the lists must equal what git tracks there (untracked `worktrees/` drops out).
 test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
-  const tracked = trackedFiles.filter((f) => f.startsWith(".claude/") && f.split("/").length > 2);
+  const tracked = TRACKED_FILES.filter((f) => f.startsWith(".claude/") && f.split("/").length > 2);
   const dirOf = (f: string) => f.split("/").slice(0, 2).join("/");
   const all = [...new Set(tracked.map(dirOf))].sort();
   const prose = [...new Set(tracked.filter((f) => f.endsWith(".md")).map(dirOf))].sort();
@@ -247,9 +237,9 @@ test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
 
 const DATA_FILE_DIRS = [...SHIPPED_PROSE_DIRS, ...MANIFEST_DIRS, ...REPO_LOCAL_PROSE_DIRS];
 const nonMarkdown = (dirs: string[]): string[] =>
-  trackedFiles
-    .filter((f) => under(dirs)(f) && !f.endsWith(".md") && !CODE_EXEMPTIONS.includes(f))
-    .sort();
+  TRACKED_FILES.filter(
+    (f) => under(dirs)(f) && !f.endsWith(".md") && !CODE_EXEMPTIONS.includes(f),
+  ).sort();
 
 test("every code exemption is a tracked file under a dir the data-file check reads", () => {
   assert.deepEqual(
@@ -274,7 +264,7 @@ test("prose-dirs.ts names every tracked non-markdown file in the repo-local pros
 });
 
 test("only prose-refs reads the side lists of data files", () => {
-  const readers = trackedFiles.filter(
+  const readers = TRACKED_FILES.filter(
     (f) =>
       f.startsWith("tests/") &&
       !["tests/prose-dirs.ts", "tests/prose-refs.test.ts"].includes(f) &&
@@ -332,10 +322,10 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
         `is fixed, every citation in it is unchecked and both tests here pass regardless.`,
     );
   }
-  for (const file of TOP_LEVEL_FILES) {
+  for (const file of TOP_LEVEL) {
     assert.ok(
       isTracked(path.join(repoRoot, file)),
-      `TOP_LEVEL_FILES names "${file}" but it is not tracked — renamed? Both tests here read ` +
+      `TOP_LEVEL names "${file}" but it is not tracked — renamed? Both tests here read ` +
         `that list, so its paths AND its citations go unchecked until this is fixed.`,
     );
   }
@@ -465,7 +455,7 @@ test("every bold law name has HARRY.md before it", () => {
 });
 
 test("every reference is cited by path from a shipped file other than itself", () => {
-  const shipped = [...SHIPPED_TOP_LEVEL, ...SHIPPED_PROSE_DIRS.flatMap(listMarkdownFiles)];
+  const shipped = SHIPPED_MARKDOWN;
   const texts = new Map(
     shipped.map((rel) => [rel, readFileSync(path.join(repoRoot, rel), "utf-8")]),
   );
@@ -488,7 +478,7 @@ test("no tracked file but the changelog cites a law by the retired section-numbe
   // Every tracked file, not a list of kinds: a list missed a file kind four times
   // (test messages, scripts, eval notes, upstream.json). CHANGELOG.md is release
   // history and quotes the numbering of its day.
-  const tracked = trackedFiles.filter((rel) => rel !== "CHANGELOG.md");
+  const tracked = TRACKED_FILES.filter((rel) => rel !== "CHANGELOG.md");
   assert.ok(
     [...SHIPPED_TOP_LEVEL, ...PROSE_NON_MD_FILES].every((rel) => tracked.includes(rel)),
     "the scan lost the tracked files",

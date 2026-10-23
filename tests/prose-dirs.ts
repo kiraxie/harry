@@ -1,27 +1,10 @@
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The one list of prose files and directories. Top-level files, directories and data
-// files are split by whether a plugin build or the marketplace loads them; NOTICE has no
-// split. Every prose scan takes its corpus from here, built from one walk of the files
-// git tracks, so a file or directory added or moved is seen by every scan that reads its
-// kind, or by none, and an untracked file is seen by none.
-//
-// MARKDOWN_CORPUS is the top-level files and the markdown under PROSE_DIRS. READER_CORPUS
-// adds PROSE_NON_MD_FILES (NOTICE and the data files) and goes to the scans whose rule is
-// about what any file says to a reader: pipeline-stages (a stale stage), grilling-
-// contract's cadence scan, prose-refs' path and citation checks, and review-cli's AC-11
-// scan (the codex subcommand). Scans of shipped markdown's own vocabulary or structure
-// leave the data files out: upstream.json names the hoist dimension a cut-term scan would
-// flag. PROSE_DIR_FILES is every tracked file under PROSE_DIRS, for the scan that reads
-// the code and data files there too. A scan reads a file as raw text where its hits cite
-// a line, and through proseStrings where its hits quote a string.
-//
-// Only prose-refs reads the side lists of data files: it keeps each side's data files
-// under that side's dirs (MANIFEST_DIRS on the shipped side) equal to what git tracks
-// there, minus CODE_EXEMPTIONS.
+// MARKDOWN_CORPUS leaves out READER_CORPUS's data files: upstream.json names cut terms.
 export const SHIPPED_TOP_LEVEL = ["HARRY.md"];
 export const REPO_TOP_LEVEL = ["README.md", "CLAUDE.md"];
 export const SHIPPED_PROSE_DIRS = ["skills", "commands", "codex-skills", "references", "agents"];
@@ -48,18 +31,39 @@ const gitFiles = (...args: string[]): string[] =>
     .filter(Boolean);
 const deleted = new Set(gitFiles("--deleted"));
 
-export const PROSE_DIR_FILES = gitFiles("--", ...PROSE_DIRS).filter((rel) => !deleted.has(rel));
-export const MARKDOWN_CORPUS = [
-  ...SHIPPED_TOP_LEVEL,
-  ...REPO_TOP_LEVEL,
-  ...PROSE_DIR_FILES.filter((rel) => rel.endsWith(".md")),
-];
-export const READER_CORPUS = [...MARKDOWN_CORPUS, ...PROSE_NON_MD_FILES];
-
 export const under =
   (dirs: string[]) =>
   (rel: string): boolean =>
     dirs.some((dir) => rel.startsWith(`${dir}/`));
+
+export const TRACKED_FILES = gitFiles().filter((rel) => !deleted.has(rel));
+export const PROSE_DIR_FILES = TRACKED_FILES.filter(under(PROSE_DIRS));
+
+const parentOf = (rel: string): string => path.posix.dirname(rel);
+const isSkill = (rel: string): boolean => path.posix.basename(rel) === "SKILL.md";
+const FILE_DIRS = new Set(PROSE_DIR_FILES.map(parentOf));
+const SKILL_DIRS = new Set(PROSE_DIR_FILES.filter(isSkill).map((rel) => parentOf(parentOf(rel))));
+
+export const inDir = (dir: string): ((rel: string) => boolean) => {
+  assert.ok(FILE_DIRS.has(dir), `inDir("${dir}"): no tracked prose file directly in it`);
+  return (rel) => parentOf(rel) === dir;
+};
+
+export const TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
+export const MARKDOWN_CORPUS = [
+  ...TOP_LEVEL,
+  ...PROSE_DIR_FILES.filter((rel) => rel.endsWith(".md")),
+];
+export const SHIPPED_MARKDOWN = [
+  ...SHIPPED_TOP_LEVEL,
+  ...MARKDOWN_CORPUS.filter(under(SHIPPED_PROSE_DIRS)),
+];
+export const READER_CORPUS = [...MARKDOWN_CORPUS, ...PROSE_NON_MD_FILES];
+
+export const skillFiles = (dir: string): string[] => {
+  assert.ok(SKILL_DIRS.has(dir), `skillFiles("${dir}"): no tracked ${dir}/<name>/SKILL.md`);
+  return MARKDOWN_CORPUS.filter((rel) => isSkill(rel) && parentOf(parentOf(rel)) === dir);
+};
 
 const jsonStrings = (value: unknown): string[] =>
   typeof value === "string"

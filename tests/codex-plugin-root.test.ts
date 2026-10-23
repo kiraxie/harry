@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { skillFiles } from "./prose-dirs.ts";
 
 // Codex does not set `${CLAUDE_PLUGIN_ROOT}` in the shell a skill's commands run in
 // (verified on codex-cli 0.155.1: `env` there has only CODEX_* names), so
@@ -31,10 +32,7 @@ const rule = (dir: string, name: string): RegExp =>
 
 /** Every skill directory under `dir` that has a SKILL.md. */
 const skillsIn = (dir: string): string[] =>
-  readdirSync(path.join(repoRoot, dir), { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name)
-    .filter((name) => readdirSync(path.join(repoRoot, dir, name)).includes("SKILL.md"));
+  skillFiles(dir).map((rel) => path.posix.basename(path.posix.dirname(rel)));
 
 /** The skills under `dir` whose SKILL.md uses the variable. */
 const usersIn = (dir: string): string[] =>

@@ -30,7 +30,7 @@ import test from "node:test";
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
 import { buildReviewPrompt, type ReviewPromptInput } from "../src/lib/review-modes.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
-import { proseStrings, READER_CORPUS } from "./prose-dirs.ts";
+import { inDir, MARKDOWN_CORPUS, proseStrings, READER_CORPUS } from "./prose-dirs.ts";
 import { headingSection, inOrder, outline, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -1439,9 +1439,7 @@ test("the per-diff prompt embeds exactly the files the rubric declares as its st
     target: { mode: "working-tree", label: "working tree diff" },
     standard: "review",
   });
-  const refs = readdirSync(path.join(REPO_ROOT, "references"))
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => `references/${f}`);
+  const refs = MARKDOWN_CORPUS.filter(inDir("references"));
   const embedded = refs.filter((rel) =>
     prompt.includes(readFileSync(path.join(REPO_ROOT, rel), "utf8").trim()),
   );
@@ -1466,9 +1464,7 @@ test("AC-4: the re-review prompt embeds the declared standard files whole and ex
     standard: "rereview",
     handed: "4 · open",
   });
-  const refs = readdirSync(path.join(REPO_ROOT, "references"))
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => `references/${f}`);
+  const refs = MARKDOWN_CORPUS.filter(inDir("references"));
   const read = (rel: string): string => readFileSync(path.join(REPO_ROOT, rel), "utf8");
   const whole = refs.filter((rel) => prompt.includes(read(rel).trim()));
   assert.deepEqual(whole.sort(), [...declared].sort());

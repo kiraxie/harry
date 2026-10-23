@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { inDir, MARKDOWN_CORPUS, skillFiles } from "./prose-dirs.ts";
 
 // harry's role routing (executing's **Who writes**) is declared in three independent places that
 // must not drift: the resident law prose, the Claude Code agent frontmatter, and
@@ -76,10 +77,9 @@ test("A2 · agents/*.md frontmatter name-set equals the canonical role set", () 
   // agents/driver.md is caught — a fixed-filename loop would silently ignore it. We
   // assert only the name *set*; agents.test.ts covers each file's model/effort/tools.
   const names = new Set<string>();
-  for (const entry of readdirSync(path.join(repoRoot, "agents"))) {
-    if (!entry.endsWith(".md")) continue;
-    const m = readFileSync(path.join(repoRoot, "agents", entry), "utf-8").match(/^name:\s*(.+)$/m);
-    assert.ok(m, `agents/${entry}: no 'name:' in frontmatter`);
+  for (const rel of MARKDOWN_CORPUS.filter(inDir("agents"))) {
+    const m = readFileSync(path.join(repoRoot, rel), "utf-8").match(/^name:\s*(.+)$/m);
+    assert.ok(m, `${rel}: no 'name:' in frontmatter`);
     names.add((m[1] as string).trim());
   }
   assert.deepEqual(
@@ -159,14 +159,12 @@ const CC_ONLY: Record<string, string> = {
 };
 
 test("B · every command with a Codex twin is declared in PAIRS", () => {
-  const commands = readdirSync(path.join(repoRoot, "commands"))
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => f.replace(/\.md$/, ""));
-  const codexSkills = readdirSync(path.join(repoRoot, "codex-skills"), { withFileTypes: true })
-    .filter(
-      (d) => d.isDirectory() && existsSync(path.join(repoRoot, "codex-skills", d.name, "SKILL.md")),
-    )
-    .map((d) => d.name);
+  const commands = MARKDOWN_CORPUS.filter(inDir("commands")).map((rel) =>
+    path.posix.basename(rel, ".md"),
+  );
+  const codexSkills = skillFiles("codex-skills").map((rel) =>
+    path.posix.basename(path.posix.dirname(rel)),
+  );
 
   assert.deepEqual(
     commands.filter((n) => codexSkills.includes(n)).sort(),

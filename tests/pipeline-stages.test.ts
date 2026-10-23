@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { READER_CORPUS } from "./prose-dirs.ts";
+import { PROSE_DIR_FILES, READER_CORPUS, under } from "./prose-dirs.ts";
 
 // The pipeline is brainstorm → execute → finish, and an active item carries
 // acceptance criteria instead of a plan. Both halves of that live in prose across
@@ -76,9 +76,12 @@ test("prose counts the pipeline skills that actually ship", () => {
   // `writing-plans` in three files while a fourth already said three. Count the
   // directories instead of pinning a number, so the next stage change fails here.
   const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
-  const actual = readdirSync(path.join(repoRoot, "skills"), { withFileTypes: true }).filter((e) =>
-    e.isDirectory(),
-  ).length;
+  const actual = new Set(
+    PROSE_DIR_FILES.filter(under(["skills"]))
+      .map((rel) => rel.split("/"))
+      .filter((parts) => parts.length > 2)
+      .map((parts) => parts[1]),
+  ).size;
   const allowed = new Set([words[actual], String(actual)]);
   const offenders: string[] = [];
   for (const rel of proseFiles()) {

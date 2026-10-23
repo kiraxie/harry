@@ -3,22 +3,18 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, SHIPPED_TOP_LEVEL, under } from "./prose-dirs.ts";
+import { SHIPPED_MARKDOWN } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const OWNER = path.join("references", "architecture-review.md");
 
-const shippedProse = (): string[] => [
-  ...SHIPPED_TOP_LEVEL,
-  ...MARKDOWN_CORPUS.filter(under(SHIPPED_PROSE_DIRS)),
-];
 const flatten = (text: string): string => text.replace(/\s+/g, " ");
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 const read = (rel: string): string => flatten(raw(rel));
 
 test("the deletion test is defined once in shipped prose, in architecture-review.md", () => {
-  const defining = shippedProse().filter((f) =>
+  const defining = SHIPPED_MARKDOWN.filter((f) =>
     /\*\*deletion test\*\*|picture the codebase without/i.test(read(f)),
   );
   assert.deepEqual(defining, [OWNER]);
