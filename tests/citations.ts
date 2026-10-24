@@ -10,8 +10,7 @@ export type Repo = {
   names: (rel: string) => Name[];
 };
 
-export const lineOf = (text: string, index?: number): number =>
-  text.slice(0, index).split("\n").length;
+const lineOf = (text: string, index?: number): number => text.slice(0, index).split("\n").length;
 
 export const LAW_HEADINGS = [
   "Priority",
@@ -126,10 +125,15 @@ const sources = (text: string): string[] => {
 
 const FENCE_BODY = { disable: { null: ["codeIndented", "definition", "htmlFlow", "htmlText"] } };
 
+// gfm's autolink transform splits a [-led text node into unpositioned nodes; no scan reads a link.
+const GFM_MDAST = gfmFromMarkdown().map((extension) =>
+  extension.enter?.literalAutolink ? { ...extension, transforms: [] } : extension,
+);
+
 const parse = (src: string, body = false): MdNode =>
   fromMarkdown(src, {
     extensions: body ? [gfm(), FENCE_BODY] : [gfm()],
-    mdastExtensions: [gfmFromMarkdown()],
+    mdastExtensions: GFM_MDAST,
   });
 
 const offset = (node: MdNode, edge: "start" | "end"): number => node.position?.[edge].offset ?? 0;
@@ -140,8 +144,6 @@ const walk = (node: MdNode, visit: (node: MdNode) => void): void => {
 };
 
 const contentRange = (node: MdNode): [number, number] | null => {
-  if (node.type === "paragraph" && node.position)
-    return [offset(node, "start"), offset(node, "end")];
   const first = node.children?.[0];
   const last = node.children?.at(-1);
   return first && last ? [offset(first, "start"), offset(last, "end")] : null;
@@ -231,6 +233,9 @@ export const fences = (text: string): Fence[] => {
   return found;
 };
 
+export const untaggedFences = (text: string): Fence[] =>
+  fences(text).filter((fence) => !fence.info);
+
 export const fenceBlocks = (fence: Fence): Block[] =>
   parsed(fence.text, true).map(({ at, ...b }) => ({
     ...b,
@@ -245,9 +250,7 @@ const proseBlocks = (text: string): Block[] =>
       fenced: false,
       lineAt: (i: number) => lineOf(text, at + i),
     })),
-    ...fences(text)
-      .filter((fence) => !fence.info)
-      .flatMap(fenceBlocks),
+    ...untaggedFences(text).flatMap(fenceBlocks),
   ].sort((a, b) => a.lineAt(0) - b.lineAt(0));
 
 export const readProse = (rel: string, text: string): Block[] =>
@@ -499,7 +502,7 @@ const hitList = () => {
     },
     list: () =>
       [...hits.values()]
-        .sort((x, y) => x.line - y.line || x.n - y.n || x.i - y.i)
+        .sort((x, y) => x.n - y.n || x.i - y.i)
         .map(({ line, message }) => `${line} -> ${message}`),
   };
 };

@@ -7,11 +7,11 @@ import {
   type Block,
   blockDimensionFailures,
   fenceBlocks,
-  fences,
   namesIn,
   type Repo,
   readProse,
   SCAN_DIMENSIONS,
+  untaggedFences,
 } from "./citations.ts";
 import { SHIPPED_MARKDOWN } from "./prose-dirs.ts";
 import { confirmedBranch, NAMES, SCHEMA } from "./report-schema.ts";
@@ -206,9 +206,7 @@ test("a hyphenated slug in audit prose sits in a code span unless it is plain En
 });
 
 const UNTAGGED = AUDIT_PROSE.flatMap((rel) =>
-  fences(raw(rel))
-    .filter((fence) => !fence.info)
-    .map((fence) => ({ rel, fence })),
+  untaggedFences(raw(rel)).map((fence) => ({ rel, fence })),
 );
 
 test("every line holding a word in an untagged audit fence is read", () => {

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { headingSection, inOrder, outline, section } from "./section.ts";
+import {
+  headingLines,
+  headingSection,
+  inOrder,
+  outline,
+  section,
+  sectionLines,
+} from "./section.ts";
 
 const doc = "# T\n\n## A\none\n\n## B\ntwo\n";
 
@@ -150,6 +157,33 @@ test("headingSection: flattened text fails instead of reading as one heading lin
 
 test("headingSection: a RegExp heading matches only at the start of a line", () => {
   assert.equal(headingSection("# T\n### B\ndeep\n## B\ntwo\n", "doc.md", /## B/), "## B\ntwo\n");
+});
+
+test("headingLines: a heading range includes the blank line before the next heading", () => {
+  assert.deepEqual(headingLines(doc, "doc.md", "## A"), [3, 5]);
+});
+
+test("headingLines: CRLF lines count like LF", () => {
+  assert.deepEqual(headingLines(doc.replaceAll("\n", "\r\n"), "doc.md", "## A"), [3, 5]);
+});
+
+test("sectionLines: a range ends before an end marker that starts its line", () => {
+  assert.deepEqual(sectionLines(doc, "doc.md", "one", "## B"), [4, 4]);
+});
+
+test("sectionLines: CRLF lines count like LF", () => {
+  assert.deepEqual(sectionLines(doc.replaceAll("\n", "\r\n"), "doc.md", "one", "## B"), [4, 4]);
+});
+
+test("headingLines and sectionLines: a lone CR ends a line, as outline() reads it", () => {
+  const cr = doc.replaceAll("\n", "\r");
+  assert.deepEqual(
+    [headingLines(cr, "doc.md", "## A"), sectionLines(cr, "doc.md", "one", "## B")],
+    [
+      [3, 5],
+      [4, 4],
+    ],
+  );
 });
 
 test("inOrder: markers in order pass", () => {

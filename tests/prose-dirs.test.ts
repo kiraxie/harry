@@ -29,9 +29,12 @@ test("inDir fails loud on a prose dir whose files the corpus leaves out", () => 
   assert.throws(() => inDir("agents", nonMarkdown), names(`inDir("agents")`));
 });
 
-test("filesUnder returns every corpus file under a dir, nested ones included", () => {
+test("filesUnder includes a nested file inDir leaves out", () => {
   const rel = "references/audit/RECON.md";
   assert.ok(filesUnder("references").includes(rel) && !inDir("references").includes(rel));
+});
+
+test("filesUnder fails loud on a dir with no corpus file under it", () => {
   for (const dir of ["nope", "src"])
     assert.throws(() => filesUnder(dir), names(`filesUnder("${dir}")`), dir);
 });

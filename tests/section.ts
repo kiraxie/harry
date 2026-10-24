@@ -1,17 +1,42 @@
 import assert from "node:assert/strict";
 
+const markerRange = (
+  text: string,
+  rel: string,
+  startMarker: string,
+  endMarker?: string,
+): [number, number] => {
+  const start = text.indexOf(startMarker);
+  assert.ok(start !== -1, `${rel} no longer contains "${startMarker}"`);
+  if (endMarker === undefined) return [start, text.length];
+  const end = text.indexOf(endMarker, start + startMarker.length);
+  assert.ok(end !== -1, `${rel} no longer contains "${endMarker}" after "${startMarker}"`);
+  return [start, end];
+};
+
 export function section(
   text: string,
   rel: string,
   startMarker: string,
   endMarker?: string,
 ): string {
-  const start = text.indexOf(startMarker);
-  assert.ok(start !== -1, `${rel} no longer contains "${startMarker}"`);
-  if (endMarker === undefined) return text.slice(start);
-  const end = text.indexOf(endMarker, start + startMarker.length);
-  assert.ok(end !== -1, `${rel} no longer contains "${endMarker}" after "${startMarker}"`);
-  return text.slice(start, end);
+  return text.slice(...markerRange(text, rel, startMarker, endMarker));
+}
+
+const LINE_END_RE = /\r\n|\r|\n/;
+
+const lineAt = (text: string, offset: number): number =>
+  text.slice(0, offset).split(LINE_END_RE).length;
+
+export function sectionLines(
+  text: string,
+  rel: string,
+  startMarker: string,
+  endMarker?: string,
+): [number, number] {
+  const [start, end] = markerRange(text, rel, startMarker, endMarker);
+  const body = text.slice(start, end).trimEnd();
+  return [lineAt(text, start), lineAt(text, start + body.length)];
 }
 
 const FENCE_RE = /^\s*(`{3,})(.*)$/s;
@@ -20,7 +45,7 @@ export type OutlineLine = { text: string; fenced: boolean; level: number; title:
 
 export function outline(text: string): OutlineLine[] {
   let fence = "";
-  return text.split(/\r\n|\r|\n/).map((line) => {
+  return text.split(LINE_END_RE).map((line) => {
     const [, run, rest = ""] = FENCE_RE.exec(line) ?? [];
     if (run && !fence) {
       fence = run;
@@ -37,7 +62,11 @@ export function outline(text: string): OutlineLine[] {
   });
 }
 
-export function headingSection(text: string, rel: string, heading: string | RegExp): string {
+const headingRange = (
+  text: string,
+  rel: string,
+  heading: string | RegExp,
+): { lines: OutlineLine[]; first: number; next: number } => {
   assert.ok(
     /[\r\n]/.test(text),
     `${rel} has no line breaks: pass the raw text, not a flattened copy`,
@@ -51,10 +80,24 @@ export function headingSection(text: string, rel: string, heading: string | RegE
   assert.ok(first !== -1, `${rel} no longer has a heading "${heading}"`);
   const own = lines[first]?.level ?? 0;
   const next = lines.findIndex((line, i) => i > first && line.level > 0 && line.level <= own);
+  return { lines, first, next: next === -1 ? lines.length : next };
+};
+
+export function headingSection(text: string, rel: string, heading: string | RegExp): string {
+  const { lines, first, next } = headingRange(text, rel, heading);
   return lines
-    .slice(first, next === -1 ? undefined : next)
+    .slice(first, next)
     .map((line) => line.text)
     .join("\n");
+}
+
+export function headingLines(
+  text: string,
+  rel: string,
+  heading: string | RegExp,
+): [number, number] {
+  const { first, next } = headingRange(text, rel, heading);
+  return [first + 1, next];
 }
 
 const short = (marker: string): string =>

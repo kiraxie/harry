@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { CODEX_SKILL_FILES, COMMAND_FILES, inDir } from "./prose-dirs.ts";
+import { codexSkillFiles, commandFiles, inDir } from "./prose-dirs.ts";
 
 // harry's role routing (executing's **Who writes**) is declared in three independent places that
 // must not drift: the resident law prose, the Claude Code agent frontmatter, and
@@ -159,8 +159,8 @@ const CC_ONLY: Record<string, string> = {
 };
 
 test("B · every command with a Codex twin is declared in PAIRS", () => {
-  const commands = COMMAND_FILES.map((rel) => path.posix.basename(rel, ".md"));
-  const codexSkills = CODEX_SKILL_FILES.map((rel) => path.posix.basename(path.posix.dirname(rel)));
+  const commands = commandFiles().map((rel) => path.posix.basename(rel, ".md"));
+  const codexSkills = codexSkillFiles().map((rel) => path.posix.basename(path.posix.dirname(rel)));
 
   assert.deepEqual(
     commands.filter((n) => codexSkills.includes(n)).sort(),

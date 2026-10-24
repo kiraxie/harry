@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -71,19 +70,5 @@ export const skillFiles = (dir: string): string[] => {
   return files;
 };
 
-export const COMMAND_FILES = inDir("commands");
-export const CODEX_SKILL_FILES = skillFiles("codex-skills");
-
-const jsonStrings = (value: unknown): string[] =>
-  typeof value === "string"
-    ? [value]
-    : Array.isArray(value)
-      ? value.flatMap(jsonStrings)
-      : value && typeof value === "object"
-        ? Object.values(value).flatMap(jsonStrings)
-        : [];
-
-export const proseStrings = (rel: string): string[] => {
-  const text = readFileSync(path.join(repoRoot, rel), "utf-8");
-  return rel.endsWith(".json") ? jsonStrings(JSON.parse(text)) : [text];
-};
+export const commandFiles = (): string[] => inDir("commands");
+export const codexSkillFiles = (): string[] => skillFiles("codex-skills");

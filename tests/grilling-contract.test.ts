@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { READER_CORPUS } from "./prose-dirs.ts";
-import { headingSection, section } from "./section.ts";
+import { headingSection, section, sectionLines } from "./section.ts";
 
 // `references/grilling.md` owns the adversarial interview end to end; four callers
 // point at it (`commands/grill.md`, `codex-skills/grill/SKILL.md`,
@@ -360,14 +360,7 @@ test("round format: no other model-instructing file carries the layout", () => {
     const text = read(rel);
     // Lines of grilling.md's opt-in rule are skipped, not cut, so every offender
     // keeps its real line number.
-    let allowed = [0, 0];
-    if (rel === GRILLING) {
-      // trimEnd: the section runs up to the end marker, so its last newline would
-      // otherwise stretch the range onto the marker's own line.
-      const optIn = section(text, rel, OPT_IN_START, OPT_IN_END).trimEnd();
-      const first = text.slice(0, text.indexOf(optIn)).split("\n").length;
-      allowed = [first, first + optIn.split("\n").length - 1];
-    }
+    const allowed = rel === GRILLING ? sectionLines(text, rel, OPT_IN_START, OPT_IN_END) : [0, 0];
     text.split("\n").forEach((line, i) => {
       const n = i + 1;
       if (n >= allowed[0] && n <= allowed[1]) return;

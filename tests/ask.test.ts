@@ -151,9 +151,10 @@ function readProse(rel: string): string {
  * the exemption-list churn it implies) is a deliberate call, deferred rather
  * than made reflexively. Revisit when a door is actually written in either form.
  */
-const DISCOVERED_ASK_DOORS = DOOR_DIRS.flatMap((dir) => filesUnder(dir)).filter((rel) =>
-  /companion\.cjs"?\s+ask\b/.test(fs.readFileSync(path.join(repoRoot, rel), "utf-8")),
-);
+const discoveredAskDoors = (): string[] =>
+  DOOR_DIRS.flatMap((dir) => filesUnder(dir)).filter((rel) =>
+    /companion\.cjs"?\s+ask\b/.test(fs.readFileSync(path.join(repoRoot, rel), "utf-8")),
+  );
 
 const FAKE = path.join(repoRoot, "tests/fake-codex-cli.mjs");
 
@@ -792,13 +793,14 @@ test("every discovered ask-invoking door is declared in ASK_DOORS or explicitly 
   // Keeps the hand-maintained list above honest: a new door that shells out to
   // `ask` must be classified, not silently skipped. A derived list that matches
   // nothing would be worse than no list, so pin the floor first.
+  const discovered = discoveredAskDoors();
   assert.ok(
-    DISCOVERED_ASK_DOORS.length >= ASK_DOORS.length,
-    `door discovery matched only ${DISCOVERED_ASK_DOORS.length} file(s) but ${ASK_DOORS.length} are declared — ` +
+    discovered.length >= ASK_DOORS.length,
+    `door discovery matched only ${discovered.length} file(s) but ${ASK_DOORS.length} are declared — ` +
       `the invocation pattern has drifted and this guard is now vacuous.`,
   );
 
-  for (const door of DISCOVERED_ASK_DOORS) {
+  for (const door of discovered) {
     const declared =
       ASK_DOORS.some((d) => d.path === door) || ASK_DOORS_EXEMPT.some((e) => e.path === door);
     assert.ok(

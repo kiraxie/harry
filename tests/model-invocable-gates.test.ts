@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { COMMAND_FILES, filesUnder, PROSE_DIRS, TOP_LEVEL } from "./prose-dirs.ts";
+import { commandFiles, filesUnder, PROSE_DIRS, TOP_LEVEL } from "./prose-dirs.ts";
 
 // A gate the model cannot execute is not a gate. `commands/review.md` used to set
 // `disable-model-invocation: true` (inherited from codex-plugin-cc, which sets it on every
@@ -64,7 +64,7 @@ function gateFiles(): string[] {
  */
 const EXTERNAL_BLOCKED = ["code-review"];
 
-function blockedCommandNames(files = COMMAND_FILES): string[] {
+function blockedCommandNames(files = commandFiles()): string[] {
   const names = files
     .filter((f) => {
       const text = readFileSync(path.resolve(repoRoot, f), "utf-8");

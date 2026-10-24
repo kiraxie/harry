@@ -127,7 +127,6 @@ const FENCED_CITE_ROWS: [string, string, string[]][] = [
   ["at top level", `intro\n\n\`\`\`\nfirst\n${BROKEN_CITE}\n\`\`\`\n`, ["5"]],
   ["in a list item", `- intro\n\n  \`\`\`\n  first\n  ${BROKEN_CITE}\n  \`\`\`\n`, ["5"]],
   ["in a > quote", `> intro\n>\n> \`\`\`\n> first\n> ${BROKEN_CITE}\n> \`\`\`\n`, ["5"]],
-  ["in a tagged fence", `intro\n\n\`\`\`sh\nfirst\n${BROKEN_CITE}\n\`\`\`\n`, []],
 ];
 
 for (const [label, text, lines] of FENCED_CITE_ROWS)
@@ -137,6 +136,30 @@ for (const [label, text, lines] of FENCED_CITE_ROWS)
       lines.map((line) => `${line} -> references/grilling.md has no heading or step "Handof"`),
     );
   });
+
+test("a tagged fence is not read", () => {
+  assert.deepEqual(
+    citeFailures(repo, md(`intro\n\n\`\`\`sh\nfirst\n${BROKEN_CITE}\n\`\`\`\n`)).failures,
+    [],
+  );
+});
+
+test("readProse returns a fence before a later paragraph in line order", () => {
+  assert.deepEqual(
+    md("```\nfenced\n```\n\nprose\n").map((block) => [block.lineAt(0), block.text]),
+    [
+      [2, "fenced"],
+      [5, "prose"],
+    ],
+  );
+});
+
+test("hits are listed by block, then by offset", () => {
+  assert.deepEqual(laws("x **Tiers** a\n\n**Tiers** b\n"), [
+    "1 -> **Tiers** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**",
+    "3 -> **Tiers** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**",
+  ]);
+});
 
 test("a fence hit at the same block offset as a prose hit is kept, in line order", () => {
   assert.deepEqual(laws("**Tiers** a\n\n```\n**Tiers** b\n```\n"), [
@@ -646,6 +669,8 @@ test("a ** that pairs with nothing is caught", () => {
     ["1. a **x\n   b\n2. c** d", [hit(1), hit(3)]],
     ["   - a **x\n     - b\n     c** d", [hit(1), hit(3)]],
     ["> q\n\nx **a\n> b** c", [hit(3), hit(4)]],
+    ["[ u@h.co **", [hit(1)]],
+    ["intro\n\n# [ u@h.co x **", [hit(3)]],
   ];
   for (const [sample, hits] of fixtures)
     assert.deepEqual(strayBold(md(sample)), hits, `the stray ** check misjudges: ${sample}`);
@@ -716,9 +741,29 @@ test("readProse reads a .md file as rendered and any other file as an untagged f
   assert.equal(lawFailures(readProse("NOTICE", "a\n```\nHARRY.md **Nope**\n```\n")).seen, 0);
 });
 
-test("a paragraph led by [ and an autolink is read whole", () => {
-  assert.deepEqual(
-    readProse("x.md", "[ u@h.co x").map((block) => block.text),
-    ["[ u@h.co x"],
-  );
+test("a block led by [ and an autolink is read whole at its line", () => {
+  const fixtures: [string, [number, string][]][] = [
+    ["[ u@h.co x", [[1, "[ u@h.co x"]]],
+    [
+      "intro\n\n[ u@h.co x",
+      [
+        [1, "intro"],
+        [3, "[ u@h.co x"],
+      ],
+    ],
+    ["# [ u@h.co x", [[1, "[ u@h.co x"]]],
+    [
+      "| h |\n|---|\n| [ u@h.co x |",
+      [
+        [1, "h"],
+        [3, "[ u@h.co x"],
+      ],
+    ],
+  ];
+  for (const [sample, blocks] of fixtures)
+    assert.deepEqual(
+      md(sample).map((block) => [block.lineAt(0), block.text]),
+      blocks,
+      `misread: ${sample}`,
+    );
 });

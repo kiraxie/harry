@@ -77,12 +77,13 @@ const resolves = (candidate: string, fileDir: string): boolean =>
 
 // evals stays out of prose-dirs.ts: REPO_LOCAL_PROSE_DIRS holds only .claude/ subdirs,
 // and plain-language's corpus reads every file, where evals/cases.jsonl would trip it.
-const EVALS_MARKDOWN = filesUnder(
-  "evals",
-  TRACKED_FILES.filter((rel) => rel.endsWith(".md")),
-);
+const evalsMarkdown = (): string[] =>
+  filesUnder(
+    "evals",
+    TRACKED_FILES.filter((rel) => rel.endsWith(".md")),
+  );
 
-const proseFiles = [...READER_CORPUS, ...EVALS_MARKDOWN];
+const proseFiles = (): string[] => [...READER_CORPUS, ...evalsMarkdown()];
 const citeCorpus = proseFiles;
 const prose = (rel: string): Block[] =>
   readProse(rel, readFileSync(path.join(repoRoot, rel), "utf-8"));
@@ -178,7 +179,7 @@ test("every repo-relative path referenced in prose is tracked", () => {
   );
   const failures: string[] = [];
 
-  for (const relFile of proseFiles) {
+  for (const relFile of proseFiles()) {
     const abs = path.join(repoRoot, relFile);
     const fileDir = path.dirname(abs);
     for (const [line, candidate] of pathCandidates(relFile, readFileSync(abs, "utf-8")))
@@ -354,7 +355,7 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
   const failures = labels.failures.map((f) => `evals/cases.jsonl:${f}`);
 
   let seen = 0;
-  for (const relFile of citeCorpus) {
+  for (const relFile of citeCorpus()) {
     const checked = lawFailures(prose(relFile));
     seen += checked.seen;
     failures.push(...checked.failures.map((f) => `${relFile}:${f}`));
@@ -382,7 +383,7 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 
 test("every cross-file citation names a heading or step its file has, once", () => {
   let seen = 0;
-  const failures = citeCorpus.flatMap((relFile) => {
+  const failures = citeCorpus().flatMap((relFile) => {
     const checked = citeFailures(repo, prose(relFile));
     seen += checked.seen;
     return checked.failures.map((f) => `${relFile}:${f}`);
@@ -398,7 +399,7 @@ test("every cross-file citation names a heading or step its file has, once", () 
 });
 
 test("no cross-file citation uses a legacy form", () => {
-  const hits = citeCorpus.flatMap((relFile) =>
+  const hits = citeCorpus().flatMap((relFile) =>
     legacyHits(prose(relFile)).map((h) => `${relFile}:${h}`),
   );
   assert.deepEqual(hits, [], "a legacy citation form; each hit names the form to use");
@@ -406,7 +407,7 @@ test("no cross-file citation uses a legacy form", () => {
 
 test("every audit dimension citation names a SCAN-DIMENSIONS ## heading", () => {
   let seen = 0;
-  const failures = citeCorpus.flatMap((relFile) => {
+  const failures = citeCorpus().flatMap((relFile) => {
     const checked = dimensionFailures(repo, prose(relFile));
     seen += checked.seen;
     return checked.failures.map((f) => `${relFile}:${f}`);
@@ -416,7 +417,7 @@ test("every audit dimension citation names a SCAN-DIMENSIONS ## heading", () => 
 });
 
 const scanCorpus = (scan: (blocks: Block[]) => string[]): string[] =>
-  citeCorpus.flatMap((relFile) => scan(prose(relFile)).map((h) => `${relFile}:${h}`));
+  citeCorpus().flatMap((relFile) => scan(prose(relFile)).map((h) => `${relFile}:${h}`));
 
 test("no cross-file citation names a heading or step in plain text", () => {
   assert.deepEqual(

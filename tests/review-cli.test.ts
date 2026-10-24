@@ -31,8 +31,8 @@ import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
 import { buildReviewPrompt, type ReviewPromptInput } from "../src/lib/review-modes.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 import { type Block, cites, readProse } from "./citations.ts";
-import { inDir, proseStrings, READER_CORPUS } from "./prose-dirs.ts";
-import { headingSection, inOrder, outline, section } from "./section.ts";
+import { inDir, READER_CORPUS } from "./prose-dirs.ts";
+import { headingLines, headingSection, inOrder, outline, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI = path.join(REPO_ROOT, "src/companion.ts");
@@ -1359,18 +1359,18 @@ test("AC-15: the review doors, CLAUDE.md and README say review runs as codex exe
 
 test("AC-11: only the review doors, CLAUDE.md's runtime section and README name review's codex subcommand", () => {
   const owners = new Set(["commands/review.md", "codex-skills/review/SKILL.md", "README.md"]);
-  const hits = READER_CORPUS.filter((rel) => !owners.has(rel)).flatMap((rel) =>
-    proseStrings(rel)
-      .map((raw) =>
-        rel === "CLAUDE.md"
-          ? raw.replace(headingSection(raw, rel, "## Runtime architecture"), "")
-          : raw,
-      )
-      .flatMap((text) => text.split(/\n\s*\n/))
-      .map((para) => para.replace(/\s+/g, " "))
-      .filter((para) => para.includes("codex exec review"))
-      .map((para) => `${rel}: ${para.slice(0, 80)}`),
-  );
+  const hits = READER_CORPUS.filter((rel) => !owners.has(rel)).flatMap((rel) => {
+    const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
+    const runtime = rel === "CLAUDE.md" ? headingLines(raw, rel, "## Runtime architecture") : null;
+    return readProse(rel, raw).flatMap((block) =>
+      [...block.text.matchAll(/codex\s+exec\s+review/g)]
+        .map((match) => ({ at: match.index, line: block.lineAt(match.index) }))
+        .filter(({ line }) => !runtime || line < runtime[0] || line > runtime[1])
+        .map(
+          ({ at, line }) => `${rel}:${line}: ${block.text.slice(at, at + 80).replace(/\s+/g, " ")}`,
+        ),
+    );
+  });
   assert.deepEqual(hits, [], "callers name the review mode they run, not the codex subcommand");
 });
 

@@ -72,11 +72,6 @@ const ALLOWED: { file: string; line: string; why: string }[] = [
     why: "position equality with a regex match, not two markers",
   },
   {
-    file: "grilling-contract.test.ts",
-    line: 'const first = text.slice(0, text.indexOf(optIn)).split("\\n").length;',
-    why: "line number of a slice section() already proved present",
-  },
-  {
     file: "session-writes.test.ts",
     line: '.slice(deepDive.indexOf("```"), deepDive.lastIndexOf("```"))',
     why: "first to last fence; a missing fence empties the slice and the match below fails",
@@ -103,7 +98,7 @@ test("every indexOf, lastIndexOf or search in tests/ is on the allowlist", () =>
   assert.deepEqual(
     unlisted,
     [],
-    `slice or order-check by marker through tests/section.ts (section(), headingSection(), inOrder()), or add an allowlist entry with its reason:\n${unlisted.join("\n")}`,
+    `slice or order-check by marker through tests/section.ts (section(), headingSection(), sectionLines(), headingLines(), inOrder()), or add an allowlist entry with its reason:\n${unlisted.join("\n")}`,
   );
 });
 

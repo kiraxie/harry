@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { CODEX_SKILL_FILES, COMMAND_FILES } from "./prose-dirs.ts";
+import { codexSkillFiles, commandFiles } from "./prose-dirs.ts";
 
 // harry passes no model to Codex: `review` and `ask` spawn the Codex CLI without
 // `-m`, so `~/.codex/config.toml` decides. The doors are the prose a consumer
@@ -26,7 +26,7 @@ const MODEL_ID_RE = /gpt-\d+(?:\.\d+)?(?:-[a-z]+)?/g;
 
 const UNAVAILABILITY_MARKERS = [/not supported/i, /\b400\b/, /why not/i, /reject/i];
 
-const doorFiles = (): string[] => [...COMMAND_FILES, ...CODEX_SKILL_FILES];
+const doorFiles = (): string[] => [...commandFiles(), ...codexSkillFiles()];
 
 const excused = (line: string): boolean => UNAVAILABILITY_MARKERS.some((m) => m.test(line));
 
