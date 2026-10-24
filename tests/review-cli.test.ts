@@ -30,7 +30,8 @@ import test from "node:test";
 import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
 import { buildReviewPrompt, type ReviewPromptInput } from "../src/lib/review-modes.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
-import { inDir, MARKDOWN_CORPUS, proseStrings, READER_CORPUS } from "./prose-dirs.ts";
+import { type Block, cites, readProse } from "./citations.ts";
+import { inDir, proseStrings, READER_CORPUS } from "./prose-dirs.ts";
 import { headingSection, inOrder, outline, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -1425,10 +1426,18 @@ test("F3: commands/review.md pre-approves only the review invocation, and every 
   }
 });
 
+function rubricLine(label: string): Block {
+  const found = readProse("references/review-rubric.md", RUBRIC).filter((block) =>
+    block.text.startsWith(label),
+  );
+  assert.equal(found.length, 1, `review-rubric.md declares no single ${label} line`);
+  return found[0] as Block;
+}
+
 function declaredStandardFiles(): string[] {
-  const line = RUBRIC.split("\n").find((l) => l.startsWith("**Standard files:**"));
-  assert.ok(line, "review-rubric.md declares no **Standard files:** line");
-  return [...line.matchAll(/`([^`]+\.md)`/g)].map((m) => m[1]);
+  return rubricLine("**Standard files:**")
+    .code.filter((span) => span.path && span.value.endsWith(".md"))
+    .map((span) => span.value);
 }
 
 test("the per-diff prompt embeds exactly the files the rubric declares as its standard", () => {
@@ -1439,7 +1448,7 @@ test("the per-diff prompt embeds exactly the files the rubric declares as its st
     target: { mode: "working-tree", label: "working tree diff" },
     standard: "review",
   });
-  const refs = MARKDOWN_CORPUS.filter(inDir("references"));
+  const refs = inDir("references");
   const embedded = refs.filter((rel) =>
     prompt.includes(readFileSync(path.join(REPO_ROOT, rel), "utf8").trim()),
   );
@@ -1447,11 +1456,9 @@ test("the per-diff prompt embeds exactly the files the rubric declares as its st
 });
 
 function declaredRereviewSections(): Array<{ file: string; heading: string }> {
-  const line = RUBRIC.split("\n").find((l) => l.startsWith("**Re-review standard:**"));
-  assert.ok(line, "review-rubric.md declares no **Re-review standard:** line");
-  return [...line.matchAll(/`([^`]+\.md)` \*\*([^*]+)\*\*/g)].map((m) => ({
-    file: m[1],
-    heading: m[2],
+  return cites(rubricLine("**Re-review standard:**")).map(({ path: file, name: heading }) => ({
+    file,
+    heading,
   }));
 }
 
@@ -1464,7 +1471,7 @@ test("AC-4: the re-review prompt embeds the declared standard files whole and ex
     standard: "rereview",
     handed: "4 · open",
   });
-  const refs = MARKDOWN_CORPUS.filter(inDir("references"));
+  const refs = inDir("references");
   const read = (rel: string): string => readFileSync(path.join(REPO_ROOT, rel), "utf8");
   const whole = refs.filter((rel) => prompt.includes(read(rel).trim()));
   assert.deepEqual(whole.sort(), [...declared].sort());

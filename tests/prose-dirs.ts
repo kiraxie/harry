@@ -41,13 +41,6 @@ export const PROSE_DIR_FILES = TRACKED_FILES.filter(under(PROSE_DIRS));
 
 const parentOf = (rel: string): string => path.posix.dirname(rel);
 const isSkill = (rel: string): boolean => path.posix.basename(rel) === "SKILL.md";
-const FILE_DIRS = new Set(PROSE_DIR_FILES.map(parentOf));
-const SKILL_DIRS = new Set(PROSE_DIR_FILES.filter(isSkill).map((rel) => parentOf(parentOf(rel))));
-
-export const inDir = (dir: string): ((rel: string) => boolean) => {
-  assert.ok(FILE_DIRS.has(dir), `inDir("${dir}"): no tracked prose file directly in it`);
-  return (rel) => parentOf(rel) === dir;
-};
 
 export const TOP_LEVEL = [...SHIPPED_TOP_LEVEL, ...REPO_TOP_LEVEL];
 export const MARKDOWN_CORPUS = [
@@ -60,10 +53,26 @@ export const SHIPPED_MARKDOWN = [
 ];
 export const READER_CORPUS = [...MARKDOWN_CORPUS, ...PROSE_NON_MD_FILES];
 
-export const skillFiles = (dir: string): string[] => {
-  assert.ok(SKILL_DIRS.has(dir), `skillFiles("${dir}"): no tracked ${dir}/<name>/SKILL.md`);
-  return MARKDOWN_CORPUS.filter((rel) => isSkill(rel) && parentOf(parentOf(rel)) === dir);
+export const inDir = (dir: string, corpus: string[] = MARKDOWN_CORPUS): string[] => {
+  const files = corpus.filter((rel) => parentOf(rel) === dir);
+  assert.ok(files.length > 0, `inDir("${dir}"): no corpus file directly in it`);
+  return files;
 };
+
+export const filesUnder = (dir: string, corpus: string[] = MARKDOWN_CORPUS): string[] => {
+  const files = corpus.filter(under([dir]));
+  assert.ok(files.length > 0, `filesUnder("${dir}"): no corpus file under it`);
+  return files;
+};
+
+export const skillFiles = (dir: string): string[] => {
+  const files = MARKDOWN_CORPUS.filter((rel) => isSkill(rel) && parentOf(parentOf(rel)) === dir);
+  assert.ok(files.length > 0, `skillFiles("${dir}"): no tracked ${dir}/<name>/SKILL.md`);
+  return files;
+};
+
+export const COMMAND_FILES = inDir("commands");
+export const CODEX_SKILL_FILES = skillFiles("codex-skills");
 
 const jsonStrings = (value: unknown): string[] =>
   typeof value === "string"

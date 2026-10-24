@@ -30,7 +30,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 **Claude Code only.** No clone, no build — `dist/` is committed and self-contained.
 
-```
+```text
 /plugin marketplace add kiraxie/harry   # GitHub owner/repo
 /plugin install harry@kiraxie           # <plugin>@<marketplace> — "harry, published by kiraxie"
 /harry:sync                             # wire the resident laws + set up this project
@@ -65,7 +65,7 @@ full feature parity (see `CLAUDE.md` **Codex CLI compatibility** for exactly
 what's degraded or missing). Requires the `codex` CLI on `PATH`, logged in
 (`codex login`).
 
-```
+```sh
 codex plugin marketplace add kiraxie/harry   # GitHub owner/repo
 ```
 
@@ -123,7 +123,7 @@ These auto-trigger (no slash command); they are the pipeline:
 
 ## Layout
 
-```
+```text
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · executing · finishing (shared, both builds)
 commands/           review · ask · debate · debt · sync · audit · grill · wait-what (Claude Code)

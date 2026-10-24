@@ -511,16 +511,6 @@ const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
     why: "the state names release.md lists, compared with the script's",
   },
   {
-    file: "review-cli.test.ts",
-    text: "/`([^`]+\\.md)`/g",
-    why: "the paths on the rubric's Standard files line",
-  },
-  {
-    file: "review-cli.test.ts",
-    text: "/`([^`]+\\.md)` \\*\\*([^*]+)\\*\\*/g",
-    why: "the path and heading pairs on the rubric's Re-review standard line",
-  },
-  {
     file: "session-writes.test.ts",
     text: "/`(mech|writer|security)`/",
     why: "three retired role names in a code span; it reads no span's content",
@@ -544,7 +534,7 @@ test("no test in tests/ reads code spans on its own", () => {
   assert.deepEqual(
     own,
     [],
-    `read code spans through tests/citations.ts blocks(), or add an allowlist entry with its reason:\n${own.join("\n")}`,
+    `read code spans through tests/citations.ts readProse(), or add an allowlist entry with its reason:\n${own.join("\n")}`,
   );
 });
 

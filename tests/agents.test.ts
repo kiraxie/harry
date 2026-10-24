@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { inDir, MARKDOWN_CORPUS } from "./prose-dirs.ts";
+import { inDir } from "./prose-dirs.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -76,7 +76,7 @@ test("no role's final-message contract caps its length in lines", () => {
 });
 
 test("agents/ holds exactly the three roles", () => {
-  const files = MARKDOWN_CORPUS.filter(inDir("agents")).map((rel) => path.posix.basename(rel));
+  const files = inDir("agents").map((rel) => path.posix.basename(rel));
   assert.deepEqual(files.sort(), ROLES.map((r) => `${r}.md`).sort());
 });
 

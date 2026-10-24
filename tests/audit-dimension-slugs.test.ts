@@ -6,16 +6,14 @@ import { fileURLToPath } from "node:url";
 import {
   type Block,
   blockDimensionFailures,
-  blocks,
-  type Fence,
   fenceBlocks,
   fences,
-  lineOf,
   namesIn,
   type Repo,
+  readProse,
   SCAN_DIMENSIONS,
 } from "./citations.ts";
-import { MARKDOWN_CORPUS, SHIPPED_PROSE_DIRS, under } from "./prose-dirs.ts";
+import { SHIPPED_MARKDOWN } from "./prose-dirs.ts";
 import { confirmedBranch, NAMES, SCHEMA } from "./report-schema.ts";
 import { headingSection, outline } from "./section.ts";
 
@@ -40,9 +38,17 @@ const schemaTerms = (value: unknown): string[] =>
       : [];
 const ALLOWED = new Set([...schemaTerms(SCHEMA), "allowed-tools", "import-linter", "ts-prune"]);
 
-const AUDIT_PROSE = MARKDOWN_CORPUS.filter(under(SHIPPED_PROSE_DIRS)).filter(
-  (rel) => rel.startsWith(`${AUDIT}/`) || raw(rel).includes("references/audit/"),
-);
+const auditProse = (read: (rel: string) => string): string[] =>
+  SHIPPED_MARKDOWN.filter(
+    (rel) => rel.startsWith(`${AUDIT}/`) || read(rel).includes("references/audit/"),
+  );
+const AUDIT_PROSE = auditProse(raw);
+
+test("the audit slug scans select HARRY.md when it cites references/audit/", () => {
+  const read = (rel: string): string =>
+    rel === "HARRY.md" ? "see `references/audit/RECON.md`" : raw(rel);
+  assert.ok(auditProse(read).includes("HARRY.md"));
+});
 
 test("each scan dimension opens with its schema slug, in the schema's order", () => {
   const rel = path.join(AUDIT, "SCAN-DIMENSIONS.md");
@@ -66,34 +72,18 @@ test("each scan dimension opens with its schema slug, in the schema's order", ()
   assert.deepEqual(slugs, SLUGS);
 });
 
-type Read = { rel: string; block: Block; fenced: boolean; lineAt: (i: number) => number };
+type Read = { rel: string; block: Block };
 
-const untagged = (text: string): Fence[] => fences(text).filter((fence) => !fence.info);
-
-const proseOf = (rel: string, text: string): Read[] => [
-  ...blocks(text).map((block) => ({
-    rel,
-    block,
-    fenced: false,
-    lineAt: (i: number) => lineOf(text, block.at + i),
-  })),
-  ...untagged(text).flatMap((fence) =>
-    fenceBlocks(fence.text).map((block) => ({
-      rel,
-      block,
-      fenced: true,
-      lineAt: (i: number) => fence.line + lineOf(fence.text, block.at + i) - 1,
-    })),
-  ),
-];
-const AUDIT_READS = AUDIT_PROSE.flatMap((rel) => proseOf(rel, raw(rel)));
+const readsOf = (rel: string, text: string): Read[] =>
+  readProse(rel, text).map((block) => ({ rel, block }));
+const AUDIT_READS = AUDIT_PROSE.flatMap((rel) => readsOf(rel, raw(rel)));
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)+$/;
 const kebabSpans = (reads: Read[]): string[] =>
-  reads.flatMap(({ rel, block, lineAt }) =>
+  reads.flatMap(({ rel, block }) =>
     block.code
       .filter((span) => KEBAB.test(span.value))
-      .map((span) => `${rel}:${lineAt(span.from)}: ${span.value}`),
+      .map((span) => `${rel}:${block.lineAt(span.from)}: ${span.value}`),
   );
 
 test("a kebab-case code span in audit prose is a schema term or a listed name", () => {
@@ -109,9 +99,9 @@ const REUSE = NAMES.reuseDimensions;
 const LOW_VALUE = [NAMES.lowValueDimension];
 
 const spans = (rel: string, label: string): string[] => {
-  const found = proseOf(rel, raw(rel)).filter(({ block }) => block.text.startsWith(label));
+  const found = readProse(rel, raw(rel)).filter((block) => block.text.startsWith(label));
   assert.equal(found.length, 1, `${rel} needs one block starting ${label}`);
-  return (found[0]?.block.code ?? []).map((span) => span.value).filter((s) => SLUGS.includes(s));
+  return (found[0]?.code ?? []).map((span) => span.value).filter((s) => SLUGS.includes(s));
 };
 const named = (text: string): string[] =>
   SLUGS.filter((slug) => new RegExp(`(?<![\\w-])${slug}(?![\\w-])`).test(text));
@@ -150,19 +140,14 @@ const PLAIN_ENGLISH = [
 ];
 
 const bareSlugs = (reads: Read[]): { slug: string; at: string }[] =>
-  reads.flatMap(({ rel, block, lineAt }) => {
-    const prose = block.code.reduce(
-      (text, span) =>
-        text.slice(0, span.from) + " ".repeat(span.to - span.from) + text.slice(span.to),
-      block.text,
-    );
-    return SLUGS.filter((slug) => slug.includes("-")).flatMap((slug) =>
-      [...prose.matchAll(new RegExp(`(?<![\\w-])${slug}(?![\\w-])`, "gi"))].map((m) => ({
+  reads.flatMap(({ rel, block }) =>
+    SLUGS.filter((slug) => slug.includes("-")).flatMap((slug) =>
+      [...block.prose.matchAll(new RegExp(`(?<![\\w-])${slug}(?![\\w-])`, "gi"))].map((m) => ({
         slug,
-        at: `${rel}:${lineAt(m.index ?? 0)}`,
+        at: `${rel}:${block.lineAt(m.index ?? 0)}`,
       })),
-    );
-  });
+    ),
+  );
 
 const READ_ROWS: [string, string, string[], string[]][] = [
   [
@@ -196,7 +181,7 @@ const READ_ROWS: [string, string, string[], string[]][] = [
 
 for (const [label, text, bare, kebab] of READ_ROWS)
   test(`the slug scans read audit prose as an agent does: ${label}`, () => {
-    const reads = proseOf("x.md", text);
+    const reads = readsOf("x.md", text);
     assert.deepEqual(
       bareSlugs(reads).map(({ slug, at }) => `${at}: ${slug}`),
       bare,
@@ -221,21 +206,24 @@ test("a hyphenated slug in audit prose sits in a code span unless it is plain En
 });
 
 const UNTAGGED = AUDIT_PROSE.flatMap((rel) =>
-  untagged(raw(rel)).map((fence) => ({ rel, ...fence })),
+  fences(raw(rel))
+    .filter((fence) => !fence.info)
+    .map((fence) => ({ rel, fence })),
 );
 
 test("every line holding a word in an untagged audit fence is read", () => {
   assert.ok(UNTAGGED.length > 0, "the audit prose holds no untagged fence");
-  const unread = UNTAGGED.flatMap(({ rel, text, line }) => {
-    const spans = fenceBlocks(text).map((block) => [
-      lineOf(text, block.at),
-      lineOf(text, block.at + block.text.length),
+  const unread = UNTAGGED.flatMap(({ rel, fence }) => {
+    const spans = fenceBlocks(fence).map((block) => [
+      block.lineAt(0),
+      block.lineAt(block.text.length),
     ]);
-    return text
+    return fence.text
       .split("\n")
       .flatMap((content, i) =>
-        /\w/.test(content) && !spans.some(([from = 0, to = 0]) => i + 1 >= from && i + 1 <= to)
-          ? [`${rel}:${line + i}`]
+        /\w/.test(content) &&
+        !spans.some(([from = 0, to = 0]) => fence.line + i >= from && fence.line + i <= to)
+          ? [`${rel}:${fence.line + i}`]
           : [],
       );
   });
@@ -249,20 +237,20 @@ const scanDimensions: Repo = {
 
 const fencedDimensions = (reads: Read[]): string[] =>
   reads
-    .filter((read) => read.fenced)
-    .flatMap(({ rel, block, lineAt }) =>
+    .filter(({ block }) => block.fenced)
+    .flatMap(({ rel, block }) =>
       blockDimensionFailures(scanDimensions, block).map(
-        ({ at, failure }) => `${rel}:${lineAt(at)} -> ${failure}`,
+        ({ line, failure }) => `${rel}:${line} -> ${failure}`,
       ),
     );
 
 test("the fenced dimension check reads a fence as an agent does", () => {
   assert.deepEqual(
-    fencedDimensions(proseOf("x.md", "```\nintro\n\n    dimension **Dead codes**\n```\n")),
+    fencedDimensions(readsOf("x.md", "```\nintro\n\n    dimension **Dead codes**\n```\n")),
     ['x.md:4 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Dead codes"'],
   );
   assert.deepEqual(
-    fencedDimensions(proseOf("x.md", "```json\ndimension **Dead codes**\n```\n")),
+    fencedDimensions(readsOf("x.md", "```json\ndimension **Dead codes**\n```\n")),
     [],
   );
 });

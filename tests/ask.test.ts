@@ -23,7 +23,7 @@ import test from "node:test";
 import { ASK_PREAMBLE } from "../src/commands/ask.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 import { pruneRunFiles, reserveRunFiles } from "../src/lib/run-files.ts";
-import { MARKDOWN_CORPUS, PROSE_DIRS, under } from "./prose-dirs.ts";
+import { filesUnder, PROSE_DIRS } from "./prose-dirs.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -122,10 +122,6 @@ const DOOR_DIRS = PROSE_DIRS.filter((dir) => !NOT_DOOR_DIRS.has(dir));
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
-function listMarkdownFiles(dir: string): string[] {
-  return MARKDOWN_CORPUS.filter(under([dir]));
-}
-
 /** Read prose with whitespace collapsed, so substring checks survive wrapping. */
 function readProse(rel: string): string {
   return fs.readFileSync(path.join(repoRoot, rel), "utf-8").replace(/\s+/g, " ");
@@ -155,7 +151,7 @@ function readProse(rel: string): string {
  * the exemption-list churn it implies) is a deliberate call, deferred rather
  * than made reflexively. Revisit when a door is actually written in either form.
  */
-const DISCOVERED_ASK_DOORS = DOOR_DIRS.flatMap(listMarkdownFiles).filter((rel) =>
+const DISCOVERED_ASK_DOORS = DOOR_DIRS.flatMap((dir) => filesUnder(dir)).filter((rel) =>
   /companion\.cjs"?\s+ask\b/.test(fs.readFileSync(path.join(repoRoot, rel), "utf-8")),
 );
 

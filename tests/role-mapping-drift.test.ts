@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { inDir, MARKDOWN_CORPUS, skillFiles } from "./prose-dirs.ts";
+import { CODEX_SKILL_FILES, COMMAND_FILES, inDir } from "./prose-dirs.ts";
 
 // harry's role routing (executing's **Who writes**) is declared in three independent places that
 // must not drift: the resident law prose, the Claude Code agent frontmatter, and
@@ -77,7 +77,7 @@ test("A2 · agents/*.md frontmatter name-set equals the canonical role set", () 
   // agents/driver.md is caught — a fixed-filename loop would silently ignore it. We
   // assert only the name *set*; agents.test.ts covers each file's model/effort/tools.
   const names = new Set<string>();
-  for (const rel of MARKDOWN_CORPUS.filter(inDir("agents"))) {
+  for (const rel of inDir("agents")) {
     const m = readFileSync(path.join(repoRoot, rel), "utf-8").match(/^name:\s*(.+)$/m);
     assert.ok(m, `${rel}: no 'name:' in frontmatter`);
     names.add((m[1] as string).trim());
@@ -159,12 +159,8 @@ const CC_ONLY: Record<string, string> = {
 };
 
 test("B · every command with a Codex twin is declared in PAIRS", () => {
-  const commands = MARKDOWN_CORPUS.filter(inDir("commands")).map((rel) =>
-    path.posix.basename(rel, ".md"),
-  );
-  const codexSkills = skillFiles("codex-skills").map((rel) =>
-    path.posix.basename(path.posix.dirname(rel)),
-  );
+  const commands = COMMAND_FILES.map((rel) => path.posix.basename(rel, ".md"));
+  const codexSkills = CODEX_SKILL_FILES.map((rel) => path.posix.basename(path.posix.dirname(rel)));
 
   assert.deepEqual(
     commands.filter((n) => codexSkills.includes(n)).sort(),

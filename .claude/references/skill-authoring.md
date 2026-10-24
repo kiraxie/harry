@@ -174,8 +174,8 @@ kind has exactly one form:
   `references/audit/SCAN-DIMENSIONS.md`, never by number, wherever the text names the dimension:
   sending a reader to its section, assigning it to an agent, weighting a run toward it. The one
   exception is the literal `dimension` value a finding carries, as in "a `low-value-tests` finding":
-  write the slug from its Slug line, in a code span. In the audit prose, and in every fence there
-  with no info string, write a hyphenated code span only for a term the schema defines or a name the
+  write the slug from its Slug line, in a code span. In the audit prose, its untagged fences
+  included, write a hyphenated code span only for a term the schema defines or a name the
   test lists, such as `allowed-tools`; put a hyphenated slug in a code span unless it is plain
   English there, as `dead-code` is; and cite a dimension by a `##` heading of
   `references/audit/SCAN-DIMENSIONS.md`. In the finding-field lists of
@@ -190,8 +190,11 @@ The name is the core name: the heading or bold step label without a leading `N. 
 standing. It must be unique in its file.
 
 `tests/citations.ts` reads Markdown as GitHub renders it (CommonMark plus GitHub's extensions, such
-as tables): bold is what renders bold, and it reads nothing in a code block or an HTML block. It
-adds only these rules. A `**` that renders as asterisks fails. A quote is `“…”`, `‘…’`, `"…"` or
+as tables): bold is what renders bold. It reads an untagged fence whole, as prose: every line of it
+except a fence nested inside it. A fence with an info string, and an indented code block or an
+HTML block outside a fence, are not read, so a fence of commands, a file tree or data carries a
+tag. A file that is not markdown is read as an untagged fence body is. `tests/citations.ts` adds
+only these rules. A `**` that renders as asterisks fails. A quote is `“…”`, `‘…’`, `"…"` or
 `'…'` within one paragraph, and a straight single quote opens only after a character that is not a
 letter or digit and closes only before one, so an apostrophe never opens one. A path counts with or
 without backticks; without them, only when it ends in `.md` or names a tracked file or directory. A

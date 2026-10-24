@@ -19,7 +19,7 @@ needs a rebuild (CI's dist drift gate fails otherwise).
 
 ## Commands
 
-```
+```sh
 pnpm install                    # install deps
 pnpm run build                  # bundle src/companion.ts -> dist/companion.cjs (esbuild)
 pnpm test                       # node --test — runs tests/*.test.ts directly (Node >=26 native TS)

@@ -15,10 +15,10 @@ import {
   lawFailures,
   lawLabelFailures,
   legacyHits,
-  lineOf,
   namesIn,
   plainNameCitations,
   type Repo,
+  readProse,
   resolveName,
   stepAttempts,
   strayBold,
@@ -55,9 +55,10 @@ const repo: Repo = {
   },
   names: (rel) => namesIn(docs[path.posix.normalize(rel)] ?? ""),
 };
-const attempts = (text: string): string[] => citationAttempts(repo, text);
-const steps = (text: string): string[] => stepAttempts(repo, text);
-const laws = (text: string): string[] => lawAttempts(text);
+const md = (text: string) => readProse("x.md", text);
+const attempts = (text: string): string[] => citationAttempts(repo, md(text));
+const steps = (text: string): string[] => stepAttempts(repo, md(text));
+const laws = (text: string): string[] => lawAttempts(md(text));
 
 test("citations.ts is pure: nothing it reaches reads git or the disk", () => {
   const reached = new Set<string>();
@@ -121,14 +122,37 @@ test("a cited name resolves to one heading or step", () => {
     );
 });
 
+const BROKEN_CITE = "see `references/grilling.md` **Handof**";
+const FENCED_CITE_ROWS: [string, string, string[]][] = [
+  ["at top level", `intro\n\n\`\`\`\nfirst\n${BROKEN_CITE}\n\`\`\`\n`, ["5"]],
+  ["in a list item", `- intro\n\n  \`\`\`\n  first\n  ${BROKEN_CITE}\n  \`\`\`\n`, ["5"]],
+  ["in a > quote", `> intro\n>\n> \`\`\`\n> first\n> ${BROKEN_CITE}\n> \`\`\`\n`, ["5"]],
+  ["in a tagged fence", `intro\n\n\`\`\`sh\nfirst\n${BROKEN_CITE}\n\`\`\`\n`, []],
+];
+
+for (const [label, text, lines] of FENCED_CITE_ROWS)
+  test(`a citation in an untagged fence fails at its file line: ${label}`, () => {
+    assert.deepEqual(
+      citeFailures(repo, md(text)).failures,
+      lines.map((line) => `${line} -> references/grilling.md has no heading or step "Handof"`),
+    );
+  });
+
+test("a fence hit at the same block offset as a prose hit is kept, in line order", () => {
+  assert.deepEqual(laws("**Tiers** a\n\n```\n**Tiers** b\n```\n"), [
+    "1 -> **Tiers** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**",
+    "4 -> **Tiers** names a law with no HARRY.md before it; cite it as HARRY.md **Heading**",
+  ]);
+});
+
 test("Markdown is read as GitHub renders it", () => {
   assert.deepEqual(
-    citeFailures(repo, "intro\n\n    per `references/grilling.md` **Handof**\n"),
+    citeFailures(repo, md("intro\n\n    per `references/grilling.md` **Handof**\n")),
     { seen: 0, failures: [] },
     "a citation in an indented code block is read",
   );
   assert.deepEqual(
-    citeFailures(repo, "> - per `references/grilling.md`\n>   **Handof** here"),
+    citeFailures(repo, md("> - per `references/grilling.md`\n>   **Handof** here")),
     { seen: 1, failures: ['1 -> references/grilling.md has no heading or step "Handof"'] },
     "a citation in a list item inside a quote is not read",
   );
@@ -148,7 +172,7 @@ test("Markdown is read as GitHub renders it", () => {
     "a bold name in a bullet item, a 1) item or past an item's start is read as a step label",
   );
   assert.deepEqual(
-    lawFailures("## per HARRY.md **Tier**\n\n| a |\n|---|\n| per HARRY.md **Code** |\n"),
+    lawFailures(md("## per HARRY.md **Tier**\n\n| a |\n|---|\n| per HARRY.md **Code** |\n")),
     { seen: 2, failures: ["1 -> HARRY.md **Tier**"] },
     "a citation in a heading or a table cell is not read",
   );
@@ -206,7 +230,7 @@ const FENCE_BODY_ROWS: [string, string, { text: string; code: string[] }[]][] = 
 for (const [label, body, expected] of FENCE_BODY_ROWS)
   test(`fence body: ${label}`, () => {
     assert.deepEqual(
-      fenceBlocks(body).map((b) => ({
+      fenceBlocks({ info: "", text: body, line: 1 }).map((b) => ({
         text: b.text,
         code: b.code.map((c) => b.text.slice(c.from, c.to)),
       })),
@@ -217,8 +241,8 @@ for (const [label, body, expected] of FENCE_BODY_ROWS)
 test("a dimension citation on an indented line of a fence body is checked", () => {
   const body = "intro\n\n    dimension **Dead codes**";
   assert.deepEqual(
-    fenceBlocks(body).flatMap((b) =>
-      blockDimensionFailures(repo, b).map((f) => `${lineOf(body, b.at + f.at)} -> ${f.failure}`),
+    fenceBlocks({ info: "", text: body, line: 1 }).flatMap((b) =>
+      blockDimensionFailures(repo, b).map((f) => `${f.line} -> ${f.failure}`),
     ),
     ['3 -> references/audit/SCAN-DIMENSIONS.md has no ## heading "Dead codes"'],
   );
@@ -229,7 +253,7 @@ test("each legacy form matches its samples and names the form to use", () => {
     for (const sample of samples)
       assert.equal([...sample.matchAll(re)].length, 1, `the "${label}" rule no longer matches`);
   assert.deepEqual(
-    legacyHits("intro\nper dimension 10 and HARRY.md Tiers"),
+    legacyHits(md("intro\nper dimension 10 and HARRY.md Tiers")),
     [
       "2 -> an audit dimension by number; cite it as dimension **<SCAN-DIMENSIONS ## core name>**",
       "2 -> a law named in plain text; cite it as HARRY.md **Heading**",
@@ -237,18 +261,18 @@ test("each legacy form matches its samples and names the form to use", () => {
     "a legacy hit no longer carries its line or the form to use",
   );
   assert.deepEqual(
-    legacyHits("intro\n```\nHARRY.md Tiers\n```\nrun `dimension 10` and ` HARRY.md` Tiers"),
+    legacyHits(md("intro\n```sh\nHARRY.md Tiers\n```\nrun `dimension 10` and ` HARRY.md` Tiers")),
     [],
-    "a legacy form inside a fence or a code span holding more than a path is read",
+    "a legacy form inside a tagged fence or a code span holding more than a path is read",
   );
   assert.deepEqual(
-    legacyHits("per `skills/executing` step 4"),
+    legacyHits(md("per `skills/executing` step 4")),
     ["1 -> a skill's step with no path; cite it as `path` **Name**"],
     "a legacy form in a code span holding only a path is no longer read",
   );
   for (const at of ["~/.claude/harry", "~kira/.claude/harry", "$HOME/.claude/harry", "/Users/x"])
     assert.equal(
-      legacyHits(`see \`${at}/HARRY.md\` Tiers`).length,
+      legacyHits(md(`see \`${at}/HARRY.md\` Tiers`)).length,
       1,
       `a law named after a code span holding only ${at}/HARRY.md is no longer read`,
     );
@@ -258,9 +282,11 @@ test("a dimension citation names a SCAN-DIMENSIONS ## heading", () => {
   assert.deepEqual(
     dimensionFailures(
       repo,
-      "a dimension **Low-value tests**,\nDimension **Low value tests**, dimension\n**Wrapped typo**,\n" +
-        "dimension **Choosing dimensions and shaping agents** and\n" +
-        "dimension **2. Reusability & hoist candidates (same-intent code that drifted apart)**",
+      md(
+        "a dimension **Low-value tests**,\nDimension **Low value tests**, dimension\n**Wrapped typo**,\n" +
+          "dimension **Choosing dimensions and shaping agents** and\n" +
+          "dimension **2. Reusability & hoist candidates (same-intent code that drifted apart)**",
+      ),
     ),
     {
       seen: 5,
@@ -274,7 +300,7 @@ test("a dimension citation names a SCAN-DIMENSIONS ## heading", () => {
     "the dimension citation check no longer matches, accepts a wrong or ### name, lost the core-name hint or the line",
   );
   assert.deepEqual(
-    dimensionFailures(repo, "a dimension **Low-value\ntests** here"),
+    dimensionFailures(repo, md("a dimension **Low-value\ntests** here")),
     { seen: 1, failures: [] },
     "a dimension name wrapped across a line no longer resolves",
   );
@@ -284,8 +310,10 @@ test("a cross-file citation names a heading or step its file has", () => {
   assert.deepEqual(
     citeFailures(
       repo,
-      "per `references/grilling.md` **Handoff**, `skills/executing/SKILL.md` **One   fix\nwave**\n" +
-        "and `references/grilling.md` **Handof**, `references/x.md` **Seams**",
+      md(
+        "per `references/grilling.md` **Handoff**, `skills/executing/SKILL.md` **One   fix\nwave**\n" +
+          "and `references/grilling.md` **Handof**, `references/x.md` **Seams**",
+      ),
     ),
     {
       seen: 4,
@@ -299,7 +327,9 @@ test("a cross-file citation names a heading or step its file has", () => {
   assert.deepEqual(
     citeFailures(
       repo,
-      "per `references/red-green.md` **Run *all* tests** and `references/red-green.md` **Use `**` marks**",
+      md(
+        "per `references/red-green.md` **Run *all* tests** and `references/red-green.md` **Use `**` marks**",
+      ),
     ),
     { seen: 2, failures: [] },
     "a step label with italics or a code span is no longer read as bold, or no longer resolves",
@@ -308,7 +338,7 @@ test("a cross-file citation names a heading or step its file has", () => {
 
 test("a law citation names a HARRY.md ## heading", () => {
   assert.deepEqual(
-    lawFailures("per HARRY.md **Tiers** and `HARRY.md` **Ask\nfirst**,\nHARRY.md **Tier**"),
+    lawFailures(md("per HARRY.md **Tiers** and `HARRY.md` **Ask\nfirst**,\nHARRY.md **Tier**")),
     { seen: 3, failures: ["3 -> HARRY.md **Tier**"] },
     "the law check no longer counts, cleans the name, resolves it or reports the line",
   );
@@ -363,7 +393,7 @@ test("a heading or step named in plain text after a path is caught", () => {
     ["`references/grilling.md` Handoffs list", []],
     ["run `cat references/grilling.md Handoff` here", []],
     ["run ``cat `references/grilling.md` Handoff`` here", []],
-    ["intro\n```\ncat references/grilling.md Handoff\n```\n", []],
+    ["intro\n```sh\ncat references/grilling.md Handoff\n```\n", []],
     [
       "intro\nper `references/grilling.md`'s Handoff, then",
       ['2 -> references/grilling.md "Handoff"'],
@@ -371,7 +401,7 @@ test("a heading or step named in plain text after a path is caught", () => {
   ];
   for (const [sample, hits] of fixtures)
     assert.deepEqual(
-      plainNameCitations(repo, sample),
+      plainNameCitations(repo, md(sample)),
       hits,
       `the plain-text name check misjudges: ${sample}`,
     );
@@ -533,7 +563,7 @@ test("bold is read where it renders", () => {
   for (const sample of [
     "run `a**b` here",
     "run ``a**`b`` here",
-    "```\na ** b\n\nc\n```\n",
+    "```sh\na ** b\n\nc\n```\n",
     "**a** and **Ask\nfirst** and **`--x`** and ***c***",
     "the **a *b* c** rule",
     "intro\n***\nafter",
@@ -552,7 +582,11 @@ test("bold is read where it renders", () => {
     "x **a\n   b\n2. c** d",
     "- a\n\nx **b\n2. c** d",
   ])
-    assert.deepEqual(strayBold(sample), [], `a ** that renders as bold is called stray: ${sample}`);
+    assert.deepEqual(
+      strayBold(md(sample)),
+      [],
+      `a ** that renders as bold is called stray: ${sample}`,
+    );
 });
 
 test("quotes are read where they render", () => {
@@ -614,7 +648,7 @@ test("a ** that pairs with nothing is caught", () => {
     ["> q\n\nx **a\n> b** c", [hit(3), hit(4)]],
   ];
   for (const [sample, hits] of fixtures)
-    assert.deepEqual(strayBold(sample), hits, `the stray ** check misjudges: ${sample}`);
+    assert.deepEqual(strayBold(md(sample)), hits, `the stray ** check misjudges: ${sample}`);
 });
 
 test("a step or category cited by its number is caught", () => {
@@ -672,5 +706,19 @@ test("a bold law name needs HARRY.md before it", () => {
       "per `references/pr-body.md` **Evidence** here",
       "the copy at ~/.claude/harry/HARRY.md **Code** included",
     ],
+  );
+});
+
+test("readProse reads a .md file as rendered and any other file as an untagged fence body", () => {
+  const text = "x:\n\n    see HARRY.md **Nope**\n";
+  assert.deepEqual(lawFailures(readProse("NOTICE", text)).failures, ["3 -> HARRY.md **Nope**"]);
+  assert.equal(lawFailures(readProse("x.md", text)).seen, 0);
+  assert.equal(lawFailures(readProse("NOTICE", "a\n```\nHARRY.md **Nope**\n```\n")).seen, 0);
+});
+
+test("a paragraph led by [ and an autolink is read whole", () => {
+  assert.deepEqual(
+    readProse("x.md", "[ u@h.co x").map((block) => block.text),
+    ["[ u@h.co x"],
   );
 });

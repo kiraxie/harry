@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  type Block,
   CONNECTORS,
   CORE_NAME_STRIPS,
   citationAttempts,
@@ -19,14 +20,16 @@ import {
   namesIn,
   plainNameCitations,
   type Repo,
+  readProse,
   resolveCitation,
   stepAttempts,
   strayBold,
 } from "./citations.ts";
 import {
   CODE_EXEMPTIONS,
-  PROSE_DIRS as INSTRUCTION_DIRS,
+  filesUnder,
   MANIFEST_DIRS,
+  PROSE_DIRS,
   PROSE_NON_MD_FILES,
   READER_CORPUS,
   REPO_LOCAL_DATA_FILES,
@@ -74,25 +77,27 @@ const resolves = (candidate: string, fileDir: string): boolean =>
 
 // evals stays out of prose-dirs.ts: REPO_LOCAL_PROSE_DIRS holds only .claude/ subdirs,
 // and plain-language's corpus reads every file, where evals/cases.jsonl would trip it.
-const PROSE_DIRS = [...INSTRUCTION_DIRS, "evals"];
+const EVALS_MARKDOWN = filesUnder(
+  "evals",
+  TRACKED_FILES.filter((rel) => rel.endsWith(".md")),
+);
 
-function listMarkdownFiles(dir: string): string[] {
-  return TRACKED_FILES.filter((rel) => rel.startsWith(`${dir}/`) && rel.endsWith(".md"));
-}
-
-const proseFiles = [...READER_CORPUS, ...listMarkdownFiles("evals")];
+const proseFiles = [...READER_CORPUS, ...EVALS_MARKDOWN];
 const citeCorpus = proseFiles;
+const prose = (rel: string): Block[] =>
+  readProse(rel, readFileSync(path.join(repoRoot, rel), "utf-8"));
 
 // Three reference shapes:
 // 1. `${CLAUDE_PLUGIN_ROOT}/<path>` — path is everything after the prefix. Checked
 //    everywhere (fenced or not) — this is how the plugin's own docs express real
 //    runtime invocations (e.g. commands/sync.md's `node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"`).
 // 2. Bare repo-relative mentions of known top-level dirs, with a recognized file
-//    extension. Checked only OUTSIDE fenced code blocks — inside fences these are
-//    frequently fabricated illustration (a skill's fenced `tests/auth/token.test.ts`
-//    example, say), not real cross-references. A `(?<!\/)` guard also
-//    stops a longer real path like `src/commands/fix.ts` from being mis-sliced into
-//    the shorter bare candidate `commands/fix.ts`.
+//    extension. Read through readProse, by the reader rule in
+//    `.claude/references/skill-authoring.md` **Citations**: a tagged fence is code or
+//    data, often fabricated illustration (a skill's `tests/auth/token.test.ts` example,
+//    say), not a real cross-reference. A `(?<!\/)` guard also stops a longer real path
+//    like `src/commands/fix.ts` from being mis-sliced into the shorter bare candidate
+//    `commands/fix.ts`.
 // 3. A path under one of `REPO_LOCAL_DIRS` (`.claude/…`) — the same bare-mention shape
 //    as (2), scoped to exactly those subdirs (see CLAUDE_DIR_PATH_RE below for why).
 const PLUGIN_ROOT_RE = /\$\{CLAUDE_PLUGIN_ROOT\}\/([\w./-]+)/g;
@@ -126,40 +131,57 @@ function isPlaceholder(candidate: string): boolean {
   return false;
 }
 
-function extractCandidates(line: string, inFence: boolean): string[] {
-  const found: string[] = [];
-  for (const m of line.matchAll(PLUGIN_ROOT_RE)) found.push(m[1]);
-  if (!inFence) {
-    for (const m of line.matchAll(BARE_PATH_RE)) found.push(m[0]);
-    for (const m of line.matchAll(CLAUDE_DIR_PATH_RE)) found.push(m[0]);
-  }
-  return found.filter((c) => !isPlaceholder(c));
-}
-
-const pathCandidates = (text: string): [number, string][] =>
-  outline(text).flatMap((line, idx) =>
-    extractCandidates(line.text, line.fenced).map((c): [number, string] => [idx + 1, c]),
-  );
+const pathCandidates = (rel: string, text: string): [number, string][] =>
+  [
+    ...outline(text).flatMap((line, idx) =>
+      [...line.text.matchAll(PLUGIN_ROOT_RE)].map((m): [number, string] => [idx + 1, m[1] ?? ""]),
+    ),
+    ...readProse(rel, text).flatMap((block) =>
+      [BARE_PATH_RE, CLAUDE_DIR_PATH_RE].flatMap((re) =>
+        [...block.text.matchAll(re)].map((m): [number, string] => [
+          block.lineAt(m.index ?? 0),
+          m[0],
+        ]),
+      ),
+    ),
+  ]
+    .filter(([, c]) => !isPlaceholder(c))
+    .sort(([a], [b]) => a - b);
 
 test("every repo-relative path referenced in prose is tracked", () => {
   assert.deepEqual(
     pathCandidates(
+      "x.md",
       // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal variable name, as the skills write it.
-      "see skills/a.md\n  ````\nskills/b.md\n```\n${CLAUDE_PLUGIN_ROOT}/c.md\n  ````\nskills/d.md",
+      "see skills/a.md\n  ````\nskills/b.md\n```\n${CLAUDE_PLUGIN_ROOT}/c.md\n  ````\nskills/d.md\n\n```sh\nnode skills/e.md ${CLAUDE_PLUGIN_ROOT}/f.md\n```\n\nsee `skills/g.md`\n",
     ),
     [
       [1, "skills/a.md"],
+      [3, "skills/b.md"],
       [5, "c.md"],
       [7, "skills/d.md"],
+      [10, "f.md"],
+      [13, "skills/g.md"],
     ],
-    "a path inside a fence is now checked, or one outside it is skipped",
+    "a path inside a tagged fence is now checked, or one outside it is skipped",
+  );
+  const indented = "x:\n\n    skills/a.md\n";
+  assert.deepEqual(
+    [pathCandidates("NOTICE", indented), pathCandidates("x.md", indented)],
+    [[[3, "skills/a.md"]], []],
+    "pathCandidates reads a file by its name through readProse",
+  );
+  assert.deepEqual(
+    pathCandidates("x.md", "[ u@h.co see skills/a.md"),
+    [[1, "skills/a.md"]],
+    "a paragraph led by [ and an autolink is not read whole",
   );
   const failures: string[] = [];
 
   for (const relFile of proseFiles) {
     const abs = path.join(repoRoot, relFile);
     const fileDir = path.dirname(abs);
-    for (const [line, candidate] of pathCandidates(readFileSync(abs, "utf-8")))
+    for (const [line, candidate] of pathCandidates(relFile, readFileSync(abs, "utf-8")))
       if (!resolves(candidate, fileDir)) failures.push(`${relFile}:${line} -> ${candidate}`);
   }
 
@@ -293,9 +315,10 @@ test("only prose-refs reads the side lists of data files", () => {
 // section's content moved to the next number, the old number still resolved, to the wrong law. A name moves with its
 // content, and a renamed heading fails here.
 //
-// Fences, and code spans holding more than a path, are skipped, as in every citation
-// check: `tests/citations.ts` reads Markdown as it renders, and text in code is shown,
-// not cited.
+// As in every citation check, `tests/citations.ts` reads an untagged fence whole, every
+// line of it except a fence nested inside it, and a file that is not markdown as an
+// untagged fence body is; it skips a tagged fence, an indented code block or an HTML
+// block outside a fence, and a code span holding more than a path.
 
 test("every HARRY.md citation names a heading HARRY.md actually has", () => {
   const laws = readFileSync(path.join(repoRoot, "HARRY.md"), "utf-8");
@@ -312,16 +335,9 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
       "heading, then update LAW_HEADINGS.",
   );
 
-  // The corpus needs guarding too: `listMarkdownFiles` returns [] for a directory
-  // with no tracked markdown, so renaming `skills/` would silently drop its citations
-  // while this test stays green. Asserted per directory, so it says which broke.
-  for (const dir of PROSE_DIRS) {
-    assert.ok(
-      listMarkdownFiles(dir).length > 0,
-      `PROSE_DIRS names "${dir}" but it holds no markdown — renamed or moved? Until this ` +
-        `is fixed, every citation in it is unchecked and both tests here pass regardless.`,
-    );
-  }
+  // The corpus needs guarding too: renaming `skills/` would silently drop its citations
+  // while this test stays green. filesUnder throws per directory, so it says which broke.
+  for (const dir of PROSE_DIRS) filesUnder(dir);
   for (const file of TOP_LEVEL) {
     assert.ok(
       isTracked(path.join(repoRoot, file)),
@@ -339,7 +355,7 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 
   let seen = 0;
   for (const relFile of citeCorpus) {
-    const checked = lawFailures(readFileSync(path.join(repoRoot, relFile), "utf-8"));
+    const checked = lawFailures(prose(relFile));
     seen += checked.seen;
     failures.push(...checked.failures.map((f) => `${relFile}:${f}`));
   }
@@ -367,7 +383,7 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
 test("every cross-file citation names a heading or step its file has, once", () => {
   let seen = 0;
   const failures = citeCorpus.flatMap((relFile) => {
-    const checked = citeFailures(repo, readFileSync(path.join(repoRoot, relFile), "utf-8"));
+    const checked = citeFailures(repo, prose(relFile));
     seen += checked.seen;
     return checked.failures.map((f) => `${relFile}:${f}`);
   });
@@ -383,7 +399,7 @@ test("every cross-file citation names a heading or step its file has, once", () 
 
 test("no cross-file citation uses a legacy form", () => {
   const hits = citeCorpus.flatMap((relFile) =>
-    legacyHits(readFileSync(path.join(repoRoot, relFile), "utf-8")).map((h) => `${relFile}:${h}`),
+    legacyHits(prose(relFile)).map((h) => `${relFile}:${h}`),
   );
   assert.deepEqual(hits, [], "a legacy citation form; each hit names the form to use");
 });
@@ -391,7 +407,7 @@ test("no cross-file citation uses a legacy form", () => {
 test("every audit dimension citation names a SCAN-DIMENSIONS ## heading", () => {
   let seen = 0;
   const failures = citeCorpus.flatMap((relFile) => {
-    const checked = dimensionFailures(repo, readFileSync(path.join(repoRoot, relFile), "utf-8"));
+    const checked = dimensionFailures(repo, prose(relFile));
     seen += checked.seen;
     return checked.failures.map((f) => `${relFile}:${f}`);
   });
@@ -399,14 +415,12 @@ test("every audit dimension citation names a SCAN-DIMENSIONS ## heading", () => 
   assert.deepEqual(failures, [], `cite a dimension as ${FORM.dimension}`);
 });
 
-const scanCorpus = (scan: (text: string) => string[]): string[] =>
-  citeCorpus.flatMap((relFile) =>
-    scan(readFileSync(path.join(repoRoot, relFile), "utf-8")).map((h) => `${relFile}:${h}`),
-  );
+const scanCorpus = (scan: (blocks: Block[]) => string[]): string[] =>
+  citeCorpus.flatMap((relFile) => scan(prose(relFile)).map((h) => `${relFile}:${h}`));
 
 test("no cross-file citation names a heading or step in plain text", () => {
   assert.deepEqual(
-    scanCorpus((text) => plainNameCitations(repo, text)),
+    scanCorpus((blocks) => plainNameCitations(repo, blocks)),
     [],
     `cite a heading or step as ${FORM.path}, not in plain text`,
   );
@@ -414,7 +428,7 @@ test("no cross-file citation names a heading or step in plain text", () => {
 
 test("every citation attempt next to a path is in the one form", () => {
   assert.deepEqual(
-    scanCorpus((text) => citationAttempts(repo, text)),
+    scanCorpus((blocks) => citationAttempts(repo, blocks)),
     [],
     "a citation attempt outside the one form; each hit names the form to use",
   );
@@ -422,7 +436,7 @@ test("every citation attempt next to a path is in the one form", () => {
 
 test("no prose cites a step or category by its number", () => {
   assert.deepEqual(
-    scanCorpus((text) => stepAttempts(repo, text)),
+    scanCorpus((blocks) => stepAttempts(repo, blocks)),
     [],
     "a step cited by number; cite it by its label",
   );
@@ -459,7 +473,7 @@ test("every reference is cited by path from a shipped file other than itself", (
   const texts = new Map(
     shipped.map((rel) => [rel, readFileSync(path.join(repoRoot, rel), "utf-8")]),
   );
-  const orphans = listMarkdownFiles("references")
+  const orphans = filesUnder("references")
     .map((rel) => rel.split(path.sep).join("/"))
     .filter(
       (ref) =>

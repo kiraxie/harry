@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { inDir, MARKDOWN_CORPUS, PROSE_DIRS, TOP_LEVEL, under } from "./prose-dirs.ts";
+import { COMMAND_FILES, filesUnder, PROSE_DIRS, TOP_LEVEL } from "./prose-dirs.ts";
 
 // A gate the model cannot execute is not a gate. `commands/review.md` used to set
 // `disable-model-invocation: true` (inherited from codex-plugin-cc, which sets it on every
@@ -21,12 +21,6 @@ import { inDir, MARKDOWN_CORPUS, PROSE_DIRS, TOP_LEVEL, under } from "./prose-di
 // is deliberately out of scope — the ban is on instructions, not on mentioning the command exists.
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-
-function markdownUnder(dir: string): string[] {
-  const found = MARKDOWN_CORPUS.filter(under([dir]));
-  assert.ok(found.length > 0, `markdownUnder("${dir}"): no tracked markdown — renamed or deleted?`);
-  return found;
-}
 
 /**
  * Own-file exemptions: files the scan skips even though they may name a blocked command,
@@ -60,7 +54,7 @@ function gateFiles(): string[] {
   return [
     ...TOP_LEVEL.filter((f) => !GATE_PATH_EXEMPTIONS.has(f)),
     "references/tier-gates.md",
-    ...PROSE_DIRS.filter((dir) => !GATE_PATH_EXEMPTIONS.has(dir)).flatMap(markdownUnder),
+    ...PROSE_DIRS.filter((dir) => !GATE_PATH_EXEMPTIONS.has(dir)).flatMap((dir) => filesUnder(dir)),
   ].filter((rel) => !exempt.has(rel));
 }
 
@@ -70,7 +64,7 @@ function gateFiles(): string[] {
  */
 const EXTERNAL_BLOCKED = ["code-review"];
 
-function blockedCommandNames(files = MARKDOWN_CORPUS.filter(inDir("commands"))): string[] {
+function blockedCommandNames(files = COMMAND_FILES): string[] {
   const names = files
     .filter((f) => {
       const text = readFileSync(path.resolve(repoRoot, f), "utf-8");

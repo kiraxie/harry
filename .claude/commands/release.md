@@ -55,7 +55,7 @@ names; otherwise ask the user which commands to run, and do not guess.
 Run, from the repo root, with one `--field` per declared field file and the commit
 you started on:
 
-```
+```sh
 node .claude/scripts/release-state.mts <version> [--field <path>]... --start <starting-commit>
 ```
 

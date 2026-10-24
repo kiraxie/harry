@@ -140,6 +140,8 @@ const walk = (node: MdNode, visit: (node: MdNode) => void): void => {
 };
 
 const contentRange = (node: MdNode): [number, number] | null => {
+  if (node.type === "paragraph" && node.position)
+    return [offset(node, "start"), offset(node, "end")];
   const first = node.children?.[0];
   const last = node.children?.at(-1);
   return first && last ? [offset(first, "start"), offset(last, "end")] : null;
@@ -150,17 +152,19 @@ const PATH_ONLY_RE = new RegExp(String.raw`^(?:~[\w.-]*\/|\$\w+\/|\/)?${PATH_SRC
 export type CodeSpan = { from: number; to: number; value: string; path: boolean };
 type Bold = { at: number; end: number; name: string };
 export type Block = {
-  at: number;
+  lineAt: (i: number) => number;
   text: string;
-  masked: string;
+  prose: string;
   code: CodeSpan[];
   bold: Bold[];
   stray: number[];
+  fenced: boolean;
 };
+type Parsed = Omit<Block, "lineAt" | "fenced"> & { at: number };
 
 const PROSE_BLOCKS = new Set(["paragraph", "heading", "tableCell"]);
 
-const toBlock = (src: string, node: MdNode): Block | null => {
+const toBlock = (src: string, node: MdNode): Parsed | null => {
   const range = contentRange(node);
   if (!range) return null;
   const [at, to] = range;
@@ -183,17 +187,23 @@ const toBlock = (src: string, node: MdNode): Block | null => {
       for (const run of text.slice(from, end).matchAll(/\*{2,}/g))
         stray.push(from + (run.index ?? 0));
   });
-  const masked = code.reduce(
-    (t, s) =>
-      t.slice(0, s.from) + t.slice(s.from, s.to).replace(/[*"'“”‘’]/g, "\0") + t.slice(s.to),
+  const prose = code.reduce(
+    (t, s) => t.slice(0, s.from) + blank(t.slice(s.from, s.to)) + t.slice(s.to),
     text,
   );
-  return { at, text, masked, code, bold, stray };
+  return { at, text, prose, code, bold, stray };
 };
 
-export const blocks = (text: string, body = false): Block[] =>
+const masked = (b: Block): string =>
+  b.code.reduce(
+    (t, s) =>
+      t.slice(0, s.from) + t.slice(s.from, s.to).replace(/[*"'“”‘’]/g, "\0") + t.slice(s.to),
+    b.text,
+  );
+
+const parsed = (text: string, body: boolean): Parsed[] =>
   (body ? [text] : sources(text)).flatMap((src) => {
-    const found: Block[] = [];
+    const found: Parsed[] = [];
     const visit = (node: MdNode): void => {
       if (!PROSE_BLOCKS.has(node.type)) for (const child of node.children ?? []) visit(child);
       else {
@@ -204,8 +214,6 @@ export const blocks = (text: string, body = false): Block[] =>
     visit(parse(src, body));
     return found;
   });
-
-export const fenceBlocks = (text: string): Block[] => blocks(text, true);
 
 export type Fence = { info: string; text: string; line: number };
 
@@ -222,6 +230,30 @@ export const fences = (text: string): Fence[] => {
   });
   return found;
 };
+
+export const fenceBlocks = (fence: Fence): Block[] =>
+  parsed(fence.text, true).map(({ at, ...b }) => ({
+    ...b,
+    fenced: true,
+    lineAt: (i) => fence.line + lineOf(fence.text, at + i) - 1,
+  }));
+
+const proseBlocks = (text: string): Block[] =>
+  [
+    ...parsed(text, false).map(({ at, ...b }) => ({
+      ...b,
+      fenced: false,
+      lineAt: (i: number) => lineOf(text, at + i),
+    })),
+    ...fences(text)
+      .filter((fence) => !fence.info)
+      .flatMap(fenceBlocks),
+  ].sort((a, b) => a.lineAt(0) - b.lineAt(0));
+
+export const readProse = (rel: string, text: string): Block[] =>
+  rel.endsWith(".md")
+    ? proseBlocks(text)
+    : fenceBlocks({ info: "", text, line: 1 }).map((b) => ({ ...b, fenced: false }));
 
 const spanAt = (spans: CodeSpan[], at: number): CodeSpan | undefined =>
   spans.find((s) => at >= s.from && at < s.to);
@@ -280,18 +312,16 @@ export const resolveCitation = (
     ? resolveName(repo.names(target), target, name, level)
     : `${target} is not tracked`;
 
-export const legacyHits = (text: string): string[] => {
-  const all = blocks(text);
-  return LEGACY_FORMS.flatMap(({ label, re, form }) =>
-    all.flatMap((b) =>
+export const legacyHits = (blocks: Block[]): string[] =>
+  LEGACY_FORMS.flatMap(({ label, re, form }) =>
+    blocks.flatMap((b) =>
       [...b.text.matchAll(re)].flatMap((m) =>
         spanAt(b.code, m.index ?? 0)?.path === false
           ? []
-          : [`${lineOf(text, b.at + (m.index ?? 0))} -> ${label}; cite it as ${form}`],
+          : [`${b.lineAt(m.index ?? 0)} -> ${label}; cite it as ${form}`],
       ),
     ),
   );
-};
 
 const DIMENSION_CITE_RE = /\bdimensions?\s+/gi;
 
@@ -302,31 +332,31 @@ type Checked = { seen: number; failures: string[] };
 type Lead = { at: number; m: RegExpExecArray; bold: Bold };
 
 const leads = (b: Block, re: RegExp): Lead[] =>
-  [...b.masked.matchAll(re)].flatMap((m) => {
+  [...masked(b).matchAll(re)].flatMap((m) => {
     const bold = b.bold.find((s) => s.at === (m.index ?? 0) + m[0].length);
-    return bold ? [{ at: b.at + (m.index ?? 0), m, bold }] : [];
+    return bold ? [{ at: m.index ?? 0, m, bold }] : [];
   });
 
 const checkEach = (
-  text: string,
+  blocks: Block[],
   re: RegExp,
   judge: (m: RegExpExecArray, name: string) => string | null,
 ): Checked => {
-  const found = blocks(text).flatMap((b) => leads(b, re));
+  const found = blocks.flatMap((b) => leads(b, re).map((lead) => ({ b, ...lead })));
   return {
     seen: found.length,
-    failures: found.flatMap(({ at, m, bold }) => {
+    failures: found.flatMap(({ b, at, m, bold }) => {
       const failure = judge(m, cleanName(bold.name));
-      return failure ? [`${lineOf(text, at)} -> ${failure}`] : [];
+      return failure ? [`${b.lineAt(at)} -> ${failure}`] : [];
     }),
   };
 };
 
-export const citeFailures = (repo: Repo, text: string): Checked =>
-  checkEach(text, CITE_RE, (m, name) => resolveCitation(repo, m[1] as string, name));
+export const citeFailures = (repo: Repo, blocks: Block[]): Checked =>
+  checkEach(blocks, CITE_RE, (m, name) => resolveCitation(repo, m[1] as string, name));
 
-export const lawFailures = (text: string): Checked =>
-  checkEach(text, LAW_CITE_RE, (_, name) =>
+export const lawFailures = (blocks: Block[]): Checked =>
+  checkEach(blocks, LAW_CITE_RE, (_, name) =>
     LAW_HEADINGS.includes(name) ? null : `HARRY.md **${name}**`,
   );
 
@@ -350,14 +380,17 @@ export const lawLabelFailures = (jsonl: string): Checked => {
 const dimensionFailure = (repo: Repo, name: string): string | null =>
   resolveCitation(repo, SCAN_DIMENSIONS, name, 2);
 
-export const dimensionFailures = (repo: Repo, text: string): Checked =>
-  checkEach(text, DIMENSION_CITE_RE, (_, name) => dimensionFailure(repo, name));
+export const dimensionFailures = (repo: Repo, blocks: Block[]): Checked =>
+  checkEach(blocks, DIMENSION_CITE_RE, (_, name) => dimensionFailure(repo, name));
 
-export const blockDimensionFailures = (repo: Repo, b: Block): { at: number; failure: string }[] =>
+export const blockDimensionFailures = (repo: Repo, b: Block): { line: number; failure: string }[] =>
   leads(b, DIMENSION_CITE_RE).flatMap(({ at, bold }) => {
     const failure = dimensionFailure(repo, cleanName(bold.name));
-    return failure ? [{ at: at - b.at, failure }] : [];
+    return failure ? [{ line: b.lineAt(at), failure }] : [];
   });
+
+export const cites = (b: Block): { path: string; name: string }[] =>
+  leads(b, CITE_RE).map(({ m, bold }) => ({ path: m[1] as string, name: cleanName(bold.name) }));
 
 const citeTarget = (repo: Repo, cited: string): string | null => {
   const target = cited.endsWith(".md") ? cited : `${cited}/SKILL.md`;
@@ -417,8 +450,8 @@ const pathMentions = (repo: Repo, b: Block): PathMention[] => {
   });
 };
 
-export const plainNameCitations = (repo: Repo, text: string): string[] =>
-  blocks(text).flatMap((b) =>
+export const plainNameCitations = (repo: Repo, blocks: Block[]): string[] =>
+  blocks.flatMap((b) =>
     pathMentions(repo, b).flatMap(({ target, start, end }) => {
       if (!target) return [];
       const rest = b.text.slice(end).replace(CONNECTOR_RE, "");
@@ -426,7 +459,7 @@ export const plainNameCitations = (repo: Repo, text: string): string[] =>
         .names(target)
         .map((n) => n.name)
         .find((n) => rest.startsWith(n) && !/^[\w-]/.test(rest.slice(n.length)));
-      return name ? [`${lineOf(text, b.at + start)} -> ${target} "${name}"`] : [];
+      return name ? [`${b.lineAt(start)} -> ${target} "${name}"`] : [];
     }),
   );
 
@@ -434,9 +467,10 @@ type Span = { at: number; end: number; name: string; bold: boolean };
 
 const quotedOrBold = (b: Block): Span[] => {
   const spans: Span[] = [];
+  const text = masked(b);
   for (let from = 0; ; ) {
     QUOTE_RE.lastIndex = from;
-    const quote = QUOTE_RE.exec(b.masked);
+    const quote = QUOTE_RE.exec(text);
     const bold = b.bold.find((s) => s.at >= from);
     if (bold && (!quote || bold.at <= quote.index)) {
       spans.push({ ...bold, bold: true });
@@ -454,19 +488,26 @@ const quotedOrBold = (b: Block): Span[] => {
   }
 };
 
-const hitList = (text: string) => {
-  const hits = new Map<number, string>();
+type Hit = { line: number; n: number; i: number; message: string };
+
+const hitList = () => {
+  const hits = new Map<string, Hit>();
   return {
-    hit: (index: number, message: string) => {
-      if (!hits.has(index)) hits.set(index, `${lineOf(text, index)} -> ${message}`);
+    hitIn: (b: Block, n: number) => (i: number, message: string) => {
+      const key = `${n}:${i}`;
+      if (!hits.has(key)) hits.set(key, { line: b.lineAt(i), n, i, message });
     },
-    list: () => [...hits.entries()].sort(([a], [b]) => a - b).map(([, message]) => message),
+    list: () =>
+      [...hits.values()]
+        .sort((x, y) => x.line - y.line || x.n - y.n || x.i - y.i)
+        .map(({ line, message }) => `${line} -> ${message}`),
   };
 };
 
-export const citationAttempts = (repo: Repo, text: string): string[] => {
-  const { hit, list } = hitList(text);
-  for (const b of blocks(text)) {
+export const citationAttempts = (repo: Repo, blocks: Block[]): string[] => {
+  const { hitIn, list } = hitList();
+  for (const [n, b] of blocks.entries()) {
+    const hit = hitIn(b, n);
     const exactAt = exactCitations(b);
     const spans = quotedOrBold(b);
     for (const { cited, target, advice, start, end, from, after } of pathMentions(repo, b)) {
@@ -478,7 +519,7 @@ export const citationAttempts = (repo: Repo, text: string): string[] => {
           (!s.bold && s.at === lead + (b.text[lead] === "\\" ? 1 : 0) && /^\w/.test(s.name)),
       );
       const adjacent = !exact && opener !== undefined;
-      if (adjacent) hit(b.at + end, `a name next to ${cited}; ${advice}`);
+      if (adjacent) hit(end, `a name next to ${cited}; ${advice}`);
       if (!target) continue;
       const names = new Set(repo.names(target).flatMap((n) => [n.name, n.full]));
       const afterEnd = end + after.length;
@@ -487,41 +528,39 @@ export const citationAttempts = (repo: Repo, text: string): string[] => {
         if (adjacent && s === opener) continue;
         if (s.bold && exactAt.has(s.at)) continue;
         const name = cleanName(s.name);
-        if (names.has(name))
-          hit(b.at + s.at, `${cited} "${name}" outside the citation form; ${advice}`);
+        if (names.has(name)) hit(s.at, `${cited} "${name}" outside the citation form; ${advice}`);
       }
     }
   }
   return list();
 };
 
-export const stepAttempts = (repo: Repo, text: string): string[] => {
-  const { hit, list } = hitList(text);
-  for (const b of blocks(text)) {
+export const stepAttempts = (repo: Repo, blocks: Block[]): string[] => {
+  const { hitIn, list } = hitList();
+  for (const [n, b] of blocks.entries()) {
+    const hit = hitIn(b, n);
     for (const { cited, end, after } of pathMentions(repo, b)) {
       if (STEP_NUMBER_RE.test(after))
-        hit(b.at + end, `a step or category number after ${cited}; ${STEP_HINT}`);
+        hit(end, `a step or category number after ${cited}; ${STEP_HINT}`);
       const paren = PAREN_STEP_RE.exec(after);
       if (paren)
-        hit(b.at + end + paren.index, `a step number in the sentence after ${cited}; ${STEP_HINT}`);
+        hit(end + paren.index, `a step number in the sentence after ${cited}; ${STEP_HINT}`);
     }
     for (const { at, end } of b.bold)
       if (STEP_NUMBER_RE.test(b.text.slice(end, end + 40)))
-        hit(b.at + at, `a step or category number after a name; ${STEP_HINT}`);
+        hit(at, `a step or category number after a name; ${STEP_HINT}`);
   }
   return list();
 };
 
-export const lawAttempts = (text: string): string[] => {
-  const { hit, list } = hitList(text);
-  for (const b of blocks(text)) {
+export const lawAttempts = (blocks: Block[]): string[] => {
+  const { hitIn, list } = hitList();
+  for (const [n, b] of blocks.entries()) {
+    const hit = hitIn(b, n);
     const exactAt = exactCitations(b);
     for (const { at, name } of b.bold)
       if (LAW_HEADINGS.includes(cleanName(name)) && !exactAt.has(at))
-        hit(
-          b.at + at,
-          `**${name}** names a law with no HARRY.md before it; cite it as ${FORM.law}`,
-        );
+        hit(at, `**${name}** names a law with no HARRY.md before it; cite it as ${FORM.law}`);
   }
   return list();
 };
@@ -530,5 +569,5 @@ const STRAY_BOLD =
   "a ** that pairs with nothing renders as asterisks; bold opens before a non-space " +
   "and closes after one, in the same paragraph";
 
-export const strayBold = (text: string): string[] =>
-  blocks(text).flatMap((b) => b.stray.map((at) => `${lineOf(text, b.at + at)} -> ${STRAY_BOLD}`));
+export const strayBold = (blocks: Block[]): string[] =>
+  blocks.flatMap((b) => b.stray.map((at) => `${b.lineAt(at)} -> ${STRAY_BOLD}`));

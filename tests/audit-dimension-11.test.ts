@@ -79,7 +79,7 @@ test("dimension-11 agents learn both kinds", () => {
 });
 
 test("no /audit file still encodes guards-nothing as a none sentinel", () => {
-  for (const rel of PROSE_DIR_FILES.filter(inDir("references/audit"))) {
+  for (const rel of inDir("references/audit", PROSE_DIR_FILES)) {
     assert.doesNotMatch(read(rel), /none: <reason>/, rel);
   }
 });
