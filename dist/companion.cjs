@@ -271,7 +271,8 @@ function lastErrorLine(logPath) {
 }
 var CODEX_EXEC = "codex exec";
 function codexExecArgs(opts) {
-  const args = ["exec", "--ephemeral", "-s", "read-only", ...opts.extraArgs ?? []];
+  const args = ["exec", "--ephemeral", "-s", "read-only"];
+  if (opts.skipGitRepoCheck) args.push("--skip-git-repo-check");
   args.push("-o", opts.outputPath);
   if (opts.reasoning) args.push("-c", `model_reasoning_effort="${opts.reasoning}"`);
   args.push("-");
@@ -404,7 +405,7 @@ async function ask(cwd, options) {
   pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
   const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
   const answer = await runCodexExec({
-    extraArgs: ["--skip-git-repo-check"],
+    skipGitRepoCheck: true,
     reasoning: options.reasoning,
     cwd,
     input: buildAskPrompt(prompt, context),

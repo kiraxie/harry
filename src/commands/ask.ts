@@ -84,7 +84,7 @@ async function ask(cwd: string, options: AskOptions): Promise<void> {
   const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
 
   const answer = await runCodexExec({
-    extraArgs: ["--skip-git-repo-check"],
+    skipGitRepoCheck: true,
     reasoning: options.reasoning,
     cwd,
     input: buildAskPrompt(prompt, context),

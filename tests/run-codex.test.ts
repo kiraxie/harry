@@ -54,6 +54,15 @@ test("resolveOnPath skips a non-executable codex for a later executable one", ()
   assert.equal(resolveOnPath("codex", env), path.join(second, "codex"));
 });
 
+test("typecheck holds spawnCodexSync to setup's queries, so codex exec has runCodexExec as its only door", () => {
+  type Query = Parameters<typeof spawnCodexSync>[0];
+  // @ts-expect-error exec is runCodexExec's alone
+  const exec: Query = ["exec", "--ephemeral"];
+  // @ts-expect-error a free-form argv is not a query
+  const freeForm: Query = ["--version"] as string[];
+  assert.deepEqual([exec[0], freeForm[0]], ["exec", "--version"]);
+});
+
 // An empty PATH entry (`:x`, `x:`, `a::b`) or a relative one (`.`, `bin`) means
 // "relative to the cwd" to execvp, and `review` runs codex with cwd = the
 // repository under review — so a repo shipping `./codex` would run its own code.
@@ -216,19 +225,19 @@ test("runCodexExec never runs a `codex` in the cwd or a relative PATH entry, and
 test("runCodexExec removes its signal listeners when spawn throws synchronously", () => {
   const dir = tempDir("harry-rc-throw-");
   const { result } = runExec(path.join(dir, "out.md"), path.join(dir, "run.log"), {
-    exec: { extraArgs: ["bad\0arg"] },
+    exec: { reasoning: "bad\0arg" },
   });
   assert.equal(result.code, "ERR_INVALID_ARG_VALUE", String(result.message));
   assert.deepEqual(result.listeners, [0, 0, 0]);
 });
 
-test("runCodexExec spawns codex exec ephemeral behind the read-only sandbox, a caller's flags after it and stdin last", () => {
+test("runCodexExec spawns codex exec ephemeral behind the read-only sandbox, --skip-git-repo-check after it and stdin last", () => {
   const dir = tempDir("harry-rc-argv-");
   const record = path.join(dir, "record");
   const outputPath = path.join(dir, "out.md");
   const { result } = runExec(outputPath, path.join(dir, "run.log"), {
     fake: { FAKE_CODEX_CLI_RECORD_DIR: record },
-    exec: { extraArgs: ["--skip-git-repo-check"], reasoning: "high" },
+    exec: { skipGitRepoCheck: true, reasoning: "high" },
   });
   assert.equal(result.ok, true);
   assert.deepEqual(JSON.parse(readFileSync(path.join(record, "argv.json"), "utf8")), [

@@ -49,12 +49,14 @@ function codexNotFound(syscall: string): Error {
   return notFoundError(syscall, "codex");
 }
 
+export type CodexQuery = readonly ["--version"] | readonly ["login", "status"];
+
 /**
  * `spawnSync` for codex: `setup`'s short queries. A long run goes through
  * {@link runCodexExec}, which a signal can interrupt.
  */
 export function spawnCodexSync(
-  args: readonly string[],
+  args: CodexQuery,
   options: SpawnSyncOptions,
 ): SpawnSyncReturns<string | Buffer> {
   const command = resolveOnPath("codex", options.env ?? process.env);
@@ -277,8 +279,8 @@ export function lastErrorLine(logPath: string): string | undefined {
 export const CODEX_EXEC = "codex exec";
 
 export interface CodexExecInput {
-  /** Arguments a caller adds after the read-only sandbox, e.g. `--skip-git-repo-check`. */
-  extraArgs?: readonly string[];
+  /** Passed as `--skip-git-repo-check` when true, so codex may run outside a git repo. */
+  skipGitRepoCheck?: boolean;
   /** Passed as `-c model_reasoning_effort="<v>"` when set. */
   reasoning?: ReasoningEffort;
   cwd: string;
@@ -292,7 +294,8 @@ export interface CodexExecInput {
 
 /** The argv every `codex exec` run spawns with, behind codex's read-only sandbox. */
 function codexExecArgs(opts: CodexExecInput): string[] {
-  const args = ["exec", "--ephemeral", "-s", "read-only", ...(opts.extraArgs ?? [])];
+  const args = ["exec", "--ephemeral", "-s", "read-only"];
+  if (opts.skipGitRepoCheck) args.push("--skip-git-repo-check");
   args.push("-o", opts.outputPath);
   if (opts.reasoning) args.push("-c", `model_reasoning_effort="${opts.reasoning}"`);
   args.push("-");

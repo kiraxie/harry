@@ -3,7 +3,12 @@
  * `codex --version` and `codex login status`.
  */
 
-import { CODEX_CLI_MISSING, codexMissing, spawnCodexSync } from "../lib/run-codex.ts";
+import {
+  CODEX_CLI_MISSING,
+  type CodexQuery,
+  codexMissing,
+  spawnCodexSync,
+} from "../lib/run-codex.ts";
 import { CLIENT_NAME, PLUGIN_VERSION } from "../lib/version.ts";
 
 export interface SetupOptions {
@@ -18,7 +23,7 @@ interface CodexCall {
   lines: string[];
 }
 
-function callCodex(cwd: string, args: string[]): CodexCall {
+function callCodex(cwd: string, args: CodexQuery): CodexCall {
   const res = spawnCodexSync(args, {
     cwd,
     encoding: "utf8",
