@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LINE_END_RE } from "./lines.ts";
 import { READER_CORPUS } from "./prose-dirs.ts";
 import { headingSection, section, sectionLines } from "./section.ts";
 
@@ -283,7 +284,7 @@ test("AC-4: no model-instructing file keeps a batched or per-build cadence", () 
   for (const rel of corpus) {
     const grillFamily = GRILL_FAMILY.includes(rel);
     read(rel)
-      .split("\n")
+      .split(LINE_END_RE)
       .forEach((line, i) => {
         const hit = [
           NUMBERED_ROUNDS_RE.test(line) && "numbered rounds",
@@ -361,7 +362,7 @@ test("round format: no other model-instructing file carries the layout", () => {
     // Lines of grilling.md's opt-in rule are skipped, not cut, so every offender
     // keeps its real line number.
     const allowed = rel === GRILLING ? sectionLines(text, rel, OPT_IN_START, OPT_IN_END) : [0, 0];
-    text.split("\n").forEach((line, i) => {
+    text.split(LINE_END_RE).forEach((line, i) => {
       const n = i + 1;
       if (n >= allowed[0] && n <= allowed[1]) return;
       if (ROUND_FORMAT_RE.test(line)) offenders.push(`${rel}:${n}`);

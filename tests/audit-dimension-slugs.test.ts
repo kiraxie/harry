@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   type Block,
   blockDimensionFailures,
+  type Fence,
   fenceBlocks,
   namesIn,
   type Repo,
@@ -13,6 +14,7 @@ import {
   SCAN_DIMENSIONS,
   untaggedFences,
 } from "./citations.ts";
+import { LINE_END_RE } from "./lines.ts";
 import { SHIPPED_MARKDOWN } from "./prose-dirs.ts";
 import { confirmedBranch, NAMES, SCHEMA } from "./report-schema.ts";
 import { headingSection, outline } from "./section.ts";
@@ -98,8 +100,8 @@ test("a kebab-case code span in audit prose is a schema term or a listed name", 
 const REUSE = NAMES.reuseDimensions;
 const LOW_VALUE = [NAMES.lowValueDimension];
 
-const spans = (rel: string, label: string): string[] => {
-  const found = readProse(rel, raw(rel)).filter((block) => block.text.startsWith(label));
+const spans = (rel: string, text: string, label: string): string[] => {
+  const found = readProse(rel, text).filter((block) => block.text.startsWith(label));
   assert.equal(found.length, 1, `${rel} needs one block starting ${label}`);
   return (found[0]?.code ?? []).map((span) => span.value).filter((s) => SLUGS.includes(s));
 };
@@ -113,11 +115,11 @@ const description = (prop: "evidence" | "drift_test" | "retention_check"): strin
   return text;
 };
 const NAMES_SITES: [string, () => string[], string[]][] = [
-  [`${DEEP} evidence`, () => spans(DEEP, "evidence:"), REUSE],
-  [`${DEEP} drift_test`, () => spans(DEEP, "drift_test ("), REUSE],
-  [`${DEEP} retention_check`, () => spans(DEEP, "retention_check ("), LOW_VALUE],
-  [`${ROUNDS} DRIFT TEST`, () => spans(ROUNDS, "DRIFT TEST ("), REUSE],
-  [`${ROUNDS} RETENTION TEST`, () => spans(ROUNDS, "RETENTION TEST ("), LOW_VALUE],
+  [`${DEEP} evidence`, () => spans(DEEP, raw(DEEP), "evidence:"), REUSE],
+  [`${DEEP} drift_test`, () => spans(DEEP, raw(DEEP), "drift_test ("), REUSE],
+  [`${DEEP} retention_check`, () => spans(DEEP, raw(DEEP), "retention_check ("), LOW_VALUE],
+  [`${ROUNDS} DRIFT TEST`, () => spans(ROUNDS, raw(ROUNDS), "DRIFT TEST ("), REUSE],
+  [`${ROUNDS} RETENTION TEST`, () => spans(ROUNDS, raw(ROUNDS), "RETENTION TEST ("), LOW_VALUE],
   ["the schema's evidence description", () => named(description("evidence")), REUSE],
   ["the schema's drift_test description", () => named(description("drift_test")), REUSE],
   [
@@ -129,6 +131,18 @@ const NAMES_SITES: [string, () => string[], string[]][] = [
 for (const [site, actual, expected] of NAMES_SITES)
   test(`${site} names the dimensions validate-findings.cjs NAMES applies the rule to`, () => {
     assert.deepEqual([...new Set(actual())].sort(), [...expected].sort());
+  });
+
+const LABEL_ROWS: [string, string][] = [
+  ["no block starts", "other\n"],
+  ["two blocks start", "evidence: a\n\nevidence: b\n"],
+];
+
+for (const [label, text] of LABEL_ROWS)
+  test(`a label site fails naming its file and label when ${label} with the label`, () => {
+    assert.throws(() => spans("x.md", text, "evidence:"), {
+      message: /^x\.md needs one block starting evidence:$/m,
+    });
   });
 
 const PLAIN_ENGLISH = [
@@ -209,23 +223,37 @@ const UNTAGGED = AUDIT_PROSE.flatMap((rel) =>
   untaggedFences(raw(rel)).map((fence) => ({ rel, fence })),
 );
 
+const unreadLines = (rel: string, fence: Fence, read: (fence: Fence) => Block[]): string[] => {
+  const spans = read(fence).map((block) => [block.lineAt(0), block.lineAt(block.text.length)]);
+  return fence.text
+    .split(LINE_END_RE)
+    .flatMap((content, i) =>
+      /\w/.test(content) &&
+      !spans.some(([from = 0, to = 0]) => fence.line + i >= from && fence.line + i <= to)
+        ? [`${rel}:${fence.line + i}`]
+        : [],
+    );
+};
+
+const UNREAD_ROWS: [string, (fence: Fence) => Block[], string[]][] = [
+  ["the fence reader", fenceBlocks, []],
+  ["a reader that drops the last block", (fence) => fenceBlocks(fence).slice(0, 1), ["x.md:4"]],
+];
+
+for (const [label, read, expected] of UNREAD_ROWS)
+  test(`the unread fence line check flags what ${label} skips`, () => {
+    const [fence] = untaggedFences("```\nfirst\n\nsecond\n```\n");
+    assert.ok(fence);
+    assert.deepEqual(unreadLines("x.md", fence, read), expected);
+  });
+
 test("every line holding a word in an untagged audit fence is read", () => {
   assert.ok(UNTAGGED.length > 0, "the audit prose holds no untagged fence");
-  const unread = UNTAGGED.flatMap(({ rel, fence }) => {
-    const spans = fenceBlocks(fence).map((block) => [
-      block.lineAt(0),
-      block.lineAt(block.text.length),
-    ]);
-    return fence.text
-      .split("\n")
-      .flatMap((content, i) =>
-        /\w/.test(content) &&
-        !spans.some(([from = 0, to = 0]) => fence.line + i >= from && fence.line + i <= to)
-          ? [`${rel}:${fence.line + i}`]
-          : [],
-      );
-  });
-  assert.deepEqual(unread, [], "a fence line the slug scans never read");
+  assert.deepEqual(
+    UNTAGGED.flatMap(({ rel, fence }) => unreadLines(rel, fence, fenceBlocks)),
+    [],
+    "a fence line the slug scans never read",
+  );
 });
 
 const scanDimensions: Repo = {

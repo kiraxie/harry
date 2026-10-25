@@ -77,7 +77,7 @@ test("citations.ts is pure: nothing it reaches reads git or the disk", () => {
   const root = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(
     [...reached].map((f) => path.relative(root, f)).sort(),
-    ["scripts/lib/evals-cases.mts", "tests/citations.ts"],
+    ["scripts/lib/evals-cases.mts", "tests/citations.ts", "tests/lines.ts"],
     "citations.ts reaches a new module; keep git and the disk out, take them through Repo",
   );
   assert.deepEqual(
@@ -87,40 +87,65 @@ test("citations.ts is pure: nothing it reaches reads git or the disk", () => {
   );
 });
 
-test("a cited name resolves to one heading or step", () => {
-  assert.deepEqual(
-    namesIn(
-      "# Title\n## \n## 2. Top — sub (x)\n1. **Step one.** a\n   1. **Nested.** b\n**Paragraph.** c\n```\n1. **Fenced.** d\n```\n" +
-        "2. **Run *all* tests.** e\n3. **A label\n   that wraps.** f\n4. **Use `**` marks.** g\n5. **After\n\n** gap\n## Last\n",
-    ).map((n) => n.name),
-    ["Top", "Step one", "Run *all* tests", "A label that wraps", "Use `**` marks", "Last"],
-    "a name now comes from a title, an empty heading, a nested item, a bold paragraph, a fenced " +
-      "line or bold across a blank line, or a label with italics, a code span or a wrap is lost",
-  );
-  assert.deepEqual(
-    namesIn("1. **a\n2. b** c\n"),
-    [],
-    "a label's bold runs on into the next list item",
-  );
-  const doc = namesIn(
-    "## Install\n### Flow (full depth)\n1. **One fix wave.** a\n## 3. Install — again\n### Check\n",
-  );
-  const fixtures: [string, number | undefined, string | null][] = [
-    ["One fix wave", undefined, null],
-    ["Flow", undefined, null],
-    ["Flow", 3, null],
-    ["Flow", 2, 'x.md has no ## heading "Flow"'],
-    ["Check the fixes first", undefined, 'x.md has no heading or step "Check the fixes first"'],
-    ["Flow (full depth)", undefined, "x.md **Flow (full depth)**: cite its core name **Flow**"],
-    ["Install", undefined, 'x.md **Install** is ambiguous: "Install", "3. Install — again"'],
-  ];
-  for (const [name, level, expected] of fixtures)
-    assert.equal(
-      resolveName(doc, "x.md", name, level),
-      expected,
-      `the resolver misjudges "${name}" at level ${level}`,
+const NAME_ROWS: [string, string, string[]][] = [
+  ["a ## heading gives its core name", "## 2. Top — sub (x)\n", ["Top"]],
+  ["a # title gives no name", "# Title\n", []],
+  ["an empty heading gives no name", "## \n", []],
+  ["a top-level step's bold label gives a name", "1. **Step one.** a\n", ["Step one"]],
+  ["a nested step gives no name", "1. a\n   1. **Nested.** b\n", []],
+  ["a bold paragraph gives no name", "**Paragraph.** c\n", []],
+  ["a step in a fence gives no name", "```\n1. **Fenced.** d\n```\n", []],
+  ["a label keeps its italics", "1. **Run *all* tests.** e\n", ["Run *all* tests"]],
+  ["a label keeps its code span", "1. **Use `**` marks.** g\n", ["Use `**` marks"]],
+  [
+    "a wrapped label reads as one line",
+    "1. **A label\n   that wraps.** f\n",
+    ["A label that wraps"],
+  ],
+  ["bold across a blank line gives no name", "1. **After\n\n** gap\n", []],
+  ["a label's bold does not run on into the next list item", "1. **a\n2. b** c\n", []],
+];
+
+for (const [label, text, names] of NAME_ROWS)
+  test(`namesIn: ${label}`, () => {
+    assert.deepEqual(
+      namesIn(text).map((n) => n.name),
+      names,
     );
-});
+  });
+
+const RESOLVE_DOC = namesIn(
+  "## Install\n### Flow (full depth)\n1. **One fix wave.** a\n## 3. Install — again\n### Check\n",
+);
+const RESOLVE_ROWS: [string, string, number | undefined, string | null][] = [
+  ["a step label resolves", "One fix wave", undefined, null],
+  ["a heading resolves by its core name", "Flow", undefined, null],
+  ["a heading resolves at its own level", "Flow", 3, null],
+  ["a heading at another level does not resolve", "Flow", 2, 'x.md has no ## heading "Flow"'],
+  [
+    "a name nothing carries fails naming it",
+    "Check the fixes first",
+    undefined,
+    'x.md has no heading or step "Check the fixes first"',
+  ],
+  [
+    "a full heading fails pointing at its core name",
+    "Flow (full depth)",
+    undefined,
+    "x.md **Flow (full depth)**: cite its core name **Flow**",
+  ],
+  [
+    "two headings with one core name are ambiguous",
+    "Install",
+    undefined,
+    'x.md **Install** is ambiguous: "Install", "3. Install — again"',
+  ],
+];
+
+for (const [label, name, level, expected] of RESOLVE_ROWS)
+  test(`resolveName: ${label}`, () => {
+    assert.equal(resolveName(RESOLVE_DOC, "x.md", name, level), expected);
+  });
 
 const BROKEN_CITE = "see `references/grilling.md` **Handof**";
 const FENCED_CITE_ROWS: [string, string, string[]][] = [
@@ -153,6 +178,26 @@ test("readProse returns a fence before a later paragraph in line order", () => {
     ],
   );
 });
+
+const LINE_END_ROWS: [string, string][] = [
+  ["LF", "\n"],
+  ["CRLF", "\r\n"],
+  ["CR", "\r"],
+];
+
+for (const [label, end] of LINE_END_ROWS)
+  test(`readProse counts a paragraph's and a fence body's lines with ${label} line ends`, () => {
+    const text = "intro\n\nprose line\nmore\n\n```\nfirst\n\nsecond\n```\n".replace(/\n/g, end);
+    assert.deepEqual(
+      md(text).map((block) => [block.lineAt(0), block.lineAt(block.text.length)]),
+      [
+        [1, 1],
+        [3, 4],
+        [7, 7],
+        [9, 9],
+      ],
+    );
+  });
 
 test("hits are listed by block, then by offset", () => {
   assert.deepEqual(laws("x **Tiers** a\n\n**Tiers** b\n"), [

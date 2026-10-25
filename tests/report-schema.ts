@@ -24,10 +24,9 @@ export type Branch = {
   };
 };
 
-const validator: {
-  NAMES: { reuseDimensions: string[]; lowValueDimension: string };
-  confirmedBranch: (outputSchema: unknown) => Branch | undefined;
-} = createRequire(import.meta.url)("../references/audit/validate-findings.cjs");
+const validator: typeof import("../references/audit/validate-findings.cjs") = createRequire(
+  import.meta.url,
+)("../references/audit/validate-findings.cjs");
 
 export const { NAMES } = validator;
 

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LINE_END_RE } from "./lines.ts";
 import { codexSkillFiles, commandFiles } from "./prose-dirs.ts";
 
 // harry passes no model to Codex: `review` and `ask` spawn the Codex CLI without
@@ -37,7 +38,7 @@ test("no door claims a model harry sends", () => {
   const claims: string[] = [];
   for (const rel of files) {
     readFileSync(path.join(repoRoot, rel), "utf-8")
-      .split("\n")
+      .split(LINE_END_RE)
       .forEach((line, i) => {
         for (const id of line.match(MODEL_ID_RE) ?? []) {
           if (!excused(line)) claims.push(`${rel}:${i + 1} names ${id}`);

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LINE_END_RE } from "./lines.ts";
 import { PROSE_DIR_FILES, READER_CORPUS, under } from "./prose-dirs.ts";
 
 // The pipeline is brainstorm → execute → finish, and an active item carries
@@ -45,7 +46,7 @@ test("no prose file still describes a plan stage in the pipeline", () => {
   const offenders: string[] = [];
   for (const rel of proseFiles()) {
     read(rel)
-      .split("\n")
+      .split(LINE_END_RE)
       .forEach((line, i) => {
         if (PLAN_STAGE_RE.test(line)) offenders.push(`${rel}:${i + 1}`);
       });
@@ -57,7 +58,7 @@ test("`## Plan` survives only where a legacy item has to be read", () => {
   const offenders: string[] = [];
   for (const rel of proseFiles()) {
     if (LEGACY_PLAN_READERS.has(rel)) continue;
-    const lines = read(rel).split("\n");
+    const lines = read(rel).split(LINE_END_RE);
     lines.forEach((line, i) => {
       if (!/`## Plan`|^## Plan\b/.test(line)) return;
       const window = lines.slice(Math.max(0, i - 2), i + 3).join(" ");
@@ -86,7 +87,7 @@ test("prose counts the pipeline skills that actually ship", () => {
   const offenders: string[] = [];
   for (const rel of proseFiles()) {
     read(rel)
-      .split("\n")
+      .split(LINE_END_RE)
       .forEach((line, i) => {
         const count = line.match(
           new RegExp(`\\b(${words.join("|")}|\\d+)\\s+pipeline skills\\b`, "i"),

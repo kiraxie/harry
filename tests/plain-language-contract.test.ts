@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LINE_END_RE } from "./lines.ts";
 import { PROSE_DIR_FILES, TOP_LEVEL } from "./prose-dirs.ts";
 import { headingSection, section } from "./section.ts";
 
@@ -412,7 +413,7 @@ test("AC-6: squash and ledger are pinned in their own contract tests, cited here
 test("plain-language and pr-body never use 'shape', finishing's term for an API, schema or boundary", () => {
   for (const rel of [PLAIN_LANGUAGE, "references/pr-body.md"]) {
     const hits = read(rel)
-      .split("\n")
+      .split(LINE_END_RE)
       .map((l, i) => [i + 1, l] as const)
       .filter(([, l]) => /shape/i.test(l))
       .map(([n, l]) => `${rel}:${n}: ${l.trim()}`);

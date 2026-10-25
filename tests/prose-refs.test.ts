@@ -25,6 +25,7 @@ import {
   stepAttempts,
   strayBold,
 } from "./citations.ts";
+import { LINE_END_RE } from "./lines.ts";
 import {
   CODE_EXEMPTIONS,
   filesUnder,
@@ -228,7 +229,7 @@ test("no shipped file cites a repo-local .claude/ path", () => {
   const used = new Set<(typeof REPO_LOCAL_CITE_EXEMPTIONS)[number]>();
   for (const relFile of shipped) {
     readFileSync(path.join(repoRoot, relFile), "utf-8")
-      .split("\n")
+      .split(LINE_END_RE)
       .forEach((line, idx) => {
         let rest = line;
         for (const e of REPO_LOCAL_CITE_EXEMPTIONS) {
@@ -502,7 +503,7 @@ test("no tracked file but the changelog cites a law by the retired section-numbe
     const text = readFileSync(path.join(repoRoot, rel), "utf-8");
     if (text.includes("\0")) return [];
     return text
-      .split("\n")
+      .split(LINE_END_RE)
       .flatMap((line, idx) => (/§ ?\d/.test(line) ? [`${rel}:${idx + 1}`] : []));
   });
   assert.deepEqual(hits, [], "a section-number law citation; cite the heading name instead");

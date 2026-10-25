@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { LINE_END_RE, lineAt } from "./lines.ts";
 
 const markerRange = (
   text: string,
@@ -22,11 +23,6 @@ export function section(
 ): string {
   return text.slice(...markerRange(text, rel, startMarker, endMarker));
 }
-
-const LINE_END_RE = /\r\n|\r|\n/;
-
-const lineAt = (text: string, offset: number): number =>
-  text.slice(0, offset).split(LINE_END_RE).length;
 
 export function sectionLines(
   text: string,

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LINE_END_RE } from "./lines.ts";
 import { commandFiles, filesUnder, PROSE_DIRS, TOP_LEVEL } from "./prose-dirs.ts";
 
 // A gate the model cannot execute is not a gate. `commands/review.md` used to set
@@ -155,7 +156,7 @@ test("no gate file instructs the model to invoke a command the model cannot invo
   for (const rel of gateFiles()) {
     const abs = path.join(repoRoot, rel);
     if (!existsSync(abs)) continue;
-    const lines = readFileSync(abs, "utf-8").split("\n");
+    const lines = readFileSync(abs, "utf-8").split(LINE_END_RE);
     for (const name of blocked) {
       const mention = commandMention(name);
       lines.forEach((line, i) => {

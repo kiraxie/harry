@@ -2,6 +2,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 import { caseName, parseCasesJsonl } from "../scripts/lib/evals-cases.mts";
+import { lineAt } from "./lines.ts";
 
 export type Name = { name: string; full: string; level?: number };
 
@@ -9,8 +10,6 @@ export type Repo = {
   kind: (rel: string) => "file" | "dir" | "untracked";
   names: (rel: string) => Name[];
 };
-
-const lineOf = (text: string, index?: number): number => text.slice(0, index).split("\n").length;
 
 export const LAW_HEADINGS = [
   "Priority",
@@ -228,7 +227,7 @@ export const fences = (text: string): Fence[] => {
     const at = offset(node, "start");
     if (node.type !== "code" || !FENCE_OPEN_RE.test(src.slice(at))) return;
     const info = [node.lang, node.meta].filter(Boolean).join(" ");
-    found.push({ info, text: node.value ?? "", line: lineOf(src, at) + 1 });
+    found.push({ info, text: node.value ?? "", line: lineAt(src, at) + 1 });
   });
   return found;
 };
@@ -240,7 +239,7 @@ export const fenceBlocks = (fence: Fence): Block[] =>
   parsed(fence.text, true).map(({ at, ...b }) => ({
     ...b,
     fenced: true,
-    lineAt: (i) => fence.line + lineOf(fence.text, at + i) - 1,
+    lineAt: (i) => fence.line + lineAt(fence.text, at + i) - 1,
   }));
 
 const proseBlocks = (text: string): Block[] =>
@@ -248,7 +247,7 @@ const proseBlocks = (text: string): Block[] =>
     ...parsed(text, false).map(({ at, ...b }) => ({
       ...b,
       fenced: false,
-      lineAt: (i: number) => lineOf(text, at + i),
+      lineAt: (i: number) => lineAt(text, at + i),
     })),
     ...untaggedFences(text).flatMap(fenceBlocks),
   ].sort((a, b) => a.lineAt(0) - b.lineAt(0));

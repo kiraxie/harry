@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LINE_END_RE, lineAt } from "./lines.ts";
 import { PROSE_DIRS } from "./prose-dirs.ts";
 
 const testsDir = fileURLToPath(new URL(".", import.meta.url));
@@ -85,7 +86,7 @@ const scanned = (): string[] =>
 
 const lines = (file: string): string[] =>
   readFileSync(path.join(testsDir, file), "utf-8")
-    .split("\n")
+    .split(LINE_END_RE)
     .map((l) => l.trim());
 
 test("every indexOf, lastIndexOf or search in tests/ is on the allowlist", () => {
@@ -255,9 +256,7 @@ const headingReads = (src: string): { line: number; text: string }[] => {
         (lit.kind === "regex"
           ? /^#+(?: |\\s|\{)/.test(body.replace(JOINS, ""))
           : /^(?:\\n)?#+ /.test(body)));
-    return reads
-      ? [{ line: src.slice(0, lit.at).split("\n").length, text: src.slice(lit.at, lit.end) }]
-      : [];
+    return reads ? [{ line: lineAt(src, lit.at), text: src.slice(lit.at, lit.end) }] : [];
   });
 };
 
@@ -452,9 +451,13 @@ const CODE_SPAN = /`(?:[([.]|\\[wWdDsS])/;
 
 const codeSpanReads = (src: string): { line: number; text: string }[] =>
   literals(src)
-    .filter((lit) => lit.kind === "regex" && CODE_SPAN.test(lit.body))
+    .filter((lit) => {
+      if (lit.kind === "regex") return CODE_SPAN.test(lit.body);
+      const { call, raw } = callBefore(src, lit.at);
+      return call === "RegExp" && CODE_SPAN.test(raw ? lit.body : lit.body.replace(/\\\\/g, "\\"));
+    })
     .map((lit) => ({
-      line: src.slice(0, lit.at).split("\n").length,
+      line: lineAt(src, lit.at),
       text: src.slice(lit.at, lit.end),
     }));
 
@@ -466,14 +469,21 @@ test("the code-span scan catches a read of a span's content and nothing else", (
       "text.matchAll(/`\\S+`/g);",
       "text.matchAll(/`.+?`/g);",
       "text.matchAll(/`\\w[\\w-]*`/g);",
+      'new RegExp("`([^`]+)`");',
+      "new RegExp(String.raw`\\`([^\\`]+)\\``);",
+      'new RegExp("`\\\\S+`", "g");',
     ].filter((src) => codeSpanReads(src).length === 0),
     [],
     "a known code-span read now passes the scan",
   );
   assert.deepEqual(
-    ["assert.match(text, /`low-value-tests`/);", "assert.match(text, /`\\.claude\\/`/);"].filter(
-      (src) => codeSpanReads(src).length > 0,
-    ),
+    [
+      "assert.match(text, /`low-value-tests`/);",
+      "assert.match(text, /`\\.claude\\/`/);",
+      'new RegExp("`low-value-tests`");',
+      'const s = "`([^`]+)`";',
+      "new RegExp(String.raw`\\`\\\\S+\\``);",
+    ].filter((src) => codeSpanReads(src).length > 0),
     [],
     "the scan now flags a regex that reads no code span's content",
   );
@@ -489,6 +499,11 @@ const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
     file: "audit-dimension-slugs.test.ts",
     text: "/^\\*\\*Slug:\\*\\* `([^`]+)`$/",
     why: "the Slug line's exact form is the contract under test",
+  },
+  {
+    file: "codex-plugin-root.test.ts",
+    text: '"\\\\*\\\\*Plugin root\\\\.\\\\*\\\\* Codex does not set `\\\\$\\\\{CLAUDE_PLUGIN_ROOT\\\\}`[\\\\s\\\\S]*?"',
+    why: "the Plugin root rule's exact sentence is the contract under test",
   },
   {
     file: "release-state.test.ts",
@@ -596,9 +611,7 @@ const dirWalks = (src: string): { line: number; text: string }[] => {
       code = code.slice(0, l.at - open) + " ".repeat(l.end - l.at) + code.slice(l.end - open);
     const walks =
       names(open, close) || [...new Set(code.match(/[A-Za-z_$][\w$]*/g))].some(aliasNames);
-    return walks
-      ? [{ line: src.slice(0, m.index).split("\n").length, text: src.slice(m.index, close + 1) }]
-      : [];
+    return walks ? [{ line: lineAt(src, m.index), text: src.slice(m.index, close + 1) }] : [];
   });
 };
 
