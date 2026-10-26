@@ -1,15 +1,7 @@
-# Audit orchestration — shared definitions
+# Audit orchestration
 
-The shared, drift-prone `/audit` orchestration definitions used by **both** builds:
-`commands/audit.md` (Claude Code) and `codex-skills/audit/SKILL.md` (Codex CLI).
-Each of those files keeps only its own build-specific shell (frontmatter, title,
-the invocation surface, and — for Codex — the "Known limitation vs. the Claude Code
-build" note) and points here for everything below. Where the two builds genuinely
-differ, both variants are captured under explicit **Claude Code build:** /
-**Codex build:** labels — never collapse them to one.
-Where only the **vocabulary** differs — a tool's name or casing, a flag that
-exists on one build — the text stays build-neutral and names the Claude Code term
-inline; a near-identical pair for that is duplication, not a divergence.
+The `/audit` orchestration definitions. `commands/audit.md` keeps only its shell
+(frontmatter, title, the invocation surface) and points here for everything below.
 
 The per-round methodology is *not* here — it lives in the sibling files under
 `${CLAUDE_PLUGIN_ROOT}/references/audit/` (`RECON.md`, `DEEP-DIVE.md`,
@@ -32,12 +24,11 @@ A security audit has a clean anchor: "can you build an exploit?" This domain doe
 | a debt-ledger pass | re-judge existing debt markers | existing markers | one-shot |
 | **this audit** | **restructure / consolidate** (incl. hoist, dimension **Reusability & hoist candidates**) **and deep over-engineering hunting** (dimension **Over-engineering / unearned abstraction**) | **whole repo / subsystem** | **iterative, accumulative** |
 
-**Claude Code build:** the three tools above are the `/review`, `/debt`, and `/audit` slash commands respectively.
+The three tools above are the `/review`, `/debt`, and `/audit` slash commands respectively.
 
 Over-engineering has two speeds now, not two competing tools: a quick per-diff pass
 lives in the diff-level code review's simplify mode's sub-agent Lane B (see the
-simplify dual-lane — **Claude Code build:** in `commands/review.md`; **Codex build:**
-in the review skill — cheap, no extra Codex quota); the deep, evidence-verified,
+simplify dual-lane in `commands/review.md` — cheap, no extra Codex quota); the deep, evidence-verified,
 severity-ranked version is dimension **Over-engineering / unearned abstraction**
 here. The one place dimension **Reusability & hoist candidates** and dimension
 **Over-engineering / unearned abstraction** could seem to contradict — one says
@@ -67,8 +58,8 @@ If an agent is killed mid-task (quota/session limit, transient API error), **res
 
 Establish two paths before starting:
 
-- **Target**: the codebase to audit (**Claude Code build:** from `$ARGUMENTS`; **Codex build:** from what the user said; either build falls back to the current working directory). Confirm the scope — whole repo, or a named subsystem / set of workspaces.
-- **Output directory**: where all audit artifacts go. If an output directory was named (**Claude Code build:** `--output <dir>` in `$ARGUMENTS`; **Codex build:** the user named one), use it. Otherwise, if the repo has a gitignored `.local/` directory, default to `.local/audit/run-<N>/`; else default to `.code-audit/run-<N>/`. `<N>` is the next unused integer (check with `ls`). Ask the user if they want somewhere else. Create it if missing. Separate run directories are what make the audit **iterative** (see below).
+- **Target**: the codebase to audit (from `$ARGUMENTS`, falling back to the current working directory). Confirm the scope — whole repo, or a named subsystem / set of workspaces.
+- **Output directory**: where all audit artifacts go. If an output directory was named (`--output <dir>` in `$ARGUMENTS`), use it. Otherwise, if the repo has a gitignored `.local/` directory, default to `.local/audit/run-<N>/`; else default to `.code-audit/run-<N>/`. `<N>` is the next unused integer (check with `ls`). Ask the user if they want somewhere else. Create it if missing. Separate run directories are what make the audit **iterative** (see below).
 
 All files written during the audit go in the output directory:
 
@@ -80,10 +71,8 @@ All files written during the audit go in the output directory:
 
 Subagents in Round 1 (`references/audit/RECON.md` **Step 2**), Round 2, Round 3, and Round 5 do NOT write files — they return results to you. You write all files. Rounds 4 and 6 have no subagents at all — structured-output assembly and report writing are yours directly, not delegated.
 
-- **Claude Code build:** every `research` and `general` agent is `harry:analyst`
-  (`skills/executing/SKILL.md` **Who writes**).
-- **Codex build:** there is no per-subagent model parameter — model/effort comes
-  from the session profile per the `/sync`-wired role map (`references/codex-role-mapping.md`).
+Every `research` and `general` agent is `harry:analyst`
+(`skills/executing/SKILL.md` **Who writes**).
 
 ## Iterative by design — no single run is complete
 

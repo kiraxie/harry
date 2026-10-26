@@ -43,6 +43,18 @@ test("AC-1: executing has the session write and dispatches only its named roles"
   assert.doesNotMatch(plain("references/tier-gates.md"), /\| Execution \|/);
 });
 
+test("AC-1: executing's Who writes routes exactly the three roles and names no model", () => {
+  const who = headingSection(raw(EXECUTING), EXECUTING, "## Who writes");
+  // A role is the token right after an arrow, whatever markup wraps it, so an added
+  // "orchestration → driver" clause lands in the set and fails the equality below.
+  const routed = new Set(
+    [...who.matchAll(/→\s*(?:`|\*\*|\*|"|')?([\w-]+)(?:`|\*\*|\*|"|')?/g)].map((m) => m[1]),
+  );
+  assert.deepEqual([...routed].sort(), ["analyst", "referee", "scout"]);
+  for (const alias of ["haiku", "sonnet", "opus", "fable"])
+    assert.doesNotMatch(who, new RegExp(`\\b${alias}\\b`, "i"), `Who writes names ${alias}`);
+});
+
 test("AC-3: executing has one mode, reviews by tier in parallel, one fix wave", () => {
   const text = plain(EXECUTING);
   for (const gone of [
@@ -80,7 +92,7 @@ test("AC-12: the findings list is a file Progress names, and a resume reads it",
 
 test("AC-13: /audit dispatches only analyst; Step 1b is the session's own script", () => {
   const orchestration = plain(path.join("references", "audit", "ORCHESTRATION.md"));
-  assert.match(orchestration, /every research and general agent is harry:analyst/);
+  assert.match(orchestration, /every research and general agent is harry:analyst/i);
   assert.match(orchestration, /Subagents in Round 1 \(references\/audit\/RECON\.md Step 2\)/);
   const recon = plain(path.join("references", "audit", "RECON.md"));
   assert.match(recon, /Run this as a script yourself: it is deterministic, so it needs no agent/);
@@ -94,18 +106,13 @@ test("AC-6: finishing handles no task refs and reviews with analyst", () => {
   assert.match(text, /dispatch ONE harry:analyst/);
 });
 
-test("AC-7: debate, audit, brainstorming and the Codex role map follow the three roles", () => {
+test("AC-7: debate, audit and brainstorming follow the three roles", () => {
   assert.match(plain(path.join("commands", "debate.md")), /\| opus \| Dispatch harry:analyst/);
   assert.match(
     plain(path.join("references", "audit", "ORCHESTRATION.md")),
-    /every research and general agent is harry:analyst/,
+    /every research and general agent is harry:analyst/i,
   );
   assert.doesNotMatch(plain(path.join("skills", "brainstorming", "SKILL.md")), /## Dispatch/);
-  const rows = readFileSync(path.join(repoRoot, "references", "codex-role-mapping.md"), "utf-8")
-    .split("\n")
-    .filter((l) => /^\| [a-z]+ \|/.test(l) && !l.startsWith("| role"))
-    .map((l) => l.split("|")[1]?.trim());
-  assert.deepEqual(rows, ["scout", "analyst", "referee"]);
 });
 
 test("AC-13: the audit hunter prompt says what to do with a thread it cannot finish", () => {

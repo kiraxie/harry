@@ -6,20 +6,18 @@ import { fileURLToPath } from "node:url";
 // MARKDOWN_CORPUS leaves out READER_CORPUS's data files: upstream.json names cut terms.
 export const SHIPPED_TOP_LEVEL = ["HARRY.md"];
 export const REPO_TOP_LEVEL = ["README.md", "CLAUDE.md"];
-export const SHIPPED_PROSE_DIRS = ["skills", "commands", "codex-skills", "references", "agents"];
+export const SHIPPED_PROSE_DIRS = ["skills", "commands", "references", "agents"];
 export const REPO_LOCAL_PROSE_DIRS = [".claude/commands", ".claude/references"];
 export const REPO_LOCAL_DIRS = [...REPO_LOCAL_PROSE_DIRS, ".claude/scripts"];
 export const PROSE_DIRS = [...SHIPPED_PROSE_DIRS, ...REPO_LOCAL_PROSE_DIRS];
 export const SHIPPED_DATA_FILES = [
   ".claude-plugin/plugin.json",
   ".claude-plugin/marketplace.json",
-  ".codex-plugin/plugin.json",
-  ".agents/plugins/marketplace.json",
   "references/audit/report-schema.json",
 ];
 export const REPO_LOCAL_DATA_FILES = ["upstream.json"];
 export const PROSE_NON_MD_FILES = ["NOTICE", ...SHIPPED_DATA_FILES, ...REPO_LOCAL_DATA_FILES];
-export const MANIFEST_DIRS = [".claude-plugin", ".codex-plugin", ".agents"];
+export const MANIFEST_DIRS = [".claude-plugin"];
 export const CODE_EXEMPTIONS = ["references/audit/validate-findings.cjs"];
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -71,4 +69,3 @@ export const skillFiles = (dir: string): string[] => {
 };
 
 export const commandFiles = (): string[] => inDir("commands");
-export const codexSkillFiles = (): string[] => skillFiles("codex-skills");

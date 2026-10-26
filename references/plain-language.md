@@ -13,9 +13,8 @@ approve the draft before the PR is opened.
 
 ## Callers
 
-`/wait-what` (`commands/wait-what.md` on Claude Code, `codex-skills/wait-what/SKILL.md`
-on Codex) is the one caller that asks for the deeper level below; both are thin
-pointers to this file, and neither adds anything of its own.
+`/wait-what` (`commands/wait-what.md`) is the one caller that asks for the deeper level
+below; it is a thin pointer to this file and adds nothing of its own.
 
 ## Grounding rule
 

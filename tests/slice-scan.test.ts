@@ -63,16 +63,6 @@ const ALLOWED: { file: string; line: string; why: string }[] = [
     why: "line-array lookup; a missing opener returns no paths and the caller's asserts fail",
   },
   {
-    file: "codex-plugin-root.test.ts",
-    line: "text.indexOf(VAR),",
-    why: "position equality with a regex match, not two markers",
-  },
-  {
-    file: "codex-plugin-root.test.ts",
-    line: "found.index + found[0].indexOf(VAR),",
-    why: "position equality with a regex match, not two markers",
-  },
-  {
     file: "session-writes.test.ts",
     line: '.slice(deepDive.indexOf("```"), deepDive.lastIndexOf("```"))',
     why: "first to last fence; a missing fence empties the slice and the match below fails",
@@ -499,11 +489,6 @@ const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
     file: "audit-dimension-slugs.test.ts",
     text: "/^\\*\\*Slug:\\*\\* `([^`]+)`$/",
     why: "the Slug line's exact form is the contract under test",
-  },
-  {
-    file: "codex-plugin-root.test.ts",
-    text: '"\\\\*\\\\*Plugin root\\\\.\\\\*\\\\* Codex does not set `\\\\$\\\\{CLAUDE_PLUGIN_ROOT\\\\}`[\\\\s\\\\S]*?"',
-    why: "the Plugin root rule's exact sentence is the contract under test",
   },
   {
     file: "release-state.test.ts",

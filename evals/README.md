@@ -550,11 +550,10 @@ way. Every case note carries its raw pair and its Fisher p precisely so the next
 reader cannot round p=0.20 up to "it works".
 
 Ten cases passing unaided is a real finding about what the resident layer still buys
-on Claude, but it is **not** license to delete the corresponding law: the same text is
-inlined into `~/.codex/AGENTS.md` for the Codex build, which has no Claude harness
-behind it, and nothing here measures that build. It is also weaker evidence than it
-looks — five of them pass by ABSENCE (`regex_must_not` / `repo_grep_absent`), and an
-empty or off-topic reply satisfies those patterns just as well as a compliant one.
+on Claude, but it is **not** license to delete the corresponding law: it is weaker
+evidence than it looks — five of them pass by ABSENCE (`regex_must_not` /
+`repo_grep_absent`), and an empty or off-topic reply satisfies those patterns just as
+well as a compliant one.
 
 The four both-fail cases are true negatives about the laws' reach, deliberately left
 gating rather than demoted to `informative`: reclassifying a law that stopped working

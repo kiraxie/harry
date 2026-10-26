@@ -1,7 +1,5 @@
 // Entries in a global instructions file that harry's laws supersede, and the
-// warning that renders them. Both are shared between install.mjs (Claude) and
-// install-codex.mjs (Codex) — duplicating either the list or the message would
-// let the two installers silently drift (the drift test in `references/review-rubric.md`).
+// warning that renders them; install.mjs warns with them.
 export const STALE = [
   {
     pattern: /copilot:implement/i,

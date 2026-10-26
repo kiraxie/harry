@@ -1,25 +1,16 @@
-# `/sync` — gitignore + legacy migration (shared)
+# `/sync` — gitignore + legacy migration
 
-The shared, drift-prone body of harry's `/sync` — Phase 2's description of what the
-gitignore initializer does, plus the whole of Phase 3's legacy migration — used by
-**both** builds: `commands/sync.md` (Claude Code) and `codex-skills/sync/SKILL.md`
-(Codex CLI). Each of those files keeps only its own build-specific shell: its
-frontmatter, its invocation surface, and **Phase 1 — Resident laws**, which is
-genuinely per-build (`install.mjs` + the `@`-import + the optional Explore override
-vs `install-codex.mjs` + the inlined block). Where the two builds genuinely differ
-below, both variants are captured under explicit **Claude Code build:** /
-**Codex build:** labels — never collapse them to one.
-Where only the **vocabulary** differs — a tool's name or casing, a flag that
-exists on one build — the text stays build-neutral and names the Claude Code term
-inline; a near-identical pair for that is duplication, not a divergence.
+The body of harry's `/sync` — Phase 2's description of what the gitignore initializer
+does, plus the whole of Phase 3's legacy migration. The command keeps only its shell:
+its frontmatter, its invocation surface, and `commands/sync.md` **Phase 1**
+(`install.mjs` + the `@`-import + the optional Explore override).
 
 ---
 
 ## Phase 2 — Gitignore
 
-Your door runs harry's gitignore initializer,
-`${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs` — see the door for this build's argument
-form.
+`commands/sync.md` runs harry's gitignore initializer,
+`${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs` — see it for the argument form.
 
 What it does:
 
@@ -47,11 +38,9 @@ owns nothing deterministically — every move is gated on the user's answers.
 
 **Skip conditions:**
 
-- **Claude Code build:** If `$ARGUMENTS` contains `--remove`, STOP here — do not scan
-  or migrate. (Uninstalling harry must not migrate anything. `--remove` wins over
-  `--force`.)
-- **Codex build:** Skip if uninstalling — do not scan or migrate.
-- **Both builds:** Skip if init failed in Phase 2 (the stop rule there).
+- If `$ARGUMENTS` contains `--remove`, STOP here — do not scan or migrate.
+  (Uninstalling harry must not migrate anything. `--remove` wins over `--force`.)
+- Skip if init failed in Phase 2 (the stop rule there).
 
 **Step A0 — Migrate harry's own pre-convergence layout, if present.** Before
 the generic scan below, check for the old per-type `.local/` directories this
@@ -113,10 +102,8 @@ read a candidate's head if its kind is unclear.
 (same topic, already in harry format) is "already migrated" — exclude it by
 default.
 
-- **Claude Code build:** If `$ARGUMENTS` contains `--force`, do NOT exclude these;
-  re-migrate and overwrite their `.local` targets.
-- **Codex build:** With a forced re-run, do NOT exclude these; re-migrate and
-  overwrite their `.local` targets.
+If `$ARGUMENTS` contains `--force`, do NOT exclude these; re-migrate and overwrite
+their `.local` targets.
 
 **If no candidates remain:** print one line (e.g. "No legacy spec/plan content to
 migrate.") and stop. Do not prompt.
@@ -138,10 +125,7 @@ path).
 
 How to ask each one:
 
-- **Claude Code build:** `AskUserQuestion`, one call per question.
-- **Codex build:** If an interactive multiple-choice question tool is available, use
-  it for each question in turn; otherwise ask in plain text, one question per
-  message, and wait for the user's reply before asking the next.
+`AskUserQuestion`, one call per question.
 
 **Step D — Execute.** For each SELECTED candidate:
 

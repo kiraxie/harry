@@ -76,10 +76,9 @@ interface AskDoor {
 /**
  * Every door that tells a consumer to return `ask`'s stdout verbatim, and so
  * must also name the signals that say not to. Hand-maintained on purpose: this
- * is a declaration of intent (same as role-mapping-drift.test.ts's PAIRS), and
- * a derived list would also sweep in a future door that invokes `ask` without
- * relaying stdout verbatim — a false failure that would get silenced by an
- * allowlist, which is how a guard rots. The cross-check test below keeps the
+ * is a declaration of intent, and a derived list would also sweep in a future
+ * door that invokes `ask` without relaying stdout verbatim — a false failure
+ * that would get silenced by an allowlist, which is how a guard rots. The cross-check test below keeps the
  * hand list honest instead.
  *
  * `debate.md` differs on two counts, both by design. Its prohibition: a failed
@@ -94,11 +93,6 @@ interface AskDoor {
 const ASK_DOORS: readonly AskDoor[] = [
   {
     path: "commands/ask.md",
-    quotes: [ASK_FAILED_MARKER, MARKER_POSITION, FATAL_ERROR_PREFIX],
-    prohibition: "never present",
-  },
-  {
-    path: "codex-skills/ask/SKILL.md",
     quotes: [ASK_FAILED_MARKER, MARKER_POSITION, FATAL_ERROR_PREFIX],
     prohibition: "never present",
   },

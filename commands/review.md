@@ -42,10 +42,15 @@ full stop. Nothing here edits the working tree, stages, or commits.
 carries `references/architecture-review.md` in place of the per-diff standard.
 And it scopes findings to the shapes the change adds or alters, rather than to
 the diff's lines. Everything else stays the same — target resolution, the
-read-only spawn, the output and failure handling. It is how the finishing
-skill's architecture review (`skills/finishing/SKILL.md` **Architecture review**) runs out of session on the Codex build. Finishing
-passes the context file its **Reviewer.** paragraph lists for the Codex build
-(`skills/finishing/SKILL.md` **Architecture review**) through `--context @<file>`.
+read-only spawn, the output and failure handling. Run it by hand for an
+out-of-session architecture review in Codex, beside the one finishing dispatches
+(`skills/finishing/SKILL.md` **Architecture review**); pass everything that
+review's **Reviewer.** paragraph hands its reviewer, except
+`references/architecture-review.md` and the diff file, through `--context @<file>` —
+this mode embeds the one and computes the other. Pass `--base`: on round 1 the branch
+point; on a later round the head the most recent round recorded, so only the diff since
+then is reviewed. The runtime does not require it — without it the target resolves as
+above, and a dirty tree would review the working tree, not the branch.
 
 ## `--rereview`
 
@@ -60,13 +65,14 @@ answers in the rubric's re-review form (`references/review-rubric.md`). It needs
 
 ## `--fix-check`
 
-`--fix-check <text|@file|@->` runs the fix check of executing's fix wave on
-the Codex build (`skills/executing/SKILL.md` **One fix wave**), before a finding's fix
-is built. Its file holds each finding with its proposed fix, and the paths of the
+`--fix-check <text|@file|@->` runs the fix check of executing's fix wave
+(`skills/executing/SKILL.md` **One fix wave**) out of session in Codex, by hand, before
+a finding's fix is built. Its file holds each finding with its proposed fix, and the paths of the
 unit's earlier findings files. The prompt carries `references/fix-check.md` in full
 and tells the reviewer to read the whole repo to trace each fix; it judges only the
-handed fixes. It needs `--base`: the unit's branch point. It excludes `--architecture`
-and `--rereview`.
+handed fixes. Pass through `--context @<file>` what `references/fix-check.md`
+**What you are handed** lists for level 3. It needs `--base`: the unit's branch point. It
+excludes `--architecture` and `--rereview`.
 
 `--rereview` and `--fix-check` both read their value as `--context` does, and as
 strictly: an `@file` that cannot be read, or an `@-` or `@file` with nothing in it,

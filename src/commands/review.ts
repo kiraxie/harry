@@ -41,7 +41,7 @@ export interface ReviewOptions {
   context?: string;
   /**
    * Embed `references/architecture-review.md` instead of the per-diff rubric —
-   * finishing's architecture review, run out of session on the Codex build.
+   * an architecture review run by hand, out of session.
    */
   architecture?: boolean;
   rereview?: string;

@@ -1,15 +1,8 @@
-# Debt ledger — shared procedure
+# Debt ledger procedure
 
-The shared, drift-prone `/debt` procedure used by **both** builds:
-`commands/debt.md` (Claude Code) and `codex-skills/debt/SKILL.md` (Codex CLI).
-Each of those files keeps only its own build-specific shell — frontmatter, title,
+The `/debt` procedure. `commands/debt.md` keeps only its shell — frontmatter, title,
 and the invocation surface that scopes the scan — and points here for everything
-below. Where the two builds genuinely differ, both variants are captured under
-explicit **Claude Code build:** / **Codex build:** labels — never collapse them to
-one.
-Where only the **vocabulary** differs — a tool's name or casing, a flag that
-exists on one build — the text stays build-neutral and names the Claude Code term
-inline; a near-identical pair for that is duplication, not a divergence.
+below.
 
 ---
 
@@ -19,7 +12,7 @@ inline; a near-identical pair for that is duplication, not a divergence.
 
 Deferrals — and open backlog — hide in two places. Collect both — this command is the single overview items alone can't give (items are scattered per-feature).
 
-- **Code markers.** **Claude Code build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- $ARGUMENTS` (drop `-- $ARGUMENTS` when no path given). **Codex build:** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- <path...>` (drop the path filter when none given). `DEBT:` is the sanctioned marker from HARRY.md **Code** and carries a ceiling + upgrade path; TODO/FIXME/HACK are unsanctioned debt — flag them as `unmarked` (a violation per HARRY.md **Code**).
+- **Code markers.** `git grep -nE '(DEBT|TODO|FIXME|HACK):' -- $ARGUMENTS` (drop `-- $ARGUMENTS` when no path given). `DEBT:` is the sanctioned marker from HARRY.md **Code** and carries a ceiling + upgrade path; TODO/FIXME/HACK are unsanctioned debt — flag them as `unmarked` (a violation per HARRY.md **Code**).
 - **Item deferrals.** Read the `## Why / What` (its Scope & Non-Goals content) and the `## Progress` section of every `status: active` item under `.local/items/` (`Glob: .local/items/**/*.md`, keep only files whose frontmatter has `status: active`). Each "不做 / 移除 / 丟棄 / 延後 / Non-Goal" bullet in Scope & Non-Goals, and each "do later / 延後 / out of scope / follow-up" line in `## Progress`, is one deferral. A legacy item that still has a `## Plan` is read there too.
 - **Backlog items.** Read every item under `.local/items/` whose frontmatter has `status: backlog` (`Glob: .local/items/**/*.md`, filter by frontmatter). Each item is one entry — unlike item deferrals, nothing here was ever decided (`references/doc-types.md`).
 

@@ -18,8 +18,7 @@ function versionOf(relPath: string): string {
 
 // The marketplace manifest nests its version inside the plugin entry — that is
 // the string the marketplace picker displays, so it needs the same lock as the
-// top-level ones. (`.agents/plugins/marketplace.json`, the Codex twin, carries
-// no version field at all; there is nothing to check there.)
+// top-level ones.
 function marketplaceVersionOf(relPath: string, pluginName: string): string {
   const entries = (read(relPath) as { plugins?: Array<{ name?: string; version?: string }> })
     .plugins;
@@ -32,7 +31,6 @@ test("package.json and every version-carrying manifest declare the same version"
   const pkg = versionOf("../package.json");
   assert.ok(pkg, "package.json must declare a version");
   assert.equal(versionOf("../.claude-plugin/plugin.json"), pkg, ".claude-plugin/plugin.json");
-  assert.equal(versionOf("../.codex-plugin/plugin.json"), pkg, ".codex-plugin/plugin.json");
   assert.equal(
     marketplaceVersionOf("../.claude-plugin/marketplace.json", "harry"),
     pkg,

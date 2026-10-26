@@ -19,8 +19,8 @@ handed:
   claims to re-litigate. Neighbouring services the design names are facts too.
   A unit with no item hands you the task as the user stated it instead.
 - **The branch diff**, as a file — on a later round, only the diff since the head
-  the previous round reviewed. On the Codex build you are told the base instead and
-  run the diff yourself.
+  the previous round reviewed. Run through `/harry:review --architecture`, you are told
+  the base instead and run the diff yourself.
 - **This file, in full.**
 - **The last 20 commits touching the changed paths** — for the history pass below.
 - **Read access to the whole repo** — read callers, neighbours and older code

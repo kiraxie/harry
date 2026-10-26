@@ -5,8 +5,7 @@ and its scoped re-review in `skills/executing/SKILL.md` **One fix wave**). The r
 below, and every review lane gets each of them in full: `dist/companion.cjs review` embeds
 them verbatim into the prompt it sends codex (`src/lib/review-modes.ts`), so the
 analyst and Codex lanes judge by the same standard even though they run in isolated
-sessions. On the Codex build there is no `analyst` at all, so this embedded prompt is
-what binds that build's single review lane. What each lane is handed besides these files
+sessions. What each lane is handed besides these files
 is listed once, in `skills/executing/SKILL.md` **Review**, and for a re-review in
 `skills/executing/SKILL.md` **One fix wave**. The reviewer reviews **read-only** — no working-tree, index, or HEAD
 mutation; its report is its final message.

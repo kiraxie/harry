@@ -93,11 +93,6 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "Instead of the diff file, in one command",
-    reader: "puts the Minors already in Follow-ups in the Codex build's context file",
-  },
-  {
-    file: "skills/finishing/SKILL.md",
     snippet: "- **backlog** → a new",
     writer: ["finishing's backlog ruling"],
   },

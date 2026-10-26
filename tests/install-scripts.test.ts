@@ -1,10 +1,9 @@
-// Safety behavior of the three install scripts: they rewrite the user's
-// hand-authored, un-versioned global files (~/.claude/CLAUDE.md,
-// ~/.codex/AGENTS.md) and a project .gitignore, so they must write atomically,
-// keep a one-time backup, and never mutate the user's bytes outside harry's
-// marker block. Everything here runs against a throwaway temp dir — never the
-// real ~/.claude — via the HARRY_GLOBAL / HARRY_CODEX_GLOBAL overrides and
-// init's explicit target-dir argument.
+// Safety behavior of the two install scripts: they rewrite the user's
+// hand-authored, un-versioned global file (~/.claude/CLAUDE.md) and a project
+// .gitignore, so they must write atomically, keep a one-time backup, and never
+// mutate the user's bytes outside harry's marker block. Everything here runs
+// against a throwaway temp dir — never the real ~/.claude — via the HARRY_GLOBAL
+// override and init's explicit target-dir argument.
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -26,7 +25,6 @@ import test, { mock } from "node:test";
 import { fileURLToPath } from "node:url";
 import { run as initRun } from "../scripts/init.mjs";
 import { run as installRun } from "../scripts/install.mjs";
-import { run as codexRun } from "../scripts/install-codex.mjs";
 import { safeWrite, tempPathFor } from "../scripts/lib/atomic-write.mjs";
 import { headingSection, section } from "./section.ts";
 
@@ -375,42 +373,6 @@ test("init.mjs: appends plain ignore entries (no harry branding) with a .bak", (
   }
 });
 
-test("install-codex.mjs: inlines HARRY.md safely with a one-time .bak", () => {
-  const dir = tmpDir("harry-codex-test-");
-  try {
-    const g = path.join(dir, "AGENTS.md");
-    const original = "# My rules\n";
-    writeFileSync(g, original);
-
-    const prev = process.env.HARRY_CODEX_GLOBAL;
-    process.env.HARRY_CODEX_GLOBAL = g;
-    try {
-      codexRun();
-      const out = readFileSync(g, "utf8");
-      assert.ok(out.includes(BEGIN), "marker block present");
-      assert.ok(out.includes("Resident Engineering Laws"), "HARRY.md content inlined");
-      for (const role of ["scout", "analyst", "referee"]) {
-        assert.ok(out.includes(role), `role map names ${role}`);
-      }
-      for (const model of ["gpt-5.6-luna"]) {
-        assert.ok(out.includes(model), `role map binds ${model}`);
-      }
-      // gpt-5.6-sol 400s on a ChatGPT login; it may appear only in the note saying so.
-      const solRows = out.split("\n").filter((l) => l.startsWith("|") && l.includes("gpt-5.6-sol"));
-      assert.deepEqual(solRows, [], "no role-map row binds gpt-5.6-sol");
-      assert.ok(existsSync(`${g}.bak`), "one-time .bak created");
-      assert.equal(readFileSync(`${g}.bak`, "utf8"), original, ".bak holds the pristine original");
-      assertNoTempResidue(dir, "install-codex.mjs");
-    } finally {
-      if (prev === undefined) delete process.env.HARRY_CODEX_GLOBAL;
-      else process.env.HARRY_CODEX_GLOBAL = prev;
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// Residue is NOT re-checked here — the temp-path test below owns that assertion.
 test("safeWrite: backs up once and never clobbers the .bak", () => {
   const dir = tmpDir("harry-safewrite-test-");
   try {
@@ -505,9 +467,7 @@ test("safeWrite: a failed write cleans up its temp file and rethrows", () => {
 // stripping assumed, so nothing they load may be a .mts or .ts module. Typecheck
 // accepts such an import and this repo's own Node runs it, so only this walk sees it.
 test("the shipped scripts reach only .mjs modules through their relative imports", () => {
-  const entries = ["install.mjs", "install-codex.mjs", "init.mjs"].map((f) =>
-    path.join(pluginRoot, "scripts", f),
-  );
+  const entries = ["install.mjs", "init.mjs"].map((f) => path.join(pluginRoot, "scripts", f));
   const seen = new Set<string>();
   const queue = [...entries];
   const offenders: string[] = [];
@@ -707,48 +667,6 @@ test("install.mjs CLI: --remove on a fresh home creates no directory", () => {
   withTmp("harry-install-cli-", (dir) => {
     cli("install.mjs", ["--remove"], { HARRY_GLOBAL: path.join(dir, "claude", "CLAUDE.md") });
     assert.ok(!existsSync(path.join(dir, "claude")), "no empty claude/ left behind");
-  });
-});
-
-test("install-codex.mjs CLI: a first run says Wired", () => {
-  withTmp("harry-codex-cli-", (dir) => {
-    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
-    assert.match(cli("install-codex.mjs", [], env).stdout, /^Wired HARRY\.md into /);
-  });
-});
-
-test("install-codex.mjs CLI: a re-run that changes nothing says so", () => {
-  withTmp("harry-codex-cli-", (dir) => {
-    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
-    cli("install-codex.mjs", [], env);
-    assert.match(cli("install-codex.mjs", [], env).stdout, /^Already up to date: /);
-  });
-});
-
-test("install-codex.mjs CLI: --remove says what it removed", () => {
-  withTmp("harry-codex-cli-", (dir) => {
-    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
-    cli("install-codex.mjs", [], env);
-    assert.match(cli("install-codex.mjs", ["--remove"], env).stdout, /^Removed harry laws from /);
-  });
-});
-
-test("install-codex.mjs CLI: --remove with nothing installed says so", () => {
-  withTmp("harry-codex-cli-", (dir) => {
-    const env = { HARRY_CODEX_GLOBAL: path.join(dir, "AGENTS.md") };
-    assert.match(
-      cli("install-codex.mjs", ["--remove"], env).stdout,
-      /^No harry laws to remove in /,
-    );
-  });
-});
-
-test("install-codex.mjs CLI: --remove on a fresh home creates no directory", () => {
-  withTmp("harry-codex-cli-", (dir) => {
-    cli("install-codex.mjs", ["--remove"], {
-      HARRY_CODEX_GLOBAL: path.join(dir, "codex", "AGENTS.md"),
-    });
-    assert.ok(!existsSync(path.join(dir, "codex")), "no empty codex/ left behind");
   });
 });
 

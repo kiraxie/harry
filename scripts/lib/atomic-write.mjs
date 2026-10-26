@@ -1,10 +1,10 @@
-// Atomic, backup-preserving writes for harry's installers (init, install-laws,
-// install-laws-codex). These scripts rewrite the user's hand-authored,
-// un-versioned files — ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, a project's
-// .gitignore. A bare writeFileSync onto those is non-atomic: a crash or full
-// disk mid-write leaves the irreplaceable file truncated with no recovery.
+// Atomic, backup-preserving writes for harry's installers (init, install-laws).
+// These scripts rewrite the user's hand-authored, un-versioned files —
+// ~/.claude/CLAUDE.md, a project's .gitignore. A bare writeFileSync onto those is
+// non-atomic: a crash or full disk mid-write leaves the irreplaceable file
+// truncated with no recovery.
 //
-// All three installers must write safely — divergence would be a bug
+// Both installers must write safely — divergence would be a bug
 // (the drift test in `references/review-rubric.md`: shared knowledge across a boundary gets one source of truth),
 // so the safe-write policy lives here once.
 

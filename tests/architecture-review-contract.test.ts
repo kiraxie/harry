@@ -190,27 +190,6 @@ test("AC-3: the command that writes the diff also creates its directory", () => 
   );
 });
 
-test("AC-3: the diff file is the CC reviewer's input only; the Codex build writes none", () => {
-  const p = step2("Reviewer.");
-  assert.match(
-    p,
-    /Package the diff to a file .*?\(the CC reviewer's input only — the Codex build below writes none\)/,
-    "the diff file is no longer marked as the CC reviewer's input only" +
-      " — " +
-      "With --architecture --base, codex computes the diff itself: a packaged diff file on the Codex build would be written and never read.",
-  );
-  assert.match(
-    p,
-    /Codex build:.*?Instead of the diff file, in one command that resolves <store> and creates that directory with mkdir -p, write a context file there/,
-    "the Codex build no longer writes its context file in place of the diff file",
-  );
-  assert.doesNotMatch(
-    p,
-    /In the same command that packages the diff/,
-    "the Codex build still packages the diff",
-  );
-});
-
 test("AC-3: the architecture-review reference lists the same inputs the step hands over", () => {
   const l = archReview();
   const inputs: [RegExp, string][] = [
@@ -230,33 +209,6 @@ test("AC-3: the architecture-review reference lists the same inputs the step han
   ];
   for (const [re, what] of inputs)
     assert.match(l, re, `the architecture-review reference no longer lists ${what}`);
-});
-
-test("AC-3: on the Codex build the review runs out of session through companion review --architecture", () => {
-  const p = step2("Reviewer.");
-  assert.match(
-    p,
-    /Codex build: there is no subagent to dispatch, so the review runs in a separate read-only codex exec process instead, and is independent\./,
-    "the Codex build no longer runs the architecture review in a separate process",
-  );
-  assert.match(
-    p,
-    /run that build's review skill \(codex-skills\/review, which owns resolving the plugin root\) with --architecture --base <base> --context @<file> — on a later round --base <sha>, the head the most recent round recorded\./,
-    "the Codex build no longer names the companion invocation, or its later-round base",
-  );
-  assert.match(
-    p,
-    /context file .*? — the round, the shape list, the item's ## Why \/ What and its AC, the git log -n 20 --stat -- <changed paths> output, and on a later round the rulings recorded so far and the Minor findings sent to ## Follow-ups\./,
-    "the Codex build's context file no longer carries the items the CC reviewer is handed",
-  );
-});
-
-test("AC-3: on the Codex build a failed companion run falls back to the not-independent in-session review", () => {
-  assert.match(
-    step2("Reviewer."),
-    /If that run fails, the session applies references\/architecture-review\.md itself and records one line in ## Progress that this review was not independent\./,
-    "the Codex build's fallback, and its not-independent line, is gone",
-  );
 });
 
 test("AC-3: with no item (Trivial) the reviewer gets the task as the user stated it", () => {
@@ -349,8 +301,8 @@ test("AC-4: every finding carries where, why, severity, structural fix and recom
     assert.ok(template.includes(field), `the output template lost "${field}"`);
 });
 
-// review-round-cap: the cap keys on severity, and the Codex build's reviewer sees only
-// architecture-review.md, so the three names are defined there, in shape terms.
+// review-round-cap: the cap keys on severity, and a `review --architecture` reviewer sees
+// only architecture-review.md, so the three names are defined there, in shape terms.
 test("review-round-cap: architecture-review.md defines each severity in shape terms", () => {
   const out = plain(section(read(ARCH_REVIEW), ARCH_REVIEW, "## Output", "```"));
   for (const [name, re] of [
@@ -692,19 +644,18 @@ test("the architecture-review reference says its reviewer gets it in full", () =
 });
 
 test("the review commands point at step 2's Reviewer list instead of copying it", () => {
-  for (const rel of ["commands/review.md", "codex-skills/review/SKILL.md"]) {
-    const flag = plain(headingSection(read(rel), rel, "## `--architecture`"));
-    assert.match(
-      flag,
-      /Finishing passes the context file its Reviewer\. paragraph lists for the Codex build \(skills\/finishing\/SKILL\.md Architecture review\) through --context @<file>\./,
-      `${rel} no longer points at finishing step 2's Reviewer list`,
-    );
-    assert.doesNotMatch(
-      flag,
-      /shape list|Why \/ What|acceptance criteria|git log|20 commits|history|rulings|Follow-ups/i,
-      `${rel} copies the hand-off list again`,
-    );
-  }
+  const rel = "commands/review.md";
+  const flag = plain(headingSection(read(rel), rel, "## `--architecture`"));
+  assert.match(
+    flag,
+    /\(skills\/finishing\/SKILL\.md Architecture review\); pass everything that review's Reviewer\. paragraph hands its reviewer, except references\/architecture-review\.md and the diff file, through --context @<file>/,
+    `${rel} no longer points at finishing step 2's Reviewer list`,
+  );
+  assert.doesNotMatch(
+    flag,
+    /shape list|Why \/ What|acceptance criteria|git log|20 commits|history|rulings|Follow-ups/i,
+    `${rel} copies the hand-off list again`,
+  );
 });
 
 test("the architecture-review Output carries the opening's round-2 Minor exception", () => {

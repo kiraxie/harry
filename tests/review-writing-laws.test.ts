@@ -135,7 +135,12 @@ test("AC-12: tier-gates tiers a fix like a task, small only when Trivial and no 
 });
 
 test("AC-5: executing's one fix wave applies the fix tier", () => {
-  const wave = section(plain(EXECUTING), EXECUTING, "4. One fix wave.", "Codex build.");
+  const wave = section(
+    plain(EXECUTING),
+    EXECUTING,
+    "4. One fix wave.",
+    "Follow-ups discovered during execution",
+  );
   assert.match(
     wave,
     /small fix \(references\/tier-gates\.md Fixes inside a unit\)/i,
@@ -171,7 +176,12 @@ test("AC-6: HARRY.md Root cause keeps the three-failed-fixes rule", () => {
 });
 
 test("AC-6: executing applies the scope brake to the re-review", () => {
-  const wave = section(plain(EXECUTING), EXECUTING, "4. One fix wave.", "Codex build.");
+  const wave = section(
+    plain(EXECUTING),
+    EXECUTING,
+    "4. One fix wave.",
+    "Follow-ups discovered during execution",
+  );
   assert.match(
     wave,
     /re-review raising new findings in the same area[^.]*as the review → stop and ask the user whether the scope still serves the unit's goal; name the goal/i,

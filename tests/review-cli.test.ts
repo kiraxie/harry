@@ -1236,19 +1236,14 @@ test("F1: every door that runs review tells the caller to read the `Review writt
     source.includes(`\${REVIEW_WRITTEN} \${`),
     "review.ts must print REVIEW_WRITTEN followed by the path",
   );
-  for (const door of [
-    "commands/review.md",
-    "codex-skills/review/SKILL.md",
-    "skills/executing/SKILL.md",
-    "skills/finishing/SKILL.md",
-  ]) {
+  for (const door of ["commands/review.md", "skills/executing/SKILL.md"]) {
     const text = readFileSync(path.join(REPO_ROOT, door), "utf8");
     assert.ok(text.includes(REVIEW_WRITTEN), `${door} must name the \`${REVIEW_WRITTEN}\` line`);
   }
 });
 
-test("both review doors document --architecture and the standard it embeds", () => {
-  for (const door of ["commands/review.md", "codex-skills/review/SKILL.md"]) {
+test("the review door documents --architecture and the standard it embeds", () => {
+  for (const door of ["commands/review.md"]) {
     const prose = readFileSync(path.join(REPO_ROOT, door), "utf8");
     assert.ok(
       prose.includes("[--architecture]"),
@@ -1279,18 +1274,47 @@ test("both review doors document --architecture and the standard it embeds", () 
   }
 });
 
-const REVIEW_DOORS = ["commands/review.md", "codex-skills/review/SKILL.md"];
+function plainSection(heading: string): string {
+  const raw = readFileSync(path.join(REPO_ROOT, "commands/review.md"), "utf8");
+  return headingSection(raw, "commands/review.md", heading)
+    .replace(/\s+/g, " ")
+    .replace(/[`*]/g, "");
+}
+
+test("the review door gives --architecture's base by round", () => {
+  assert.ok(
+    plainSection("## `--architecture`").includes(
+      "Pass --base: on round 1 the branch point; on a later round the head the most recent round recorded",
+    ),
+    "the --architecture section no longer says which --base each round passes",
+  );
+});
+
+test("the review door says the runtime does not require --architecture's base", () => {
+  assert.ok(
+    plainSection("## `--architecture`").includes("The runtime does not require it"),
+    "the --architecture section no longer says the runtime does not require --base",
+  );
+});
+
+test("the review door points --fix-check's context at fix-check.md's handed list", () => {
+  assert.ok(
+    plainSection("## `--fix-check`").includes(
+      "Pass through --context @<file> what references/fix-check.md What you are handed lists for level 3",
+    ),
+    "a hand run of --fix-check has no word on what its context carries",
+  );
+});
+
+const REVIEW_DOORS = ["commands/review.md"];
 
 function doorSynopsis(door: string, prose: string): string {
-  const line =
-    door === "commands/review.md"
-      ? prose.match(/^argument-hint: (.+)$/m)?.[1]
-      : prose.match(/^node "\$\{CLAUDE_PLUGIN_ROOT\}\/dist\/companion\.cjs" review \[.+$/m)?.[0];
+  const line = prose.match(/^argument-hint: (.+)$/m)?.[1];
   assert.ok(line, `${door} has no synopsis line`);
   return line;
 }
 
-test("AC-5: both review doors list --rereview and --fix-check in their synopsis", () => {
+test("AC-5: the review door lists --rereview and --fix-check in its synopsis", () => {
   for (const door of REVIEW_DOORS) {
     const synopsis = doorSynopsis(door, readFileSync(path.join(REPO_ROOT, door), "utf8"));
     for (const flag of ["[--rereview <text|@file|@->]", "[--fix-check <text|@file|@->]"])
@@ -1311,7 +1335,7 @@ for (const { flag, others, holds } of [
     holds: "holds each finding with its proposed fix",
   },
 ]) {
-  test(`AC-5: both review doors say what ${flag}'s file holds, that it needs --base and what it excludes`, () => {
+  test(`AC-5: the review door says what ${flag}'s file holds, that it needs --base and what it excludes`, () => {
     for (const door of REVIEW_DOORS) {
       const raw = readFileSync(path.join(REPO_ROOT, door), "utf8");
       const own = headingSection(raw, door, `## \`${flag}\``).replace(/\s+/g, " ");
@@ -1321,7 +1345,7 @@ for (const { flag, others, holds } of [
   });
 }
 
-test("both review doors say an empty range fails --rereview and --fix-check instead of reporting nothing", () => {
+test("the review door says an empty range fails --rereview and --fix-check instead of reporting nothing", () => {
   for (const door of REVIEW_DOORS) {
     const prose = readFileSync(path.join(REPO_ROOT, door), "utf8").replace(/\s+/g, " ");
     const nothing = section(prose, door, "**Nothing to review:**", "## Failure");
@@ -1332,7 +1356,7 @@ test("both review doors say an empty range fails --rereview and --fix-check inst
   }
 });
 
-test("AC-15: the review doors, CLAUDE.md and README say review runs as codex exec, and why", () => {
+test("AC-15: the review door, CLAUDE.md and README say review runs as codex exec, and why", () => {
   const because =
     "Not `codex exec review`: it answers in its own review-comment format and ignores the form the prompt asks for";
   for (const [rel, part] of [
@@ -1357,8 +1381,8 @@ test("AC-15: the review doors, CLAUDE.md and README say review runs as codex exe
   }
 });
 
-test("AC-11: only the review doors, CLAUDE.md's runtime section and README name review's codex subcommand", () => {
-  const owners = new Set(["commands/review.md", "codex-skills/review/SKILL.md", "README.md"]);
+test("AC-11: only the review door, CLAUDE.md's runtime section and README name review's codex subcommand", () => {
+  const owners = new Set(["commands/review.md", "README.md"]);
   const hits = READER_CORPUS.filter((rel) => !owners.has(rel)).flatMap((rel) => {
     const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
     const runtime = rel === "CLAUDE.md" ? headingLines(raw, rel, "## Runtime architecture") : null;
@@ -1374,7 +1398,7 @@ test("AC-11: only the review doors, CLAUDE.md's runtime section and README name 
   assert.deepEqual(hits, [], "callers name the review mode they run, not the codex subcommand");
 });
 
-test("AC-5: both review doors send a re-review's open findings to --rereview, not --context", () => {
+test("AC-5: the review door sends a re-review's open findings to --rereview, not --context", () => {
   for (const door of REVIEW_DOORS) {
     const raw = readFileSync(path.join(REPO_ROOT, door), "utf8");
     const context = headingSection(raw, door, "## `--context`").replace(/\s+/g, " ");
@@ -1386,15 +1410,10 @@ test("AC-5: both review doors send a re-review's open findings to --rereview, no
 });
 
 test("F1: every review and ask door quotes the no-error-line notice and names no tail size", () => {
-  // The notice is run-codex's, printed by both commands, so all four doors are
+  // The notice is run-codex's, printed by both commands, so both doors are
   // pinned here. A door quoting a stale copy tells its consumer to watch for a
   // line that never comes; a door naming the tail size drifts when it changes.
-  for (const door of [
-    "commands/review.md",
-    "codex-skills/review/SKILL.md",
-    "commands/ask.md",
-    "codex-skills/ask/SKILL.md",
-  ]) {
+  for (const door of ["commands/review.md", "commands/ask.md"]) {
     const prose = readFileSync(path.join(REPO_ROOT, door), "utf8").replace(/\s+/g, " ");
     assert.ok(prose.includes(NO_ERROR_LINE), `${door} must quote \`${NO_ERROR_LINE}\``);
     assert.doesNotMatch(prose, /\blast \d+ lines\b/i, `${door} must not name the tail size`);

@@ -16,10 +16,7 @@ const plain = (text: string): string =>
     .replace(/(?<!\w)_+|_+(?!\w)/g, "");
 
 const PLAIN_LANGUAGE = "references/plain-language.md";
-const DOORS = [
-  path.join("commands", "wait-what.md"),
-  path.join("codex-skills", "wait-what", "SKILL.md"),
-];
+const DOOR = path.join("commands", "wait-what.md");
 
 function lawBullet(): string {
   const bullet = read("HARRY.md")
@@ -183,37 +180,35 @@ test("AC-3: plain-language.md carries the grounding rule, both principles, and t
   );
 });
 
-test("AC-4: both /wait-what doors are thin pointers that say one-shot, not a mode", () => {
-  for (const door of DOORS) {
-    const text = flat(read(door));
-    assert.ok(
-      text.includes(PLAIN_LANGUAGE),
-      `${door} no longer points at ${PLAIN_LANGUAGE}, which owns the deeper level`,
-    );
-    assert.match(
+test("AC-4: the /wait-what door is a thin pointer that says one-shot, not a mode", () => {
+  const text = flat(read(DOOR));
+  assert.ok(
+    text.includes(PLAIN_LANGUAGE),
+    `${DOOR} no longer points at ${PLAIN_LANGUAGE}, which owns the deeper level`,
+  );
+  assert.match(
+    text,
+    /one-shot|once, on that one message only/i,
+    `${DOOR} no longer says the re-explanation is one-shot; a mode would silently re-pace every later message`,
+  );
+  assert.match(
+    text,
+    /not a mode|does not persist/i,
+    `${DOOR} no longer says this is not a standing mode`,
+  );
+  for (const restated of [
+    /one question per message/i,
+    /one new concept/i,
+    /capable adult/i,
+    /working memory/i,
+  ])
+    assert.doesNotMatch(
       text,
-      /one-shot|once, on that one message only/i,
-      `${door} no longer says the re-explanation is one-shot; a mode would silently re-pace every later message`,
+      restated,
+      `${DOOR} is a door, not a second copy of the technique — keep the content in ${PLAIN_LANGUAGE}` +
+        " — " +
+        "Thin: the door names the technique, it does not restate it. A restated rule is a second copy that can be relaxed on its own.",
     );
-    assert.match(
-      text,
-      /not a mode|does not persist/i,
-      `${door} no longer says this is not a standing mode`,
-    );
-    for (const restated of [
-      /one question per message/i,
-      /one new concept/i,
-      /capable adult/i,
-      /working memory/i,
-    ])
-      assert.doesNotMatch(
-        text,
-        restated,
-        `${door} is a door, not a second copy of the technique — keep the content in ${PLAIN_LANGUAGE}` +
-          " — " +
-          "Thin: the door names the technique, it does not restate it. A restated rule is a second copy that can be relaxed on one build only.",
-      );
-  }
 });
 
 const corpus = (): string[] => [...TOP_LEVEL, ...PROSE_DIR_FILES];
@@ -249,7 +244,6 @@ const SURVIVING: Record<string, { re: RegExp; allowed: string[]; gloss: [string,
     re: /\bhoist\w*/i,
     allowed: [
       path.join("commands", "audit.md"),
-      path.join("codex-skills", "audit", "SKILL.md"),
       "references/audit/DEEP-DIVE.md",
       "references/audit/ORCHESTRATION.md",
       "references/audit/RECON.md",

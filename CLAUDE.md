@@ -28,7 +28,6 @@ pnpm run typecheck              # tsc --noEmit
 pnpm run lint                   # biome check .
 pnpm run format                 # biome format --write .
 pnpm run install-laws           # scripts/install.mjs — wire HARRY.md into a global CLAUDE.md via @-import
-pnpm run install-laws-codex     # scripts/install-codex.mjs — inline HARRY.md into ~/.codex/AGENTS.md (Codex build)
 pnpm run init-ignore            # scripts/init.mjs — add harry's .gitignore block to a project
 pnpm run evals <validate|run|score> [options]   # scripts/run-evals.mts — behavioral evals
 ```
@@ -47,7 +46,7 @@ Maintainer-only scripts (the evals runner and its `scripts/lib/evals-*` modules,
 `.claude/scripts/`) are `.mts`, run by Node's type stripping. For the evals modules `.mts` is
 required, not a style choice: it is ESM by its extension, so the jailed post-session child never
 has to read the `package.json` the jail denies.
-The scripts that ship to consumers (`install`, `install-codex`, `init` and their `scripts/lib`
+The scripts that ship to consumers (`install`, `init` and their `scripts/lib`
 helpers) stay `.mjs`, typed with JSDoc and checked through `checkJs`, so `/sync` needs no
 type-stripping Node; a test keeps them off any `.mts` module.
 
@@ -67,7 +66,7 @@ state script `.claude/scripts/release-state.mts`) and no plugin build loads it, 
 `/upgrade-deps` (`.claude/commands/upgrade-deps.md`).
 
 - **Version fields**, bumped in lockstep: `package.json`, `.claude-plugin/plugin.json`,
-  `.codex-plugin/plugin.json`, and the **nested** `plugins[harry].version` in
+  and the **nested** `plugins[harry].version` in
   `.claude-plugin/marketplace.json`. `tests/version-sync.test.ts` fails if any one of
   them disagrees.
 - **Build**: `pnpm run build`, committing `dist/companion.cjs` — `build.mjs` inlines
@@ -100,8 +99,17 @@ decides which one runs. There is no fix backend or apply path in-runtime; both c
 read-only, full stop. Two `review` modes build their own prompt around a
 handed file: `--rereview` (executing's scoped re-review: the per-diff standard plus
 `references/fix-check.md` **Three levels**, and the open findings) and `--fix-check`
-(the fix check on the Codex build: `references/fix-check.md` in full, and the proposed
+(a fix check run by hand: `references/fix-check.md` in full, and the proposed
 fixes).
+
+`review` is read-only by construction: the spawned codex process runs in its own read-only
+sandbox. `commands/review.md`'s `allowed-tools` only **pre-approves** the review invocation
+(`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review`), read-only `git status`/`git diff`,
+and `Read` — it does not block other tools, so the orchestrator side stays read-only by
+instruction. Every command line in that doc starts with that exact invocation so it matches
+the pattern (an unmatched one only costs a permission prompt). The frontmatter does not set
+`disable-model-invocation`, so both the `SlashCommand` and `Skill` tools — and executing's
+review step (`skills/executing/SKILL.md` **Review**) — can invoke it directly.
 
 Everything in the repo is MIT except `.claude/references/skill-authoring.md`, which distills
 parts of an Apache-2.0 source (`anthropics/skills`) — see `NOTICE`.
@@ -134,8 +142,7 @@ deployed copy into a consumer's global `~/.claude/CLAUDE.md`, so it applies ever
 needing a keyword. The import points at the deployed snapshot, NOT the live plugin checkout: editing
 `HARRY.md` (even uncommitted) does not change installed behavior until you re-run install-laws /
 `/sync`, which re-deploys the snapshot and rewrites the import block (migrating any older
-direct-repo-path import). "Release" = re-run sync — the same resync model as the Codex build
-(`scripts/install-codex.mjs`), so both builds converge on one mental model.
+direct-repo-path import). "Release" = re-run sync.
 
 The three pipeline skills (`skills/brainstorming`, `skills/executing`, `skills/finishing`)
 auto-trigger (no slash command) and read the tier triggers in HARRY.md **Tiers** to decide
@@ -155,16 +162,6 @@ plugin agents, so they dispatch as `harry:scout`, `harry:analyst` and `harry:ref
 `tests/agents.test.ts` enforces the invariants (alias models only, no edit or spawn tools;
 `analyst` and `referee` keep Bash and are read-only by instruction).
 
-**Dispatch mechanism is Claude Code only — verified against live Codex 0.144.4.** Codex has
-no per-subagent model/effort mechanism: `codex --help` exposes no subagent dispatch, its
-plugin `agents/` are frontmatter-less persona/interface cards (no `model`/`effort`), and
-`codex debug prompt-input` shows harry contributing skills + AGENTS.md laws but **no
-agents**. Web docs describing `codex-agents/*.toml` with `model_reasoning_effort` do not
-match the live CLI; do not add them. The role→model *bindings* exist for Codex, though —
-`references/codex-role-mapping.md` is an advisory table that `install-codex.mjs` inlines
-into `~/.codex/AGENTS.md` alongside HARRY.md, applied via session profile / `-m` plus
-reasoning-effort config rather than dispatch, since there is still no subagent to route to.
-
 The *auto-invoked* Explore path (vs. explicit `scout` dispatch) is captured on CC by an
 opt-in user-level `~/.claude/agents/Explore.md` override that `/harry:sync --explore` installs
 (marker-guarded so `--remove` never deletes a user's own). Note plugin agent changes need
@@ -175,12 +172,12 @@ install** (or `claude plugin update`), not a hand-edited plugin cache.
 iterative workflow distinct from the three pipeline skills above (it's user-invoked via slash
 command, not tier-triggered). Its round-by-round methodology, JSON schema, and validator script
 are too large to inline in one command file, so they live in `references/audit/`
-(`references/audit/ORCHESTRATION.md` — the shared six-round orchestration both builds' thin
-wrappers point at — plus `references/audit/RECON.md`, `references/audit/DEEP-DIVE.md`,
+(`references/audit/ORCHESTRATION.md` — the six-round orchestration `commands/audit.md`
+points at — plus `references/audit/RECON.md`, `references/audit/DEEP-DIVE.md`,
 `references/audit/SCAN-DIMENSIONS.md`, `references/audit/VALIDATION-AND-REPORTING.md`,
 `references/audit/report-schema.json`, `references/audit/validate-findings.cjs`) — a
-subdirectory of the shared `references/`, read by path from `commands/audit.md` and
-`codex-skills/audit/SKILL.md`, not auto-discovered as anything on its own. Written as full
+subdirectory of the shared `references/`, read by path from `commands/audit.md`, not
+auto-discovered as anything on its own. Written as full
 paths, not bare filenames: this is now the only hand-maintained copy of that list, and
 `tests/prose-refs.test.ts` can only verify a path, so a bare filename here would go stale
 silently on a rename.
@@ -191,61 +188,3 @@ silently on a rename.
 one repo's personal rules to everyone who clones.
 Active in-flight work lives in the also-gitignored `.local/INDEX.md` `## In flight` section
 instead.
-
-## Codex CLI compatibility (`.codex-plugin/`, `codex-skills/`)
-
-Alongside the Claude Code plugin, harry ships a parallel `.codex-plugin/plugin.json`
-+ `.agents/plugins/marketplace.json` for Codex CLI, which has its own Skills/Hooks
-system (`SKILL.md` format is shared with Claude Code). Codex does **not** set
-`${CLAUDE_PLUGIN_ROOT}` / `${CLAUDE_PLUGIN_DATA}` in the shell a skill's commands run
-in (verified on codex-cli 0.155.1), so every `codex-skills/*/SKILL.md` that uses the
-root variable opens with a **Plugin root** rule — derive it from the skill's own path —
-pinned by `tests/codex-plugin-root.test.ts`; `dist/companion.cjs` falls back to a
-tmpdir state root when `CLAUDE_PLUGIN_DATA` is unset, so it needs no Codex-specific
-code path. `skills/` (the three pipeline skills) is auto-discovered
-by Codex's default component discovery and `dist/companion.cjs` is shared as-is
-between both builds; `plugin.json`'s `skills` field only needs to name the
-supplemental `./codex-skills` path (it's a single string, not an array — Codex's
-own `plugin-creator` system skill's schema reference confirms this).
-`.agents/plugins/marketplace.json`'s shape (`name` / `interface.displayName` /
-`plugins[]` with `source.source`/`source.path`/`policy.installation`/
-`policy.authentication`/`category` per entry) is Codex-specific and does NOT
-mirror `.claude-plugin/marketplace.json`'s shape — verified live against an
-authenticated Codex CLI install (0.128.0) via `codex debug prompt-input`, not
-guessed from web docs.
-
-`codex-skills/` holds Codex-only conversions of the portable
-`commands/*.md` slash commands (`ask`, `debt`, `review`,
-`sync`, `audit`, `wait-what`, and the conversational `grill`) — Codex's plugin manifest has no `commands`/`prompts`
-field, so these become semantically-triggered Skills instead of explicit slash
-commands. This is a **deliberate partial-parity build**, not full feature parity:
-
-- `debate` has no Codex skill (its "self" voice is Claude/opus by design).
-- `grill` is listed to keep this parity list complete, not as a difference: both builds
-  ask one question per round, in both phases, per `references/grilling.md`. A single
-  question needs no harness-specific question UI, so only the door differs
-  (`commands/grill.md` vs `codex-skills/grill/SKILL.md`).
-- `review` is read-only on both builds — it has no fix backend and no in-runtime
-  path to apply what it finds. On both
-  builds the review itself is held read-only by the spawned codex process's own
-  read-only sandbox. On Claude Code,
-  `commands/review.md`'s `allowed-tools` only **pre-approves** the review
-  invocation (`node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review`), read-only
-  `git status`/`git diff`, and `Read` — it does not block other tools, so the
-  orchestrator side stays read-only by instruction. Every command line in that
-  doc starts with that exact invocation so it matches the pattern (an unmatched
-  one only costs a permission prompt). The frontmatter does not set
-  `disable-model-invocation`, so both the `SlashCommand` and `Skill` tools — and
-  executing's review step (`skills/executing/SKILL.md` **Review**) — can invoke it directly.
-- Codex `audit`'s RO round-boundaries are likewise instruction-only, not
-  tool-enforced (see its skill's own "Known limitation" note); it shares the same
-  `references/audit/` reference bundle and `report-schema.json`/
-  `validate-findings.cjs` as the Claude Code `/audit` command via
-  `${CLAUDE_PLUGIN_ROOT}`.
-- `sync` (`scripts/install-codex.mjs`) inlines HARRY.md's content into
-  `~/.codex/AGENTS.md` as a snapshot (Codex has no `@`-import syntax), appending the
-  advisory Codex role-map table (`references/codex-role-mapping.md`) to the same block —
-  re-run after HARRY.md or the role map changes to resync, unlike Claude Code's always-live import.
-
-See `.local/specs/2026-07-03-codex-compat-design.md` for the full design record
-(gitignored, not committed — this section is the durable summary).

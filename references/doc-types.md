@@ -191,8 +191,8 @@ separately re-judges every `status: backlog` item by asking whether it's
 still open. `status: backlog` is the **only** deferred-work source read from
 `.local/items/` — there is no separate research/Non-Goals corpus anymore;
 those cases now live as `## Notes` inside a backlog or active item. The verdict
-vocabulary is defined in `references/debt-audit.md`, which both builds' `/debt`
-doors read — go there rather than to either door.
+vocabulary is defined in `references/debt-audit.md`, which `commands/debt.md`
+reads — go there rather than to the command.
 
 **Non-Goals do not survive archiving.** `/debt` only scans `status: active`
 items, and finishing's Follow-ups flush (above) only carries `## Follow-ups` forward —

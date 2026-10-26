@@ -20,7 +20,7 @@ test("inDir returns the corpus files directly in a dir", () => {
 });
 
 test("inDir fails loud on a dir that is not a prose dir or has none of its own files", () => {
-  for (const dir of ["nope", "src", "codex-skills", ".claude/scripts"])
+  for (const dir of ["nope", "src", ".claude/scripts"])
     assert.throws(() => inDir(dir), names(`inDir("${dir}")`), dir);
 });
 
@@ -42,5 +42,5 @@ test("filesUnder fails loud on a dir with no corpus file under it", () => {
 test("skillFiles fails loud on a dir with no tracked <dir>/<name>/SKILL.md", () => {
   for (const dir of ["nope", "references"])
     assert.throws(() => skillFiles(dir), names(`skillFiles("${dir}")`), dir);
-  for (const dir of ["codex-skills", "skills"]) assert.doesNotThrow(() => skillFiles(dir), dir);
+  assert.doesNotThrow(() => skillFiles("skills"));
 });

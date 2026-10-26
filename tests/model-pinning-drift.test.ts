@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { LINE_END_RE } from "./lines.ts";
-import { codexSkillFiles, commandFiles } from "./prose-dirs.ts";
+import { commandFiles } from "./prose-dirs.ts";
 
 // harry passes no model to Codex: `review` and `ask` spawn the Codex CLI without
 // `-m`, so `~/.codex/config.toml` decides. The doors are the prose a consumer
@@ -12,10 +12,7 @@ import { codexSkillFiles, commandFiles } from "./prose-dirs.ts";
 // guard keeps them from regrowing one — the same drift the old per-lane pins had,
 // when a door kept naming `gpt-5.6-sol` long after an account could not reach it.
 //
-// Out of scope, on purpose: README.md and references/codex-role-mapping.md name
-// models as configuration advice (the advisory CC-role -> Codex-model table), and
-// upstream.json records history. They say what an operator may choose, not what
-// harry sends.
+// Out of scope, on purpose: upstream.json records history, not what harry sends.
 //
 // One exception: a line may name a model while saying it is NOT usable — an
 // honest note about an account that cannot reach a model is not a claim.
@@ -27,12 +24,10 @@ const MODEL_ID_RE = /gpt-\d+(?:\.\d+)?(?:-[a-z]+)?/g;
 
 const UNAVAILABILITY_MARKERS = [/not supported/i, /\b400\b/, /why not/i, /reject/i];
 
-const doorFiles = (): string[] => [...commandFiles(), ...codexSkillFiles()];
-
 const excused = (line: string): boolean => UNAVAILABILITY_MARKERS.some((m) => m.test(line));
 
 test("no door claims a model harry sends", () => {
-  const files = doorFiles();
+  const files = commandFiles();
   assert.ok(files.length >= 8, `expected the door corpus, found ${files.length} files`);
 
   const claims: string[] = [];

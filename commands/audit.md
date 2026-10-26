@@ -9,16 +9,14 @@ allowed-tools: Read, Write, Glob, Grep, Agent, AskUserQuestion, Bash(npx:*), Bas
 Raw slash-command arguments (optional target path(s) and `--output <dir>`):
 `$ARGUMENTS`
 
-## Orchestration lives in a shared file
+## Orchestration lives in a reference file
 
 The full six-round audit orchestration — the auditor's role, the falsifiability
 discipline and core principles, the setup / output-directory rules, the
 iteration / `run-<N>` semantics, and the six-round flow with its pointers into
-the rest of `references/audit/` — is shared with the Codex build and lives in
+the rest of `references/audit/` — lives in
 **`${CLAUDE_PLUGIN_ROOT}/references/audit/ORCHESTRATION.md`**.
 
-**Read that file now and follow it.** It carries the build divergences under
-explicit **Claude Code build:** / **Codex build:** labels; wherever it names the
-Claude Code build, that is you. The invocation surface for this build is
+**Read that file now and follow it.** The invocation surface is
 `$ARGUMENTS` above (target path(s) and an optional `--output <dir>`), and this
 command's `allowed-tools` frontmatter is the tool universe you operate within.

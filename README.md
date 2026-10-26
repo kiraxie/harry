@@ -53,29 +53,9 @@ project's `.gitignore` block; the global laws stay.)
 
 The laws are a **snapshot**, not a live reference to the plugin checkout: after
 updating the plugin (or editing `HARRY.md`), re-run `/harry:sync` (or
-`pnpm run install-laws`) to re-deploy and resync — same model as the Codex build
-below. "Release" = re-run sync.
+`pnpm run install-laws`) to re-deploy and resync. "Release" = re-run sync.
 
 Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
-
-## Install (Codex CLI)
-
-harry also ships as a **Codex CLI** plugin — a deliberate partial-parity build, not
-full feature parity (see `CLAUDE.md` **Codex CLI compatibility** for exactly
-what's degraded or missing). Requires the `codex` CLI on `PATH`, logged in
-(`codex login`).
-
-```sh
-codex plugin marketplace add kiraxie/harry   # GitHub owner/repo
-```
-
-Then, inside an interactive `codex` session, run `/plugins` and install `harry`
-from the `kiraxie` marketplace — this CLI build has no non-interactive plugin
-install command yet, only the `/plugins` picker.
-
-`codex-skills/` holds the Codex-only conversions (`ask`, `debt`,
-`review`, `sync`, `audit`, `grill`, `wait-what`); the three pipeline skills and the runtime are
-shared as-is with the Claude Code build. `debate` has no Codex skill.
 
 ## Commands
 
@@ -119,20 +99,18 @@ These auto-trigger (no slash command); they are the pipeline:
 
 - **brainstorming** — turn an idea into an approved item `## Why / What` (SCQA) via the grilling interview (`references/grilling.md`), closing on a residue manifest and the numbered acceptance criteria approved with it (gate: no code before approval). A Major/contested decision can escalate to `/debate`.
 - **executing** — build against the acceptance criteria, recording progress per AC ID. The session writes the code; the tier sets the tests and the review (one `analyst` lane for Standard, plus a Codex lane for Major). Before a finding's fix is built, the `referee` checks it at the finding's site, in the data flow, and in the system.
-- **finishing** — verify green, run an architecture review when the change altered an API, DB schema, public interface or module/service boundary, ask merge-vs-PR, then verify the merged result and push it (a local merge pushes its base when a remote exists) before any cleanup, list work the session raised and left open, turn follow-ups into backlog items, archive the item, clean up the branch and any worktrees, end on the confirmed base (CI as evidence when pushed; the merged-result suite when there is no remote), and on Claude Code offer repo-specific lessons for `CLAUDE.local.md`.
+- **finishing** — verify green, run an architecture review when the change altered an API, DB schema, public interface or module/service boundary, ask merge-vs-PR, then verify the merged result and push it (a local merge pushes its base when a remote exists) before any cleanup, list work the session raised and left open, turn follow-ups into backlog items, archive the item, clean up the branch and any worktrees, end on the confirmed base (CI as evidence when pushed; the merged-result suite when there is no remote), and offer repo-specific lessons for `CLAUDE.local.md`.
 
 ## Layout
 
 ```text
 HARRY.md            resident laws (loaded via @)
-skills/             brainstorming · executing · finishing (shared, both builds)
-commands/           review · ask · debate · debt · sync · audit · grill · wait-what (Claude Code)
-codex-skills/       ask · debt · review · sync · audit · grill · wait-what (Codex CLI)
+skills/             brainstorming · executing · finishing
+commands/           review · ask · debate · debt · sync · audit · grill · wait-what
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
-src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs, shared, both builds)
-scripts/            install.mjs · init.mjs · install-codex.mjs · lib/markers.mjs · lib/stale-entries.mjs
+src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs)
+scripts/            install.mjs · init.mjs · lib/markers.mjs · lib/stale-entries.mjs
 .claude-plugin/     Claude Code plugin manifest
-.codex-plugin/ + .agents/plugins/   Codex CLI plugin manifest
 .claude/            repo-local maintainer tooling, not loaded by the plugin: commands (release · upgrade-deps · distill) · references · scripts
 upstream.json       tracks the pinned upstreams by commit (see .claude/references/upstream-sync.md)
 ```

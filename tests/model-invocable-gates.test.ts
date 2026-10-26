@@ -40,8 +40,8 @@ const GATE_SCAN_EXEMPTIONS: ReadonlyArray<{ path: string; names: string[]; reaso
 
 /**
  * Files that instruct the model: the resident laws, the tier gates, `CLAUDE.md` (repo guidance
- * the model reads every session), both builds' skill trees (`skills/` is shared, `codex-skills/`
- * is the Codex build's own tree), the role agents, and every command the model can reach.
+ * the model reads every session), the skill tree (`skills/`), the role agents, and every command
+ * the model can reach.
  *
  * One deliberate exclusion beyond `GATE_SCAN_EXEMPTIONS`, `GATE_PATH_EXEMPTIONS`: both
  * references trees, beyond the tier gates, and `README.md` describe the slash commands rather
@@ -79,7 +79,7 @@ function blockedCommandNames(files = commandFiles()): string[] {
 /**
  * `/name` as a command mention, bare or namespaced: Claude Code exposes a plugin's commands as
  * `/harry:review`, which is the form a real instruction uses, so both must be caught. Not a path
- * (`commands/review.md`, `codex-skills/review/SKILL.md`) and not a file reference; backticks
+ * (`commands/review.md`, `skills/executing/SKILL.md`) and not a file reference; backticks
  * around it are fine — that is how prose writes it.
  */
 function commandMention(name: string): RegExp {

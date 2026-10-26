@@ -170,26 +170,6 @@ test("AC-5: a failed dispatch falls back to the session, recorded as not indepen
   );
 });
 
-test("AC-5: on the Codex build the fix check runs as a separate read-only run of the review skill's --fix-check", () => {
-  const text = read("skills/executing/SKILL.md");
-  const codex = flat(section(text, "skills/executing/SKILL.md", "**Codex build.**"));
-  assert.match(
-    codex,
-    /The fix check runs as a separate read-only run of that review skill's --fix-check, with --base <base> --fix-check @<store>\/\.local\/tmp\/<branch>\/fix-check-<k>\.md --context @<store>\/\.local\/tmp\/<branch>\/fix-check-context\.md, <base> being the branch point/,
-    "the Codex build no longer runs the fix check out of session through the review skill's --fix-check, with both files in the store",
-  );
-  assert.doesNotMatch(
-    codex,
-    /codex-skills\/ask/,
-    "the Codex build's fix check goes back through ask, whose preamble forbids exploring the repo",
-  );
-  assert.match(
-    codex,
-    /Its failure falls back to the session applying references\/fix-check\.md itself, recorded as not independent/,
-    "the Codex build's fix check no longer falls back with a not-independent record",
-  );
-});
-
 test("AC-4: a fix now ruling runs the referee's check before the AC is drafted, and its line sets the fix", () => {
   const ruling = flat(
     read("skills/finishing/SKILL.md")
@@ -241,15 +221,6 @@ test("executing's fix-check Progress line counts the fixes that stopped", () => 
     executingStep4(),
     /<h> held, <r> revised, <s> stopped/,
     "stopped fixes have no slot in the Progress line",
-  );
-});
-
-test("the Codex fix check hands the fixes in --fix-check and the rulings as facts, and the runtime traces the repo", () => {
-  const text = read("skills/executing/SKILL.md");
-  assert.match(
-    flat(section(text, "skills/executing/SKILL.md", "**Codex build.**")),
-    /the first file holds each finding with its proposed fix and the paths of the unit's earlier findings files, the second, as facts, the item's Why \/ What, its AC verbatim and every ruling so far with its reason, and the runtime embeds references\/fix-check\.md and tells the reviewer to read and trace the repo/,
-    "the Codex fix check loses an input fix-check.md lists, or answers at level 1 only without the instruction to trace the repo",
   );
 });
 

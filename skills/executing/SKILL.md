@@ -21,7 +21,7 @@ State the route in one line before starting ("Trivial → no review" / "Standard
 
 ## Who writes
 
-The session does all implementation, fixing and writing itself. It dispatches only independent judgment — review, debate, audit analysis → `analyst`, fix checks → `referee` — and bulk reading → `scout`; each role binds its own model and effort, so pass neither. Independent dispatches run concurrently (several agent calls in one turn), each with exactly the context it needs (never your session history), an explicit output contract, and constraints. Parallel writing is separate units, each in its own worktree. Codex's advisory bindings live in `references/codex-role-mapping.md`.
+The session does all implementation, fixing and writing itself. It dispatches only independent judgment — review, debate, audit analysis → `analyst`, fix checks → `referee` — and bulk reading → `scout`; each role binds its own model and effort, so pass neither. Independent dispatches run concurrently (several agent calls in one turn), each with exactly the context it needs (never your session history), an explicit output contract, and constraints. Parallel writing is separate units, each in its own worktree.
 
 ## Before you build
 
@@ -64,8 +64,6 @@ The session does all implementation, fixing and writing itself. It dispatches on
    **There is no second wave.** Adjudicate each finding still open with a recorded ruling — a silent discard is not allowed: contestable or reviewer-wrong → the ruling appended to `## Progress`; real but nothing builds on it → `## Follow-ups`; real and load-bearing → BLOCKED to the user with the finding, the AC text and the fix history. The re-review raising new findings in the same area (same file or same rule) as the review → stop and ask the user whether the scope still serves the unit's goal; name the goal.
 
    Minor findings → `## Follow-ups` for triage before finishing. A finding that conflicts with an AC → the user decides; present it beside the AC text. Then append `review clean`, `review clean after small fixes`, or `review adjudicated` → **finishing** skill.
-
-**Codex build.** There is no `analyst` to dispatch: the analyst lane is that build's review skill (`codex-skills/review`), which names its report on its `Review written to` line, and the Codex lane collapses into it — the orchestrator reviewing itself is not a second opinion. At Standard and Major it runs on step 3's facts file, written as that step's Codex lane writes it, with `--base <base> --context @<that file>`, so the lane gets each AC verbatim with its probe line. Record `review: one lane ran`. The fix check runs as a separate read-only run of that review skill's `--fix-check`, with `--base <base> --fix-check @<store>/.local/tmp/<branch>/fix-check-<k>.md --context @<store>/.local/tmp/<branch>/fix-check-context.md`, `<base>` being the branch point: the first file holds each finding with its proposed fix and the paths of the unit's earlier findings files, the second, as facts, the item's Why / What, its AC verbatim and every ruling so far with its reason, and the runtime embeds `references/fix-check.md` and tells the reviewer to read and trace the repo. Its failure falls back to the session applying `references/fix-check.md` itself, recorded as not independent. The re-review runs through the same skill with `--rereview`, as step 4 sets out for the Codex lane. Pick the session's model and effort from the `/sync`-wired role map in `~/.codex/AGENTS.md`.
 
 ## Follow-ups discovered during execution
 

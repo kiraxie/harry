@@ -7,9 +7,9 @@ import { LINE_END_RE } from "./lines.ts";
 import { READER_CORPUS } from "./prose-dirs.ts";
 import { headingSection, section, sectionLines } from "./section.ts";
 
-// `references/grilling.md` owns the adversarial interview end to end; four callers
-// point at it (`commands/grill.md`, `codex-skills/grill/SKILL.md`,
-// `skills/brainstorming/SKILL.md`, and `references/tier-gates.md` for depth). That
+// `references/grilling.md` owns the adversarial interview end to end; three callers
+// point at it (`commands/grill.md`, `skills/brainstorming/SKILL.md`, and
+// `references/tier-gates.md` for depth). That
 // single-source arrangement is only real while the callers keep *citing* it instead of
 // restating it: a second copy of the exit gate or of the cadence rule gives the model
 // two instructions that drift apart, which is the drift test in `references/review-rubric.md` answering "bug",
@@ -25,7 +25,7 @@ const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "ut
 const GRILLING = "references/grilling.md";
 const BRAINSTORMING = path.join("skills", "brainstorming", "SKILL.md");
 const TIER_GATES = "references/tier-gates.md";
-const DOORS = [path.join("commands", "grill.md"), path.join("codex-skills", "grill", "SKILL.md")];
+const DOOR = path.join("commands", "grill.md");
 
 /** Blank-line-separated paragraphs — these files wrap prose, so a citation and the
  *  claim it supports routinely sit on different lines of one paragraph. */
@@ -81,22 +81,20 @@ test("AC-1: brainstorming cites the exit gate without restating it", () => {
   );
 });
 
-test("AC-1: both /grill doors stay thin pointers", () => {
-  for (const door of DOORS) {
-    const text = read(door);
-    assert.ok(text.includes("references/grilling.md"), `${door} no longer points at ${GRILLING}`);
-    for (const restated of [
-      /residue manifest/i,
-      /one question per round/i,
-      /termination condition/i,
-      /re-walk/i,
-    ])
-      assert.doesNotMatch(
-        text,
-        restated,
-        `${door} is a door, not a second copy of the technique — keep the content in ${GRILLING}`,
-      );
-  }
+test("AC-1: the /grill door stays a thin pointer", () => {
+  const text = read(DOOR);
+  assert.ok(text.includes("references/grilling.md"), `${DOOR} no longer points at ${GRILLING}`);
+  for (const restated of [
+    /residue manifest/i,
+    /one question per round/i,
+    /termination condition/i,
+    /re-walk/i,
+  ])
+    assert.doesNotMatch(
+      text,
+      restated,
+      `${DOOR} is a door, not a second copy of the technique — keep the content in ${GRILLING}`,
+    );
 });
 
 // ---------------------------------------------------------------------------
@@ -200,15 +198,15 @@ test("AC-5: only the user may defer a question", () => {
 // ---------------------------------------------------------------------------
 // AC-4 — cadence: one question per round, everywhere
 //
-// The old design batched up to four questions a round on Claude Code via
-// AskUserQuestion and fell back to numbered text rounds on Codex. Both are gone. The
+// The old design batched up to four questions a round via AskUserQuestion and fell
+// back to numbered text rounds where no picker existed. Both are gone. The
 // reason is stated in the prose: the user runs several sessions at once and returns
 // cold, where four unanswered questions are unanswerable. A surviving sentence from
 // the old design anywhere in a model-instructing tree reinstates it for that reader —
 // which is why the negative scan is corpus-wide, not grilling-file-only.
 
 /**
- * The trees AC-4 names: everything that instructs a model or describes the build.
+ * The trees AC-4 names: everything that instructs a model or describes harry.
  * `HARRY.md` and `agents/` are in the scan because they instruct a model too — the
  * resident laws are the likeliest place a cadence rule gets re-added, and a role
  * agent's card is read as an instruction by whatever runs as that role. Both are
@@ -231,10 +229,8 @@ const FOUR_PER_ROUND_RE =
 // surviving. A harness-specific delivery mechanism can only be named by invoking
 // AskUserQuestion or by falling back to something else.
 const PICKER_RE = /AskUserQuestion|falls? back/i;
-/** The bullet is a parity note, so it may not name a picker at all, negated or not. */
-const STALE_BULLET_RE = /AskUserQuestion|structured picker|falls? back|numbered/i;
 const BATCHED_QUESTIONS_RE = /batch(?:es|ing)?\s+(?:the\s+|its\s+)?questions?/i;
-const GRILL_FAMILY = [GRILLING, BRAINSTORMING, ...DOORS];
+const GRILL_FAMILY = [GRILLING, BRAINSTORMING, DOOR];
 
 test("AC-4: the cadence regexes still match the design they forbid", () => {
   // Proven against literals from the prose these replaced, so a regex that stopped
@@ -243,13 +239,12 @@ test("AC-4: the cadence regexes still match the design they forbid", () => {
     "grill's convergence phase batches questions via AskUserQuestion on Claude Code; Codex has no structured picker, so its skill falls back to the numbered text rounds";
   assert.ok(NUMBERED_ROUNDS_RE.test(old));
   assert.ok(PICKER_RE.test(old));
-  assert.ok(STALE_BULLET_RE.test(old));
   assert.ok(BATCHED_QUESTIONS_RE.test(old));
   assert.ok(FOUR_PER_ROUND_RE.test("ask up to 4 questions per round"));
   assert.ok(FOUR_PER_ROUND_RE.test("questions are batched, at most four a round"));
 });
 
-test("AC-4: grilling.md states one question per round, both phases, both builds", () => {
+test("AC-4: grilling.md states one question per round, in both phases", () => {
   const cadence = headingSection(read(GRILLING), GRILLING, "## Cadence");
   assert.match(
     cadence,
@@ -258,9 +253,8 @@ test("AC-4: grilling.md states one question per round, both phases, both builds"
   );
   assert.match(
     cadence,
-    /both phases[^.]*both builds/i,
-    "the cadence no longer says it holds in both phases and on both builds — a " +
-      "build-specific cadence is what the harness fallback used to be",
+    /holds in both phases/i,
+    "the cadence no longer says it holds in both phases",
   );
   assert.match(
     cadence,
@@ -269,7 +263,7 @@ test("AC-4: grilling.md states one question per round, both phases, both builds"
   );
 });
 
-test("AC-4: no model-instructing file keeps a batched or per-build cadence", () => {
+test("AC-4: no model-instructing file keeps a batched cadence", () => {
   const corpus = cadenceCorpus();
   // The comment above claims the scan is corpus-wide; these two say so in assertions.
   // A corpus that quietly lost the laws or the role cards would still pass every scan
@@ -295,35 +289,7 @@ test("AC-4: no model-instructing file keeps a batched or per-build cadence", () 
         if (hit) offenders.push(`${rel}:${i + 1} (${hit})`);
       });
   }
-  assert.deepEqual(offenders, [], "one question per round, both phases, both builds");
-});
-
-test("AC-4: CLAUDE.md's grill bullet describes the shipped cadence", () => {
-  // CLAUDE.md is where a contributor reads what the Codex build does differently. Its
-  // grill bullet claimed an AskUserQuestion batch and a numbered-rounds fallback long
-  // after both were removed — a stale parity note is a wrong map, not a typo.
-  const lines = read("CLAUDE.md").split("\n");
-  const start = lines.findIndex((l) => l.startsWith("- `grill`"));
-  assert.ok(start !== -1, "CLAUDE.md's partial-parity list no longer has a `grill` bullet");
-  const end = lines.findIndex((l, i) => i > start && /^- /.test(l));
-  // Whitespace-normalized: the bullet is hard-wrapped and indented, so a phrase this
-  // test looks for routinely straddles a line break.
-  const bullet = lines
-    .slice(start, end === -1 ? undefined : end)
-    .join(" ")
-    .replace(/\s+/g, " ");
-
-  assert.match(bullet, /one question/i, "the bullet no longer states the one-question cadence");
-  assert.match(
-    bullet,
-    /both builds/i,
-    "the bullet no longer says the cadence is build-independent",
-  );
-  assert.doesNotMatch(
-    bullet,
-    STALE_BULLET_RE,
-    "the bullet describes a picker or a fallback the interview no longer has",
-  );
+  assert.deepEqual(offenders, [], "one question per round, in both phases");
 });
 
 // ---------------------------------------------------------------------------

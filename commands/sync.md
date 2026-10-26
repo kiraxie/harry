@@ -39,8 +39,7 @@ harmless no-op; it also warns about stale global entries harry supersedes). With
 `--explore` it additionally writes `~/.claude/agents/Explore.md` (a marked file
 `--remove` can safely strip). This is a **snapshot**, not a live reference to the
 plugin checkout: after the plugin is updated (or `HARRY.md` is edited), re-run this
-to re-deploy and resync — same resync model as the Codex build. Return its output
-verbatim.
+to re-deploy and resync. Return its output verbatim.
 
 ## Phase 2 — Gitignore
 
@@ -50,14 +49,11 @@ Run harry's gitignore initializer through the plugin runtime:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/init.mjs" $ARGUMENTS
 ```
 
-## The workflow lives in a shared file
+## The workflow lives in a reference file
 
-What that command does, and the whole of **Phase 3 — Legacy migration**, are shared
-with the Codex build and live in
+What that command does, and the whole of **Phase 3 — Legacy migration**, live in
 **`${CLAUDE_PLUGIN_ROOT}/references/sync-migration.md`**.
 
-**Read that file now and follow it.** It carries the build divergences under explicit
-**Claude Code build:** / **Codex build:** labels; wherever it names the Claude Code
-build, that is you. The invocation surface for this build is `$ARGUMENTS` above
+**Read that file now and follow it.** The invocation surface is `$ARGUMENTS` above
 (`--remove`, `--force`, an optional target dir), and this command's `allowed-tools`
 frontmatter is the tool universe you operate within.
