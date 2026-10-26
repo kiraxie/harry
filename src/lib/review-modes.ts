@@ -200,13 +200,19 @@ export function takesHanded(standard: ReviewStandard): standard is HandedStandar
   return "heading" in MODES[standard];
 }
 
+const SPEC_HEADING = "Acceptance criteria handed to this review";
+
+const SPEC_NOTE =
+  "Judge Spec compliance per AC against the acceptance criteria below. A probe line beside an AC is its author's report, not a settled fact: check it as the review standard's Spec compliance says.";
+
 export type ReviewPromptInput = {
   target: ReviewTarget;
   /** Resolved `--context` text, if any. */
   context?: string;
   focusText?: string;
 } & (
-  | { standard: Exclude<ReviewStandard, HandedStandard> }
+  | { standard: "review"; spec?: string }
+  | { standard: "architecture" }
   | { standard: HandedStandard; handed: string }
 );
 
@@ -220,6 +226,8 @@ export function buildReviewPrompt(input: ReviewPromptInput): string {
     if (!handed) throw new Error(`A ${input.standard} prompt requires its handed text.`);
     sections.push(`# ${mode.heading}\n\n${handed}`);
   }
+  const spec = input.standard === "review" ? input.spec?.trim() : undefined;
+  if (spec) sections.push(`# ${SPEC_HEADING}\n\n${SPEC_NOTE}\n\n${spec}`);
   const context = input.context?.trim();
   if (context) {
     sections.push(`## Background (settled facts from the working session)\n\n${context}`);

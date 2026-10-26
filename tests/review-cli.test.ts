@@ -31,8 +31,16 @@ import { REVIEW_WRITTEN, reserveReviewFiles } from "../src/commands/review.ts";
 import { buildReviewPrompt, type ReviewPromptInput } from "../src/lib/review-modes.ts";
 import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 import { type Block, cites, readProse } from "./citations.ts";
+import { LINE_END_RE } from "./lines.ts";
 import { inDir, READER_CORPUS } from "./prose-dirs.ts";
-import { headingLines, headingSection, inOrder, outline, section } from "./section.ts";
+import {
+  headingLines,
+  headingSection,
+  inOrder,
+  outline,
+  section,
+  sectionLines,
+} from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI = path.join(REPO_ROOT, "src/companion.ts");
@@ -633,6 +641,93 @@ test("AC-2: the fix-check target sends the reader through the whole repo and jud
     !prompt.includes("must not be reported"),
     "a fix check must not carry the per-diff ban on findings outside the changes",
   );
+});
+
+const SPEC =
+  "AC-1 — stale sessions expire. AC-1: probe: a stale session, old → kept, new → expired";
+const SPEC_HEADING = "# Acceptance criteria handed to this review\n";
+const BACKGROUND = "## Background (settled facts from the working session)\n";
+
+test("AC-1: --spec sits under its own heading after the standard and before Background, never in it", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, [
+    "--base",
+    "main",
+    "--spec",
+    SPEC,
+    "--context",
+    "sessions are Redis",
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  inOrder(prompt, "the review prompt", RUBRIC.trim(), RED_GREEN.trim(), SPEC_HEADING, BACKGROUND);
+  assert.ok(section(prompt, "the review prompt", SPEC_HEADING, BACKGROUND).includes(SPEC));
+  const background = section(prompt, "the review prompt", BACKGROUND);
+  assert.ok(background.includes("sessions are Redis"), background);
+  assert.ok(!background.includes(SPEC), `the spec leaked into Background: ${background}`);
+});
+
+test("AC-1: the spec section says a probe line is its author's report, checked under Spec compliance", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--spec", SPEC]);
+  assert.equal(run.status, 0, run.stderr);
+  const own = section(recordedPrompt(run), "the review prompt", SPEC_HEADING).replace(/\s+/g, " ");
+  for (const needle of [
+    "Judge Spec compliance per AC",
+    "A probe line beside an AC is its author's report, not a settled fact",
+    "check it as the review standard's Spec compliance says",
+  ])
+    assert.ok(own.includes(needle), `the spec section must say "${needle}": ${own}`);
+});
+
+for (const { flag, args } of [
+  { flag: "--architecture", args: ["--architecture"] },
+  { flag: "--rereview", args: ["--rereview", "4 · open"] },
+  { flag: "--fix-check", args: ["--fix-check", "2 · fix"] },
+]) {
+  test(`AC-2: --spec with ${flag} fails naming that mode and never spawns codex`, () => {
+    const repo = makeBranchRepo();
+    const run = runReview(repo, ["--base", "main", ...args, "--spec", SPEC]);
+    assert.notEqual(run.status, 0, run.stderr);
+    assert.ok(
+      run.stderr.includes(`--spec goes with the plain review only: ${flag} judges no spec.`),
+      run.stderr,
+    );
+    assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+  });
+}
+
+test("AC-2: --spec @- with --context @- fails naming both flags instead of an empty stdin", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--spec", "@-", "--context", "@-"], {
+    input: `${SPEC}\n`,
+  });
+  assert.notEqual(run.status, 0, run.stderr);
+  assert.ok(run.stderr.includes("--context and --spec cannot both read stdin"), run.stderr);
+  assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+});
+
+test("AC-2: an unreadable --spec @file fails naming the flag and path, and never spawns codex", () => {
+  const repo = makeBranchRepo();
+  const missing = path.join(tempDir("harry-rcli-spec-"), "nope.md");
+  const run = runReview(repo, ["--base", "main", "--spec", `@${missing}`]);
+  assert.notEqual(run.status, 0, run.stderr);
+  assert.ok(run.stderr.includes(`Could not read --spec file ${missing}`), run.stderr);
+  assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+});
+
+test("AC-2: an empty --spec @file or @- fails naming the flag and source, and never spawns codex", () => {
+  const repo = makeBranchRepo();
+  const empty = handedFile("  \n");
+  for (const [value, source] of [
+    [`@${empty}`, `file ${empty}`],
+    ["@-", "from stdin"],
+  ]) {
+    const run = runReview(repo, ["--base", "main", "--spec", value], { input: "" });
+    assert.notEqual(run.status, 0, `${value}: ${run.stderr}`);
+    assert.ok(run.stderr.includes(`--spec ${source} is empty`), `${value}: ${run.stderr}`);
+    assert.ok(!existsSync(path.join(run.record, "argv.json")), "codex must not be spawned");
+  }
 });
 
 for (const { flag, base } of [
@@ -1409,6 +1504,156 @@ test("AC-5: the review door sends a re-review's open findings to --rereview, not
   }
 });
 
+test("AC-5: the review door lists --spec in its synopsis", () => {
+  const synopsis = doorSynopsis(
+    "commands/review.md",
+    readFileSync(path.join(REPO_ROOT, "commands/review.md"), "utf8"),
+  );
+  assert.ok(synopsis.includes("[--spec <text|@file|@->]"), synopsis);
+});
+
+test("AC-5: the review door says what --spec holds, that it is the plain review's, and its strict read", () => {
+  const own = plainSection("## `--spec`");
+  for (const needle of [
+    "then the AC verbatim, each with its probe line beside it",
+    "It goes with the plain review only",
+    "an @file that cannot be read, or an @- or @file with nothing in it, fails the run before codex starts",
+  ])
+    assert.ok(own.includes(needle), `the --spec section must say "${needle}": ${own}`);
+});
+
+test("AC-5: the review door sends the AC and their probe lines to --spec, not --context", () => {
+  assert.ok(
+    plainSection("## `--context`").includes(
+      "In a plain review, the acceptance criteria and their probe lines go in --spec, not --context",
+    ),
+    "the --context contract no longer routes the AC and their probe lines to --spec",
+  );
+});
+
+function codexLane(): string {
+  const rel = "skills/executing/SKILL.md";
+  const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
+  return flatProse(section(raw, rel, "**Codex lane**", "It writes findings to the file"));
+}
+
+test("AC-4: executing's Codex lane hands the AC with their probe lines through --spec", () => {
+  const lane = codexLane();
+  for (const needle of [
+    "review-spec.md, opening with",
+    "then the item's AC verbatim, each with its probe line beside it",
+    "/harry:review --base <base-branch> --spec @<",
+  ])
+    assert.ok(lane.includes(needle), `executing's Codex lane must say "${needle}": ${lane}`);
+});
+
+test("AC-4: executing's Codex lane facts file holds only the constraints and the rulings", () => {
+  const lane = codexLane();
+  assert.ok(
+    lane.includes(
+      "review-context.md, holding only the unit's binding constraints and any rulings recorded so far, each with its reasoning",
+    ),
+    lane,
+  );
+  const facts = section(
+    lane,
+    "executing's Codex lane",
+    "the facts file review-context.md",
+    "2. Invoke the slash command",
+  );
+  for (const carried of [/\bAC\b/, /criteri/i, /probe/i])
+    assert.doesNotMatch(facts, carried, `the facts file still carries the AC: ${facts}`);
+});
+
+function analystLane(): string {
+  const rel = "skills/executing/SKILL.md";
+  const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
+  return flatProse(section(raw, rel, "**analyst lane**", "**Codex lane**"));
+}
+
+for (const { surface, text, needle } of [
+  {
+    surface: "executing's analyst lane",
+    text: analystLane,
+    needle: "dispatch harry:analyst with the range, the unit's tier, the item's",
+  },
+  {
+    surface: "executing's Codex lane",
+    text: codexLane,
+    needle: "review-spec.md, opening with a Tier: <tier> line",
+  },
+  {
+    surface: "the review door's --spec section",
+    text: () => plainSection("## `--spec`"),
+    needle: "the unit's tier on its first line, Tier: <tier>",
+  },
+]) {
+  test(`finding 1: ${surface} hands the reviewer the unit's tier`, () => {
+    const own = text();
+    assert.ok(own.includes(needle), `${surface} must say "${needle}": ${own}`);
+  });
+}
+
+const NAMES_TIER = /the unit's tier|tier: <tier>/i;
+
+const EXECUTING_RAW = (): string =>
+  readFileSync(path.join(REPO_ROOT, "skills/executing/SKILL.md"), "utf8");
+
+const executingLines = (): string[] =>
+  EXECUTING_RAW()
+    .split(LINE_END_RE)
+    .map((line) => flatProse(line).trim());
+
+test("finding 6: every review hand-off in executing names the tier", () => {
+  const rel = "skills/executing/SKILL.md";
+  const [from, to] = sectionLines(
+    EXECUTING_RAW(),
+    rel,
+    "**Codex lane**",
+    "It writes findings to the file",
+  );
+  const lane = codexLane();
+  const handoffs = executingLines()
+    .map((line, i) => ({ line, n: i + 1 }))
+    .filter(({ line }) => /harry:analyst|\/harry:review\b/.test(line));
+  assert.ok(handoffs.length > 0, `${rel} no longer hands any review lane anything`);
+  for (const { line, n } of handoffs)
+    assert.match(
+      n >= from && n <= to ? lane : line,
+      NAMES_TIER,
+      `${rel}:${n} hands a review no tier: ${line}`,
+    );
+});
+
+test("finding 6: every flag executing hands a review through says its file carries the tier", () => {
+  const flags = new Set(
+    executingLines()
+      .filter((line) => line.includes("/harry:review"))
+      .flatMap((line) => [...line.matchAll(/--([a-z-]+) @/g)].map((m) => m[1])),
+  );
+  flags.delete("context");
+  assert.ok(flags.size > 0, "executing hands no review a file through a flag");
+  for (const flag of flags)
+    assert.match(plainSection(`## \`--${flag}\``), NAMES_TIER, `--${flag}'s door section`);
+});
+
+test("AC-6: Spec compliance judges a probe whose old and new answers match", () => {
+  const spec = flatProse(
+    section(
+      RUBRIC,
+      "references/review-rubric.md",
+      "1. **Spec compliance**",
+      "2. **Code quality.**",
+    ),
+  );
+  assert.ok(
+    spec.includes(
+      "A probe line whose old and new answers match is not watched failing: at Major it fails the AC; at Standard it is judged on the line's reason, as a no probe ran line is.",
+    ),
+    spec,
+  );
+});
+
 test("F1: every review and ask door quotes the no-error-line notice and names no tail size", () => {
   // The notice is run-codex's, printed by both commands, so both doors are
   // pinned here. A door quoting a stale copy tells its consumer to watch for a
@@ -1530,6 +1775,20 @@ test("AC-10: typecheck holds the builder's handed text to the re-review and the 
     [rereview.standard, fixCheck.standard, review.standard],
     ["rereview", "fix-check", "review"],
   );
+});
+
+test("AC-3: typecheck holds spec to the plain review", () => {
+  const target = { mode: "branch" as const, label: "branch diff against main", baseRef: "main" };
+  const pins: ReviewPromptInput[] = [
+    { target, standard: "review", spec: SPEC },
+    // @ts-expect-error an architecture review judges no spec
+    { target, standard: "architecture", spec: SPEC },
+    // @ts-expect-error a re-review judges no spec
+    { target, standard: "rereview", handed: "4 · open", spec: SPEC },
+    // @ts-expect-error a fix check judges no spec
+    { target, standard: "fix-check", handed: "2 · fix", spec: SPEC },
+  ];
+  void pins;
 });
 
 const flatProse = (text: string): string => text.replace(/\s+/g, " ").replace(/\*+|`/g, "");

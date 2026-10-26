@@ -652,6 +652,8 @@ var MODES = {
 function takesHanded(standard) {
   return "heading" in MODES[standard];
 }
+var SPEC_HEADING = "Acceptance criteria handed to this review";
+var SPEC_NOTE = "Judge Spec compliance per AC against the acceptance criteria below. A probe line beside an AC is its author's report, not a settled fact: check it as the review standard's Spec compliance says.";
 function buildReviewPrompt(input) {
   const mode = MODES[input.standard];
   const sections = [mode.target(input.target), ...mode.files.map(embed)];
@@ -663,6 +665,12 @@ function buildReviewPrompt(input) {
 
 ${handed}`);
   }
+  const spec = input.standard === "review" ? input.spec?.trim() : void 0;
+  if (spec) sections.push(`# ${SPEC_HEADING}
+
+${SPEC_NOTE}
+
+${spec}`);
   const context = input.context?.trim();
   if (context) {
     sections.push(`## Background (settled facts from the working session)
@@ -678,6 +686,11 @@ ${focus}`);
 }
 
 // src/commands/review.ts
+function assertOneStdinReader(context, flag, raw) {
+  if (context === "@-" && raw === "@-") {
+    throw new Error(`--context and ${flag} cannot both read stdin (@-): pass one as @file.`);
+  }
+}
 function resolveStandard(cwd, options) {
   const handedRaw = {
     rereview: options.rereview,
@@ -695,13 +708,20 @@ function resolveStandard(cwd, options) {
     const flags = chosen.map((standard2) => MODES[standard2].flag);
     throw new Error(`${flags.join(" and ")} cannot be combined: each is its own review.`);
   }
-  const standard = chosen[0] ?? "review";
+  const standard = chosen.at(0) ?? "review";
+  if (options.spec !== void 0 && standard !== "review") {
+    throw new Error(
+      `--spec goes with the plain review only: ${MODES[standard].flag} judges no spec.`
+    );
+  }
+  if (standard === "review") {
+    assertOneStdinReader(options.context, "--spec", options.spec);
+    return { standard, spec: resolveTextFlag(cwd, "--spec", options.spec) };
+  }
   if (!takesHanded(standard)) return { standard };
   const mode = MODES[standard];
   const raw = handedRaw[standard];
-  if (options.context === "@-" && raw === "@-") {
-    throw new Error(`--context and ${mode.flag} cannot both read stdin (@-): pass one as @file.`);
-  }
+  assertOneStdinReader(options.context, mode.flag, raw);
   if (!options.base) {
     throw new Error(`${mode.flag} requires --base <ref>: ${mode.baseReason}.`);
   }
@@ -824,7 +844,15 @@ async function runSetup(options = {}) {
 var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "json", "architecture"]);
 var KNOWN_FLAGS = {
   setup: /* @__PURE__ */ new Set(["json"]),
-  review: /* @__PURE__ */ new Set(["base", "reasoning", "context", "architecture", "rereview", "fix-check"]),
+  review: /* @__PURE__ */ new Set([
+    "base",
+    "reasoning",
+    "context",
+    "spec",
+    "architecture",
+    "rereview",
+    "fix-check"
+  ]),
   ask: /* @__PURE__ */ new Set(["task", "reasoning", "context"])
 };
 function assertKnownFlags(command, flags) {
@@ -918,7 +946,7 @@ function printUsage() {
       "Usage:",
       "  companion setup [--json]",
       "  companion review [--base <ref>] [--reasoning <low|medium|high|xhigh>]",
-      "                   [--context <text|@file|@->]",
+      "                   [--context <text|@file|@->] [--spec <text|@file|@->]",
       "                   [--architecture | --rereview <text|@file|@-> | --fix-check <text|@file|@->]",
       "                   [focus...]",
       '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
@@ -949,6 +977,7 @@ async function main() {
         base: flagRequiredString(flags, "base"),
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
         context: flagRequiredString(flags, "context"),
+        spec: flagRequiredString(flags, "spec"),
         architecture: flags.architecture === true,
         rereview: flagRequiredString(flags, "rereview"),
         fixCheck: flagRequiredString(flags, "fix-check"),

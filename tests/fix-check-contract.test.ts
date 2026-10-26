@@ -195,7 +195,7 @@ test("AC-6: the re-review accepts a fix as ADDRESSED only when the cause is gone
 test("AC-6: the re-review is handed the fix check's verdicts", () => {
   assert.match(
     executingStep4(),
-    /handed the open-findings list under its merged-list numbers, the fix check's verdicts and the merged list's last number/,
+    /handed the open-findings list under its merged-list numbers, [^;]*the fix check's verdicts and the merged list's last number/,
     "executing's re-review no longer lists the fix check's verdicts among its inputs",
   );
 });

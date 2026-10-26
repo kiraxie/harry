@@ -21,7 +21,9 @@ mutation; its report is its final message.
    author's report, so check it: the prompt tests the behavior the AC states, the new
    answer follows from the changed text, and the old answer from the base's text. An
    answer the text does not give fails the AC. A `no probe ran` line is judged on its
-   reason. An AC that a later AC supersedes is judged by
+   reason. A probe line whose old and new answers match is not watched failing: at
+   Major it fails the AC; at Standard it is judged on the line's reason, as a
+   `no probe ran` line is. An AC that a later AC supersedes is judged by
    its successor, not on its own (`references/doc-types.md`): its line reads
    `superseded by AC-<m>`, never `fail`, and only the successor's verdict
    counts. Flag unmet criteria AND unrequested extras

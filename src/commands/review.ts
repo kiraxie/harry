@@ -39,6 +39,7 @@ export interface ReviewOptions {
   reasoning?: ReasoningEffort;
   /** Background for the reviewer: literal text, or `@file` / `@-` — see `resolveTextFlag`. */
   context?: string;
+  spec?: string;
   /**
    * Embed `references/architecture-review.md` instead of the per-diff rubric —
    * an architecture review run by hand, out of session.
@@ -50,8 +51,15 @@ export interface ReviewOptions {
 }
 
 type Selected =
-  | { standard: Exclude<ReviewStandard, HandedStandard> }
+  | { standard: "review"; spec?: string }
+  | { standard: "architecture" }
   | { standard: HandedStandard; handed: string };
+
+function assertOneStdinReader(context: string | undefined, flag: string, raw: string | undefined) {
+  if (context === "@-" && raw === "@-") {
+    throw new Error(`--context and ${flag} cannot both read stdin (@-): pass one as @file.`);
+  }
+}
 
 function resolveStandard(cwd: string, options: ReviewOptions): Selected {
   const handedRaw: Record<HandedStandard, string | undefined> = {
@@ -70,13 +78,20 @@ function resolveStandard(cwd: string, options: ReviewOptions): Selected {
     const flags = chosen.map((standard) => MODES[standard].flag);
     throw new Error(`${flags.join(" and ")} cannot be combined: each is its own review.`);
   }
-  const standard = chosen[0] ?? "review";
+  const standard = chosen.at(0) ?? "review";
+  if (options.spec !== undefined && standard !== "review") {
+    throw new Error(
+      `--spec goes with the plain review only: ${MODES[standard].flag} judges no spec.`,
+    );
+  }
+  if (standard === "review") {
+    assertOneStdinReader(options.context, "--spec", options.spec);
+    return { standard, spec: resolveTextFlag(cwd, "--spec", options.spec) };
+  }
   if (!takesHanded(standard)) return { standard };
   const mode = MODES[standard];
   const raw = handedRaw[standard];
-  if (options.context === "@-" && raw === "@-") {
-    throw new Error(`--context and ${mode.flag} cannot both read stdin (@-): pass one as @file.`);
-  }
+  assertOneStdinReader(options.context, mode.flag, raw);
   if (!options.base) {
     throw new Error(`${mode.flag} requires --base <ref>: ${mode.baseReason}.`);
   }

@@ -1,6 +1,6 @@
 ---
 description: Run a read-only code review through the Codex CLI — reviews the working tree, a branch against its default, or a diff against --base.
-argument-hint: '[--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--architecture] [--rereview <text|@file|@->] [--fix-check <text|@file|@->] [focus...]'
+argument-hint: '[--base <ref>] [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--spec <text|@file|@->] [--architecture] [--rereview <text|@file|@->] [--fix-check <text|@file|@->] [focus...]'
 allowed-tools: Read, Bash(git status:*), Bash(git diff:*), Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review:*)
 ---
 
@@ -14,7 +14,7 @@ Raw slash-command arguments:
 `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" review` spawns `codex exec`
 read-only (`-s read-only`, `--ephemeral`) with a prompt built from the
 target diff, every file `references/review-rubric.md` declares as its standard, in full,
-a `## Background` section from
+the acceptance criteria from `--spec` under their own heading, a `## Background` section from
 `--context`, and a `## Focus` section from the focus text. Not `codex exec review`:
 it answers in its own review-comment format and ignores the form the prompt asks for.
 It never passes a
@@ -36,6 +36,20 @@ full stop. Nothing here edits the working tree, stages, or commits.
 - No `--base`, clean working tree → reviews the current branch against the
   repository's default branch.
 
+## `--spec`
+
+`--spec <text|@file|@->` carries the acceptance criteria the review judges Spec
+compliance against: the unit's tier on its first line, `Tier: <tier>`, then the AC
+verbatim, each with its probe line beside it. The prompt
+puts them under their own heading, after the review standard and before
+`## Background`, and says a probe line is its author's report, to be checked under
+Spec compliance (`references/review-rubric.md` **Four dimensions**), not a settled
+fact. It goes with the plain review only: with `--architecture`, `--rereview` or
+`--fix-check` the run fails before codex starts, since none of them judges a spec.
+It reads its value as `--context` does, and as strictly: an `@file` that cannot be
+read, or an `@-` or `@file` with nothing in it, fails the run before codex starts.
+Only one of `--spec` and `--context` can read stdin (`@-`).
+
 ## `--architecture`
 
 `--architecture` changes two things. It swaps the embedded standard: the prompt
@@ -56,7 +70,9 @@ above, and a dirty tree would review the working tree, not the branch.
 
 `--rereview <text|@file|@->` runs the scoped re-review of executing's fix wave
 (`skills/executing/SKILL.md` **One fix wave**). Its file holds the open findings
-under their numbers, the fix check's verdicts and the last number in use. The
+under their numbers, the fix check's verdicts and the last number in use. Each
+finding ends in `fix tier: <tier>`, its fix's own tier (`references/tier-gates.md`
+**Fixes inside a unit**), which sets what the fix's tests must show. The
 prompt carries the per-diff standard plus `references/fix-check.md` **Three levels**,
 says it is a re-review, and puts the file under its own heading, so the reviewer
 answers in the rubric's re-review form (`references/review-rubric.md`). It needs
@@ -142,7 +158,9 @@ have: constraints, decisions already taken, a prior round's ruling and its
 reasoning. It never carries verdicts — never tell the reviewer what *not* to
 flag ("this is deliberate, skip it"). Focus text says where to look; context
 says what is true. A re-review's open findings go in `--rereview`, not
-`--context`: they are a prior reviewer's verdicts. Forward whatever `--context`
+`--context`: they are a prior reviewer's verdicts. In a plain review, the acceptance
+criteria and their probe lines go in `--spec`, not `--context`: a probe line is its author's report, to
+be checked, not a fact. Forward whatever `--context`
 the caller gives as-is — the
 rule binds the caller, not this command; it is not this command's job to
 rewrite or filter it before forwarding.

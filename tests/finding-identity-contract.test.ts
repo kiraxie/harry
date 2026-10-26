@@ -89,7 +89,7 @@ test("executing hands the re-review the numbered open list and Three levels, and
   const wave = line("skills/executing/SKILL.md", "exactly one scoped re-review");
   assert.match(
     wave,
-    /handed the open-findings list under its merged-list numbers, the fix check's verdicts and the merged list's last number; the analyst lane is also handed, beside the standard files, `references\/fix-check\.md` \*\*Three levels\*\* in full, as the rubric's re-review standard declares\. It reports in the rubric's re-review form \(`references\/review-rubric\.md`\)/,
+    /handed the open-findings list under its merged-list numbers, each finding ending in `fix tier: <tier>`, its fix's own tier, the fix check's verdicts and the merged list's last number; the analyst lane is also handed, beside the standard files, `references\/fix-check\.md` \*\*Three levels\*\* in full, as the rubric's re-review standard declares\. It reports in the rubric's re-review form \(`references\/review-rubric\.md`\)/,
     "executing no longer hands the numbered open list and Three levels, or cites the rubric's re-review form",
   );
   assert.doesNotMatch(

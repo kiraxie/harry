@@ -21,7 +21,15 @@ export const BOOLEAN_FLAGS = new Set<string>(["help", "json", "architecture"]);
 // review. `help` is accepted everywhere and handled before dispatch.
 export const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
   setup: new Set(["json"]),
-  review: new Set(["base", "reasoning", "context", "architecture", "rereview", "fix-check"]),
+  review: new Set([
+    "base",
+    "reasoning",
+    "context",
+    "spec",
+    "architecture",
+    "rereview",
+    "fix-check",
+  ]),
   ask: new Set(["task", "reasoning", "context"]),
 };
 
