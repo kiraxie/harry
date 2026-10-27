@@ -168,6 +168,7 @@ test("judgment that left the core lives in the review standard", () => {
       "Optimize on evidence, never on imagination.",
       "Clean legacy in the scope you touch.",
       "Pull related changes into the same PR.",
+      "Scope grows only on the user's say.",
       "DRY is about knowledge, not code.",
       "A fix stays pure.",
       "Findings carry their structural fix.",

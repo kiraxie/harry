@@ -43,7 +43,7 @@ one (`## Notes` stays as history once `## Why / What` is written).
 and carries its own verification — a command, a test, or a named manual check.
 They are approved with the design; execution cites their IDs and never rewrites
 them (a wrong or impossible AC stops and asks). An AC appended later may name
-an AC it supersedes (finishing's **fix now** ruling drafts one that way); the
+an AC it supersedes (a **fix now** ruling, in executing or finishing, drafts one that way); the
 superseded AC keeps its text and is judged by its successor, not on its own.
 
 `## Why / What` holds only `### Acceptance criteria` unless a real design decision was
@@ -140,7 +140,11 @@ milestone edit.
   `## Follow-ups` becomes its own new `status: backlog` item in
   `.local/items/` (title + a `## Notes` line quoting the follow-up), then
   the source item's `## Follow-ups` section is cleared. The flush treats
-  every entry the same, whatever its source.
+  every entry the same, whatever its source. Before the merge menu, finishing's
+  triage (`skills/finishing/SKILL.md` **Ask: merge or PR?**) has already taken each
+  line ruled **leave as is** out of the section and sent each **fix now** back into
+  the unit, so the flush files only what the user ruled **backlog** or kept after
+  the menu.
 - **Active → backlog (discard)**: finishing's Discard, when the user
   chooses Back to backlog, sets `status: backlog`, appends a `## Notes`
   line, removes its `## In flight` line and flips its `INDEX.md` item line
@@ -160,10 +164,15 @@ milestone edit.
       - Minor findings;
       - findings of any severity outside the fix range;
       - findings adjudicated to Follow-ups;
+      - findings the user rules backlog before the fix wave;
     - finishing's architecture review from round 2 on (its Minor findings);
     - finishing's leftover check, on the user's say (work from the session or the
       files with no outcome, in step c and before a PR opens);
     - an author copying in a Non-Goal (**Non-Goals do not survive archiving**, below).
+
+    Any entry written on the user's own ruling — a finding the user rules backlog, a
+    leftover the user keeps — ends `(ruled backlog)`, so finishing's triage keeps that
+    ruling instead of asking again.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.

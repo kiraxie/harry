@@ -472,8 +472,8 @@ test("review-round-cap AC-1: round 1 plus at most two more, then a stop with a s
       "the report precedes the rulings list",
     ],
     [
-      /backlog as the recommended ruling on every open finding/i,
-      "open findings default to backlog",
+      /then the same numbered list as Rulings above, its recommended rulings set the same way/i,
+      "open findings' recommended rulings follow the Rulings rule",
     ],
     [/nothing is filed before the user's reply/i, "no backlog item before the user rules"],
     [/the user's explicit choice of another round/i, "another round only on the user's choice"],
@@ -578,7 +578,7 @@ test("AC-5: with no item (Trivial) rulings go to the reply and fix now fixes in 
 test("fix now: doc-types owns the superseded-AC rule", () => {
   assert.match(
     plain(read(DOC_TYPES)),
-    /An AC appended later may name an AC it supersedes \(finishing's fix now ruling drafts one that way\); the superseded AC keeps its text and is judged by its successor, not on its own\./,
+    /An AC appended later may name an AC it supersedes \(a fix now ruling, in executing or finishing, drafts one that way\); the superseded AC keeps its text and is judged by its successor, not on its own\./,
     "doc-types no longer says a superseded AC keeps its text and is judged by its successor" +
       " — " +
       "A fix-now AC supersedes an approved one. doc-types owns the rule; the rubric (which both review lanes read) and executing's pre-flight scan are where it is acted on, so each must cite it — otherwise the pre-flight flags the pair as a conflict and the final review fails the superseded AC and hands the approved fix to be reverted.",

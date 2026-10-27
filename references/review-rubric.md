@@ -85,6 +85,28 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
 - **Pull related changes into the same PR.** Related = shared root cause, shared systemic
   gap, or the main change is incomplete without it. Propose the complete version; confirm
   before expanding scope.
+- **Scope grows only on the user's say.** After a review, two checks sort each finding and
+  each `## Follow-ups` line. Is its fix inside the AC (it stays within what an AC already
+  asks) or outside the AC (it adds a requirement no AC covers)? Is its failure real (a caller
+  that exists today reaches it) or not real (it needs a caller that does not exist)? That
+  second check is for a fix that adds handling for an input or a caller; a finding whose fix
+  deletes or narrows code (dead scaffolding, an abstraction too early for its callers) is
+  real by being there. A red-line finding (HARRY.md **Tiers**) is always real, as the YAGNI
+  counter-constraint above keeps a red line even when nothing calls it. So is an error path
+  or contract this unit itself adds that hides a failure — it swallows the failure or
+  reports success — called or not (HARRY.md **Code**).
+  - Real, inside the AC → the session fixes it; no ask.
+  - Real, outside the AC → ask the user, naming the unit's goal: recommend **fix now** when it
+    is related (as the bullet above defines it), **backlog** when it is not.
+  - Not real → **leave as is**, with a `## Progress` line naming the missing caller; no ask,
+    but the user is told and can overturn it.
+
+  Only real work outside the AC grows the unit, so only it goes to the user. A step that puts
+  every ruling to the user anyway uses these as its recommendations, a real one inside the AC
+  as **fix now**. A line the user already ruled, marked `(ruled backlog)` where it was
+  written, keeps that ruling as its recommendation. This is not the re-review's stop on findings returning in one area
+  (`skills/executing/SKILL.md` **One fix wave**): that stop is about recurrence, this rule
+  about one finding's scope and whether it is real.
 - **DRY is about knowledge, not code.** Drift test: "if these two copies silently diverge,
   is that a bug or normal evolution?" Bug → one authoritative truth — extract it now
   (cross-boundary: on first occurrence), and after extracting verify every composed value

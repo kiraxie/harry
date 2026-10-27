@@ -68,6 +68,16 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/executing/SKILL.md",
+    snippet: "A **backlog** there goes to the item's `## Follow-ups`.",
+    writer: ["findings the user rules backlog before the fix wave"],
+  },
+  {
+    file: "skills/executing/SKILL.md",
+    snippet: "A line the user's own ruling sends to `## Follow-ups`",
+    reader: "marks the Follow-ups lines a user ruling wrote, for the triage",
+  },
+  {
+    file: "skills/executing/SKILL.md",
     snippet: "Minor findings → `## Follow-ups`",
     writer: ["Minor findings;"],
   },
@@ -123,6 +133,26 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
+    snippet: "**Follow-ups triage, before the menu.**",
+    rule: "Follow-ups flush",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "the line leaves `## Follow-ups` for a new AC",
+    rule: "Follow-ups flush",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "and the line leaves `## Follow-ups`.",
+    rule: "Follow-ups flush",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "A unit with no item has no `## Follow-ups` and skips this.",
+    reader: "skips the triage when there is no item",
+  },
+  {
+    file: "skills/finishing/SKILL.md",
     snippet: "Then flush: read the item's `## Follow-ups` section",
     rule: "Follow-ups flush",
   },
@@ -160,6 +190,11 @@ const KNOWN: Entry[] = [
     file: "references/sync-migration.md",
     snippet: "`status: backlog`, its",
     writer: ["`/sync`'s legacy migration"],
+  },
+  {
+    file: "references/review-rubric.md",
+    snippet: "- **Scope grows only on the user's say.**",
+    reader: "the rule the steps that write Follow-ups and backlog sort by",
   },
   {
     file: "references/review-rubric.md",
