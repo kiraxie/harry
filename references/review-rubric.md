@@ -87,26 +87,32 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
   before expanding scope.
 - **Scope grows only on the user's say.** After a review, two checks sort each finding and
   each `## Follow-ups` line. Is its fix inside the AC (it stays within what an AC already
-  asks) or outside the AC (it adds a requirement no AC covers)? Is its failure real (a caller
-  that exists today reaches it) or not real (it needs a caller that does not exist)? That
-  second check is for a fix that adds handling for an input or a caller; a finding whose fix
-  deletes or narrows code (dead scaffolding, an abstraction too early for its callers) is
-  real by being there. A red-line finding (HARRY.md **Tiers**) is always real, as the YAGNI
-  counter-constraint above keeps a red line even when nothing calls it. So is an error path
-  or contract this unit itself adds that hides a failure — it swallows the failure or
-  reports success — called or not (HARRY.md **Code**).
+  asks) or outside the AC (it adds a requirement no AC covers)? Is it real? It is not real
+  only when its fix adds handling for an input or a caller that does not exist; every other
+  finding is real, including one whose fix deletes or narrows code (dead scaffolding, an
+  abstraction too early for its callers), adds a test or corrects logic. A red-line finding
+  (HARRY.md **Tiers**) is always real, as the YAGNI counter-constraint above keeps a red line
+  even when nothing calls it. So is an error path or contract this unit itself adds that
+  hides a failure — it swallows the failure or reports success — called or not (HARRY.md
+  **Code**).
   - Real, inside the AC → the session fixes it; no ask.
   - Real, outside the AC → ask the user, naming the unit's goal: recommend **fix now** when it
     is related (as the bullet above defines it), **backlog** when it is not.
-  - Not real → **leave as is**, with a `## Progress` line naming the missing caller; no ask,
-    but the user is told and can overturn it.
+  - Not real → **leave as is**, recorded as below; no ask, but the user is told and can
+    overturn it.
 
   Only real work outside the AC grows the unit, so only it goes to the user. A step that puts
   every ruling to the user anyway uses these as its recommendations, a real one inside the AC
-  as **fix now**. A line the user already ruled, marked `(ruled backlog)` where it was
-  written, keeps that ruling as its recommendation. This is not the re-review's stop on findings returning in one area
+  as **fix now**. A step after the merge menu, where **fix now** is closed (finishing's
+  leftover check, `skills/finishing/SKILL.md` **Execute the choice**), sorts by the real
+  check alone, AC or no AC: real → **backlog**, not real → **leave as is**. A line the user
+  already ruled, marked `(ruled backlog)` where it was written, keeps that ruling as its
+  recommendation. This is not the re-review's stop on findings returning in one area
   (`skills/executing/SKILL.md` **One fix wave**): that stop is about recurrence, this rule
-  about one finding's scope and whether it is real.
+  about one finding's scope and whether it is real. Every **leave as is** by this rule is one
+  `## Progress` line: where, its gist (a leftover's original words), the missing caller when
+  it is not real, the user's reason when the user ruled it; an architecture-review ruling
+  keeps the record `references/architecture-review.md` **Output** defines.
 - **DRY is about knowledge, not code.** Drift test: "if these two copies silently diverge,
   is that a bug or normal evolution?" Bug → one authoritative truth — extract it now
   (cross-boundary: on first occurrence), and after extracting verify every composed value

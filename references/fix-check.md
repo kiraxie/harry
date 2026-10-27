@@ -55,7 +55,7 @@ Stop for the user, on the third line shape, when:
 
 - the fix that holds goes beyond the acceptance criteria;
 - it conflicts with an acceptance criterion or a ruling;
-- the finding is not real at a wider level;
+- the finding is not valid at a wider level;
 - the fix's direction is wrong, not only its placement.
 
 The caller builds every other fix as your line says.

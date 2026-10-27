@@ -314,7 +314,7 @@ test("review-round-cap: architecture-review.md defines each severity in shape te
       "Important",
       /- Important — merged as is, the shape costs a migration or a boundary rewrite later\./,
     ],
-    ["Minor", /- Minor — real, but nothing in this unit builds on it; it can wait\./],
+    ["Minor", /- Minor — valid, but nothing in this unit builds on it; it can wait\./],
   ] as const)
     assert.match(out, re, `architecture-review.md no longer defines ${name}`);
 });

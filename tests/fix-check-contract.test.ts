@@ -91,7 +91,7 @@ test("AC-1: fix-check names the cases that stop for the user", () => {
   const cases: [RegExp, string][] = [
     [/goes beyond the acceptance criteria/i, "a fix beyond the AC"],
     [/conflicts with an acceptance criterion or a ruling/i, "a conflict with an AC or ruling"],
-    [/the finding is not real at a wider level/i, "a finding not real at a wider level"],
+    [/the finding is not valid at a wider level/i, "a finding not valid at a wider level"],
     [/the fix's direction is wrong/i, "a wrong fix direction"],
   ];
   for (const [re, what] of cases)

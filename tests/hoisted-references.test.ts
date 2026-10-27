@@ -47,6 +47,7 @@ const HOISTED: Record<string, string[]> = {
   ],
   grill: [
     "references/grilling.md",
+    "references/architecture-review.md",
     "references/review-rubric.md",
     "references/fix-check.md",
     "references/red-green.md",
@@ -56,6 +57,7 @@ const HOISTED: Record<string, string[]> = {
   ],
   "wait-what": [
     "references/plain-language.md",
+    "references/architecture-review.md",
     "references/grilling.md",
     "references/review-rubric.md",
     "references/fix-check.md",

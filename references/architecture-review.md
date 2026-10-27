@@ -113,7 +113,7 @@ same three — a recommendation which a Minor finding from round 2 on does not c
 
 - **fix now** — fix it before this merges. The work goes back to be fixed, and
   this review then re-checks the shapes the fix changed.
-- **backlog** — real, but not for this merge. It becomes a new backlog item and
+- **backlog** — valid, but not for this merge. It becomes a new backlog item and
   the merge goes ahead.
 - **leave as is** — the shape stays as it is. Its location, its gist and the user's
   reason are recorded, and the finding is not raised again.
@@ -123,7 +123,7 @@ Severity is judged on the shape, one of three:
 - **Critical** — the shape breaks a caller already deployed, loses data, or leaves an
   acceptance criterion unmet.
 - **Important** — merged as is, the shape costs a migration or a boundary rewrite later.
-- **Minor** — real, but nothing in this unit builds on it; it can wait.
+- **Minor** — valid, but nothing in this unit builds on it; it can wait.
 
 ```
 ### Shapes reviewed
