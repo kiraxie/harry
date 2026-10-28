@@ -75,5 +75,5 @@ section (create the section if it doesn't exist yet) — not a new file, and
 not a code `DEBT:` marker (those stay code-side per HARRY.md **Code**; a
 `## Follow-ups` line is for process/scope-level follow-on work, a `DEBT:`
 marker is for an in-code shortcut with a ceiling). `finishing` turns these
-into new backlog items on completion — do not create backlog items directly
+into backlog items on completion — do not create backlog items directly
 during execution.

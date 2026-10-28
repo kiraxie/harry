@@ -428,11 +428,11 @@ test("AC-5: a later round lists and packages everything since the previous round
   );
 });
 
-test("AC-5: backlog opens a new item quoting the finding", () => {
+test("AC-5: backlog lands the finding in a new or merged backlog item", () => {
   assert.match(
     step2("Rulings."),
-    /- backlog → a new <store>\/\.local\/items\/<slug>\.md with status: backlog and a ## Notes section quoting the finding/,
-    "backlog no longer opens a new item quoting the finding",
+    /- backlog → the finding quoted in a status: backlog item under <store>\/\.local\/items\/, new .* or merged into a similar one/,
+    "backlog no longer lands the finding in a new or merged backlog item",
   );
 });
 
@@ -572,7 +572,11 @@ test("AC-5: with no item (Trivial) rulings go to the reply and fix now fixes in 
     /A fix now ruling means fix it in place, with no fix check, re-run step 1, and re-check the shapes that changed — no AC is drafted\./,
     "a Trivial fix now no longer fixes in place without drafting an AC",
   );
-  assert.match(p, /backlog still opens a new item\./, "a Trivial backlog no longer opens an item");
+  assert.match(
+    p,
+    /backlog — ruled here, or a leftover kept at step c or before a PR opens — always lands in a status: backlog item, never only in the reply/,
+    "a Trivial backlog no longer lands in an item",
+  );
 });
 
 test("fix now: doc-types owns the superseded-AC rule", () => {

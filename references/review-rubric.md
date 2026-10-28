@@ -106,8 +106,9 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
   as **fix now**. A step after the merge menu, where **fix now** is closed (finishing's
   leftover check, `skills/finishing/SKILL.md` **Execute the choice**), sorts by the real
   check alone, AC or no AC: real → **backlog**, not real → **leave as is**. A line the user
-  already ruled, marked `(ruled backlog)` where it was written, keeps that ruling as its
-  recommendation. This is not the re-review's stop on findings returning in one area
+  already ruled, marked as the "Writers" bullet of
+  `references/doc-types.md` **Lifecycle rules** says where it was written, keeps that
+  ruling as its recommendation. This is not the re-review's stop on findings returning in one area
   (`skills/executing/SKILL.md` **One fix wave**): that stop is about recurrence, this rule
   about one finding's scope and whether it is real. Every **leave as is** by this rule is one
   `## Progress` line: where, its gist (a leftover's original words), the missing caller when

@@ -126,8 +126,10 @@ the failure mode this command exists to close.
 
 ### 8. Backlog items — with the user's nod
 
-Each accepted candidate becomes a `<store>/.local/items/<slug>.md` with `status: backlog`
-quoting its ruling line, plus a `<store>/.local/INDEX.md` entry — only after the user confirms
+Each accepted candidate becomes a `status: backlog` item quoting its ruling line — a new
+`<store>/.local/items/<slug>.md` plus a `<store>/.local/INDEX.md` entry, or merged into a
+similar one by the "Similar backlog items" bullet of `references/doc-types.md`
+**Lifecycle rules**, its target shown in the list — only after the user confirms
 which ones to keep (present the list; let them cut). Deliver the confirmation via the
 harness's structured picker when one exists (on Claude Code, AskUserQuestion with
 multi-select); plain text otherwise. If no user is available (headless/batch run),

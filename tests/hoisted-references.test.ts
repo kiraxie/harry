@@ -16,7 +16,7 @@ const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "ut
 // it used to reach. The two audit entries that are not prose are listed, not exempted:
 // the equality assertion is what keeps this map honest.
 const HOISTED: Record<string, string[]> = {
-  debt: ["references/debt-audit.md", "references/doc-types.md"],
+  debt: ["references/debt-audit.md", "references/doc-types.md", "references/sync-migration.md"],
   review: [
     "references/review-rubric.md",
     "references/fix-check.md",
@@ -26,6 +26,7 @@ const HOISTED: Record<string, string[]> = {
     "references/red-green.md",
     "references/tier-gates.md",
     "references/grilling.md",
+    "references/sync-migration.md",
   ],
   sync: ["references/sync-migration.md", "references/doc-types.md", "references/debt-audit.md"],
   audit: [
@@ -44,6 +45,7 @@ const HOISTED: Record<string, string[]> = {
     "references/debt-audit.md",
     "references/tier-gates.md",
     "references/grilling.md",
+    "references/sync-migration.md",
   ],
   grill: [
     "references/grilling.md",
@@ -54,6 +56,7 @@ const HOISTED: Record<string, string[]> = {
     "references/tier-gates.md",
     "references/doc-types.md",
     "references/debt-audit.md",
+    "references/sync-migration.md",
   ],
   "wait-what": [
     "references/plain-language.md",
@@ -65,6 +68,7 @@ const HOISTED: Record<string, string[]> = {
     "references/tier-gates.md",
     "references/doc-types.md",
     "references/debt-audit.md",
+    "references/sync-migration.md",
   ],
 };
 

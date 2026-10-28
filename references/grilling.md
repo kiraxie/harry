@@ -12,7 +12,9 @@ re-deriving any of it.
 `/grill` is a **conversation, not a tool run**: it creates no `.local/` item and no
 pipeline entry, closing on the residue manifest below rather than a deliverable — with
 one exception, which is where its deferred lines land: on the user's nod, each line the
-manifest reads out becomes a `status: backlog` item, whichever scope tag it carries.
+manifest reads out becomes a `status: backlog` item, whichever scope tag it carries —
+new, or merged into a similar one by the "Similar backlog items" bullet of
+`references/doc-types.md` **Lifecycle rules**, its target named in the manifest.
 `skills/brainstorming` writes an item and enters the pipeline; there, its own steps
 govern what gets written from the close.
 

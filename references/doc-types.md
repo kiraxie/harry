@@ -32,11 +32,26 @@ milestone: <slug>      # optional key — omit entirely if standalone
 ## Why / What      <!-- filled when promoted to active — its acceptance criteria, after the design when one was weighed (below) -->
 ### Acceptance criteria  <!-- last subsection of Why / What; approved with the design -->
 ## Progress        <!-- append-only, filled during execution -->
-## Follow-ups      <!-- sources: Writers, below; flushed to new backlog items at finish -->
+## Follow-ups      <!-- sources: Writers, below; flushed to backlog items at finish -->
 ```
 
 Sections accumulate — never delete an earlier section when filling a later
 one (`## Notes` stays as history once `## Why / What` is written).
+
+A `## Notes` entry a writer files in a backlog item — a new item's first, or one
+merged into a similar item — is one block per line: a `From <source> …:` line, then
+the quote as a `>` blockquote. The block ends where its blockquote ends; other text
+in `## Notes` (finishing's discard line, an archive back-link, research notes)
+belongs to no block. `<source>` is one rule, applied in order: the item the line
+came from; with no item, the slash command that filed it and what it ran on; with
+neither, the branch. After it comes where in that source the line sat and when, a
+sha or a date. For example: `From scope-rule-followups' Follow-ups (94af1a1):`, `From
+/grill on the cache design (2026-10-27):`, `From /debt's DEBT: row at
+src/cache.ts:40 (2026-10-27):`, `From /distill's ruling on anthropics/skills
+(2026-10-27):`, `From fix/init-typo's leftover check (abc1234):`. Lines ruled into
+one new item each keep their own block. `/sync`'s migration is the exception
+(**Writers**, below; its `## Notes` is set in `references/sync-migration.md`
+**Phase 3**, Step A0's case 3).
 
 `### Acceptance criteria` is a numbered `AC-1, AC-2, …` list. Each AC is an
 **outcome** ("invalid input returns 400"), never a step ("add `validate()`"),
@@ -137,9 +152,10 @@ milestone edit.
   skill), set `status: done` and move `.local/items/<slug>.md` →
   `.local/archive/<slug>.md`.
 - **Follow-ups flush**: before archiving, every line under the item's
-  `## Follow-ups` becomes its own new `status: backlog` item in
-  `.local/items/` (title + a `## Notes` line quoting the follow-up), then
-  the source item's `## Follow-ups` section is cleared. The flush treats
+  `## Follow-ups` becomes a `status: backlog` item in `.local/items/` — its
+  own new one (title + one `## Notes` entry, **The item model** above), or merged into
+  a similar one (**Similar backlog items**, below) — then the source item's
+  `## Follow-ups` section is cleared. The flush treats
   every entry the same, whatever its source. Before the merge menu, finishing's
   triage (`skills/finishing/SKILL.md` **Ask: merge or PR?**) has already taken each
   line ruled **leave as is** out of the section and sent each **fix now** back into
@@ -149,13 +165,36 @@ milestone edit.
   chooses Back to backlog, sets `status: backlog`, appends a `## Notes`
   line, removes its `## In flight` line and flips its `INDEX.md` item line
   to backlog; the file does not move.
+- **Similar backlog items**: a writer about to open a new `status: backlog` item,
+  `/sync`'s migration excepted (**Writers**, below), first looks for a similar one — an open `status: backlog` item whose work would
+  land in the same unit: the same files, or the same rule. Found → the line is
+  appended to that item's `## Notes` as one entry (**The item model**, above), the
+  text a new item's `## Notes` would hold; no new file and no new `INDEX.md` line, and the
+  target's `INDEX.md` summary is updated when its scope widens. An `active` item is
+  never a target (its AC is approved, and a merge would grow it), nor is the item the
+  writer is itself promoting or finishing, nor anything in the archive (read-only). Lines in one list that are similar to each other, with
+  no target, open one new item together. The writer names each line's target —
+  "merge into `<slug>`" or "new item `<slug>`" — in the list the user rules, so the ruling
+  confirms it; a writer with no list (an author promoting a Non-Goal after the design,
+  as **Non-Goals do not survive archiving** below allows) applies the rule itself. A writer that files the line later (finishing's flush) reads the
+  target from the line's marker (**Writers**, below): lines whose markers name one
+  new-item slug open that one item; a new-item slug an item already holds at flush
+  time opens the item under another slug; a marker with no target, or a merge-into
+  target no longer an open `status: backlog` item (promoted, archived, deleted),
+  opens a new item. Each of these departures from the ruled target is said in the
+  reply.
 - **Writers**: who adds work to the store besides the flush and the discard.
-  - Backlog items are also created directly by:
+  - Backlog items are also created directly by, each but one through **Similar backlog
+    items** above:
     - brainstorming's residue manifest, at design time;
     - `/grill`'s residue manifest, on the user's nod;
     - finishing's **backlog** ruling on an architecture finding;
+    - finishing's leftover check for a unit with no item (a leftover the user keeps,
+      in step c and before a PR opens);
     - `/debt`, on request, for its rows that need acting on;
-    - `/sync`'s legacy migration, for an old backlog or research file;
+    - `/sync`'s legacy migration, for an old backlog or research file — the one writer
+      outside **Similar backlog items**: it opens one item per legacy file and never
+      merges;
     - an author promoting a Non-Goal (**Non-Goals do not survive archiving**, below).
   - `## Follow-ups` entries come from:
     - brainstorming's residue manifest (deferred discussion items);
@@ -172,7 +211,13 @@ milestone edit.
 
     Any entry written on the user's own ruling — a finding the user rules backlog, a
     leftover the user keeps — ends `(ruled backlog)`, so finishing's triage keeps that
-    ruling instead of asking again.
+    ruling instead of asking again; its merge target is still put to the user there, and
+    the reply confirms or changes it. Once the user has ruled the target, the marker
+    carries it: `(ruled backlog → merge into <slug>)` or `(ruled backlog → new item <slug>)`,
+    a new item's slug chosen when the user rules the target and shared by the lines the
+    user ruled into one new item.
+    The triage writes it on every line it leaves ruled backlog; step c and Option 2
+    write it on a leftover the user keeps.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.
@@ -208,8 +253,8 @@ items, and finishing's Follow-ups flush (above) only carries `## Follow-ups` for
 a Scope & Non-Goals bullet in an item that reaches `status: done` is gone
 the moment it's archived, with nothing left to re-judge it. This is a
 deliberate discipline, not an automated sweep: a Non-Goal worth revisiting
-later must be copied into `## Follow-ups` (or promoted straight to its own
-`status: backlog` item) before the item is archived — do not rely on `/debt`
+later must be copied into `## Follow-ups` (or promoted straight to a `status: backlog`
+item, new or merged by **Similar backlog items**, above) before the item is archived — do not rely on `/debt`
 or finishing to catch it for you.
 
 ## Global index `.local/INDEX.md`

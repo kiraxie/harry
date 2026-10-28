@@ -113,8 +113,9 @@ same three — a recommendation which a Minor finding from round 2 on does not c
 
 - **fix now** — fix it before this merges. The work goes back to be fixed, and
   this review then re-checks the shapes the fix changed.
-- **backlog** — valid, but not for this merge. It becomes a new backlog item and
-  the merge goes ahead.
+- **backlog** — valid, but not for this merge. It lands in a `status: backlog` item,
+  new or merged into a similar one (the "Similar backlog items" bullet of
+  `references/doc-types.md` **Lifecycle rules**), and the merge goes ahead.
 - **leave as is** — the shape stays as it is. Its location, its gist and the user's
   reason are recorded, and the finding is not raised again.
 

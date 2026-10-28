@@ -236,7 +236,7 @@ const SURVIVING: Record<string, { re: RegExp; allowed: string[]; gloss: [string,
     gloss: [
       [
         "references/doc-types.md",
-        /every line under the item's `## Follow-ups` becomes its own new `status: backlog` item/i,
+        /every line under the item's `## Follow-ups` becomes a `status: backlog` item/i,
       ],
     ],
   },

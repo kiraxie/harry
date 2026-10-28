@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { MARKDOWN_CORPUS } from "./prose-dirs.ts";
-import { headingSection } from "./section.ts";
+import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
@@ -13,12 +13,19 @@ const DOC_TYPES = "references/doc-types.md";
 const MENTION = /status: backlog|## Follow-ups/;
 
 type Role = { writer: string[] } | { rule: string } | { reader: string } | { repoLocal: string };
-type Entry = { file: string; snippet: string; sentences?: number } & Role;
+type Entry = {
+  file: string;
+  snippet: string;
+  sentences?: number;
+  citesSimilar?: true;
+  outsideSimilar?: true;
+} & Role;
 
 const KNOWN: Entry[] = [
   {
     file: "skills/brainstorming/SKILL.md",
     snippet: "The manifest's dispositions are *commitments*",
+    citesSimilar: true,
     writer: ["brainstorming's residue manifest"],
   },
   {
@@ -29,11 +36,13 @@ const KNOWN: Entry[] = [
   {
     file: "skills/brainstorming/SKILL.md",
     snippet: "Discharge step 5's manifest commitments",
+    citesSimilar: true,
     writer: ["brainstorming's residue manifest"],
   },
   {
     file: "skills/brainstorming/SKILL.md",
     snippet: "The manifest's deferred lines land the same way",
+    citesSimilar: true,
     writer: ["brainstorming's residue manifest"],
   },
   {
@@ -43,8 +52,9 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/brainstorming/SKILL.md",
-    snippet: "`## Follow-ups` (or open a `status: backlog` item now)",
-    writer: ["an author copying in a Non-Goal", "an author promoting a Non-Goal"],
+    snippet: "rule it in step 5's residue manifest",
+    citesSimilar: true,
+    writer: ["brainstorming's residue manifest", "an author copying in a Non-Goal"],
   },
   {
     file: "skills/brainstorming/SKILL.md",
@@ -54,6 +64,7 @@ const KNOWN: Entry[] = [
   {
     file: "references/grilling.md",
     snippet: "becomes a `status: backlog` item",
+    citesSimilar: true,
     writer: ["`/grill`'s residue manifest"],
   },
   {
@@ -103,7 +114,8 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "- **backlog** → a new",
+    snippet: "- **backlog** → the finding quoted",
+    citesSimilar: true,
     writer: ["finishing's backlog ruling"],
   },
   {
@@ -118,7 +130,14 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
+    snippet: "always lands in a `status: backlog` item, never only in the reply",
+    citesSimilar: true,
+    writer: ["finishing's backlog ruling", "finishing's leftover check for a unit with no item"],
+  },
+  {
+    file: "skills/finishing/SKILL.md",
     snippet: "A kept leftover is appended to the item's `## Follow-ups`",
+    citesSimilar: true,
     writer: ["finishing's leftover check"],
   },
   {
@@ -129,11 +148,13 @@ const KNOWN: Entry[] = [
   {
     file: "skills/finishing/SKILL.md",
     snippet: "- **Conversation leftovers, before `gh pr create`.**",
+    citesSimilar: true,
     writer: ["finishing's leftover check"],
   },
   {
     file: "skills/finishing/SKILL.md",
     snippet: "**Follow-ups triage, before the menu.**",
+    citesSimilar: true,
     rule: "Follow-ups flush",
   },
   {
@@ -158,7 +179,8 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "For each line, create a new `.local/items/<new-slug>.md`",
+    snippet: "For each line, open a `status: backlog` item",
+    citesSimilar: true,
     rule: "Follow-ups flush",
   },
   {
@@ -183,12 +205,14 @@ const KNOWN: Entry[] = [
   },
   {
     file: "references/debt-audit.md",
-    snippet: "as a new `status: backlog` item",
+    snippet: "row as a `status: backlog` item",
+    citesSimilar: true,
     writer: ["`/debt`, on request"],
   },
   {
     file: "references/sync-migration.md",
     snippet: "`status: backlog`, its",
+    outsideSimilar: true,
     writer: ["`/sync`'s legacy migration"],
   },
   {
@@ -209,6 +233,12 @@ const KNOWN: Entry[] = [
   },
   {
     file: "references/architecture-review.md",
+    snippet: "It lands in a `status: backlog` item",
+    citesSimilar: true,
+    reader: "tells the reviewer what a backlog ruling does; finishing writes it",
+  },
+  {
+    file: "references/architecture-review.md",
     snippet: "which goes to the item's `## Follow-ups` without a ruling.",
     reader: "tells the reviewer where finishing files round-2 Minors",
   },
@@ -224,7 +254,8 @@ const KNOWN: Entry[] = [
   },
   {
     file: ".claude/commands/distill.md",
-    snippet: "with `status: backlog`",
+    snippet: "becomes a `status: backlog` item quoting",
+    citesSimilar: true,
     repoLocal: "writes backlog items in harry's own store; shipped prose may not cite .claude/",
   },
 ];
@@ -298,6 +329,170 @@ test("the writers outside the Writers bullet are Lifecycle rules of their own", 
     (rule) => !bullets.has(rule),
   );
   assert.deepEqual(missing, [], "doc-types' Lifecycle rules no longer have these bullets");
+});
+
+const SIMILAR = "Similar backlog items";
+const CITES_SIMILAR = new RegExp(
+  `"${SIMILAR}" bullet of \`references/doc-types\\.md\` Lifecycle rules`,
+);
+
+test("every sentence flagged citesSimilar cites the Similar backlog items rule", () => {
+  assert.ok(
+    lifecycleBullets().has(SIMILAR),
+    `doc-types' Lifecycle rules have no ${SIMILAR} bullet`,
+  );
+  const uncited = KNOWN.filter((k) => k.citesSimilar).flatMap((k) =>
+    mentions(k.file)
+      .filter((s) => s.includes(k.snippet) && !CITES_SIMILAR.test(flat(s)))
+      .map((s) => `${k.file}: ${s.slice(0, 100)}`),
+  );
+  assert.deepEqual(
+    uncited,
+    [],
+    `cite the "${SIMILAR}" bullet of \`references/doc-types.md\` **Lifecycle rules**`,
+  );
+});
+
+test("every sentence that cites the Similar backlog items rule is flagged citesSimilar", () => {
+  const unflagged = prose().flatMap((file) =>
+    mentions(file)
+      .filter(
+        (s) =>
+          CITES_SIMILAR.test(flat(s)) &&
+          !KNOWN.some((k) => k.citesSimilar && k.file === file && s.includes(k.snippet)),
+      )
+      .map((s) => `${file}: ${s.slice(0, 100)}`),
+  );
+  assert.deepEqual(unflagged, [], "flag each entry citesSimilar so its citation stays checked");
+});
+
+test("doc-types' flush and Writers bullets defer to the Similar backlog items rule", () => {
+  const bullets = lifecycleBullets();
+  const missing = ["Follow-ups flush", "Writers"].filter(
+    (b) => !(bullets.get(b) ?? "").includes(SIMILAR),
+  );
+  assert.deepEqual(missing, [], `these doc-types bullets no longer name ${SIMILAR}`);
+});
+
+test("doc-types names /sync's migration as the one writer outside the Similar backlog items rule", () => {
+  assert.match(
+    lifecycleBullets().get("Writers") ?? "",
+    /`\/sync`'s legacy migration[^;]*the one writer outside Similar backlog items/,
+  );
+});
+
+test("every direct creator's sentence that opens a backlog item is classed for the Similar backlog items rule", () => {
+  const writers = flat(lifecycleBullets().get("Writers") ?? "");
+  const direct = section(
+    writers,
+    DOC_TYPES,
+    "created directly by",
+    "`## Follow-ups` entries come from",
+  );
+  const unclassed = KNOWN.filter(
+    (k) =>
+      "writer" in k &&
+      k.writer.some((w) => direct.includes(flat(w))) &&
+      !k.citesSimilar &&
+      !k.outsideSimilar &&
+      mentions(k.file).some((s) => s.includes(k.snippet) && s.includes("status: backlog")),
+  ).map((k) => `${k.file}: ${k.snippet}`);
+  assert.deepEqual(
+    unclassed,
+    [],
+    "mark each citesSimilar (cites the rule) or outsideSimilar (the Writers exception)",
+  );
+});
+
+test("doc-types' Non-Goal promotion goes through the Similar backlog items rule", () => {
+  const para =
+    read(DOC_TYPES)
+      .split("\n\n")
+      .find((b) => b.startsWith("**Non-Goals do not survive archiving.**")) ?? "";
+  assert.ok(para, "doc-types has no Non-Goals do not survive archiving paragraph");
+  assert.match(flat(para), new RegExp(SIMILAR));
+});
+
+test("brainstorming rules a kept Non-Goal in its residue manifest, not at step 6", () => {
+  const line =
+    mentions("skills/brainstorming/SKILL.md").find((s) =>
+      s.includes("If a Non-Goal is something you genuinely expect to revisit"),
+    ) ?? "";
+  assert.ok(line, "the Item Template has no kept-Non-Goal sentence");
+  assert.match(flat(line), /step 5's residue manifest as a destination-outside line/);
+  assert.doesNotMatch(flat(line), /open a `status: backlog` item now/);
+  assert.match(
+    lifecycleBullets().get(SIMILAR) ?? "",
+    /a writer with no list \(an author promoting a Non-Goal after the design/,
+  );
+});
+
+const ITEM_MODEL = "The item model";
+const ENTRY_SHAPE = /`## Notes` (line|section) quoting/;
+
+test("the Notes entry's shape is stated only in doc-types", () => {
+  const restating = MARKDOWN_CORPUS.filter(
+    (f) => f !== DOC_TYPES && ENTRY_SHAPE.test(flat(read(f))),
+  );
+  assert.deepEqual(
+    restating,
+    [],
+    `cite references/doc-types.md ${ITEM_MODEL} instead of restating the entry`,
+  );
+});
+
+test("The item model defines a Notes entry as an ordered source rule and a closed blockquote", () => {
+  const para = flat(
+    read(DOC_TYPES)
+      .split("\n\n")
+      .find((b) => b.startsWith("A `## Notes` entry a writer files")) ?? "",
+  );
+  assert.ok(para, "doc-types' item model has no Notes entry paragraph");
+  for (const rule of [
+    /then the quote as a `>` blockquote/,
+    /ends where its blockquote ends/,
+    /belongs to no block/,
+    /the item the line came from; with no item, the slash command that filed it and what it ran on; with neither, the branch/,
+    /`references\/sync-migration\.md` Phase 3/,
+  ])
+    assert.match(para, rule);
+  assert.doesNotMatch(para, /verbatim/, "point to /sync's own rule instead of restating it");
+});
+
+test("every site that writes a backlog item's Notes entry cites The item model", () => {
+  const bullets = lifecycleBullets();
+  const sites = [
+    ["Follow-ups flush", bullets.get("Follow-ups flush") ?? ""],
+    [SIMILAR, bullets.get(SIMILAR) ?? ""],
+    ...[
+      ["skills/finishing/SKILL.md", "For each line, open a `status: backlog` item"],
+      ["references/debt-audit.md", "row as a `status: backlog` item"],
+    ].map(([file, snippet]) => [file, flat(mentions(file).find((s) => s.includes(snippet)) ?? "")]),
+  ];
+  const uncited = sites.filter(([, text]) => !text.includes(ITEM_MODEL)).map(([site]) => site);
+  assert.deepEqual(uncited, [], `these sites no longer cite ${ITEM_MODEL}`);
+});
+
+test("a writer outside the Similar backlog items rule never names it", () => {
+  const files = [...new Set(KNOWN.filter((k) => k.outsideSimilar).map((k) => k.file))];
+  assert.ok(files.length > 0, "no KNOWN entry is marked outsideSimilar");
+  const citing = files.filter((f) => flat(read(f)).includes(SIMILAR));
+  assert.deepEqual(
+    citing,
+    [],
+    `these files name ${SIMILAR} though doc-types' Writers puts them outside it`,
+  );
+});
+
+test("the ruled backlog marker carries its target across sessions", () => {
+  const bullets = lifecycleBullets();
+  const writers = bullets.get("Writers") ?? "";
+  const missing = [
+    "`(ruled backlog → merge into <slug>)`",
+    "`(ruled backlog → new item <slug>)`",
+  ].filter((form) => !writers.includes(form));
+  assert.deepEqual(missing, [], "the Writers bullet no longer defines these marker forms");
+  assert.match(bullets.get(SIMILAR) ?? "", /reads the target from the line's marker/);
 });
 
 test("doc-types never calls the flush the only source of backlog items, anywhere in the file", () => {
