@@ -156,12 +156,12 @@ test("AC-3: the reviewer is handed every input", () => {
     ],
     [/and read access to the whole repo\./, "read access to the whole repo"],
     [
-      /On a later round, also hand it every ruling recorded so far — each leave as is record as references\/architecture-review\.md Output defines it, and each backlog/,
+      /On a later round, also hand it every ruling recorded so far — each leave as is record in the architecture form of the leave as is record references\/doc-types\.md The item model defines, and each backlog/,
       "the prior rulings on a later round",
     ],
     [
-      /and every Minor finding sent to ## Follow-ups from round 2 on, so neither is raised again unless the fix changed its shape\./,
-      "the Minors sent to Follow-ups on a later round",
+      /and every Minor finding left as is from round 2 on, so neither is raised again unless the fix changed its shape\./,
+      "the Minors left as is on a later round",
     ],
   ];
   for (const [re, what] of inputs) assert.match(p, re, `the reviewer is no longer handed ${what}`);
@@ -203,8 +203,8 @@ test("AC-3: the architecture-review reference lists the same inputs the step han
     [/The last 20 commits touching the changed paths/, "the last 20 commits"],
     [/Read access to the whole repo/, "the whole repo"],
     [
-      /On a later round, the rulings recorded so far — each leave as is record as Output below defines it, and each backlog — and the Minor findings sent to ## Follow-ups from round 2 on\. Do not raise a ruled finding or one of those Minor findings again unless the fix changed the shape it concerns\./,
-      "the prior rulings and Follow-ups Minors, and not re-raising them",
+      /On a later round, the rulings recorded so far — each leave as is record in the architecture form of the leave as is record references\/doc-types\.md The item model defines, and each backlog — and the Minor findings left as is from round 2 on\. Do not raise a ruled finding or one of those Minor findings again unless the fix changed the shape it concerns\./,
+      "the prior rulings and left-as-is Minors, and not re-raising them",
     ],
   ];
   for (const [re, what] of inputs)
@@ -337,7 +337,7 @@ test("AC-5: findings never reach an automatic fixer and go to the user as one li
   assert.match(p, /Put them to the user as one list/, "findings are no longer one list");
   assert.match(
     archReview(),
-    /you do not fix anything; what you find goes to the user, who rules on each finding, except a Minor finding from round 2 on, which goes to the item's ## Follow-ups without a ruling\./,
+    /you do not fix anything; what you find goes to the user, who rules on each finding, except a Minor finding from round 2 on, which is left as is without a ruling, as one ## Progress line\./,
     "the architecture-review reference no longer forbids the reviewer from fixing",
   );
 });
@@ -439,7 +439,7 @@ test("AC-5: backlog lands the finding in a new or merged backlog item", () => {
 test("AC-5: leave as is records the reason and is not raised again", () => {
   assert.match(
     step2("Rulings."),
-    /- leave as is → the ruling goes to ## Progress as the record references\/architecture-review\.md Output defines — a number names a finding in one list only; handed to the reviewer on any later round, so the finding is not raised again\./,
+    /- leave as is → the ruling goes to ## Progress in the architecture form of the leave as is record references\/doc-types\.md The item model defines — a number names a finding in one list only; handed to the reviewer on any later round, so the finding is not raised again\./,
     "leave as is no longer records the reason and the finding's location and gist, or the finding may be raised again",
   );
 });
@@ -511,10 +511,10 @@ test("review-round-cap AC-5(b): every main-loop round is numbered and counted fo
   );
 });
 
-test("review-round-cap AC-2: from round 2 on, Minor findings go to Follow-ups without a ruling", () => {
+test("review-round-cap AC-2: from round 2 on, Minor findings are left as is without a ruling", () => {
   assert.match(
     step2("Round cap."),
-    /From round 2 on, each Minor finding goes to the item's ## Follow-ups without a ruling/i,
+    /From round 2 on, each Minor finding is left as is without a ruling/i,
   );
 });
 
@@ -522,12 +522,12 @@ test("review-round-cap AC-5(c): a later round's Minors are traceable, and a Mino
   const p = step2("Round cap.");
   assert.match(
     p,
-    /goes to the item's ## Follow-ups without a ruling, as architecture review round <n>: <where> · <gist>/i,
-    "a later round's Minor no longer lands in Follow-ups as one traceable line",
+    /as one ## Progress line in the architecture form of the leave as is record \(references\/doc-types\.md The item model\), <round> round <n>, reason minor/i,
+    "a later round's Minor no longer lands in Progress as one traceable line",
   );
   assert.match(
     p,
-    /a round whose findings are all Minor records architecture review round <n>: <m> Minor to Follow-ups in ## Progress and goes to step 3/i,
+    /a round whose findings are all Minor records architecture review round <n>: <m> Minor left as is in ## Progress and goes to step 3/i,
     "a Minors-only round no longer records its outcome",
   );
   assert.match(
@@ -664,7 +664,7 @@ test("the review commands point at step 2's Reviewer list instead of copying it"
 
 test("the architecture-review Output carries the opening's round-2 Minor exception", () => {
   const exception =
-    /Minor finding from round 2 on\b.{0,40}goes to the item's ## Follow-ups without a ruling/;
+    /Minor finding from round 2 on\b.{0,40}is left as is without a ruling, as one ## Progress line/;
   assert.match(
     plain(section(read(ARCH_REVIEW), ARCH_REVIEW, "# Architecture Review", "A **shape**")),
     exception,

@@ -72,8 +72,19 @@ lines that rules read back: `complete (commits …)` (the AC is done; resuming
 builds from the first AC without one), the review and fix-wave lines (where
 the review stands, and the findings file each names, holding what is open), the probe
 lines `AC-<n>: probe: …` and `AC-<n>: no probe ran: …` (handed to the review beside
-their AC, whose spec verdict reads them), and adjudication rulings. `small fix: <what> (commit
-<sha7>)` is a record only; no rule reads it back.
+their AC, whose spec verdict reads them), adjudication rulings, and the **leave as is**
+records (below), which `/debt` reads from the archive. `small fix: <what> (commit <sha7>)`
+is a record only; no rule reads it back.
+
+A **leave as is** record is one `## Progress` line in one of two forms: `leave as is ·
+<where> · <gist> · <reason>` (a review finding or a leftover), or `architecture review
+<round>: leave as is · <where> · <gist> · <reason>` (an architecture finding, `<round>`
+as the round's head line names it: `round <n>`, or `follow-up`). `<where>` is a
+`file:line`, a shape's name, or its source (a turn, an AC id, the `## Follow-ups` line it
+was);
+`<gist>` is one line, a leftover's original words; `<reason>` is what the writer's own
+rule sets. Every writer produces this shape and `/debt` reads it from the archive
+(`references/debt-audit.md`), so it is defined here and nowhere else.
 
 **Legacy items.** An item written under the older shape keeps its `## Plan` and
 is read as-is; nothing migrates it, and no acceptance criteria are invented for it.
@@ -186,12 +197,13 @@ milestone edit.
 - **Writers**: who adds work to the store besides the flush and the discard.
   - Backlog items are also created directly by, each but one through **Similar backlog
     items** above:
-    - brainstorming's residue manifest, at design time;
-    - `/grill`'s residue manifest, on the user's nod;
-    - finishing's **backlog** ruling on an architecture finding;
+    - brainstorming's residue manifest, at design time, for a destination-outside line
+      the user names as a backlog item;
+    - `/grill`'s residue manifest, for a line the user names as a backlog item;
+    - finishing's **backlog** ruling on an architecture finding, on the user's naming;
     - finishing's leftover check for a unit with no item (a leftover the user keeps,
       in step c and before a PR opens);
-    - `/debt`, on request, for its rows that need acting on;
+    - `/debt`, on request, for its rows that need acting on and for its sweep candidates;
     - `/sync`'s legacy migration, for an old backlog or research file — the one writer
       outside **Similar backlog items**: it opens one item per legacy file and never
       merges;
@@ -200,11 +212,9 @@ milestone edit.
     - brainstorming's residue manifest (deferred discussion items);
     - executing: follow-on work found mid-build, and the review findings it
       does not fix:
-      - Minor findings;
-      - findings of any severity outside the fix range;
+      - Critical and Important findings outside the fix range;
       - findings adjudicated to Follow-ups;
       - findings the user rules backlog before the fix wave;
-    - finishing's architecture review from round 2 on (its Minor findings);
     - finishing's leftover check, on the user's say (work from the session or the
       files with no outcome, in step c and before a PR opens);
     - an author copying in a Non-Goal (**Non-Goals do not survive archiving**, below).
@@ -248,8 +258,9 @@ those cases now live as `## Notes` inside a backlog or active item. The verdict
 vocabulary is defined in `references/debt-audit.md`, which `commands/debt.md`
 reads — go there rather than to the command.
 
-**Non-Goals do not survive archiving.** `/debt` only scans `status: active`
-items, and finishing's Follow-ups flush (above) only carries `## Follow-ups` forward —
+**Non-Goals do not survive archiving.** `/debt` reads Scope & Non-Goals only in `status: active`
+items (from the archive it reads `## Progress` leave-as-is lines alone,
+`references/debt-audit.md`), and finishing's Follow-ups flush (above) only carries `## Follow-ups` forward —
 a Scope & Non-Goals bullet in an item that reaches `status: done` is gone
 the moment it's archived, with nothing left to re-judge it. This is a
 deliberate discipline, not an automated sweep: a Non-Goal worth revisiting

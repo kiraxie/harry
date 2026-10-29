@@ -69,8 +69,8 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/executing/SKILL.md",
-    snippet: "anything outside it → the item's `## Follow-ups`",
-    writer: ["findings of any severity outside the fix range"],
+    snippet: "one outside it → the item's `## Follow-ups`",
+    writer: ["Critical and Important findings outside the fix range"],
   },
   {
     file: "skills/executing/SKILL.md",
@@ -79,7 +79,7 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/executing/SKILL.md",
-    snippet: "A **backlog** there goes to the item's `## Follow-ups`.",
+    snippet: "A **backlog** there goes to the item's `## Follow-ups`;",
     writer: ["findings the user rules backlog before the fix wave"],
   },
   {
@@ -89,8 +89,9 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/executing/SKILL.md",
-    snippet: "Minor findings → `## Follow-ups`",
-    writer: ["Minor findings;"],
+    snippet:
+      "one outside gets a `## Progress` **leave as is** line and never a `## Follow-ups` line",
+    reader: "routes Minor findings away from Follow-ups, as the rubric's Severity says",
   },
   {
     file: "skills/executing/SKILL.md",
@@ -109,19 +110,14 @@ const KNOWN: Entry[] = [
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "On a later round, also hand it every ruling",
-    reader: "hands the reviewer the Minors already in Follow-ups",
-  },
-  {
-    file: "skills/finishing/SKILL.md",
     snippet: "- **backlog** → the finding quoted",
     citesSimilar: true,
     writer: ["finishing's backlog ruling"],
   },
   {
     file: "skills/finishing/SKILL.md",
-    snippet: "From round 2 on, each Minor finding goes to the item's `## Follow-ups`",
-    writer: ["finishing's architecture review from round 2 on"],
+    snippet: "neither fixed here nor sent to `## Follow-ups`",
+    reader: "routes a later round's Minors to a Progress leave-as-is line, never Follow-ups",
   },
   {
     file: "skills/finishing/SKILL.md",
@@ -210,6 +206,12 @@ const KNOWN: Entry[] = [
     writer: ["`/debt`, on request"],
   },
   {
+    file: "references/debt-audit.md",
+    snippet: "Sweep candidates persist, on request, as **one** `status: backlog` sweep item",
+    citesSimilar: true,
+    writer: ["`/debt`, on request"],
+  },
+  {
     file: "references/sync-migration.md",
     snippet: "`status: backlog`, its",
     outsideSimilar: true,
@@ -222,35 +224,14 @@ const KNOWN: Entry[] = [
   },
   {
     file: "references/review-rubric.md",
-    snippet: "item's `## Follow-ups` for final triage; do not block",
-    reader: "tells the reviewer where Minors go; executing writes them",
-  },
-  {
-    file: "references/review-rubric.md",
-    snippet: "#### Minor (nice to have — item's `## Follow-ups` for final triage)",
-    sentences: 2,
-    reader: "report-template headings, in the review and re-review forms",
+    snippet: "never a `## Follow-ups` line.",
+    reader: "tells the reviewer where Minors go; executing routes them",
   },
   {
     file: "references/architecture-review.md",
     snippet: "It lands in a `status: backlog` item",
     citesSimilar: true,
     reader: "tells the reviewer what a backlog ruling does; finishing writes it",
-  },
-  {
-    file: "references/architecture-review.md",
-    snippet: "which goes to the item's `## Follow-ups` without a ruling.",
-    reader: "tells the reviewer where finishing files round-2 Minors",
-  },
-  {
-    file: "references/architecture-review.md",
-    snippet: "and the Minor findings sent to `## Follow-ups` from round 2 on.",
-    reader: "tells the reviewer not to raise Minors already in Follow-ups",
-  },
-  {
-    file: "references/architecture-review.md",
-    snippet: "exception: it goes to the item's `## Follow-ups`",
-    reader: "tells the reviewer where finishing files round-2 Minors",
   },
   {
     file: ".claude/commands/distill.md",

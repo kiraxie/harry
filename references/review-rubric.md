@@ -97,7 +97,8 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
   **Code**).
   - Real, inside the AC → the session fixes it; no ask.
   - Real, outside the AC → ask the user, naming the unit's goal: recommend **fix now** when it
-    is related (as the bullet above defines it), **backlog** when it is not.
+    is related (as the bullet above defines it), **leave as is** when it is not. **Backlog**
+    is not recommended here: a backlog item for a finding opens only when the user names it.
   - Not real → **leave as is**, recorded as below; no ask, but the user is told and can
     overturn it.
 
@@ -105,15 +106,19 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
   every ruling to the user anyway uses these as its recommendations, a real one inside the AC
   as **fix now**. A step after the merge menu, where **fix now** is closed (finishing's
   leftover check, `skills/finishing/SKILL.md` **Execute the choice**), sorts by the real
-  check alone, AC or no AC: real → **backlog**, not real → **leave as is**. A line the user
+  check and the related check, AC or no AC: real and related → **backlog**, anything else →
+  **leave as is**. A line the user
   already ruled, marked as the "Writers" bullet of
   `references/doc-types.md` **Lifecycle rules** says where it was written, keeps that
   ruling as its recommendation. This is not the re-review's stop on findings returning in one area
   (`skills/executing/SKILL.md` **One fix wave**): that stop is about recurrence, this rule
-  about one finding's scope and whether it is real. Every **leave as is** by this rule is one
-  `## Progress` line: where, its gist (a leftover's original words), the missing caller when
-  it is not real, the user's reason when the user ruled it; an architecture-review ruling
-  keeps the record `references/architecture-review.md` **Output** defines.
+  about one finding's scope and whether it is real. A Minor finding is not sorted here: it is
+  routed as **Severity** says. Every **leave as is** by this rule is one `## Progress` line
+  in the record `references/doc-types.md` **The item model** defines, its reason the missing
+  caller when it is not real, `unrelated` when it is real and outside the AC, `minor` for a
+  Minor **Severity** leaves as is, or the user's reason when the user ruled it; an
+  architecture-review record, a Minor from round 2 on included, takes that record's
+  architecture form (`references/architecture-review.md` **Output**).
 - **DRY is about knowledge, not code.** Drift test: "if these two copies silently diverge,
   is that a bug or normal evolution?" Bug → one authoritative truth — extract it now
   (cross-boundary: on first occurrence), and after extracting verify every composed value
@@ -140,8 +145,12 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
   acceptance criterion unmet.
 - **Important** — architecture problems, poor error handling, test gaps,
   unrequested scope, a red line crossed.
-- **Minor** — style, naming, local optimization, doc polish. Record in the
-  item's `## Follow-ups` for final triage; do not block on these.
+- **Minor** — style, naming, local optimization, doc polish. Do not block on these.
+  Inside a file the unit already changes, it is fixed in the unit, a pure style nit raised
+  as non-blocking instead, as the "Clean legacy in the scope you touch" bullet of
+  **Engineering judgment** says; outside, it becomes one `## Progress` **leave as is** line
+  in the record `references/doc-types.md` **The item model** defines, reason `minor`, and the
+  user is told, never a `## Follow-ups` line.
 
 Categorize by *actual* severity — not everything is Critical, and a nitpick is
 never Critical. In a fresh review, acknowledge what was done well before listing issues.
@@ -175,7 +184,7 @@ never Critical. In a fresh review, acknowledge what was done well before listing
 ### Issues
 #### Critical (must fix)
 #### Important (should fix)
-#### Minor (nice to have — item's `## Follow-ups` for final triage)
+#### Minor (nice to have — routed as **Severity** says)
 [each, numbered 1, 2, 3 … straight across all three severities, so a finding is cited by its number: file:line · what's wrong · why it matters · structural fix · short-term fix, only when the structural one is not simple. A number holds inside one report only, except the handed numbers a re-review carries; a finding's identity is where it is plus what is wrong]
 
 ### Assessment
@@ -197,7 +206,7 @@ reviewer reports in the form below instead — no Strengths section, since it ju
 ### New issues
 #### Critical (must fix)
 #### Important (should fix)
-#### Minor (nice to have — item's `## Follow-ups` for final triage)
+#### Minor (nice to have — routed as **Severity** says)
 [numbered on from the last number handed — the merged list's last, Minors included — same fields as above]
 
 ### Assessment

@@ -11,10 +11,11 @@ re-deriving any of it.
 
 `/grill` is a **conversation, not a tool run**: it creates no `.local/` item and no
 pipeline entry, closing on the residue manifest below rather than a deliverable — with
-one exception, which is where its deferred lines land: on the user's nod, each line the
-manifest reads out becomes a `status: backlog` item, whichever scope tag it carries —
+one exception, which is where its deferred lines land: each line the user names as one
+becomes a `status: backlog` item, whichever scope tag it carries —
 new, or merged into a similar one by the "Similar backlog items" bullet of
-`references/doc-types.md` **Lifecycle rules**, its target named in the manifest.
+`references/doc-types.md` **Lifecycle rules**, its target named in the manifest; a line
+the user does not name stays in the manifest as read out, and nowhere else.
 `skills/brainstorming` writes an item and enters the pipeline; there, its own steps
 govern what gets written from the close.
 
@@ -219,7 +220,8 @@ Once all three termination conditions hold, present the residue manifest:
 2. **Raised-but-deferred items** — the Deferred list, read out, each line stating its
    scope tag (deferred-in-scope or destination-outside). Where a line lands is the
    caller's to decide and to state — see Callers; this file only guarantees the line is
-   named here. Nothing raised may drop out of this list into mere chat history.
+   named here. Nothing raised may drop out of this list before it is read out: the reading
+   is the record.
 3. **Silent assumptions** — each with its disposition stated, not just its text.
 
 The manifest is the ledger's decided, deferred, and assumptions lists read out; the open
@@ -231,7 +233,7 @@ decisions restated as **numbered acceptance criteria** — each an outcome, neve
 with its own verification — presented beside the manifest, not folded into it.
 
 **What the user approves is design + residue manifest + acceptance criteria.** Nothing
-raised may evaporate.
+raised may go unread at the close.
 
 ## Handoff
 

@@ -5,7 +5,7 @@ What a reviewer applies when finishing's architecture-review step
 change for its shape, before anything merges or is pushed. You are that reviewer.
 You review **read-only** — no working-tree, index, or HEAD mutation — and you do
 not fix anything; what you find goes to the user, who rules on each finding, except a
-Minor finding from round 2 on, which goes to the item's `## Follow-ups` without a ruling.
+Minor finding from round 2 on, which is left as is without a ruling, as one `## Progress` line.
 
 A **shape** is the outward form other code depends on: an API, a DB schema, a
 public interface, or a module or service boundary. You judge only shapes. You are
@@ -26,8 +26,9 @@ handed:
 - **Read access to the whole repo** — read callers, neighbours and older code
   freely; the diff alone never shows how a shape fits.
 - **On a later round, the rulings recorded so far** — each **leave as is**
-  record as Output below defines it, and each **backlog** — and the Minor findings sent to
-  `## Follow-ups` from round 2 on. Do not raise a ruled finding or one of those Minor
+  record in the architecture form of the **leave as is** record `references/doc-types.md`
+  **The item model** defines, and each **backlog** — and the Minor findings left as
+  is from round 2 on. Do not raise a ruled finding or one of those Minor
   findings again unless the fix changed the shape it concerns.
 
 ## Not your job
@@ -108,7 +109,7 @@ Every finding carries five things: **where** (`file:line`, or the shape's name
 when it spans files), **why** it matters, its **severity**, the **structural fix**,
 and your **recommended ruling**, which a Minor finding from round 2 on does not carry. The structural fix is the long-term one, never a workaround
 (`references/review-rubric.md` **Engineering judgment**). The user rules each finding one of three ways. A Minor finding from round 2 on is the
-exception: it goes to the item's `## Follow-ups` without a ruling. You recommend one of the
+exception: it is left as is without a ruling, as one `## Progress` line. You recommend one of the
 same three — a recommendation which a Minor finding from round 2 on does not carry:
 
 - **fix now** — fix it before this merges. The work goes back to be fixed, and
@@ -117,7 +118,8 @@ same three — a recommendation which a Minor finding from round 2 on does not c
   new or merged into a similar one (the "Similar backlog items" bullet of
   `references/doc-types.md` **Lifecycle rules**), and the merge goes ahead.
 - **leave as is** — the shape stays as it is. Its location, its gist and the user's
-  reason are recorded, and the finding is not raised again.
+  reason are recorded, as one `## Progress` line in the architecture form of the record
+  `references/doc-types.md` **The item model** defines, and the finding is not raised again.
 
 Severity is judged on the shape, one of three:
 
