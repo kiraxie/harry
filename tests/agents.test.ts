@@ -80,7 +80,7 @@ test("agents/ holds exactly the three roles", () => {
   assert.deepEqual(files.sort(), ROLES.map((r) => `${r}.md`).sort());
 });
 
-test("referee checks fixes on fable, a different model from the reviewer, by the fix-check reference", () => {
+test("referee checks fixes on fable at high effort, a different model from the reviewer", () => {
   const file = path.join(ccDir, "referee.md");
   assert.ok(existsSync(file), "missing CC agent: agents/referee.md");
   const fm = readFrontmatter(file);
@@ -90,9 +90,4 @@ test("referee checks fixes on fable, a different model from the reviewer, by the
     "referee: runs on fable, so its blind spots differ from the opus reviewer's",
   );
   assert.equal(fm.effort, "high", "referee: checks at high effort");
-  assert.match(
-    readFileSync(file, "utf-8"),
-    /references\/fix-check\.md/,
-    "referee: no longer points to the fix-check reference that defines its job",
-  );
 });

@@ -62,11 +62,6 @@ const ALLOWED: { file: string; line: string; why: string }[] = [
     line: "const start = lines.indexOf(opener);",
     why: "line-array lookup; a missing opener returns no paths and the caller's asserts fail",
   },
-  {
-    file: "session-writes.test.ts",
-    line: '.slice(deepDive.indexOf("```"), deepDive.lastIndexOf("```"))',
-    why: "first to last fence; a missing fence empties the slice and the match below fails",
-  },
 ];
 
 const scanned = (): string[] =>

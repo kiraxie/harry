@@ -16,25 +16,9 @@ const RED_GREEN = "`references/red-green.md`";
 
 const executing = read(path.join("skills", "executing", "SKILL.md"));
 
-test("executing's Build step sends Standard and Major to red-green.md before a test", () => {
+test("executing's Build step cites red-green.md", () => {
   const build = section(executing, "skills/executing/SKILL.md", "1. **Build.**", "2. **Verify**");
-  assert.match(
-    build,
-    /Standard and Major[^.]*read `references\/red-green\.md` before writing a test/,
-  );
-});
-
-test("executing's analyst lane is handed every file the rubric declares as its standard", () => {
-  const lane = section(
-    executing,
-    "skills/executing/SKILL.md",
-    "**analyst lane**",
-    "**Codex lane**",
-  );
-  assert.ok(
-    lane.includes("every file `references/review-rubric.md` declares as its standard"),
-    lane,
-  );
+  assert.ok(build.includes(RED_GREEN), build);
 });
 
 // A pointer is a sentence or two; anything longer is a second copy that drifts.
@@ -80,18 +64,9 @@ test("red-green.md sorts every section under an every-test or a Major group", ()
     lines.slice(0, every).every((l) => l.level !== 3),
     "no section before the groups",
   );
-  const before = lines
-    .slice(0, every)
-    .map((l) => l.text)
-    .join("\n");
   assert.deepEqual(
     lines.filter((l) => l.level === 2).map((l) => l.title),
     ["When this is mandatory (tiered)", "Every test", "Major / red line"],
     "a section outside both groups binds no tier",
-  );
-  assert.match(
-    before,
-    /\*\*Every test\*\* below binds every tier that writes a test; \*\*Major \/ red line\*\* adds/,
-    "the scope sentence names both groups",
   );
 });

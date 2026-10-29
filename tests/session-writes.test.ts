@@ -32,18 +32,8 @@ const flatten = (text: string): string => text.replace(/\s+/g, " ").replace(/[*`
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
 const plain = (rel: string): string => flatten(raw(rel));
 const EXECUTING = path.join("skills", "executing", "SKILL.md");
-const FINISHING = path.join("skills", "finishing", "SKILL.md");
 
-test("AC-1: executing has the session write and dispatches only its named roles", () => {
-  const who = flatten(headingSection(raw(EXECUTING), EXECUTING, "## Who writes"));
-  assert.match(who, /The session does all implementation, fixing and writing itself/);
-  assert.match(who, /independent judgment — review, debate, audit analysis → analyst/);
-  assert.match(who, /bulk reading → scout/);
-  assert.match(who, /Parallel writing is separate units, each in its own worktree/);
-  assert.doesNotMatch(plain("references/tier-gates.md"), /\| Execution \|/);
-});
-
-test("AC-1: executing's Who writes routes exactly the three roles and names no model", () => {
+test("AC-1: executing's Who writes routes exactly the three roles", () => {
   const who = headingSection(raw(EXECUTING), EXECUTING, "## Who writes");
   // A role is the token right after an arrow, whatever markup wraps it, so an added
   // "orchestration → driver" clause lands in the set and fails the equality below.
@@ -51,106 +41,9 @@ test("AC-1: executing's Who writes routes exactly the three roles and names no m
     [...who.matchAll(/→\s*(?:`|\*\*|\*|"|')?([\w-]+)(?:`|\*\*|\*|"|')?/g)].map((m) => m[1]),
   );
   assert.deepEqual([...routed].sort(), ["analyst", "referee", "scout"]);
-  for (const alias of ["haiku", "sonnet", "opus", "fable"])
-    assert.doesNotMatch(who, new RegExp(`\\b${alias}\\b`, "i"), `Who writes names ${alias}`);
 });
 
-test("AC-3: executing has one mode, reviews by tier in parallel, one fix wave", () => {
-  const text = plain(EXECUTING);
-  for (const gone of [
-    /task worktree/i,
-    /base ref/i,
-    /report log/i,
-    /## Dispatch/,
-    /Resuming table/i,
-  ])
-    assert.doesNotMatch(text, gone);
-  assert.match(text, /Dispatch the tier's lanes at once, in one turn/);
-  assert.match(text, /dispatch harry:analyst/);
-  assert.match(text, /The session fixes every Critical and Important finding itself/);
-  assert.match(text, /exactly one scoped re-review/);
-  assert.match(text, /There is no second wave/);
-});
-
-test("AC-4: a failed Codex lane is recorded and the review goes on with one lane", () => {
-  assert.match(
-    plain(EXECUTING),
-    /The lane fails[^.]*→ append its verbatim error and review: one lane ran to ## Progress and go on with the analyst lane alone — no substitute lane, and no question to the user/,
-  );
-});
-
-test("AC-12: the findings list is a file Progress names, and a resume reads it", () => {
-  const text = plain(EXECUTING);
-  assert.match(text, /Resuming[^.]*reads ## Progress, git log, and the files ## Progress names/);
-  assert.match(text, /write the merged list to <store>\/\.local\/tmp\/<branch>\/findings-<k>\.md/);
-  assert.match(text, /review at <sha7>: <n> findings \(<lanes>\) — <findings file>/);
-  assert.match(
-    text,
-    /fix wave: <X> addressed, <Y> open \(commits <base7>\.\.<head7>\) — <findings file>/,
-  );
-});
-
-test("AC-13: /audit dispatches only analyst; Step 1b is the session's own script", () => {
-  const orchestration = plain(path.join("references", "audit", "ORCHESTRATION.md"));
-  assert.match(orchestration, /every research and general agent is harry:analyst/i);
-  assert.match(orchestration, /Subagents in Round 1 \(references\/audit\/RECON\.md Step 2\)/);
-  const recon = plain(path.join("references", "audit", "RECON.md"));
-  assert.match(recon, /Run this as a script yourself: it is deterministic, so it needs no agent/);
-  assert.doesNotMatch(recon, /Assign this to a research agent/);
-});
-
-test("AC-6: finishing handles no task refs and reviews with analyst", () => {
-  const text = plain(FINISHING);
-  for (const gone of [/Leftover tasks/i, /refs\/harry/, /task\/<branch>/, /executing's 5\.5/])
-    assert.doesNotMatch(text, gone);
-  assert.match(text, /dispatch ONE harry:analyst/);
-});
-
-test("AC-7: debate, audit and brainstorming follow the three roles", () => {
-  assert.match(plain(path.join("commands", "debate.md")), /\| opus \| Dispatch harry:analyst/);
-  assert.match(
-    plain(path.join("references", "audit", "ORCHESTRATION.md")),
-    /every research and general agent is harry:analyst/i,
-  );
-  assert.doesNotMatch(plain(path.join("skills", "brainstorming", "SKILL.md")), /## Dispatch/);
-});
-
-test("AC-13: the audit hunter prompt says what to do with a thread it cannot finish", () => {
-  const deepDive = readFileSync(
-    path.join(repoRoot, "references", "audit", "DEEP-DIVE.md"),
-    "utf-8",
-  );
-  const prompt = deepDive
-    .slice(deepDive.indexOf("```"), deepDive.lastIndexOf("```"))
-    .replace(/\s+/g, " ");
-  assert.match(prompt, /return it as a lead: its location and the open question/i);
-  assert.doesNotMatch(prompt, /SPAWN/);
-});
-
-const DOC_TYPES = path.join("references", "doc-types.md");
-
-test("AC-17: no rule reads older Progress lines; users finish in-flight units first", () => {
-  assert.doesNotMatch(plain(DOC_TYPES), /Older Progress lines/);
-  assert.doesNotMatch(plain(EXECUTING), /Older Progress lines/);
-});
-
-test("AC-15: the CHANGELOG marks the removed roles breaking and says to re-sync", () => {
-  // Pinned on the whole file, not on an [Unreleased] section: a release renames that
-  // section to its version, and the entry stays there for good.
-  const changelog = readFileSync(path.join(repoRoot, "CHANGELOG.md"), "utf-8").replace(/\s+/g, " ");
-  assert.match(changelog, /\*\*The `mech`, `writer` and `security` role agents \(breaking\)\.\*\*/);
-  assert.match(changelog, /`harry:analyst`/);
-  assert.match(changelog, /run `\/harry:sync` \(Claude Code\) and the `sync` skill \(Codex\)/);
-  assert.match(changelog, /finish or discard every in-flight Standard or Major unit/);
-});
-
-test("AC-16: files Progress names are unit state, and a missing findings file re-runs the review", () => {
-  assert.match(
-    plain(DOC_TYPES),
-    /A file ## Progress names is unit state: it is kept until finishing's cleanup/,
-  );
-  assert.match(
-    plain(EXECUTING),
-    /A findings file ## Progress names that is missing → run step 3's review again over the whole branch \(<base>\.\.\.HEAD\)/,
-  );
+test("AC-17: no prose reads older Progress lines; users finish in-flight units first", () => {
+  const hits = proseFiles().filter((rel) => /Older Progress lines/.test(plain(rel)));
+  assert.deepEqual(hits, []);
 });

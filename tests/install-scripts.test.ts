@@ -26,7 +26,6 @@ import { fileURLToPath } from "node:url";
 import { run as initRun } from "../scripts/init.mjs";
 import { run as installRun } from "../scripts/install.mjs";
 import { safeWrite, tempPathFor } from "../scripts/lib/atomic-write.mjs";
-import { headingSection, section } from "./section.ts";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -679,18 +678,4 @@ test("init.mjs: a missing target directory is an error, not a directory to creat
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("/sync's shared Phase 2 stops on init's non-zero exit before Phase 3", () => {
-  const doc = readFileSync(path.join(pluginRoot, "references", "sync-migration.md"), "utf8");
-  const phase2 = headingSection(doc, "references/sync-migration.md", "## Phase 2");
-  assert.match(phase2, /verbatim/);
-  assert.match(phase2, /exits non-zero/);
-  assert.match(phase2, /stop[^.]*before\s+Phase 3/);
-});
-
-test("/sync's Phase 3 skip conditions point to Phase 2's init-failure stop", () => {
-  const doc = readFileSync(path.join(pluginRoot, "references", "sync-migration.md"), "utf8");
-  const skips = section(doc, "references/sync-migration.md", "**Skip conditions:**", "**Step A0");
-  assert.match(skips, /init failed[^.]*Phase 2/);
 });

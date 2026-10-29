@@ -27,17 +27,6 @@ test("dimension 11 judges tests by red-green.md", () => {
   assert.ok(eleven.includes("`references/red-green.md`"), eleven);
 });
 
-test("dimension 9 sends tests that exist but guard nothing to dimension 11", () => {
-  const nine = flatten(
-    headingSection(
-      raw("references/audit/SCAN-DIMENSIONS.md"),
-      "references/audit/SCAN-DIMENSIONS.md",
-      "## 9. Structural test-coverage holes",
-    ),
-  );
-  assert.match(nine, /dimension \*\*Low-value tests\*\*/);
-});
-
 const proofKinds = confirmedBranch().properties.retention_check?.properties?.proof?.oneOf;
 assert.ok(proofKinds?.length, "report-schema.json lost its retention_check proof kinds");
 const KINDS = proofKinds.map((kind) => `\`${kind.properties.kind.const}\``);
@@ -107,18 +96,6 @@ test("Round 6 hands every low-value-tests finding's deletion evidence to the rep
     "**`low-value-tests` findings**",
     "`seams_unlocked`",
   );
-  assert.match(entry, /at any severity/);
   for (const field of ["kind", "keeper", "mutation", "reason"])
     assert.ok(entry.includes(`\`${field}\``), `the REPORT.md entry must show ${field}`);
-  const debt = section(
-    ROUNDS,
-    "references/audit/VALIDATION-AND-REPORTING.md",
-    "If the target uses a debt ledger",
-  );
-  assert.match(debt, /`low-value-tests` finding carries its `retention_check`/);
-});
-
-test("dimension 11's remediation names the keeper and the mutation", () => {
-  const bar = section(dimension11(), "references/audit/SCAN-DIMENSIONS.md", "**Bar:**");
-  assert.match(bar, /remediation names the keeper and the mutation/);
 });

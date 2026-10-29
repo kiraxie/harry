@@ -97,6 +97,17 @@ would be released with the old version in it. No tag yet → skip this check.
 
 ## Phase A — bump, verify, commit (before the merge)
 
+**Eval coverage first.** Before any version bump, list the commits since the eval
+cases last changed that touch what a model is asked:
+
+```sh
+git log --oneline $(git log -1 --format=%H -- evals/cases.jsonl)..HEAD -- HARRY.md skills references commands agents
+```
+
+Show the list and say these commits have no eval case; with no output, say in one
+line that every prose commit is covered. The user decides: add a case, run the
+evals (`evals/README.md`), or proceed.
+
 **Branch first.** Never commit the release on the default branch (HARRY.md **Ask first**): cut a
 fresh branch from it (already synced above), holding nothing but the release
 commit. The squash in step 6 lands everything on the branch under the release

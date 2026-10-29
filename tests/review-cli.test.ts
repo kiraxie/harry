@@ -33,14 +33,7 @@ import { NO_ERROR_LINE } from "../src/lib/run-codex.ts";
 import { type Block, cites, readProse } from "./citations.ts";
 import { LINE_END_RE } from "./lines.ts";
 import { inDir, READER_CORPUS } from "./prose-dirs.ts";
-import {
-  headingLines,
-  headingSection,
-  inOrder,
-  outline,
-  section,
-  sectionLines,
-} from "./section.ts";
+import { headingLines, headingSection, inOrder, outline, section } from "./section.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI = path.join(REPO_ROOT, "src/companion.ts");
@@ -1337,30 +1330,14 @@ test("F1: every door that runs review tells the caller to read the `Review writt
   }
 });
 
-test("the review door documents --architecture and the standard it embeds", () => {
+test("the review door lists --architecture and names none of the rubric's standard files itself", () => {
   for (const door of ["commands/review.md"]) {
     const prose = readFileSync(path.join(REPO_ROOT, door), "utf8");
     assert.ok(
       prose.includes("[--architecture]"),
       `${door} must list --architecture in its synopsis`,
     );
-    assert.ok(
-      prose
-        .replace(/\s+/g, " ")
-        .includes("`references/architecture-review.md` in place of the per-diff standard"),
-      `${door} must say --architecture embeds architecture-review.md instead of the per-diff standard`,
-    );
-    assert.ok(
-      prose
-        .replace(/\s+/g, " ")
-        .includes("scopes findings to the shapes the change adds or alters"),
-      `${door} must say --architecture also scopes findings to shapes, not only swaps the standard`,
-    );
     const flat = prose.replace(/\s+/g, " ");
-    assert.ok(
-      flat.includes("every file `references/review-rubric.md` declares as its standard"),
-      `${door} must point at the rubric's declared standard, not list its files`,
-    );
     for (const file of declaredStandardFiles().filter((f) => f !== "references/review-rubric.md"))
       assert.ok(
         !flat.includes(`\`${file}\``),
@@ -1376,31 +1353,6 @@ function plainSection(heading: string): string {
     .replace(/[`*]/g, "");
 }
 
-test("the review door gives --architecture's base by round", () => {
-  assert.ok(
-    plainSection("## `--architecture`").includes(
-      "Pass --base: on round 1 the branch point; on a later round the head the most recent round recorded",
-    ),
-    "the --architecture section no longer says which --base each round passes",
-  );
-});
-
-test("the review door says the runtime does not require --architecture's base", () => {
-  assert.ok(
-    plainSection("## `--architecture`").includes("The runtime does not require it"),
-    "the --architecture section no longer says the runtime does not require --base",
-  );
-});
-
-test("the review door points --fix-check's context at fix-check.md's handed list", () => {
-  assert.ok(
-    plainSection("## `--fix-check`").includes(
-      "Pass through --context @<file> what references/fix-check.md What you are handed lists for level 3",
-    ),
-    "a hand run of --fix-check has no word on what its context carries",
-  );
-});
-
 const REVIEW_DOORS = ["commands/review.md"];
 
 function doorSynopsis(door: string, prose: string): string {
@@ -1414,40 +1366,6 @@ test("AC-5: the review door lists --rereview and --fix-check in its synopsis", (
     const synopsis = doorSynopsis(door, readFileSync(path.join(REPO_ROOT, door), "utf8"));
     for (const flag of ["[--rereview <text|@file|@->]", "[--fix-check <text|@file|@->]"])
       assert.ok(synopsis.includes(flag), `${door}'s synopsis must list ${flag}: ${synopsis}`);
-  }
-});
-
-for (const { flag, others, holds } of [
-  {
-    flag: "--rereview",
-    others: "`--architecture` and `--fix-check`",
-    holds:
-      "holds the open findings under their numbers, the fix check's verdicts and the last number in use",
-  },
-  {
-    flag: "--fix-check",
-    others: "`--architecture` and `--rereview`",
-    holds: "holds each finding with its proposed fix",
-  },
-]) {
-  test(`AC-5: the review door says what ${flag}'s file holds, that it needs --base and what it excludes`, () => {
-    for (const door of REVIEW_DOORS) {
-      const raw = readFileSync(path.join(REPO_ROOT, door), "utf8");
-      const own = headingSection(raw, door, `## \`${flag}\``).replace(/\s+/g, " ");
-      for (const needle of [holds, "needs `--base`", `excludes ${others}`])
-        assert.ok(own.includes(needle), `${door}'s \`${flag}\` section must say "${needle}"`);
-    }
-  });
-}
-
-test("the review door says an empty range fails --rereview and --fix-check instead of reporting nothing", () => {
-  for (const door of REVIEW_DOORS) {
-    const prose = readFileSync(path.join(REPO_ROOT, door), "utf8").replace(/\s+/g, " ");
-    const nothing = section(prose, door, "**Nothing to review:**", "## Failure");
-    assert.ok(
-      nothing.includes("With `--rereview` or `--fix-check`, an empty range fails instead"),
-      `${door}'s Nothing to review paragraph must say an empty range fails the two handed modes`,
-    );
   }
 });
 
@@ -1493,17 +1411,6 @@ test("AC-11: only the review door, CLAUDE.md's runtime section and README name r
   assert.deepEqual(hits, [], "callers name the review mode they run, not the codex subcommand");
 });
 
-test("AC-5: the review door sends a re-review's open findings to --rereview, not --context", () => {
-  for (const door of REVIEW_DOORS) {
-    const raw = readFileSync(path.join(REPO_ROOT, door), "utf8");
-    const context = headingSection(raw, door, "## `--context`").replace(/\s+/g, " ");
-    assert.ok(
-      context.includes("A re-review's open findings go in `--rereview`, not `--context`"),
-      `${door}'s \`--context\` section must route a re-review's open findings to --rereview`,
-    );
-  }
-});
-
 test("AC-5: the review door lists --spec in its synopsis", () => {
   const synopsis = doorSynopsis(
     "commands/review.md",
@@ -1511,90 +1418,6 @@ test("AC-5: the review door lists --spec in its synopsis", () => {
   );
   assert.ok(synopsis.includes("[--spec <text|@file|@->]"), synopsis);
 });
-
-test("AC-5: the review door says what --spec holds, that it is the plain review's, and its strict read", () => {
-  const own = plainSection("## `--spec`");
-  for (const needle of [
-    "then the AC verbatim, each with its probe line beside it",
-    "It goes with the plain review only",
-    "an @file that cannot be read, or an @- or @file with nothing in it, fails the run before codex starts",
-  ])
-    assert.ok(own.includes(needle), `the --spec section must say "${needle}": ${own}`);
-});
-
-test("AC-5: the review door sends the AC and their probe lines to --spec, not --context", () => {
-  assert.ok(
-    plainSection("## `--context`").includes(
-      "In a plain review, the acceptance criteria and their probe lines go in --spec, not --context",
-    ),
-    "the --context contract no longer routes the AC and their probe lines to --spec",
-  );
-});
-
-function codexLane(): string {
-  const rel = "skills/executing/SKILL.md";
-  const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
-  return flatProse(section(raw, rel, "**Codex lane**", "It writes findings to the file"));
-}
-
-test("AC-4: executing's Codex lane hands the AC with their probe lines through --spec", () => {
-  const lane = codexLane();
-  for (const needle of [
-    "review-spec.md, opening with",
-    "then the item's AC verbatim, each with its probe line beside it",
-    "/harry:review --base <base-branch> --spec @<",
-  ])
-    assert.ok(lane.includes(needle), `executing's Codex lane must say "${needle}": ${lane}`);
-});
-
-test("AC-4: executing's Codex lane facts file holds only the constraints and the rulings", () => {
-  const lane = codexLane();
-  assert.ok(
-    lane.includes(
-      "review-context.md, holding only the unit's binding constraints and any rulings recorded so far, each with its reasoning",
-    ),
-    lane,
-  );
-  const facts = section(
-    lane,
-    "executing's Codex lane",
-    "the facts file review-context.md",
-    "2. Invoke the slash command",
-  );
-  for (const carried of [/\bAC\b/, /criteri/i, /probe/i])
-    assert.doesNotMatch(facts, carried, `the facts file still carries the AC: ${facts}`);
-});
-
-function analystLane(): string {
-  const rel = "skills/executing/SKILL.md";
-  const raw = readFileSync(path.join(REPO_ROOT, rel), "utf8");
-  return flatProse(section(raw, rel, "**analyst lane**", "**Codex lane**"));
-}
-
-for (const { surface, text, needle } of [
-  {
-    surface: "executing's analyst lane",
-    text: analystLane,
-    needle: "dispatch harry:analyst with the range, the unit's tier, the item's",
-  },
-  {
-    surface: "executing's Codex lane",
-    text: codexLane,
-    needle: "review-spec.md, opening with a Tier: <tier> line",
-  },
-  {
-    surface: "the review door's --spec section",
-    text: () => plainSection("## `--spec`"),
-    needle: "the unit's tier on its first line, Tier: <tier>",
-  },
-]) {
-  test(`finding 1: ${surface} hands the reviewer the unit's tier`, () => {
-    const own = text();
-    assert.ok(own.includes(needle), `${surface} must say "${needle}": ${own}`);
-  });
-}
-
-const NAMES_TIER = /the unit's tier|tier: <tier>/i;
 
 const EXECUTING_RAW = (): string =>
   readFileSync(path.join(REPO_ROOT, "skills/executing/SKILL.md"), "utf8");
@@ -1604,28 +1427,7 @@ const executingLines = (): string[] =>
     .split(LINE_END_RE)
     .map((line) => flatProse(line).trim());
 
-test("finding 6: every review hand-off in executing names the tier", () => {
-  const rel = "skills/executing/SKILL.md";
-  const [from, to] = sectionLines(
-    EXECUTING_RAW(),
-    rel,
-    "**Codex lane**",
-    "It writes findings to the file",
-  );
-  const lane = codexLane();
-  const handoffs = executingLines()
-    .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line }) => /harry:analyst|\/harry:review\b/.test(line));
-  assert.ok(handoffs.length > 0, `${rel} no longer hands any review lane anything`);
-  for (const { line, n } of handoffs)
-    assert.match(
-      n >= from && n <= to ? lane : line,
-      NAMES_TIER,
-      `${rel}:${n} hands a review no tier: ${line}`,
-    );
-});
-
-test("finding 6: every flag executing hands a review through says its file carries the tier", () => {
+test("every flag executing hands a review a file through has a section in the review door", () => {
   const flags = new Set(
     executingLines()
       .filter((line) => line.includes("/harry:review"))
@@ -1633,25 +1435,7 @@ test("finding 6: every flag executing hands a review through says its file carri
   );
   flags.delete("context");
   assert.ok(flags.size > 0, "executing hands no review a file through a flag");
-  for (const flag of flags)
-    assert.match(plainSection(`## \`--${flag}\``), NAMES_TIER, `--${flag}'s door section`);
-});
-
-test("AC-6: Spec compliance judges a probe whose old and new answers match", () => {
-  const spec = flatProse(
-    section(
-      RUBRIC,
-      "references/review-rubric.md",
-      "1. **Spec compliance**",
-      "2. **Code quality.**",
-    ),
-  );
-  assert.ok(
-    spec.includes(
-      "A probe line whose old and new answers match is not watched failing: at Major it fails the AC; at Standard it is judged on the line's reason, as a no probe ran line is.",
-    ),
-    spec,
-  );
+  for (const flag of flags) plainSection(`## \`--${flag}\``);
 });
 
 test("F1: every review and ask door quotes the no-error-line notice and names no tail size", () => {

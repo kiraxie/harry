@@ -613,6 +613,82 @@ Prompts are realistic user requests and never mention harry or the laws — aski
 "would you classify this?" would cue the answer. Checks are robust regexes, not
 exact phrases.
 
+### Candidates
+
+Behaviors no case covers yet. Each line was once a wording pin in `tests/`, deleted
+on 2026-10-29 because a reword turned it red and a wrong behavior did not; a case
+here is written only when the user names the behavior as load-bearing.
+
+**Finishing's merge tail**
+- a unit lands as a squash: one commit on the base summarising the unit, never a merge commit; locally with `git merge --squash` and `git reset --merge` as the undo, on a PR with `gh pr merge --squash --subject --body`
+- the landing check is `git merge-tree --write-tree`, read past its first line; `branch -D` only after the landing check and the clean-worktree check pass
+- isolation follows concurrent writers, not tier; the user editing alongside counts as a writer
+- the layout names only the unit's own linked worktree, never the main checkout; Discard touches no main checkout that is not on the unit's branch and keeps ignored files
+- a merge in progress is finished or aborted first, then cleanup restarts from its first check; the clean check lists ignored files
+- Option 1 pushes the base with a plain push, never forced; a rejected push stops, never retried; step h only watches CI; nothing asks before the push
+
+**The fix check**
+- fix-check names three levels (finding site, data flow, system) and what each checks; a returning cause needs a class-wide check; an unlisted side-effect flag fails at level 2
+- the referee is handed every listed input, the reference itself in full, and never the session transcript
+- a verdict is per fix: holds at all three named levels, or fails at a named level with a reason and a fix that holds; a stop-for-the-user line has its own shape and its four cases are named
+- executing dispatches one referee over every non-small Critical/Important fix before building, builds each as its line says, sends back a report missing a line, records verdicts under `## Fix check` and one Progress line; a failed dispatch falls back to the session as not independent
+- finishing's fix now runs the referee's check before its AC is drafted and records the findings file, verdicts and Progress line
+
+**The re-review form and finding identity**
+- a finding's number holds inside one report only; its identity is where it is plus what is wrong
+- executing numbers the merged list; the re-review gives one verdict per handed number, ADDRESSED only when the cause is gone, judged at fix-check's three levels; attempted is not addressed
+- new issues number on from the handed list's last number; two lanes' new issues merge into one numbering
+- the re-review's Assessment carries Quality and Verdict, no per-AC spec; the both-verdicts rule names the re-review as its one exception
+- the Codex lane's re-review gets the open list through `--rereview`, never `--context`; the facts file carries no AC, which go through `--spec` with their probe lines; every hand-off names the unit's tier
+
+**Grilling**
+- the exit gate (residue manifest: decided, deferred, assumptions; the settled decisions as numbered AC; what approval covers) is defined once, in grilling.md
+- the loop exits on three conditions: no open questions after a re-walk that adds nothing, every assumption dispositioned, the destination did not move
+- listing an assumption is not closing it; only the user defers a question; the ledger is written to a file only on request
+- one question per round in both phases; batching is opt-in; the re-walk runs after every answer and every design draft, from the destination down, reopening a decision out loud and withdrawing its AC; the handoff lets a re-walk reopen a settled decision
+- tier sets the interview's depth (divergence brief, convergence on the frontier, exit gate unabridged), never its cadence
+
+**The architecture review's inputs and rulings**
+- merge, PR and keep all pass through the review; only Discard skips it; a pre-decided path still runs it; a bug fix that alters a shape is reviewed like a feature
+- an empty shape list writes the skip line to `## Progress`; with no item every line goes to the reply, a fix now fixes in place and a backlog still lands in an item
+- one analyst, one lane, handed the round, the shape list, the design and AC, the diff by absolute path (its directory created first), the reference in full, the last 20 commits, repo read access, and on a later round every ruling and left-as-is Minor
+- the reviewer steps up one level and labels what is seen only from there, reads the history for accumulation, names the unseen side of a boundary, phrases missing context as a question, says no findings plainly, and never fixes
+- every finding carries where, why, severity (defined in shape terms), structural fix and recommended ruling; a Minor from round 2 on carries none and is left as is without a ruling
+- rulings are fix now (a new AC that names the one it supersedes; approved text never edited; back to executing), backlog (a new or merged item), leave as is (recorded in the architecture form, handed to later rounds)
+- every round records the head it reviews; a later round lists and packages only the changes since that head; rounds 2 and 3 start on their own, none after, and round 3 with a Critical or Important open stops with a status report
+- the leave-as-is record's fields are listed once, in doc-types The item model, and the architecture review cites its architecture form; the review door points at the step's Reviewer list instead of copying it
+
+**Who writes**
+- the session writes everything and dispatches only analyst, referee and scout, naming no model; lanes dispatched at once, one fix wave, exactly one scoped re-review, no second wave
+- a failed Codex lane is recorded verbatim and the review goes on with one lane; the findings list is a file Progress names; a resume reads Progress, git log and the named files; a missing findings file re-runs the review
+- /audit dispatches only analyst and runs its deterministic step as the session's script; the hunter prompt returns an unfinished thread as a lead; debate's opus voice is analyst
+- the resident laws keep each rule under its heading, and every rule that left the core has one home in the skill or reference that uses it
+
+**Plain language and the writing laws**
+- the Talk law binds plain writing to every text written for people and keeps briefs and review reports precision-first, coining no new term; a PR body is the user's
+- the plain-language reference carries the grounding rule, both principles and two levels; the `/wait-what` door is one-shot, not a mode
+- code carries no comment by default; the one kept kind is a one-line trade-off; a DEBT: note names its ceiling and upgrade path; tool directives are not comments
+- every review and architecture finding carries a structural fix, a short-term one only when that is not simple, a workaround never; a comment that restates the code, justifies a workaround or resists a change is flagged
+- a fix inside a unit is tiered like a task: small only when Trivial and no test weakens; the fix wave cites that rule once; the scope brake applies to the re-review; three failed fixes of one hypothesis stop
+
+**Backlog writers and the review door**
+- doc-types owns the Notes entry's shape, the superseded-AC rule and the ruled-backlog marker forms; a kept Non-Goal is ruled in the residue manifest; /sync's migration is the one writer outside the Similar rule
+- the review door documents each flag's file, that it needs `--base`, what it excludes, that an empty range fails the handed modes, and what `--context` must not carry
+- `/sync`'s shared Phase 2 stops on init's non-zero exit before Phase 3
+- `/release` passes `--start` to the state script, takes the latest tag from it, and greps with its token boundary, never `grep -w`
+- the referee's card points at the fix-check reference; /distill writes under the resolved store, never a bare `.local/`; doc-types says to set up or confirm `.local/` when a project has none
+- the /grill and /wait-what doors restate nothing of the technique they point at; brainstorming and tier-gates restate nothing of grilling.md's exit gate or re-walk; doc-types' template and brainstorming re-list no Follow-ups source
+
+**Tiers, acceptance criteria and the audit**
+- HARRY.md sets the Major trigger by risk (a red line, a failure hard to see or undo, an edit to always-loaded instructions), never by file count; red-green's table holds the TDD tiers
+- an AC states an outcome and carries its verification; the rubric gives one verdict line per AC; executing's analyst lane is handed every file the rubric declares as its standard
+- executing's Build step sends Standard and Major to red-green.md before writing a test; red-green's scope sentence binds Every test to every tier that writes one and adds the full cycle at Major
+- Standard and Major build to the rubric's Engineering judgment, read before the first commit, and the fix wave applies it too
+- finishing cites HARRY.md **Ask first** for its destructive step; doc-types says a work unit is one item, status backlog → active → done
+- tier-gates defines brainstorm depth once and no tier row prescribes interview cadence; brainstorming and tier-gates restate none of the depth rule
+- finishing checks a PR's reviews, inline comments and CodeRabbit status, never merges over an unmet conditional approval, and keeps planning language out of the title and body
+- the audit sends a test that exists but guards nothing from its coverage-holes dimension to **Low-value tests**; a low-value-tests finding carries its deletion evidence at any severity, its retention check into the debt ledger, and a remediation naming the keeper and the mutation
+
 ## Invocation
 
 ```sh

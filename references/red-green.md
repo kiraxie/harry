@@ -33,9 +33,12 @@ uses real code, has a clear name). Corollaries:
   through bugs; test the behavior the constant controls, not the constant.
 - **Behavior, not text** — never grep a script's or skill's source as a substitute for
   running it; run it and assert its effects. An instruction edit is tested by a probe
-  (`references/tier-gates.md` **Red-green for an instruction edit**). (Asserting a text
-  artifact's own contract — links resolve, two files agree — is a different kind of test,
-  and fine.)
+  (`references/tier-gates.md` **Red-green for an instruction edit**). A text artifact
+  takes four kinds of test: citation resolution (a cited path or section exists),
+  agreement between two files (what one file says of another holds), structure (a
+  section, field or label exists; a count; an order), and a corpus-wide guard that a
+  retired concept does not return. A regex against one file's wording is a change
+  detector: a reword turns it red, a wrong behavior does not.
 - **No borrowed pass** — a negative test must fail for the reason it names. A rejection
   that comes from a different guard, or from a path production never reaches, passes
   while the guard it claims to test is gone.

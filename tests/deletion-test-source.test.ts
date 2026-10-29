@@ -28,7 +28,7 @@ test("/audit dimension 10 points at architecture-review.md for the deletion test
       "## 10.",
     ),
   );
-  assert.match(ten, /deletion test[^.]*`references\/architecture-review\.md`/i);
+  assert.ok(ten.includes("`references/architecture-review.md`"), ten);
   assert.match(ten, /\*\*Bar:\*\*/);
 });
 
@@ -40,8 +40,5 @@ test("/audit dimension 10 takes when a single implementation is too early from A
       "## 10.",
     ),
   );
-  assert.match(
-    ten,
-    /single-implementation[^.]*`references\/architecture-review\.md` \*\*Abstraction timing\*\*/i,
-  );
+  assert.ok(ten.includes("`references/architecture-review.md` **Abstraction timing**"), ten);
 });

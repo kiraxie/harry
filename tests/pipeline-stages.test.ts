@@ -109,17 +109,3 @@ test("the item template carries acceptance criteria and Progress", () => {
     }
   }
 });
-
-test("the acceptance-criteria rule keeps its two load-bearing halves", () => {
-  // Outcomes not steps, and every criterion carries its own verification. Lose
-  // either and AC degrades into a task list or an unverifiable wish.
-  const docTypes = read("references/doc-types.md");
-  assert.match(docTypes, /outcome/i, "doc-types no longer says an AC states an outcome");
-  assert.match(docTypes, /verif/i, "doc-types no longer says an AC carries its verification");
-  const rubric = read("references/review-rubric.md");
-  assert.match(
-    rubric,
-    /one line per AC/i,
-    "the review rubric's output block no longer demands a verdict per acceptance criterion",
-  );
-});
