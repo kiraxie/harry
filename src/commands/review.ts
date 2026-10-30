@@ -1,18 +1,3 @@
-/**
- * review command — runs one `companion review` mode through the Codex CLI.
- *
- * Works out the mode from its flags and checks them (the modes exclude each
- * other; a re-review or fix check needs `--base` and its handed text), resolves
- * what to review (branch vs working tree), builds the mode's prompt from its record
- * (`MODES` in `src/lib/review-modes.ts`), and runs the one read-only `codex exec`
- * every mode runs (`runCodexExec`), at the repo root with the prompt on stdin.
- * The review file is printed verbatim.
- *
- * Spawning and the loud no-fallback failure handling live in
- * `src/lib/run-codex.ts`; the review file and the `.log` beside it are reserved
- * by `src/lib/run-files.ts`. Both are shared with `ask`.
- */
-
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { resolveTextFlag } from "../lib/context.ts";
@@ -37,13 +22,8 @@ import { ensureDir, resolveStateDir } from "../lib/state.ts";
 export interface ReviewOptions {
   base?: string;
   reasoning?: ReasoningEffort;
-  /** Background for the reviewer: literal text, or `@file` / `@-` — see `resolveTextFlag`. */
   context?: string;
   spec?: string;
-  /**
-   * Embed `references/architecture-review.md` instead of the per-diff rubric —
-   * an architecture review run by hand, out of session.
-   */
   architecture?: boolean;
   rereview?: string;
   fixCheck?: string;
@@ -101,11 +81,6 @@ function resolveStandard(cwd: string, options: ReviewOptions): Selected {
 /** The stderr line naming the review file. The doors tell callers to read that path. */
 export const REVIEW_WRITTEN = "Review written to";
 
-/**
- * Where the review lands. The MAIN checkout's `.local/tmp/<branch>/` when that
- * checkout already has a `.local/` (even when run from a linked worktree),
- * otherwise the plugin state dir. A `.local/` is never created here.
- */
 function resolveOutputDir(repoRoot: string): string {
   const branch = getBranchOrShortSha(repoRoot);
   const local = join(getMainCheckoutRoot(repoRoot), ".local");
@@ -117,7 +92,6 @@ function resolveOutputDir(repoRoot: string): string {
   return dir;
 }
 
-/** One review file per run: `codex-review-<YYYYMMDD-HHMMSS>[-N].md` plus its `.log`. */
 export function reserveReviewFiles(
   dir: string,
   now: Date = new Date(),

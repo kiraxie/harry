@@ -1,10 +1,3 @@
-/**
- * Workspace-scoped state directory, under $CLAUDE_PLUGIN_DATA.
- *
- * Holds the per-run output files and codex transcript logs that `ask` writes,
- * and that `review` writes when the main checkout has no `.local/`.
- */
-
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
@@ -13,12 +6,8 @@ import { basename, join, resolve } from "node:path";
 
 import { resolveOnPath } from "./path-search.ts";
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
 const PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
 const FALLBACK_STATE_ROOT = join(tmpdir(), "harry");
-
-// ─── State Directory ─────────────────────────────────────────────────────────
 
 /**
  * Resolve the git repo root containing `cwd`, falling back to `resolve(cwd)`

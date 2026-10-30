@@ -49,7 +49,11 @@ session; adds harry's `.gitignore` block to this project; and offers to migrate
 any legacy spec/plan docs into harry's format. Run it once per project to set up,
 and again any time the plugin updates or `HARRY.md` changes — the laws step is
 idempotent, so re-runs elsewhere are no-ops. (`/harry:sync --remove` strips this
-project's `.gitignore` block; the global laws stay.)
+project's `.gitignore` block; the global laws stay, and `pnpm run install-laws --remove`
+strips the import block and harry's Explore override, leaving the deployed snapshot for
+you to delete.) The laws
+step also warns about entries in your global file that harry supersedes; it never edits
+your own rules. `HARRY_GLOBAL=<path>` points the installer at another global file.
 
 The laws are a **snapshot**, not a live reference to the plugin checkout: after
 updating the plugin (or editing `HARRY.md`), re-run `/harry:sync` (or
@@ -65,7 +69,7 @@ Claude-native or local scripts.
 
 | Command | What it does |
 |---------|--------------|
-| `/harry:review [--base <ref>] [--reasoning <effort>] [--context <text\|@file\|@->]` | Read-only code review via `codex exec` — working tree, a branch against its default, or a diff against `--base` |
+| `/harry:review [--base <ref>] [--architecture] [--reasoning <effort>] [--context <text\|@file\|@->]` | Read-only code review via `codex exec` — working tree, a branch against its default, or a diff against `--base`; `--architecture` runs the architecture review by hand, out of session |
 | `/harry:ask "<prompt>" [--reasoning <effort>] [--context <text\|@file\|@->]` | One read-only prompt to Codex via `codex exec` |
 | `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
@@ -73,6 +77,8 @@ Claude-native or local scripts.
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 | `/harry:wait-what` | Re-explain harry's previous message once, in plainer words — one-shot, not a mode |
+
+`--context` reads `@file` from a file and `@-` from stdin; any other text is literal. Text that must begin with a literal `@` has no escape: pass it through `@-` or a file.
 
 Cheap-first smoke test: `/harry:ask` → `/harry:review`/`/harry:debate`.
 

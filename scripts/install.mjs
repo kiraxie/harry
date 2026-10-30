@@ -1,29 +1,6 @@
 #!/usr/bin/env node
-// harry install-laws — DEPLOY the resident HARRY.md as a snapshot and wire the
-// global instructions file to it via an `@` import, so the laws load every
-// session without a keyword.
-//
-// Deploys a copy of the plugin's current HARRY.md to <home>/.claude/harry/HARRY.md
-// and inserts a marker-wrapped `@<home>/.claude/harry/HARRY.md` line into
-// ~/.claude/CLAUDE.md (override the global file with HARRY_GLOBAL; the snapshot
-// path derives from its directory). This is a snapshot, NOT a live reference to
-// the plugin checkout: editing the plugin's HARRY.md (even uncommitted) does not
-// change installed behavior until you re-run this — "release" = re-run
-// `pnpm run install-laws` / `/harry:sync`: re-run sync to resync laws after
-// updating.
-//
-// Re-running re-deploys the snapshot and rewrites the marker block idempotently,
-// migrating any older direct-repo-path import inside harry's block to the
-// deployed path. Idempotent; `--remove` strips the import block (the deployed
-// snapshot copy is left in place — a harmless file, and deletion is the user's
-// call). Also warns about stale entries in the global file that harry supersedes
-// (it does NOT edit the user's hand-written rules — that's the user's call).
-//
-// Usage:
-//   node scripts/install.mjs            # deploy the snapshot + wire the @ import
-//   node scripts/install.mjs --explore  # also deploy the user-level Explore override
-//   node scripts/install.mjs --remove   # uninstall the import block + harry's Explore override
-//   node scripts/install.mjs --selftest # runnable check
+// A snapshot, NOT a live reference to the plugin checkout: editing the plugin's
+// HARRY.md (even uncommitted) changes nothing installed until this re-runs.
 
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -145,7 +122,6 @@ function selftest() {
       run();
       out = readFileSync(g, "utf8");
       assert(out.split(BEGIN).length === 2, "idempotent on second run");
-      // --explore deploys the user-level Explore override; --remove deletes it.
       const explore = join(dir, "agents", "Explore.md");
       run({ explore: true });
       assert(existsSync(explore), "--explore deploys the Explore override");

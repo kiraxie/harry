@@ -1,11 +1,6 @@
 /**
- * The one place the companion spawns the Codex CLI: `spawnCodexSync` for
- * `setup`'s quick queries, and `runCodexExec`, which builds the read-only
- * `codex exec` argv every review mode and `ask` runs, spawns it with signal
- * forwarding, and handles its failures. Both spawn the absolute path
- * `resolveOnPath` finds, never the bare name (execvp would search the cwd);
- * finding `codex` on PATH lives in `path-search.ts`; the run files it writes
- * into live in `run-files.ts`.
+ * Both spawns use the absolute path `resolveOnPath` finds, never the bare name:
+ * execvp would search the cwd.
  *
  * codex writes its whole session transcript to stderr (prompt echo, every
  * command's output) — hundreds of KB on a real run — so stderr goes to the run's
@@ -35,26 +30,17 @@ export const REASONING_EFFORTS: readonly ReasoningEffort[] = ["low", "medium", "
 export const CODEX_CLI_MISSING =
   "The Codex CLI was not found on PATH. Install it and run `codex login`, then retry.";
 
-/**
- * Whether a spawn result means codex is not installed: ENOENT, which
- * {@link runCodexExec}'s spawn and {@link spawnCodexSync} also report when PATH
- * holds no `codex`. A non-zero exit is never one: codex ran and failed on its own terms.
- */
+/** A non-zero exit never means codex is missing: codex ran and failed on its own terms. */
 export function codexMissing(res: { error?: Error; status: number | null }): boolean {
   return (res.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 }
 
-/** The ENOENT a spawn reports when PATH holds no `codex` (see {@link codexMissing}). */
 function codexNotFound(syscall: string): Error {
   return notFoundError(syscall, "codex");
 }
 
 export type CodexQuery = readonly ["--version"] | readonly ["login", "status"];
 
-/**
- * `spawnSync` for codex: `setup`'s short queries. A long run goes through
- * {@link runCodexExec}, which a signal can interrupt.
- */
 export function spawnCodexSync(
   args: CodexQuery,
   options: SpawnSyncOptions,
@@ -67,24 +53,19 @@ export function spawnCodexSync(
   return spawnSync(command, args, options);
 }
 
-/** How a {@link spawnCodex} run ended, in `spawnSync`'s terms. */
 interface CodexResult {
-  /** The exit code; null when codex never started or was killed by a signal. */
   status: number | null;
   signal: NodeJS.Signals | null;
-  /** A spawn error (codex never started), else a stdin write error such as EPIPE. */
   error?: Error;
 }
 
-/** The termination signals a companion passes on to its running codex. */
 const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ["SIGTERM", "SIGINT", "SIGHUP"];
 
 /**
- * Run codex with `input` on stdin, stdout ignored and stderr to `logFd`, and
- * resolve once it has exited. Asynchronous, unlike `spawnSync`, so the
- * companion can act on a signal while codex runs: a SIGTERM, SIGINT or SIGHUP
- * (e.g. a Bash tool timeout) is sent on to codex, and then re-raised on the
- * companion, which dies by it as it would unhandled — even when the send fails.
+ * Asynchronous, unlike `spawnSync`, so the companion can act on a signal while
+ * codex runs: a SIGTERM, SIGINT or SIGHUP (e.g. a Bash tool timeout) is sent on
+ * to codex, and then re-raised on the companion, which dies by it as it would
+ * unhandled — even when the send fails.
  *
  * DEBT: the signal reaches codex's own pid only. The real codex CLI (an npm
  * node launcher) forwards it to its native binary itself, but anything codex
@@ -149,7 +130,6 @@ function spawnCodex(
   });
 }
 
-/** How much of codex's log a failure prints — enough to carry its closing `ERROR:` line. */
 const FAILURE_TAIL_LINES = 40;
 
 /**
@@ -158,14 +138,11 @@ const FAILURE_TAIL_LINES = 40;
  */
 export const NO_ERROR_LINE = "No error line at the end of codex's log.";
 
-/** Why a codex run failed. `missing`: never started (its log is removed). */
 export type CodexFailureKind = "missing" | "exit" | "empty";
 
 export class CodexRunError extends Error {
   readonly kind: CodexFailureKind;
-  /** The run's log; absent for `missing`, whose empty log is deleted. */
   readonly logPath?: string;
-  /** The exit code for `exit` (null when killed by a signal). */
   readonly exitStatus?: number | null;
 
   constructor(
@@ -192,15 +169,11 @@ function logTail(logPath: string): string[] {
   return lines.slice(-FAILURE_TAIL_LINES);
 }
 
-/** The most bytes a failure prints of any one log line, marker included. */
 const MAX_LINE_BYTES = 1000;
 
 const TRUNCATED = "…[truncated]";
 
-/**
- * Cut `line` to at most {@link MAX_LINE_BYTES} UTF-8 bytes, ending in
- * `…[truncated]` when cut. Walks whole code points, so the cut never splits one.
- */
+// Walks whole code points, so the cut never splits one.
 export function capLogLine(line: string): string {
   if (Buffer.byteLength(line) <= MAX_LINE_BYTES) return line;
   const budget = MAX_LINE_BYTES - Buffer.byteLength(TRUNCATED);
@@ -228,10 +201,6 @@ const ERROR_LINE_RE = /^(?:ERROR|Error|error):/;
  */
 const CONTROL_RE = /[^\P{Cc}\t]/gu;
 
-/**
- * The error lines of the log's tail, matched at column 0 of the raw line, with
- * control characters and trailing whitespace dropped.
- */
 function tailErrorLines(logPath: string): string[] {
   return logTail(logPath)
     .filter((l) => ERROR_LINE_RE.test(l))
@@ -239,7 +208,6 @@ function tailErrorLines(logPath: string): string[] {
 }
 
 /**
- * Print the error lines of the log's tail, then its path, for a failed run.
  * Only error lines: the rest of the tail is transcript, and the caller's
  * stderr lands in its own transcript.
  */
@@ -279,20 +247,15 @@ export function lastErrorLine(logPath: string): string | undefined {
 export const CODEX_EXEC = "codex exec";
 
 export interface CodexExecInput {
-  /** Passed as `--skip-git-repo-check` when true, so codex may run outside a git repo. */
   skipGitRepoCheck?: boolean;
-  /** Passed as `-c model_reasoning_effort="<v>"` when set. */
   reasoning?: ReasoningEffort;
   cwd: string;
-  /** Sent on stdin: the argv ends in `-`. */
   input: string;
   outputPath: string;
   logPath: string;
-  /** Names what `-o` should hold, e.g. `review`. */
   outputNoun: string;
 }
 
-/** The argv every `codex exec` run spawns with, behind codex's read-only sandbox. */
 function codexExecArgs(opts: CodexExecInput): string[] {
   const args = ["exec", "--ephemeral", "-s", "read-only"];
   if (opts.skipGitRepoCheck) args.push("--skip-git-repo-check");
@@ -302,13 +265,6 @@ function codexExecArgs(opts: CodexExecInput): string[] {
   return args;
 }
 
-/**
- * Spawn `codex exec` read-only and return the non-empty contents of its `-o` file, ending with a
- * newline so a marker the caller writes to stderr after it starts its own line.
- * On `exit` and `empty` failures the log tail's error lines and `Log:` path are
- * already on stderr when the {@link CodexRunError} is thrown. Any other spawn
- * error is rethrown as is, after the same report when codex wrote to its log.
- */
 export async function runCodexExec(opts: CodexExecInput): Promise<string> {
   // stdout is ignored: codex echoes its final message there, and the output is
   // read from the -o file instead.
@@ -354,6 +310,7 @@ export async function runCodexExec(opts: CodexExecInput): Promise<string> {
   }
   // Loud: a run whose output may stay readable by others does not succeed.
   narrowOutput(opts.outputPath);
+  // Ends with a newline so a marker the caller writes to stderr after it starts its own line.
   return output.endsWith("\n") ? output : `${output}\n`;
 }
 

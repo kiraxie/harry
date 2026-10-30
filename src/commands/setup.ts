@@ -1,8 +1,3 @@
-/**
- * setup command — Codex CLI availability and login state, from
- * `codex --version` and `codex login status`.
- */
-
 import {
   CODEX_CLI_MISSING,
   type CodexQuery,
@@ -19,7 +14,6 @@ export interface SetupOptions {
 interface CodexCall {
   missing: boolean;
   status: number | null;
-  /** Non-empty output lines, stderr (where `login status` reports) then stdout. */
   lines: string[];
 }
 

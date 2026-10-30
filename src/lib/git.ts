@@ -1,9 +1,3 @@
-/**
- * Read-only git helpers for `companion review`: resolve what to review (branch
- * vs working tree) and where the checkout lives. Originally ported from the
- * codex plugin's lib/git.mjs.
- */
-
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 
@@ -64,7 +58,6 @@ export function getRepoRoot(cwd: string): string {
   return gitChecked(cwd, ["rev-parse", "--show-toplevel"]).stdout.trim();
 }
 
-/** The main checkout's root — the same from any linked worktree of the repo. */
 export function getMainCheckoutRoot(cwd: string): string {
   const commonDir = gitChecked(cwd, [
     "rev-parse",
@@ -74,13 +67,11 @@ export function getMainCheckoutRoot(cwd: string): string {
   return dirname(commonDir);
 }
 
-/** The current branch name (may contain `/`), or the short HEAD sha when detached. */
 export function getBranchOrShortSha(cwd: string): string {
   const branch = gitChecked(cwd, ["branch", "--show-current"]).stdout.trim();
   return branch || gitChecked(cwd, ["rev-parse", "--short", "HEAD"]).stdout.trim();
 }
 
-/** Number of files changed in `<baseRef>...HEAD`. */
 export function countBranchChanges(cwd: string, baseRef: string): number {
   return gitChecked(cwd, ["diff", "--name-only", `${baseRef}...HEAD`])
     .stdout.split("\n")
@@ -130,11 +121,6 @@ export interface ReviewTarget {
   baseRef?: string;
 }
 
-/**
- * `--base <ref>` → that branch diff. Otherwise a dirty working tree (untracked
- * files included) → the working tree, and a clean one → the branch against the
- * detected default branch.
- */
 export function resolveReviewTarget(cwd: string, options: { base?: string } = {}): ReviewTarget {
   ensureGitRepository(cwd);
   if (options.base) {

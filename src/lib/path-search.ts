@@ -10,7 +10,6 @@
 import { accessSync, constants, statSync } from "node:fs";
 import { posix } from "node:path";
 
-/** An executable regular file (symlinks followed); any stat/access failure is a miss. */
 function isExecutableFile(path: string): boolean {
   try {
     if (!statSync(path).isFile()) return false;
@@ -21,14 +20,8 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
-/**
- * The first `<PATH entry>/<name>` that is an executable regular file, in PATH
- * order, or null when there is none. Empty and relative entries are skipped.
- * Entries are neither trimmed nor `~`-expanded, as execvp does neither. An
- * unset PATH is no hit (execvp would fall back to a default path; this does
- * not).
- */
 export function resolveOnPath(name: string, env: NodeJS.ProcessEnv): string | null {
+  // An unset PATH is no hit: execvp would fall back to a default path, this does not.
   for (const dir of (env.PATH ?? "").split(":")) {
     if (!posix.isAbsolute(dir)) continue;
     const candidate = posix.join(dir, name);

@@ -1,5 +1,3 @@
-// Entries in a global instructions file that harry's laws supersede, and the
-// warning that renders them; install.mjs warns with them.
 export const STALE = [
   {
     pattern: /copilot:implement/i,
@@ -12,8 +10,6 @@ export const STALE = [
   { pattern: /gemini:investigate/i, why: "research dispatch deferred in harry; remove for now" },
 ];
 
-// Warn about superseded entries found in `text` (the user's global instructions).
-// Reports only — harry never edits the user's hand-written rules.
 /** @param {string} text */
 export function warnStale(text) {
   const hits = STALE.filter((s) => s.pattern.test(text));

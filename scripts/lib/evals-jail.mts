@@ -1,7 +1,3 @@
-// The opt-in macOS seatbelt jail for agentic eval sessions (EVALS_SANDBOX=1): the
-// profile, the paths it is built from, the jailed PATH, and the refusal when the jail
-// cannot be built. The runner (scripts/run-evals.mts) builds one per trial.
-
 import { realpathSync } from "node:fs";
 import { delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { buildBaseEnv, type Env, findOnPath } from "./evals-env.mts";
@@ -80,8 +76,6 @@ export function trialJail(
   };
 }
 
-// ---- opt-in OS sandbox (macOS seatbelt) ------------------------------------
-
 // The one place the jail's paths are canonicalized (realpath). Seatbelt matches the
 // kernel-canonical path, so a rule spelled through a symlink silently FAILS to match:
 //   - $HOME is resolved HARD: an un-normalized jail root that doesn't match un-jails
@@ -132,10 +126,7 @@ function resolveJailPaths({
     const target = canonical(p);
     if (target) trees.add(dirname(target));
   };
-  // node: the runtime that actually executes the session's `node` and claude's cli.
   addLauncher(process.execPath);
-  // claude: runEvals hands in an absolute path; a bare name (a direct caller) is
-  // looked up in-process, never by spawning `which`.
   addLauncher(bin ? findOnPath(bin, env) : null);
   addLauncher(gitBin);
   if (gitExecPath && isAbsolute(gitExecPath)) {
@@ -182,34 +173,19 @@ function refuseUnsafeTrees(trees: string[], home: string, writes: string[]) {
   }
 }
 
-// The system services (mach-lookup global names) a jailed process may reach, by
-// exact name. Every other service is denied by `(deny default)`, and that is what
-// keeps LaunchServices (`open`) and Apple Events (`osascript`) from starting or
+// Exact names only; every other service is denied by `(deny default)`, and that is
+// what keeps LaunchServices (`open`) and Apple Events (`osascript`) from starting or
 // driving a program OUTSIDE the jail, as the operator: both reach their broker
 // through a mach-lookup global name this deny closes. launchd is different:
 // `launchctl` reaches it over the task's bootstrap port, not a mach-lookup name,
 // so this allowlist does not gate it at all — launchd applies its own checks per
 // subcommand instead (see the DEBT note on buildSeatbeltProfile for what those
-// checks still let through). Derived
-// empirically: the jailed post-session step (git, node --test), `claude --version`
-// and an HTTPS fetch all run with none; user lookup is the one thing that fails
-// without it (node's os.userInfo() throws), and it answers directory queries only.
-// A live `claude` session was not run to derive this list (API spend); if one needs
-// another service (evals/README.md says how to read the denied name from the unified
-// log), add that one exact name after checking it cannot launch, drive or act for
-// the caller as a program (keychain, preferences and login-item services can), never
-// a prefix or a bare `(allow mach-lookup)`. A test pins the whole generated
-// profile as fixed text, so the addition is also a visible test edit.
-const JAIL_MACH_SERVICES = [
-  "com.apple.system.opendirectoryd.libinfo", // getpwuid/getgrgid: user and group lookup
-];
+// checks still let through). Derived empirically: the jailed post-session step
+// (git, node --test), `claude --version` and an HTTPS fetch all run with none;
+// user lookup is the one thing that fails without it (node's os.userInfo() throws),
+// and it answers directory queries only.
+const JAIL_MACH_SERVICES = ["com.apple.system.opendirectoryd.libinfo"];
 
-// Generate a seatbelt (sandbox_init) profile as a string. Pure and unit-testable:
-// no IO, deterministic given its inputs. The policy is deny-by-default: the first
-// rule is `(deny default)`, and the rules below allow back only what node, claude
-// and git need. The rules are the code; a golden test pins the whole generated
-// text (tests/evals-jail.test.ts), and evals/README.md says what they block.
-//
 // The terminal deny closes opening one by path only: a terminal fd already open
 // reads freely, and a shell's terminal is one read-write file on fds 0, 1 and 2
 // alike. So fds 0, 1 and 2 of every jailed child must not be the terminal: each
@@ -335,9 +311,7 @@ function jailedPath(pathEntries: PathEntry[], execDirs: string[]): string {
     .join(delimiter);
 }
 
-// Build the sandbox-exec argv that wraps the original `bin args...` under `profile`.
 // Pure, so a test can assert the exact wrapped shape without executing sandbox-exec.
-// `sandbox-exec -p <profile> <bin> <args...>` runs bin inside the seatbelt policy.
 export function wrapWithSandbox(
   sandboxExec: string,
   profile: string,
@@ -375,9 +349,7 @@ export function requireSandboxSupport(platform: string, sandboxExecPath: string 
   return sandboxExecPath;
 }
 
-// Locate sandbox-exec. EVALS_SANDBOX_EXEC overrides (present-but-empty means "not
-// found", a deterministic test/refusal seam); otherwise look it up on PATH
-// in-process (findOnPath), once, before the first session.
+// A present-but-empty EVALS_SANDBOX_EXEC means "not found": a deterministic refusal seam.
 function resolveSandboxExec(env: Env): string | null {
   if (env.EVALS_SANDBOX_EXEC !== undefined) {
     return env.EVALS_SANDBOX_EXEC ? resolve(env.EVALS_SANDBOX_EXEC) : null;
@@ -385,10 +357,6 @@ function resolveSandboxExec(env: Env): string | null {
   return findOnPath("sandbox-exec", env);
 }
 
-// Decide whether agentic sessions run inside the seatbelt jail, throwing on refusal.
-// Null (no wrapping) when the flag is off or no agentic session will run. When the
-// flag is on AND one will, support is mandatory: requireSandboxSupport refuses hard
-// rather than silently run unsandboxed.
 export function sandboxContext(env: Env, agenticWillRun: boolean): { sandboxExec: string } | null {
   if (env.EVALS_SANDBOX !== "1") return null;
   if (!agenticWillRun) return null;

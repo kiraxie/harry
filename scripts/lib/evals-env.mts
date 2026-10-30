@@ -1,14 +1,11 @@
-// The environments the eval runner's children start from, and the in-process PATH
-// lookup that resolves every binary it spawns. Shared by the runner and the jail
-// (scripts/lib/evals-jail.mts), so neither imports the other.
+// Shared by the runner and the jail (scripts/lib/evals-jail.mts), so neither
+// imports the other.
 
 import { accessSync, constants as fsConstants, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 
 export type Env = Record<string, string | undefined>;
-
-// ---- child environments: an allowlist, never copy-then-strip ----------------
 
 // The operator vars a child may inherit. Everything else stays behind: NODE_OPTIONS
 // (code injection into every node child), SSH_AUTH_SOCK, GITHUB_TOKEN / AWS_* and the

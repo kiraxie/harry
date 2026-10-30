@@ -1,10 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * companion — CLI entry point for the harry Claude Code plugin; each command
- * is a thin wrapper over the Codex CLI.
- */
-
 import process from "node:process";
 import { runAsk } from "./commands/ask.ts";
 import { runReview } from "./commands/review.ts";

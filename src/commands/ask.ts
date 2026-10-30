@@ -1,12 +1,4 @@
 /**
- * ask command — a thin wrapper over the Codex CLI's `codex exec`: one prompt,
- * read-only, and the answer printed verbatim. The reasoning backend for the
- * `/harry:debate` skill's gpt voice, and a generic single-prompt query command.
- *
- * Runs it through `runCodexExec` with `--skip-git-repo-check`, in the invoking
- * cwd with the prompt on stdin. The answer and codex's transcript log land under
- * the plugin state dir (`asks/`), never in a `.local/`.
- *
  * The stdout contract `/debate` depends on: success prints the answer file
  * verbatim; ANY failure prints `# Ask Failed`, a blank line and one reason line,
  * and exits non-zero — a consumer relaying stdout verbatim must never be able
@@ -27,16 +19,13 @@ import { ensureDir, resolveStateDir } from "../lib/state.ts";
 export interface AskOptions {
   prompt: string;
   reasoning?: ReasoningEffort;
-  /** Background for the model: literal text, or `@file` / `@-` — see `resolveTextFlag`. */
   context?: string;
 }
 
 const ASK_FAILED_MARKER = "# Ask Failed";
 
-/** The run-file prefix under `asks/`: `ask-<YYYYMMDD-HHMMSS>[-N].md` and `.log`. */
 const ASK_PREFIX = "ask";
 
-/** How long an ask's answer and log are kept before a later ask prunes them. */
 const ASK_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
@@ -57,7 +46,6 @@ function buildAskPrompt(prompt: string, context: string | undefined): string {
   return `${ASK_PREAMBLE}\n\n## Background (settled facts from the working session)\n\n${context}\n\n## Prompt\n\n${prompt}\n`;
 }
 
-/** The one-line reason a failed ask reports on stdout. */
 function failureReason(err: unknown): string {
   const reason =
     err instanceof CodexRunError && err.kind === "exit" && err.logPath

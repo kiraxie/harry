@@ -210,9 +210,7 @@ var FAILURE_TAIL_LINES = 40;
 var NO_ERROR_LINE = "No error line at the end of codex's log.";
 var CodexRunError = class extends Error {
   kind;
-  /** The run's log; absent for `missing`, whose empty log is deleted. */
   logPath;
-  /** The exit code for `exit` (null when killed by a signal). */
   exitStatus;
   constructor(message, kind, extra = {}) {
     super(message);

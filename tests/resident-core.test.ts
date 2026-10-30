@@ -11,9 +11,11 @@ import { headingSection } from "./section.ts";
 // standard loads it.
 
 // A ceiling, not a target: the core measured 952 words on 2026-10-09 after the review's
-// fixes, and 980 once "optimize on evidence" came back (the plugin eval lost
-// no-speculative-optimization, 3/3 → 0/3, without it); 990 leaves room for a word, not a rule.
-const CORE_WORDS = 990;
+// fixes, 980 once "optimize on evidence" came back (the plugin eval lost
+// no-speculative-optimization, 3/3 → 0/3, without it), and 1017 on 2026-10-30 when Code's
+// comment rule named its kind (why, never what) and dropped the one-line cap; 1020 leaves
+// room for a word, not a rule.
+const CORE_WORDS = 1020;
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const flatten = (text: string): string => text.replace(/\s+/g, " ").replace(/[*`]/g, "");
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");

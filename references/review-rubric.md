@@ -33,8 +33,10 @@ mutation; its report is its final message.
 2. **Code quality.** Clear separation of concerns; error handling at trust
    boundaries; edge cases (empty / null / overflow / concurrency); type safety
    where the language offers it; integrates cleanly with surrounding code. Flag a
-   comment that restates the code, justifies a workaround, or resists a change —
-   code carries no comment by default (HARRY.md **Code**).
+   comment that says what the code does, restates a reason the code already shows,
+   or defends a workaround in place of fixing its cause; keep one that says why the
+   code is this way and not the obvious way, as short as that point allows — code
+   carries no comment by default (HARRY.md **Code**).
    Also judge against the repo's own documented standards: search the repo for every
    file that says how code is written (`CONTRIBUTING.md`, `CODING_STANDARDS.md`, and the
    like); where one conflicts with a default here, the repo's wins. Skip anything

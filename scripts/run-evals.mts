@@ -1,29 +1,4 @@
 #!/usr/bin/env node
-// harry behavioral-evals runner — measure whether the resident laws (HARRY.md)
-// actually change a model's FIRST-RESPONSE behavior, as a regression harness.
-//
-// Three conditions, each case run under one per run, same prompt, same pinned model:
-//   baseline  — a fresh, empty CLAUDE_CONFIG_DIR (no global CLAUDE.md → no laws).
-//   candidate — a CLAUDE_CONFIG_DIR whose CLAUDE.md inlines this repo's HARRY.md.
-// The delta between them is the laws' effect. baseline is informative contrast;
-// candidate is what must pass.
-// A third, plugin, is candidate plus a frozen copy of this plugin loaded with
-// --plugin-dir, with Skill and a Read denied under the home allowed: a rule that
-// lives in a skill or reference is measured the way a real session meets it.
-//
-// Isolation is the whole point: we NEVER read or touch the operator's real
-// ~/.claude config. Each condition gets its own mkdtemp config dir, so the
-// operator's own global CLAUDE.md can't leak in and inflate the baseline.
-//
-// The `claude` binary is resolved from EVALS_CLAUDE_BIN (default `claude`) — the
-// seam that lets tests substitute a fake shim without a real API call. Model is
-// mandatory (--model or EVALS_MODEL): pinning is a hard rule, so results are
-// attributable to a known model, and we refuse to run without one.
-//
-// Usage:
-//   node scripts/run-evals.mts validate
-//   node scripts/run-evals.mts run --condition candidate --model <id> [--cases a,b] [--out p]
-//   node scripts/run-evals.mts score --results <path>
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -71,14 +46,8 @@ import {
 
 const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-// One agentic artifact-check outcome. `detail` is a human-readable trace of what
-// the check saw (matched file, failing branch list, test exit); `matched` from
-// the text shape is absent here.
 export type ArtifactCheckOutcome = Outcome & { check: CheckInput };
 
-// A snapshot of a fixture repo after a session, the input the artifact checks
-// judge. `newCommitMessages` excludes the seed commit; `files` is tracked +
-// untracked (minus .git).
 export interface RepoState {
   fixtureDir: string;
   initialBranch: string;
@@ -89,9 +58,6 @@ export interface RepoState {
   files: string[];
 }
 
-// Run settings for judging, kept apart from the repo facts: the env every child's
-// env is built from, the git binary that collects the state, and the epoch ms by
-// which judging must finish (git calls and test_command_passes get the time left).
 export interface JudgeSettings {
   env?: Env;
   gitBin?: string;
@@ -105,19 +71,17 @@ export interface RunOpts {
   out?: string;
   trials?: string | number;
   agentic?: boolean;
-  // How long the post-session step may run (default 5 minutes). Programmatic only.
   postSessionTimeoutMs?: number;
 }
 
-// What the post-session step needs to judge one trial's fixture.
 export interface PostSessionPayload {
   fixtureDir: string;
   fixtureId: { dev: string; ino: string };
-  gitConfig: string; // base64
+  gitConfig: string;
   initialBranch: string;
   initialCommit: string;
   checks: CheckInput[];
-  gitBin?: string; // absolute; resolved by runEvals before the first session
+  gitBin?: string;
   timeoutMs: number;
 }
 
@@ -131,9 +95,8 @@ type ExecError = Error & {
 
 const CONDITIONS = new Set(["baseline", "candidate", "plugin"]);
 const DEFAULT_TEST_COMMAND = "node --test";
-// How long the post-session step may take (runEvals opts.postSessionTimeoutMs
-// overrides it). It bounds a hung model-written test, and, sandboxed, the whole
-// jailed child — which gets a grace period on top so its own test timeout fires first.
+// Bounds a hung model-written test and, sandboxed, the whole jailed child, which
+// gets a grace period on top so its own test timeout fires first.
 const DEFAULT_POST_SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 const POST_SESSION_GRACE_MS = 15 * 1000;
 const remainingMs = (deadline: number) => Math.max(1, deadline - Date.now());
@@ -204,17 +167,8 @@ function git(
   }
 }
 
-// ---- the post-session step ---------------------------------------------------
-
-// The hidden subcommand the jailed post-session child runs (see runPostSession).
 const POST_SESSION = "__post-session";
 
-// Everything the runner does after an agentic session on paths the session
-// controlled: check the fixture is still the directory materializeFixture made,
-// put its .git/config back, collect the repo state, and evaluate every check
-// (file reads and the model-written test command included). Returns one
-// { ok, detail } per check, in order.
-//
 // In a sandboxed run this executes ONLY inside the jailed child, under the
 // session's own profile, so nothing the session planted — a swapped fixture, a
 // config the session re-plants after the restore, a gpg.program, a test — ever
@@ -271,9 +225,6 @@ function untrustedText(value: unknown, max = 1000): string {
   return clean.length > max ? `${clean.slice(0, max)}…[truncated]` : clean;
 }
 
-// Validate the jailed child's stdout by shape, as untrusted input: exactly
-// { outcomes: [{ ok: boolean, detail: string }] } with one outcome per check, or
-// { error: string }. Anything else is refused without being echoed back.
 export function parsePostSessionOutput(stdout: string, count: number): Outcome[] {
   let parsed: unknown;
   try {
@@ -313,9 +264,9 @@ function runPostSession(payload: PostSessionPayload, jail: Jail | null, env: Env
   ]);
   let stdout: string;
   try {
-    // All three streams piped: the child's stderr (and anything its git or tests
-    // print there) never reaches the operator's terminal except through
-    // untrustedText on the failure path.
+    // Piped, never inherited: the child's stderr (and anything its git or tests
+    // print there) reaches the operator's terminal only through untrustedText on
+    // the failure path.
     stdout = execFileSync(wrapped.bin, wrapped.args, {
       cwd: jail.tmpDir,
       env: buildBaseEnv({ ...env, PATH: jail.path }, jail.tmpDir),
@@ -352,8 +303,6 @@ function runPostSession(payload: PostSessionPayload, jail: Jail | null, env: Env
   return parsePostSessionOutput(stdout, payload.checks.length);
 }
 
-// The jailed child's side: read the payload from stdin, judge, print one JSON line.
-// A refusal is reported as { error } so the parent can surface it on the result line.
 function cmdPostSession() {
   let out: { outcomes: Outcome[] } | { error: string };
   try {
@@ -366,12 +315,7 @@ function cmdPostSession() {
   return 0;
 }
 
-// ---- agentic: fixture materialization + repo state (side-effecting) --------
-
-// Copy a committed fixture into a fresh temp dir, `git init` it there, and make
-// one pinned initial commit. Returns the working dir plus the initial branch and
-// commit SHA (the baseline the artifact checks diff against). NEVER runs inside
-// the repo — the copy lands under `root` (default the OS temp dir).
+// Never inside the repo: the copy lands under `root` (default the OS temp dir).
 export function materializeFixture(
   name: string,
   root: string = tmpdir(),
@@ -416,7 +360,6 @@ export function materializeFixture(
   return { dir, initialBranch, initialCommit, gitConfig, id };
 }
 
-// lstat that reports a missing path as null instead of throwing.
 function lstatOrNull(p: string, opts?: { bigint: true }) {
   try {
     return lstatSync(p, opts);
@@ -434,12 +377,10 @@ function lstatOrNull(p: string, opts?: { bigint: true }) {
 // stop a background process re-planting it afterwards; in a sandboxed run it only
 // ever executes inside the jailed post-session step (judgeFixture), so whatever
 // runs, runs jailed. Refuses, rather than repairs, anything that would make git read
-// config from somewhere else: a .git that is not a plain directory (a symlink, or a
-// `gitdir:` file pointing elsewhere), an added commondir or config.worktree, and a
-// .git/config that is not a regular file. A symlinked config is refused, never
-// written through: writing the constant through a link into ~/.gitconfig would
-// clobber the operator's own. The write is O_EXCL after an unlink, so it can only
-// ever create a fresh regular file.
+// config from somewhere else. A symlinked config is refused, never written through:
+// writing the constant through a link into ~/.gitconfig would clobber the
+// operator's own. The write is O_EXCL after an unlink, so it can only ever create a
+// fresh regular file.
 export function restoreFixtureGitConfig(fixtureDir: string, gitConfig: Buffer | string): void {
   const refuse = (why: string) => {
     throw new Error(`refusing to run git in fixture ${fixtureDir}: ${why}`);
@@ -456,9 +397,6 @@ export function restoreFixtureGitConfig(fixtureDir: string, gitConfig: Buffer | 
   writeFileSync(configPath, gitConfig, { flag: "wx" });
 }
 
-// Snapshot the post-session repo state the artifact checks judge: the branches,
-// the messages of commits that are NEW since the seed, and the tracked+untracked
-// file list (minus .git). Reads only — deterministic given the repo on disk.
 export function collectRepoState(
   fixtureDir: string,
   initialBranch: string,
@@ -475,7 +413,6 @@ export function collectRepoState(
     .split("\n")
     .map((b) => b.trim())
     .filter(Boolean);
-  // All commit messages across every branch, minus the seed commit's.
   const commitLog = run(["log", "--all", "--format=%H%x1f%s"]);
   const newCommitMessages = commitLog
     .split("\n")
@@ -487,9 +424,7 @@ export function collectRepoState(
   const tracked = run(["ls-files"]).split("\n");
   const untracked = run(["ls-files", "--others", "--exclude-standard"]).split("\n");
   const files = [...new Set([...tracked, ...untracked])].map((f) => f.trim()).filter(Boolean);
-  // Commits added ON the initial branch since the seed. A lawful session works
-  // off a fresh branch, so this stays 0 even after it commits elsewhere. If the
-  // initial branch is gone (renamed away), treat it as untouched (0).
+  // If the initial branch is gone (renamed away), treat it as untouched (0).
   let newCommitsOnInitial = 0;
   if (branches.includes(initialBranch)) {
     const count = run(["rev-list", "--count", `${initialCommit}..${initialBranch}`]);
@@ -541,12 +476,6 @@ function readFileSafe(fixtureDir: string, relPath: string): string | null | type
   }
 }
 
-// Evaluate ONE artifact check against a collected repo state. Deterministic
-// given the state (test_command_passes shells out to the fixture's test runner,
-// which reads the same on-disk state). Returns { check, ok, detail }. `env` is
-// what the test command's env is built from (through the allowlist), `deadline`
-// the epoch ms by which judging must finish; both are run settings, not repo facts.
-//
 // Every check reads paths the session controlled, and test_command_passes runs
 // tests the session WROTE, so in a sandboxed run this only ever executes inside
 // the jailed post-session child (see judgeFixture / runPostSession).
@@ -584,7 +513,6 @@ export function evaluateArtifactCheck(
       if (!relPath) return { check, ok: false, detail: `${check.type} names no path` };
       const content = readFileSafe(state.fixtureDir, relPath);
       if (content === NOT_REGULAR) return notRegular(check, relPath);
-      // Missing file trivially can't contain the pattern → passes.
       if (content === null) return { check, ok: true, detail: `missing file ${relPath}` };
       return { check, ok: !compileCheck(check).test(content), detail: relPath };
     }
@@ -618,9 +546,8 @@ export function evaluateArtifactCheck(
       const command = (check.command ?? DEFAULT_TEST_COMMAND).trim();
       const [cmd, ...args] = command.split(/\s+/);
       const timeoutMs = remainingMs(deadline);
-      // Model-written code: the credential-free base env, never the runner's own;
-      // `node` is the running node by absolute path, not a PATH lookup; output is
-      // discarded; and a hung test is killed at the timeout.
+      // Model-written code: the credential-free base env, never the runner's own, and
+      // `node` by absolute path, not a PATH lookup.
       try {
         execFileSync(cmd === "node" ? process.execPath : cmd, args, {
           cwd: state.fixtureDir,
@@ -645,7 +572,6 @@ export function evaluateArtifactCheck(
   }
 }
 
-// Evaluate a whole agentic case's checks against a repo state.
 export function evaluateArtifactChecks(
   checks: CheckInput[] | undefined,
   state: RepoState,
@@ -655,28 +581,20 @@ export function evaluateArtifactChecks(
   return { pass: results.every((r) => r.ok), results };
 }
 
-// ---- run helpers -----------------------------------------------------------
-
-// Resolve the trial count, or throw. Default 1. Must be a positive integer —
-// a fractional or non-numeric --trials is a user error we refuse cleanly rather
-// than silently coerce (a coerced "2.5"→2 or "abc"→1 would run a silently-wrong
-// number of trials). Each selected case runs this many independent sessions.
+// A fractional or non-numeric --trials is refused rather than coerced: a coerced
+// "2.5"→2 or "abc"→1 would run a silently-wrong number of trials.
 export function resolveTrials(opts: { trials?: string | number | null }): number {
   const raw = opts.trials;
   if (raw === undefined || raw === null) return 1;
-  // Accept a plain positive integer ONLY: a string must be all digits (rejects
-  // "", " 2", "2.5", "1e1", "0x2"); a number must itself be a positive integer.
-  // No silent default on blank/garbage — that would run a wrong trial count.
   const isPlainInt = typeof raw === "string" ? /^\d+$/.test(raw) : Number.isInteger(raw);
   const n = Number(raw);
   if (!isPlainInt || !Number.isInteger(n) || n < 1) {
+    // No silent default on blank or garbage: that would run a wrong trial count at real cost.
     throw new Error(`--trials must be a positive integer (got "${raw}")`);
   }
   return n;
 }
 
-// Resolve the pinned model, or throw. Pinning is a hard rule: an unattributable
-// result is worse than no result.
 export function resolveModel(opts: { model?: string }, env: Env): string {
   const model = opts.model || env.EVALS_MODEL;
   if (!model?.trim()) {
@@ -687,8 +605,6 @@ export function resolveModel(opts: { model?: string }, env: Env): string {
   return model.trim();
 }
 
-// How to hand a credential to the runner without it ever being echoed: read it from a
-// file only the operator can read. Part of every auth refusal.
 const AUTH_HINT =
   "set exactly one of EVALS_ANTHROPIC_API_KEY (a console API key) or " +
   "EVALS_CLAUDE_CODE_OAUTH_TOKEN (a subscription token from `claude setup-token`), " +
@@ -696,19 +612,11 @@ const AUTH_HINT =
   'EVALS_CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/harry/evals.token)"';
 
 // An empty or whitespace-only value is unset: `EVALS_X="$(cat missing-file)"` must not
-// count as a choice. This only decides; the value itself is forwarded untouched.
+// count as a choice.
 function isSet(value: string | undefined): boolean {
   return typeof value === "string" && value.trim() !== "";
 }
 
-// Resolve the run's ONE auth path, or throw. A fresh config dir is logged out, so the
-// child authenticates only from the env: either a console API key
-// (EVALS_ANTHROPIC_API_KEY → the child's ANTHROPIC_API_KEY) or a subscription token
-// from `claude setup-token` (EVALS_CLAUDE_CODE_OAUTH_TOKEN → CLAUDE_CODE_OAUTH_TOKEN).
-// Both set is ambiguous and neither set cannot authenticate; both refuse. Bare
-// ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN in the operator's shell never count —
-// the EVALS_ prefix is the opt-in, so an unrelated credential is never billed by
-// accident. No message carries a value: it reads only whether each var is set.
 export function resolveAuth(env: Env): { kind: "api-key" | "oauth-token" } {
   const apiKey = isSet(env.EVALS_ANTHROPIC_API_KEY);
   const oauthToken = isSet(env.EVALS_CLAUDE_CODE_OAUTH_TOKEN);
@@ -738,24 +646,6 @@ export function resolveAuth(env: Env): { kind: "api-key" | "oauth-token" } {
   return { kind: apiKey ? "api-key" : "oauth-token" };
 }
 
-// Create one trial's private dirs under a fresh mkdtemp root in `root`:
-//   config/  — its CLAUDE_CONFIG_DIR: candidate gets a CLAUDE.md inlining the laws,
-//              baseline an empty dir (no CLAUDE.md);
-//   work/    — the text child's cwd, empty, so no project CLAUDE.md is found above it;
-//   fixture/ — the parent a fixture is materialized under (agentic);
-//   tmp/     — the TMPDIR of this trial's claude sessions and, when jailed, of its
-//              post-session step and the git and tests it runs; unjailed, the
-//              runner's own git and test-command calls keep the runner's TMPDIR.
-// Nothing is shared between trials, so a jailed session — which may write only its
-// own trial's config, fixture and tmp dirs — can never reach a dir a later trial or
-// an unjailed text case reads.
-//
-// No credential file, settings or memory is ever written here. The child
-// authenticates from its env (buildChildEnv), so no credential lands on disk for a
-// session to read. The runner used to copy the operator's `.credentials.json` in as
-// a fallback; that path is gone, because on macOS the file is a Keychain snapshot
-// that goes stale on its own schedule, and copying real credentials into temp dirs
-// was a liability in itself.
 function prepareTrialDirs(condition: string, lawsText: string, root: string = tmpdir()) {
   const trialDir = mkdtempSync(join(root, `harry-evals-trial-${condition}-`));
   const dirs = {
@@ -773,13 +663,9 @@ function prepareTrialDirs(condition: string, lawsText: string, root: string = tm
   return dirs;
 }
 
-// The env for every `claude` child — text, agentic, and sandboxed agentic alike, since
-// all three launch through invokeClaude: the git env (the allowlist plus pinned git
-// identity and config), its config dir, and exactly one credential under its
-// unprefixed name, set from its EVALS_ source (resolveAuth picks which). Nothing else
-// from the operator's env survives — not a bare ANTHROPIC_API_KEY or
-// CLAUDE_CODE_OAUTH_TOKEN, not the EVALS_ sources, not any var that would outrank the
-// chosen credential.
+// Exactly one credential, under its unprefixed name, and nothing else from the
+// operator's env: not a bare ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, not the
+// EVALS_ sources, not any var that would outrank the chosen credential.
 //
 // DEBT: the session holds its one credential. It needs it to reach the API, no OS
 // sandbox can hide an env var from the session's own processes, and outbound network
@@ -825,12 +711,11 @@ function extractResponse(stdout: string): string {
   return JSON.stringify(parsed);
 }
 
-// Run the claude CLI and decode its response. On an execFileSync failure
-// (nonzero exit or spawn error), surface a structured {is_error} stdout if the
-// child still printed one, otherwise name how it ended and attach stdout/stderr
-// tails so a failing line carries a real diagnostic. Never execFileSync's own
-// message: that is "Command failed: <the whole argv>" — the prompt and, jailed,
-// the whole seatbelt profile — which crowds the child's own output out of the cap.
+// On a failure a structured {is_error} stdout wins if the child printed one, else
+// how it ended plus stdout/stderr tails, so a failing line carries a real
+// diagnostic. Never execFileSync's own message: that is "Command failed: <the
+// whole argv>" — the prompt and, jailed, the whole seatbelt profile — which crowds
+// the child's own output out of the cap.
 function invokeClaude(
   bin: string,
   args: string[],
@@ -842,8 +727,8 @@ function invokeClaude(
   const childEnv = buildChildEnv(env, configDir, tmpDir);
   let stdout: string;
   try {
-    // All three streams piped: claude's stderr never reaches the operator's
-    // terminal directly; a failure surfaces it only through untrustedText.
+    // Piped, never inherited: claude's stderr reaches the operator's terminal only
+    // through untrustedText on a failure.
     stdout = execFileSync(bin, args, {
       cwd,
       env: childEnv,
@@ -855,8 +740,6 @@ function invokeClaude(
     const err = caught as ExecError;
     const printed = err?.stdout ? String(err.stdout) : "";
     if (printed.trim().startsWith("{")) {
-      // The child exited nonzero but still emitted a JSON result — decode it
-      // (this rethrows the readable is_error message when present).
       return extractResponse(printed);
     }
     const tail = (s: unknown) => (s ? untrustedText(String(s).trim().slice(-800), 800) : "");
@@ -918,11 +801,9 @@ function runTextCase(
   return invokeClaude(bin, args, workDir, configDir, env, tmpDir);
 }
 
-// The Bash commands an agentic session is allowed to run, comma-joined into one
-// `--allowedTools` value (`claude --help`: "Comma or space-separated list of tool
-// names to allow"; a single comma-separated arg avoids the variadic `<tools...>`
-// swallowing later flags). WHY these: the artifact checks assert on git state
-// (git_created_branch, git_no_new_commits_on_initial, commit messages) and on
+// One comma-joined `--allowedTools` value: a single arg avoids the variadic
+// `<tools...>` swallowing later flags. WHY these: the artifact checks assert on git
+// state (git_created_branch, git_no_new_commits_on_initial, commit messages) and on
 // test runs (test_command_passes), so the session MUST be able to branch/commit
 // and run `node`, or those checks are structurally unsatisfiable.
 //
@@ -934,10 +815,7 @@ function runTextCase(
 // would still execute model-authored files. This narrows the surface; the
 // allowlist alone does NOT contain a misbehaving session: `Bash(node:*)` is
 // arbitrary code execution, including network. Exec containment is the opt-in
-// EVALS_SANDBOX=1 seatbelt jail (see buildSeatbeltProfile / sandboxContext): a
-// deny-by-default profile that lets the session write only its own trial's dirs,
-// read nothing under the operator's $HOME, and reach almost no system service —
-// see the launchd exception in the DEBT note on buildSeatbeltProfile.
+// seatbelt jail (sandboxContext), not this list.
 const AGENTIC_ALLOWED_TOOLS = [
   "Bash(git status:*)",
   "Bash(git diff:*)",
@@ -950,9 +828,8 @@ const AGENTIC_ALLOWED_TOOLS = [
   "Bash(node:*)",
 ].join(",");
 
-// What the plugin condition copies: only what a session loads from the plugin. Left
-// out on purpose: scripts/ and dist/ (a trial could run the installer against the
-// operator's ~/.claude, or Codex), and evals/, tests/, .local/ (the cases' own
+// Left out on purpose: scripts/ and dist/ (a trial could run the installer against
+// the operator's ~/.claude, or Codex), and evals/, tests/, .local/ (the cases' own
 // grading patterns, and the operator's notes).
 const PLUGIN_PAYLOAD = [".claude-plugin", "HARRY.md", "skills", "commands", "agents", "references"];
 
@@ -987,15 +864,14 @@ export function snapshotPlugin(
 // it (runEvals refuses a trial root under the home).
 const HOME_READ_DENY = ["--disallowedTools", "Read(~/**)"];
 
-// The tool flags a text session runs with: none at all outside the plugin condition
-// (`--allowedTools ""` alone would still leave Read), Skill and Read inside it. A
-// result line records them, so score can flag trials taken under different setups.
+// `--allowedTools ""` alone would still leave Read, hence `--tools`. A result line
+// records the flags, so score can flag trials taken under different setups.
 function textToolArgs(withPlugin: boolean): string[] {
   return withPlugin ? ["--tools", "Skill,Read", ...HOME_READ_DENY] : ["--tools", ""];
 }
-// The CLI's version, once per run and before any trial. It runs with the base env, no
-// credential and a throwaway config dir, so it touches neither the operator's
-// ~/.claude nor the API; a failure refuses the run like a missing binary.
+// Once per run, before any trial, with the base env, no credential and a throwaway
+// config dir, so it touches neither the operator's ~/.claude nor the API; a failure
+// refuses the run like a missing binary.
 function claudeVersion(bin: string, env: Env): string {
   const configDir = mkdtempSync(join(tmpdir(), "harry-evals-version-"));
   try {
@@ -1020,13 +896,6 @@ function claudeVersion(bin: string, env: Env): string {
 
 const toolSetup = (args: string[]): string => args.map((a) => (a === "" ? '""' : a)).join(" ");
 
-// Invoke the claude CLI for one AGENTIC case: a full headless session in the
-// fixture repo. `--permission-mode acceptEdits` auto-approves file edits; the
-// `--allowedTools` allowlist additionally auto-approves the git subcommands and
-// `node` the artifact checks depend on (see AGENTIC_ALLOWED_TOOLS) so the session
-// can branch, commit, and run the test suite. Both flags verified present in
-// `claude --help`; not empty like the text kill-switch — here tools are enabled,
-// narrowed to the commands the checks need (a surface reduction, not a sandbox).
 function runAgenticCase(
   bin: string,
   model: string,
@@ -1049,21 +918,17 @@ function runAgenticCase(
     "acceptEdits",
     "--allowedTools",
     pluginDir ? `${AGENTIC_ALLOWED_TOOLS},Skill` : AGENTIC_ALLOWED_TOOLS,
-    // The same home deny as text cases; the session's node commands can still read
-    // the host, which only the sandbox contains.
+    // The session's node commands can still read the host; only the sandbox contains
+    // that.
     ...(pluginDir ? [...HOME_READ_DENY, "--plugin-dir", pluginDir] : []),
   ];
   if (!jail) {
     return invokeClaude(bin, args, fixtureDir, configDir, env, tmpDir);
   }
-  // Opt-in EVALS_SANDBOX: the child runs inside the trial's seatbelt jail, built in
-  // runEvals by trialJail (scripts/lib/evals-jail.mts).
   const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, bin, args);
   const jailedEnv = { ...env, PATH: jail.path };
   return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, jailedEnv, jail.tmpDir);
 }
-
-// ---- run (side-effecting) --------------------------------------------------
 
 export type RunLine = ResultLine & {
   trialDir: string;
@@ -1102,9 +967,6 @@ export function runEvals(
   const selected = wanted ? cases.filter((c) => wanted.includes(c.id)) : cases;
   if (selected.length === 0) throw new Error("no cases selected");
 
-  // Cost gate: agentic cases run a FULL headless session each (real spend). They
-  // require the explicit --agentic release gate. Naming one by id without the
-  // flag is a hard refusal; a full run without it silently skips them (notice).
   const skipped = [];
   const runnable = [];
   for (const c of selected) {
@@ -1122,9 +984,8 @@ export function runEvals(
 
   // Resolve the opt-in seatbelt jail BEFORE any dir is created or session starts:
   // if EVALS_SANDBOX=1 is set with a runnable agentic case but we can't sandbox,
-  // this throws (never a silent unsandboxed run). Null → run unwrapped as before.
-  // Only agentic cases are jailed: text mode has no exec surface, so a text-only run
-  // ignores the flag entirely.
+  // this throws (never a silent unsandboxed run). Only agentic cases are jailed:
+  // text mode has no exec surface, so a text-only run ignores the flag entirely.
   const agenticWillRun = runnable.some((c) => c.mode === "agentic");
   // The jail's read allowlist does not include the plugin copy, and it jails no text
   // case, while plugin text cases have Read: so the flag is refused for every plugin
@@ -1142,7 +1003,7 @@ export function runEvals(
   resolveAuth(env);
 
   // Every binary the runner spawns is resolved to an absolute path HERE, before the
-  // first session, and never looked up on PATH again (see findOnPath). Still before
+  // first session, and never looked up on PATH again (requireOnPath). Still before
   // any dir exists: a missing binary refuses the run up front.
   const claudeBin = requireOnPath(env.EVALS_CLAUDE_BIN || "claude", env, "the claude CLI");
   // git is needed only for agentic cases. The jail lets its helpers run from the exec
@@ -1159,8 +1020,6 @@ export function runEvals(
     }
   }
 
-  // Each trial gets its own dirs under this root (prepareTrialDirs), left in place
-  // for post-hoc inspection. EVALS_FIXTURE_ROOT names it; default the OS temp dir.
   const trialsRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
   if (condition === "plugin") {
     const home = realpathSync(homedir());
@@ -1178,15 +1037,14 @@ export function runEvals(
     condition === "baseline"
       ? ""
       : readFileSync(plugin ? join(plugin.dir, "HARRY.md") : lawsPath(), "utf8");
-  // Provenance stamped onto every result line. Without it a results file cannot be
-  // attributed to a law text at all: on 2026-07-30 a probe's failure was read as a
-  // regression, two law edits were made on that reading, and the only way anyone
-  // could later recover WHICH text each run used was that the throwaway mkdtemp
-  // config dirs happened not to have been reaped yet. That is luck, not a record.
-  // `lawSha256` is what lets `score` refuse to pool trials across different texts.
-  // The `claude` CLI version is read once per run with `--version`: no session, no
-  // credential, a throwaway config dir. The CLI enforces the tool limits a trial ran
-  // under, so a result names the CLI that held them. Recorded, not pooled by score.
+  // Without provenance a results file cannot be attributed to a law text: on
+  // 2026-07-30 a probe's failure was read as a regression and two law edits made on
+  // it, and which text each run used was recoverable only from unreaped mkdtemp
+  // config dirs. `lawSha256` is what lets `score` refuse to pool trials across
+  // different texts. The `claude` CLI version is read once per run with `--version`:
+  // no session, no credential, a throwaway config dir. The CLI enforces the tool
+  // limits a trial ran under, so a result names the CLI that held them. Recorded,
+  // not pooled by score.
   const provenance = {
     claudeVersion: claudeVersion(claudeBin, env),
     lawBytes: Buffer.byteLength(lawsText),
@@ -1227,8 +1085,6 @@ export function runEvals(
         timestamp: new Date().toISOString(),
       };
       try {
-        // mode dispatch: text judges first-response prose; agentic materializes a
-        // throwaway fixture repo, runs a full session in it, then judges artifacts.
         if (c.mode === "agentic") {
           if (!agenticGit) throw new Error(`case "${c.id}" is agentic, but git was not resolved`);
           const { gitBin, gitExecPath } = agenticGit;
@@ -1320,8 +1176,6 @@ export function runEvals(
   return { outPath, lines: written, skipped };
 }
 
-// ---- CLI -------------------------------------------------------------------
-
 const VALUE_FLAGS = new Set([
   "--condition",
   "--model",
@@ -1331,7 +1185,6 @@ const VALUE_FLAGS = new Set([
   "--trials",
 ]);
 
-// Boolean flags take no value — presence is the whole signal.
 const BOOL_FLAGS = new Set(["--agentic"]);
 
 type CliOpts = Partial<RunOpts> & { results?: string };
@@ -1345,8 +1198,6 @@ function parseArgs(argv: string[]): CliOpts {
       continue;
     }
     if (!VALUE_FLAGS.has(a)) throw new Error(`unknown or misplaced argument: ${a}`);
-    // Guard the value: a flag as the last token (or a value that is itself the
-    // next flag) is a user error — report it, don't TypeError on undefined.
     const value = argv[i + 1];
     if (value === undefined || VALUE_FLAGS.has(value) || BOOL_FLAGS.has(value)) {
       throw new Error(`${a} requires a value`);
@@ -1401,15 +1252,8 @@ function cmdScore(opts: CliOpts) {
   }
   const { groups, summary, candidateFailed, pluginFailed } = scoreResults(lines);
   const pad = (s: unknown, n: number) => String(s).padEnd(n);
-  // A group is one (case, condition): its verdict is a strict majority of its
-  // pooled trials, shown as a tally, e.g. PASS (2/3) / FAIL (1/3). Graded groups
-  // gate the run; informative groups are printed separately and never affect the
-  // exit code.
   const graded = groups.filter((g) => !g.informative);
   const informative = groups.filter((g) => g.informative);
-  // An errored trial counts as a failing trial (it is in the denominator); when
-  // any trial errored, surface the count so `FAIL (0/3, 3 error)` is legible as
-  // "all errored", not "all genuinely non-compliant".
   // A MIXED-LAW group averaged trials across more than one HARRY.md, so its
   // verdict describes no single text — say so on the row rather than printing a
   // number that reads like a measurement.
@@ -1427,9 +1271,8 @@ function cmdScore(opts: CliOpts) {
         ? `  ⚠ MIXED PLUGIN COPY (${g.pluginShas.length} versions — verdict describes neither)`
         : ""
     }`;
-  // Column width spans EVERY printed id — graded AND informative — plus the
-  // "case" header, so a long informative id can't overflow into the condition
-  // column of either section (both use the same width). +2 for breathing room.
+  // Spans every printed id, graded and informative, so a long informative id cannot
+  // overflow into the condition column of either section.
   const idWidth = Math.max(4, ...groups.map((g) => g.id.length), "case".length) + 2;
   const row = (g: ScoreGroup) =>
     `${pad(g.id, idWidth)}${pad(g.condition, 12)}${pad(g.law ?? "", 14)}${verdict(g)}`;
@@ -1446,8 +1289,6 @@ function cmdScore(opts: CliOpts) {
   const informativeLine = summary.informativeTotal
     ? ` · informative: ${summary.informativePass}/${summary.informativeTotal} groups passed (ungated)`
     : "";
-  // Counts are GROUPS (case × condition), each a strict-majority verdict over
-  // its pooled trials — the trailing count is how many raw trial lines pooled.
   console.log(
     `\ncandidate: ${summary.candidatePass}/${summary.candidateTotal} groups passed` +
       ` · baseline (contrast): ${summary.baselinePass}/${summary.baselineTotal} groups passed` +
@@ -1463,8 +1304,6 @@ function cmdScore(opts: CliOpts) {
 export function main(argv: string[], env: Env = process.env): number {
   const [sub, ...rest] = argv;
   try {
-    // Inside the try: a malformed flag (e.g. a value flag with no value) is a
-    // clean exit-1 with a message, not an uncaught throw.
     const opts = parseArgs(rest);
     if (sub === "validate") return cmdValidate();
     if (sub === "run") return cmdRun(opts, env);
@@ -1479,7 +1318,6 @@ export function main(argv: string[], env: Env = process.env): number {
   }
 }
 
-// Only run the CLI when invoked directly, not when imported by a test.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   process.exit(main(process.argv.slice(2)));
 }

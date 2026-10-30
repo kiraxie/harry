@@ -186,7 +186,8 @@ append-merge mechanism that lets baseline and candidate share one file.)
 Every `run` is **real API spend** — one `claude -p` call per (case, condition,
 trial). With ~12 cases and two conditions (baseline and candidate) at `--trials 1`
 that is ~24 calls per pass; `--trials 3` triples it. Only run it when you mean to. The `validate` and
-`score` subcommands are free (they touch no API). Tests use a fake shim and never
+`score` subcommands are free (they touch no API). Tests use a fake shim (the
+`EVALS_CLAUDE_BIN` seam names the binary the runner spawns as `claude`) and never
 spend.
 
 **Text cases** are cheap-ish: the prompt goes in, the first response comes back
@@ -667,8 +668,8 @@ here is written only when the user names the behavior as load-bearing.
 **Plain language and the writing laws**
 - the Talk law binds plain writing to every text written for people and keeps briefs and review reports precision-first, coining no new term; a PR body is the user's
 - the plain-language reference carries the grounding rule, both principles and two levels; the `/wait-what` door is one-shot, not a mode
-- code carries no comment by default; the one kept kind is a one-line trade-off; a DEBT: note names its ceiling and upgrade path; tool directives are not comments
-- every review and architecture finding carries a structural fix, a short-term one only when that is not simple, a workaround never; a comment that restates the code, justifies a workaround or resists a change is flagged
+- code carries no comment by default; the one kept kind says why the code is this way and not the obvious way, as short as that allows, never what it does; a DEBT: note names its ceiling and upgrade path; tool directives are not comments
+- every review and architecture finding carries a structural fix, a short-term one only when that is not simple, a workaround never; a comment that says what the code does, restates a reason the code shows, or defends a workaround in place of fixing its cause is flagged; one that says why the code is this way and not the obvious way, as short as that point allows, is kept
 - a fix inside a unit is tiered like a task: small only when Trivial and no test weakens; the fix wave cites that rule once; the scope brake applies to the re-review; three failed fixes of one hypothesis stop
 
 **Backlog writers and the review door**

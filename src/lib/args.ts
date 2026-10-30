@@ -33,10 +33,9 @@ export const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
   ask: new Set(["task", "reasoning", "context"]),
 };
 
-/** Throw on any `--flag` not in the command's allow-list (typos error loudly). */
 export function assertKnownFlags(command: string, flags: Record<string, string | boolean>): void {
   const allowed = KNOWN_FLAGS[command];
-  if (!allowed) return; // help/unknown commands: handled by the switch default.
+  if (!allowed) return;
   for (const key of Object.keys(flags)) {
     if (key === "help") continue;
     if (!allowed.has(key)) {
@@ -53,7 +52,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
-      // Support --key=value form for explicit value binding.
       const eq = arg.indexOf("=");
       if (eq !== -1) {
         const key = arg.slice(2, eq);
@@ -115,10 +113,6 @@ export function flagEnum<T extends string>(
   return v as T;
 }
 
-/**
- * Resolve the task / focus string from positional args, falling back to a
- * `--task <…>` flag. Trims so callers can compare against empty string.
- */
 export function extractTask(args: string[], flags: Record<string, string | boolean>): string {
   const positional = args.join(" ").trim();
   if (positional) return positional;

@@ -1,6 +1,3 @@
-// Scoring a results file: one verdict per (case id, condition) group, pooled across
-// trials. Pure; the runner's `score` command (scripts/run-evals.mts) uses it.
-
 import {
   type CaseEntry,
   type CheckInput,
@@ -90,9 +87,6 @@ export function validateResultLines(entries: CaseEntry[]): {
   return { lines, errors };
 }
 
-// One (case id, condition) group: all its trial lines pooled (from a --trials N
-// run and/or several appended runs of the same condition). Its verdict is a
-// STRICT MAJORITY of the pooled trials — `pass` is true iff passCount*2 > trials.
 export interface ScoreGroup {
   id: string;
   condition: string;
@@ -101,8 +95,6 @@ export interface ScoreGroup {
   trials: number;
   passCount: number;
   errors: number;
-  // Every distinct law text (lawSha256) the group's trials ran under, sorted;
-  // mixedLaw is true when there is more than one, so the verdict spans law texts.
   lawShas: string[];
   mixedLaw: boolean;
   pluginShas: string[];
@@ -132,9 +124,8 @@ export interface ScoreSummary {
   pluginFailed: boolean;
 }
 
-// Score one result line to a single-trial pass. Each result carries its own
-// checks (embedded at run time) so scoring is self-contained and never drifts
-// from a mutated cases file. A legacy line with no `trial` field is trial 1.
+// Each result carries its own checks (embedded at run time) so scoring is
+// self-contained and never drifts from a mutated cases file.
 function scoreTrial(line: ResultLine) {
   // Agentic lines can't be re-judged offline (the fixture temp dir is gone), so
   // the run recorded per-check outcomes; text lines re-evaluate the response so
@@ -162,14 +153,6 @@ function scoreTrial(line: ResultLine) {
   };
 }
 
-// Score a whole results array. Trials are POOLED per (id, condition) group —
-// every line for a group counts, whether it came from one --trials N run or
-// several appended runs of the same condition (that is the documented way to
-// add trials post-hoc). A group's verdict is a STRICT MAJORITY of its trials:
-// it passes iff more than half passed (2/3, 2/2 — a 1/2 tie FAILS). An errored
-// trial counts as a failing trial. candidateFailed and pluginFailed (the CLI exit code) derive
-// only from graded (non-informative) candidate and plugin GROUP verdicts; informative
-// groups are tallied separately and never gate.
 type Tally = Omit<
   ScoreGroup,
   "lawShas" | "pluginShas" | "toolSetups" | "mixedLaw" | "mixedPlugin" | "mixedTools" | "pass"
@@ -231,12 +214,9 @@ export function scoreResults(lines: ResultLine[]): ScoreSummary {
     mixedPlugin: g.pluginShas.size > 1,
     toolSetups: [...g.toolSetups].sort(),
     mixedTools: g.toolSetups.size > 1,
-    // Strict majority: passCount > trials/2  ⇔  2*passCount > trials.
     pass: g.passCount * 2 > g.trials,
   }));
 
-  // Informative groups are contrast-only: split them out so they never gate the
-  // run, and the gating counts (and exit code) consider only the graded groups.
   const graded = groups.filter((g) => !g.informative);
   const candidate = graded.filter((g) => g.condition === "candidate");
   const baseline = graded.filter((g) => g.condition === "baseline");

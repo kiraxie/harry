@@ -1,13 +1,7 @@
 /**
- * Each `companion review` mode and the prompt it sends codex on stdin.
- *
- * `MODES` holds one record per mode: the flag that asks for it, the references
- * embedded as its standard (each verbatim, or the one section an entry names), its
- * target section, for a re-review or fix check the handed text's heading and the
- * `--base` it needs, and what an empty range does. Every mode runs `codex exec`
- * with its read-only sandbox (`runCodexExec` in `src/lib/run-codex.ts` builds it) —
- * not `codex exec review`, which answers in its own review-comment format and
- * ignores the form a mode asks for.
+ * Every mode runs `codex exec` with its read-only sandbox (`runCodexExec` in
+ * `src/lib/run-codex.ts` builds it) — not `codex exec review`, which answers in
+ * its own review-comment format and ignores the form a mode asks for.
  *
  * `codex exec` takes no review target, so the prompt itself names it: which git
  * command shows the change, and that everything outside it is context only.
@@ -19,22 +13,16 @@ import { dirname, join } from "node:path";
 import type { ReviewTarget } from "./git.ts";
 
 /**
- * The plugin root: the parent of the directory holding the entry file. That is
- * the repo root both from source (`src/companion.ts`) and from the committed
- * bundle (`dist/companion.cjs`), which is why this reads `process.argv[1]`
- * rather than `import.meta` (empty in the CJS bundle) or `__dirname` (absent in
- * ESM source).
+ * `process.argv[1]` rather than `import.meta` (empty in the CJS bundle) or
+ * `__dirname` (absent in ESM source). The entry file sits one directory below
+ * the repo root from source (`src/companion.ts`) and from the committed bundle
+ * (`dist/companion.cjs`) alike, so its grandparent is the root in both.
  */
 export function pluginRoot(): string {
   return dirname(dirname(realpathSync(process.argv[1])));
 }
 
-/**
- * Which review a prompt asks for: the per-diff code review, finishing's
- * architecture review, or executing's scoped re-review of a fix range and its
- * fix check of proposed fixes. One input picks the mode's whole record, so its
- * parts can never disagree.
- */
+/** One input picks the mode's whole record, so its parts can never disagree. */
 export type HandedStandard = "rereview" | "fix-check";
 export type ReviewStandard = "review" | "architecture" | HandedStandard;
 
@@ -49,7 +37,7 @@ const PER_DIFF: ReadonlyArray<StandardFile> = [
   { file: "red-green.md", heading: "Test standard (`references/red-green.md`)" },
 ];
 
-/** Read a review reference from `references/`; a missing one is an install defect, never skipped. */
+/** A missing reference is an install defect, never skipped. */
 function loadReference(file: string): string {
   const refPath = join(pluginRoot(), "references", file);
   let text: string;
@@ -207,7 +195,6 @@ const SPEC_NOTE =
 
 export type ReviewPromptInput = {
   target: ReviewTarget;
-  /** Resolved `--context` text, if any. */
   context?: string;
   focusText?: string;
 } & (
@@ -216,7 +203,6 @@ export type ReviewPromptInput = {
   | { standard: HandedStandard; handed: string }
 );
 
-/** Throws when a reference file or section the standard embeds is missing or empty. */
 export function buildReviewPrompt(input: ReviewPromptInput): string {
   const mode = MODES[input.standard];
   const sections = [mode.target(input.target), ...mode.files.map(embed)];

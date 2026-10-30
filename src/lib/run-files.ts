@@ -1,10 +1,3 @@
-/**
- * The run-file store `ask` and `review` write codex's output into: one
- * `<prefix>-<stamp>[-N].md` per run plus the `.log` beside it, reserved so a
- * re-run never clobbers an earlier one, pruned by age, and narrowed to
- * owner-only once codex has written it.
- */
-
 import {
   chmodSync,
   closeSync,
@@ -24,11 +17,9 @@ import { join } from "node:path";
  */
 const STAMP = "YYYYMMDD-hhmmss";
 
-/** Run files' extensions: codex's `-o` output and the log beside it. */
 const OUTPUT_EXT = ".md";
 const LOG_EXT = ".log";
 
-/** The `n`th stem for `prefix` at `now`: `<prefix>-<STAMP>`, then `-<n>` from 2 on. */
 function runFileStem(prefix: string, now: Date, n: number): string {
   const p = (v: number, width = 2): string => String(v).padStart(width, "0");
   const fields: Record<string, string> = {
@@ -43,7 +34,6 @@ function runFileStem(prefix: string, now: Date, n: number): string {
   return `${prefix}-${stamp}${n === 1 ? "" : `-${n}`}`;
 }
 
-/** Matches exactly the file names {@link runFileStem} yields for `prefix`, with either extension. */
 function runFilePattern(prefix: string): RegExp {
   const literal = (v: string): string => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const stamp = STAMP.replace(/[A-Za-z]/g, "\\d");
@@ -52,10 +42,9 @@ function runFilePattern(prefix: string): RegExp {
 }
 
 /**
- * One output file per run: `<prefix>-<YYYYMMDD-HHMMSS>[-N].md` plus the
- * matching `.log`, so a re-run never clobbers an earlier one and a failed run
- * can never print an older output. A stem is taken when either file exists; the
- * log is created exclusively (`wx`, mode 0600) to claim the stem against a
+ * A fresh stem per run, so a re-run never clobbers an earlier one and a failed
+ * run can never print an older output. A stem is taken when either file exists;
+ * the log is created exclusively (`wx`, mode 0600) to claim the stem against a
  * concurrent run.
  */
 export function reserveRunFiles(
@@ -79,13 +68,6 @@ export function reserveRunFiles(
   }
 }
 
-/**
- * Delete `dir`'s run files for `prefix` (the {@link reserveRunFiles} names, `.md`
- * and `.log`) last modified more than `maxAgeMs` before `now`. Best-effort and
- * never throws: an entry that cannot be read or removed is left in place, and
- * anything that is not a regular file, or not named like a run file, is never
- * touched.
- */
 export function pruneRunFiles(
   dir: string,
   prefix: string,

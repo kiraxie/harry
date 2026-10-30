@@ -1,12 +1,7 @@
-// Atomic, backup-preserving writes for harry's installers (init, install-laws).
 // These scripts rewrite the user's hand-authored, un-versioned files —
 // ~/.claude/CLAUDE.md, a project's .gitignore. A bare writeFileSync onto those is
 // non-atomic: a crash or full disk mid-write leaves the irreplaceable file
-// truncated with no recovery.
-//
-// Both installers must write safely — divergence would be a bug
-// (the drift test in `references/review-rubric.md`: shared knowledge across a boundary gets one source of truth),
-// so the safe-write policy lives here once.
+// truncated with no recovery. Shared by both installers so the policy cannot diverge.
 
 import { randomUUID } from "node:crypto";
 import {
@@ -20,29 +15,14 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 
-// Write `content` to `targetPath` atomically, keeping a one-time backup. Returns
-// whether it wrote: content equal to the target's (a missing target reading as
-// empty) is left alone, so a re-run neither rewrites the file nor creates it empty,
-// and the caller can tell the user nothing changed. The parent directory is made
-// only on the write path, so a no-op leaves no empty directory behind either.
-//
-//  1. On the FIRST modification of an existing target, copy it to `<target>.bak`
-//     — but only if no `.bak` already exists, so re-runs never clobber the
-//     original snapshot with a harry-modified one.
-//  2. Write to a uniquely-named sibling of the target (same directory → same
-//     filesystem, so the rename is atomic), then rename it over the target. A
-//     reader ever sees only the complete old file or the complete new one, never
-//     a half-written file.
-
-// Per-call temp path for `targetPath`. Unique because two installers can run at
-// once (a second /harry:sync, or a sync racing `pnpm run install-laws`) against
-// the same target: with a shared temp name they interleave write and rename, and
-// one process renames the other's half-written file over the user's global
-// instructions — the very truncation this module prevents. Same idiom as
-// src/lib/state.ts's atomicWrite (copied, not imported: scripts/ and src/ share
-// no code). A per-call name is also why safeWrite must clean up after a failed
-// write: there is no next run to reclaim a fixed path, so the debris would
-// accumulate beside the user's global instructions.
+// A sibling of the target, never a tmpdir: rename is atomic only within one
+// filesystem. Unique per call because two installers can run at once (a second
+// /harry:sync, or a sync racing `pnpm run install-laws`) against the same target:
+// with a shared temp name they interleave write and rename, and one process
+// renames the other's half-written file over the user's global instructions — the
+// very truncation this module prevents. A per-call name is also why safeWrite
+// must clean up after a failed write: there is no next run to reclaim a fixed
+// path, so the debris would accumulate beside the user's global instructions.
 /** @param {string} targetPath @returns {string} */
 export function tempPathFor(targetPath) {
   return `${targetPath}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -54,6 +34,7 @@ export function safeWrite(targetPath, content) {
   if ((exists ? readFileSync(targetPath, "utf8") : "") === content) return false;
   mkdirSync(dirname(targetPath), { recursive: true });
   const backupPath = `${targetPath}.bak`;
+  // Only when no `.bak` exists, so a re-run never clobbers the original with a harry-modified one.
   if (exists && !existsSync(backupPath)) {
     copyFileSync(targetPath, backupPath);
   }

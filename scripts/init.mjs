@@ -1,16 +1,10 @@
 #!/usr/bin/env node
-// harry init — add harry's required ignore entries to a project's .gitignore.
 // No marker block, no tool-name comment: it just checks each entry for an
 // exact-match line anywhere in the file and appends whatever is missing, so a
 // teammate reading .gitignore sees plain ignore rules, not harry branding.
 // Trade-off (accepted): --remove deletes ANY line that exactly matches one of
 // harry's entries, even one the user typed in by hand — there is no marker to
 // tell the two apart.
-//
-// Usage:
-//   node scripts/init.mjs [targetDir]     # default: cwd
-//   node scripts/init.mjs --remove [dir]  # uninstall the entries
-//   node scripts/init.mjs --selftest      # runnable check (no project needed)
 
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,16 +12,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
 
-// Per project dir: local scratch (items/, archive/, INDEX.md with its
-// in-flight work list, HISTORY.md, tmp/ handoff files), worktree sandboxes,
-// and the user's per-project specialization rules. All non-versioned.
 const ENTRIES = [".local/", "*worktrees/", "CLAUDE.local.md"];
 
 class UserError extends Error {}
 
-// Returns the .gitignore content with harry's entries appended (or removed).
-// Per-entry dedupe: an entry already present anywhere in the file is skipped,
-// so it never duplicates a line the user already has.
 /** @param {string} existing @param {{ remove?: boolean }} [opts] @returns {string} */
 export function applyBlock(existing, { remove = false } = {}) {
   const text = existing ?? "";
@@ -72,7 +60,6 @@ function selftest() {
   };
   const dir = mkdtempSync(join(tmpdir(), "harry-init-"));
   try {
-    // Pre-existing content is preserved; entries appended once.
     writeFileSync(join(dir, ".gitignore"), "node_modules/\n");
     run(dir);
     let out = readFileSync(join(dir, ".gitignore"), "utf8");
@@ -82,7 +69,6 @@ function selftest() {
     assert(out.includes("CLAUDE.local.md"), "adds CLAUDE.local.md");
     assert(!out.includes("harry"), "no harry branding in the output");
 
-    // Idempotent: second run does not duplicate any entry.
     run(dir);
     out = readFileSync(join(dir, ".gitignore"), "utf8");
     assert(
@@ -90,7 +76,6 @@ function selftest() {
       "still one .local/ line after second run (idempotent)",
     );
 
-    // Dedupe: an entry already present is not duplicated.
     writeFileSync(join(dir, ".gitignore"), "node_modules/\n.local/\n");
     run(dir);
     out = readFileSync(join(dir, ".gitignore"), "utf8");
@@ -109,7 +94,6 @@ function selftest() {
     assert(!out.includes("CLAUDE.local.md"), "remove strips harry's entries");
     assert(out.includes("node_modules/"), "remove keeps unrelated existing entries");
 
-    // Works when no .gitignore exists yet.
     const dir2 = mkdtempSync(join(tmpdir(), "harry-init-"));
     run(dir2);
     assert(
