@@ -1,10 +1,12 @@
 # Plain Language — writing for people
 
-HARRY.md **Talk** makes every text written for people plain, short and to the point: chat
-replies, PR bodies and comments, commit messages, README, CHANGELOG, skills and
-references, code comments, and drafted Slack, Jira or email messages. The grounding rule
-and the self-check below apply to all of them. Subagent briefs and review reports stay
-precision-first per the law, and coin no new term.
+HARRY.md **Talk** makes every text for people plain, short and to the point: chat replies,
+PR bodies and comments, commit messages, README, CHANGELOG, code comments, drafted Slack,
+Jira or email, and what a skill has the session say to the user. Text for a model —
+skills, commands, references, agents, briefs and review reports — stays precision-first
+and coins no term the law does not allow (HARRY.md **Talk**). The grounding rule and the
+self-check below apply to every text; for text a model reads, a concept counts as
+established when HARRY.md **Talk** lets that text use it.
 
 The two levels below pace prose addressed to the user — a chat reply, a chat-facing
 summary, a PR body, anything written for the person rather than for another agent. The
@@ -105,7 +107,7 @@ request on whatever the previous message was.
 ## Self-check before sending
 
 - **List every project noun in the draft.** Each one is either established earlier
-  in the same message, or cut.
+  in the same message — or, for text a model reads, as the opening paragraph says — or cut.
 - **Read the draft cold**, as if returning to it after a scroll-back with nothing
   else in mind. A sentence that only parses because the one before it is still fresh
   has a hidden second layer — split it out instead of relying on the reader's
