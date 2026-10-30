@@ -780,7 +780,7 @@ Log: ${logPath}
 }
 
 // package.json
-var package_default = { version: "0.25.0" };
+var package_default = { version: "0.26.0" };
 
 // src/lib/version.ts
 var PLUGIN_VERSION = package_default.version;

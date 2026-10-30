@@ -5,6 +5,52 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-10-30
+
+### Added
+
+- **A kept comment says why, never what.** HARRY.md **Code**'s one kept comment kind
+  is now why the code is this way and not the obvious way — a trade-off, or a
+  constraint the code cannot show — as short as that point allows and never what the
+  code does; the one-line cap is gone. The review rubric states the same two sides,
+  so the Codex lane judges by the law it never reads. `src/`, `scripts/` and `ci.yml`
+  were swept against it. Run `/harry:sync` to deploy it.
+- **The Codex review lane takes `--spec`, `--rereview` and `--fix-check`.** The AC and
+  their probe lines reach codex under their own heading as claims to check, not facts;
+  the re-review and the fix check are review modes of their own, handed the three
+  levels of `references/fix-check.md`. Every mode runs as `codex exec` on the
+  runtime's own prompt, never `codex exec review`, so each follows the form it is asked.
+- **Scope grows only on the user's say.** After a review, each finding and Follow-ups
+  line is sorted by two checks — inside or outside the AC, real or not — and only real
+  work outside the AC goes to the user; the rest is fixed or recorded as leave-as-is.
+  A discovery's default disposition is a record; a backlog item opens only when the
+  user names it, merged into a similar open item first. `/debt` sweeps the archive's
+  leave-as-is records.
+- **Text for a model is precision-first.** HARRY.md **Talk** names skills, commands,
+  references, agents, briefs and review reports as text a model reads, coining no new
+  term; what a skill has the session say to the user stays plain.
+- **Audit dimensions carry their schema slug** in `references/audit/SCAN-DIMENSIONS.md`.
+
+### Changed
+
+- **Prose tests guard behavior, not wording.** Single-file sentence pins are gone;
+  `references/red-green.md` names the four text-artifact tests (citation resolution,
+  agreement between files, structure, a retired-concept guard), and the suite keeps
+  only those. All prose scans read git-tracked files through one CommonMark + GFM
+  reader and one corpus. `/release` lists prose commits with no eval case before any bump.
+- **`runCodexExec` is the one route to codex.** It builds the read-only argv, takes
+  typed options instead of free-form args, and the build fails when any module other
+  than `src/lib/version.ts` imports the manifest.
+- Brainstorm depth, the item's shape and the probe's Progress line each have one home.
+
+### Removed
+
+- **The Codex CLI plugin build.** harry ships as a Claude Code plugin only; review,
+  ask, debate and executing's Codex lane still run codex from Claude Code. Codex users:
+  run `node scripts/install-codex.mjs --remove` from a v0.25.0 checkout (or delete the
+  `# >>> harry >>>` … `# <<< harry <<<` block in `~/.codex/AGENTS.md`), then remove the
+  plugin in Codex.
+
 ## [0.25.0] - 2026-10-21
 
 ### Added
