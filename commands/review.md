@@ -61,9 +61,9 @@ out-of-session architecture review in Codex, beside the one finishing dispatches
 (`skills/finishing/SKILL.md` **Architecture review**); pass everything that
 review's **Reviewer.** paragraph hands its reviewer, except
 `references/architecture-review.md` and the diff file, through `--context @<file>` —
-this mode embeds the one and computes the other. Pass `--base`: on round 1 the branch
-point; on a later round the head the most recent round recorded, so only the diff since
-then is reviewed. The runtime does not require it — without it the target resolves as
+this mode embeds the one and computes the other. Pass `--base`: the start of the diff
+`skills/finishing/SKILL.md` **Architecture review** hands its reviewer, so Codex reviews
+the same diff. The runtime does not require it — without it the target resolves as
 above, and a dirty tree would review the working tree, not the branch.
 
 ## `--rereview`
@@ -87,7 +87,9 @@ a finding's fix is built. Its file holds each finding with its proposed fix, and
 unit's earlier findings files. The prompt carries `references/fix-check.md` in full
 and tells the reviewer to read the whole repo to trace each fix; it judges only the
 handed fixes. Pass through `--context @<file>` what `references/fix-check.md`
-**What you are handed** lists for level 3. It needs `--base`: the unit's branch point. It
+**What you are handed** lists for level 3, except the earlier findings files: the
+`--fix-check` file already names them, and they hold verdicts (**`--context`**,
+below). It needs `--base`: the unit's branch point. It
 excludes `--architecture` and `--rereview`.
 
 `--rereview` and `--fix-check` both read their value as `--context` does, and as

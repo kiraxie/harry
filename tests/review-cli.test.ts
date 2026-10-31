@@ -469,6 +469,15 @@ test("A3: --architecture embeds architecture-review.md as the review standard, n
   ]);
 });
 
+test("AC-3: --architecture without --base on a clean branch reviews the branch against main", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--architecture"]);
+  assert.equal(run.status, 0, run.stderr);
+  const prompt = recordedPrompt(run);
+  assert.match(prompt, /git diff main\.\.\.HEAD/);
+  assert.ok(prompt.includes(ARCH_RUBRIC.trim()), "the run must be an architecture review");
+});
+
 test("A3: without --architecture the prompt embeds the review rubric and not architecture-review.md", () => {
   const repo = makeRepo();
   writeFileSync(path.join(repo, "a.txt"), "v2\n");

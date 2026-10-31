@@ -20,15 +20,15 @@ A security audit has a clean anchor: "can you build an exploit?" This domain doe
 
 | Tool | Direction | Scope | Cadence |
 |---|---|---|---|
-| a diff-level code review | correctness — plus a quick over-engineering pass via its simplify mode's sub-agent Lane B | a change | per PR |
+| a diff-level code review | correctness — plus a quick over-engineering pass, its `references/review-rubric.md` **YAGNI / altitude** dimension | a change | per PR |
 | a debt-ledger pass | re-judge existing debt markers | existing markers | one-shot |
 | **this audit** | **restructure / consolidate** (incl. hoist, dimension **Reusability & hoist candidates**) **and deep over-engineering hunting** (dimension **Over-engineering / unearned abstraction**) | **whole repo / subsystem** | **iterative, accumulative** |
 
 The three tools above are the `/review`, `/debt`, and `/audit` slash commands respectively.
 
 Over-engineering has two speeds now, not two competing tools: a quick per-diff pass
-lives in the diff-level code review's simplify mode's sub-agent Lane B (see the
-simplify dual-lane in `commands/review.md` — cheap, no extra Codex quota); the deep, evidence-verified,
+is the diff-level code review's `references/review-rubric.md` **YAGNI / altitude**
+dimension; the deep, evidence-verified,
 severity-ranked version is dimension **Over-engineering / unearned abstraction**
 here. The one place dimension **Reusability & hoist candidates** and dimension
 **Over-engineering / unearned abstraction** could seem to contradict — one says
@@ -101,7 +101,7 @@ This is the mirror of a security audit's "if you need the word *theoretically*, 
 
 ### 2. A missing abstraction is not a finding — defer to the drift test
 
-The natural bias of an architecture reviewer is to *add* abstraction (introduce a Strategy, a Factory, a Repository). That bias directly fights KISS / YAGNI and produces over-engineering — the exact thing dimension **Over-engineering / unearned abstraction** (and the diff-level review's simplify mode) exists to remove. So this audit holds the opposite default:
+The natural bias of an architecture reviewer is to *add* abstraction (introduce a Strategy, a Factory, a Repository). That bias directly fights KISS / YAGNI and produces over-engineering — the exact thing dimension **Over-engineering / unearned abstraction** (and the diff-level review's `references/review-rubric.md` **YAGNI / altitude** dimension) exists to remove. So this audit holds the opposite default:
 
 **Duplication or a missing abstraction is a finding only if it fails the drift test:** *if these copies silently diverge, is that a bug, or normal independent evolution?*
 
