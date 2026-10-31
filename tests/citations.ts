@@ -4,7 +4,7 @@ import { gfm } from "micromark-extension-gfm";
 import { caseName, parseCasesJsonl } from "../scripts/lib/evals-cases.mts";
 import { lineAt } from "./lines.ts";
 
-export type Name = { name: string; full: string; level?: number };
+export type Name = { name: string; full: string; level?: number; bullets?: string[] };
 
 export type Repo = {
   kind: (rel: string) => "file" | "dir" | "untracked";
@@ -31,6 +31,7 @@ export const FORM = {
   dimension: "dimension **<SCAN-DIMENSIONS ## core name>**",
   skillDir: "`dir/SKILL.md` **Name**",
   dirFile: "`dir/FILE.md` **Name**",
+  bullet: '"Bullet" bullet of `path` **Name**',
 } as const;
 const QUOTE_SRC = [
   `"([^"]+)"`,
@@ -39,9 +40,17 @@ const QUOTE_SRC = [
   String.raw`(?<![\p{L}\p{N}])'([^']+)'(?![\p{L}\p{N}])`,
 ].join("|");
 const PATH_SRC = String.raw`(?:[\w.-]+\/)*[\w.-]+?`;
-const CITE_RE = new RegExp(String.raw`\`(${PATH_SRC}\.md)\`\s+`, "g");
 const LAW_SRC = String.raw`(?<![\w.-])HARRY\.md\`?`;
-const LAW_CITE_RE = new RegExp(String.raw`${LAW_SRC}\s+`, "g");
+const CITE_FORMS: Record<"path" | "law" | "dimension" | "bullet", { re: RegExp; quoted: boolean }> =
+  {
+    path: { re: new RegExp(String.raw`\`(${PATH_SRC}\.md)\`\s+`, "g"), quoted: false },
+    law: { re: new RegExp(String.raw`${LAW_SRC}\s+`, "g"), quoted: false },
+    dimension: { re: /\bdimensions?\s+/gi, quoted: false },
+    bullet: {
+      re: new RegExp(`(?:${QUOTE_SRC})\\s+bullet\\s+of\\s+\`(?<path>${PATH_SRC}\\.md)\`\\s+`, "gu"),
+      quoted: true,
+    },
+  };
 
 type Connector = { name: string; src: string };
 
@@ -109,6 +118,7 @@ type MdNode = {
   depth?: number;
   lang?: string | null;
   meta?: string | null;
+  ordered?: boolean | null;
 };
 
 const FRONT_MATTER_RE = /^(---\r?\n)([\s\S]*?\r?\n)---[ \t]*(?=\r?\n|$)/;
@@ -260,29 +270,60 @@ export const readProse = (rel: string, text: string): Block[] =>
 const spanAt = (spans: CodeSpan[], at: number): CodeSpan | undefined =>
   spans.find((s) => at >= s.from && at < s.to);
 
-const labelOf = (src: string, item: MdNode): string | null => {
+export const TRAILING_MARK: { name: string; re: RegExp } = {
+  name: "a trailing `.` or `:`",
+  re: /[.:]$/,
+};
+
+const leadLabel = (src: string, item: MdNode): string | null => {
   const [first] = item.children ?? [];
   const [lead] = first?.type === "paragraph" ? (first.children ?? []) : [];
-  if (item.position?.start.column !== 1 || !/^\d+\. /.test(src.slice(offset(item, "start"))))
-    return null;
   if (lead?.type !== "strong") return null;
   return cleanName(src.slice(offset(lead, "start") + 2, offset(lead, "end") - 2))
-    .replace(/[.:]$/, "")
+    .replace(TRAILING_MARK.re, "")
     .trim();
+};
+
+const labelOf = (src: string, item: MdNode): string | null =>
+  item.position?.start.column === 1 && /^\d+\. /.test(src.slice(offset(item, "start")))
+    ? leadLabel(src, item)
+    : null;
+
+const sectionBullets = (src: string, root: MdNode): Map<MdNode, string[]> => {
+  const bullets = new Map<MdNode, string[]>();
+  let open: { depth: number; labels: string[] }[] = [];
+  for (const node of root.children ?? []) {
+    if (node.type === "heading") {
+      const depth = node.depth ?? 0;
+      const labels: string[] = [];
+      open = [...open.filter((h) => h.depth < depth), { depth, labels }];
+      bullets.set(node, labels);
+    } else if (node.type === "list" && !node.ordered) {
+      const found = (node.children ?? []).flatMap((item) => leadLabel(src, item) ?? []);
+      for (const h of open) h.labels.push(...found);
+    }
+  }
+  return bullets;
 };
 
 export const namesIn = (text: string): Name[] => {
   const found: { at: number; name: Name }[] = [];
-  for (const src of sources(text))
-    walk(parse(src), (node) => {
+  for (const src of sources(text)) {
+    const root = parse(src);
+    const bullets = sectionBullets(src, root);
+    walk(root, (node) => {
       const range = contentRange(node);
       if (node.type === "heading" && range && (node.depth ?? 0) >= 2) {
         const full = cleanName(src.slice(...range));
-        found.push({ at: range[0], name: { name: coreName(full), full, level: node.depth } });
+        found.push({
+          at: range[0],
+          name: { name: coreName(full), full, level: node.depth, bullets: bullets.get(node) ?? [] },
+        });
       }
       const full = node.type === "listItem" ? labelOf(src, node) : null;
       if (full) found.push({ at: offset(node, "start"), name: { name: coreName(full), full } });
     });
+  }
   return found.sort((a, b) => a.at - b.at).map(({ name }) => name);
 };
 
@@ -314,6 +355,31 @@ export const resolveCitation = (
     ? resolveName(repo.names(target), target, name, level)
     : `${target} is not tracked`;
 
+export const resolveBullet = (
+  repo: Repo,
+  target: string,
+  section: string,
+  bullet: string,
+): string | null => {
+  const failure = resolveCitation(repo, target, section);
+  if (failure) return failure;
+  const heading = repo.names(target).find((n) => n.name === section);
+  if (heading?.level === undefined)
+    return `${target} **${section}** is a step, not a section; a bullet is cited from its heading`;
+  const labels = heading.bullets ?? [];
+  const matches = labels.filter((label) => label === bullet).length;
+  if (matches === 1) return null;
+  const cited = `"${bullet}" bullet of ${target} **${section}**`;
+  if (matches > 1) return `${cited} is ambiguous: ${matches} bullets carry that label`;
+  const bare = bullet.replace(TRAILING_MARK.re, "");
+  if (bare !== bullet && labels.filter((label) => label === bare).length === 1)
+    return `${cited}: drop the trailing "${bullet.at(-1)}"`;
+  const longer = labels.filter((label) => label.startsWith(bullet));
+  return longer.length === 1
+    ? `${cited}: cite its whole bold label "${longer[0]}"`
+    : `${cited} names no top-level bold-labelled bullet of that section`;
+};
+
 export const legacyHits = (blocks: Block[]): string[] =>
   LEGACY_FORMS.flatMap(({ label, re, form }) =>
     blocks.flatMap((b) =>
@@ -324,8 +390,6 @@ export const legacyHits = (blocks: Block[]): string[] =>
       ),
     ),
   );
-
-const DIMENSION_CITE_RE = /\bdimensions?\s+/gi;
 
 export const SCAN_DIMENSIONS = "references/audit/SCAN-DIMENSIONS.md";
 
@@ -355,10 +419,20 @@ const checkEach = (
 };
 
 export const citeFailures = (repo: Repo, blocks: Block[]): Checked =>
-  checkEach(blocks, CITE_RE, (m, name) => resolveCitation(repo, m[1] as string, name));
+  checkEach(blocks, CITE_FORMS.path.re, (m, name) => resolveCitation(repo, m[1] as string, name));
+
+export const bulletFailures = (repo: Repo, blocks: Block[]): Checked =>
+  checkEach(blocks, CITE_FORMS.bullet.re, (m, section) =>
+    resolveBullet(
+      repo,
+      m.groups?.path as string,
+      section,
+      cleanName(m.slice(1).find(Boolean) ?? ""),
+    ),
+  );
 
 export const lawFailures = (blocks: Block[]): Checked =>
-  checkEach(blocks, LAW_CITE_RE, (_, name) =>
+  checkEach(blocks, CITE_FORMS.law.re, (_, name) =>
     LAW_HEADINGS.includes(name) ? null : `HARRY.md **${name}**`,
   );
 
@@ -383,16 +457,19 @@ const dimensionFailure = (repo: Repo, name: string): string | null =>
   resolveCitation(repo, SCAN_DIMENSIONS, name, 2);
 
 export const dimensionFailures = (repo: Repo, blocks: Block[]): Checked =>
-  checkEach(blocks, DIMENSION_CITE_RE, (_, name) => dimensionFailure(repo, name));
+  checkEach(blocks, CITE_FORMS.dimension.re, (_, name) => dimensionFailure(repo, name));
 
 export const blockDimensionFailures = (repo: Repo, b: Block): { line: number; failure: string }[] =>
-  leads(b, DIMENSION_CITE_RE).flatMap(({ at, bold }) => {
+  leads(b, CITE_FORMS.dimension.re).flatMap(({ at, bold }) => {
     const failure = dimensionFailure(repo, cleanName(bold.name));
     return failure ? [{ line: b.lineAt(at), failure }] : [];
   });
 
 export const cites = (b: Block): { path: string; name: string }[] =>
-  leads(b, CITE_RE).map(({ m, bold }) => ({ path: m[1] as string, name: cleanName(bold.name) }));
+  leads(b, CITE_FORMS.path.re).map(({ m, bold }) => ({
+    path: m[1] as string,
+    name: cleanName(bold.name),
+  }));
 
 const citeTarget = (repo: Repo, cited: string): string | null => {
   const target = cited.endsWith(".md") ? cited : `${cited}/SKILL.md`;
@@ -412,7 +489,9 @@ const STEP_HINT = `cite the step by its label, as ${FORM.path}`;
 
 const exactCitations = (b: Block): Set<number> =>
   new Set(
-    [CITE_RE, LAW_CITE_RE, DIMENSION_CITE_RE].flatMap((re) => leads(b, re).map((l) => l.bold.at)),
+    Object.values(CITE_FORMS).flatMap(({ re, quoted }) =>
+      leads(b, re).flatMap((l) => (quoted ? [l.at, l.bold.at] : [l.bold.at])),
+    ),
   );
 
 type PathMention = {
@@ -520,17 +599,28 @@ export const citationAttempts = (repo: Repo, blocks: Block[]): string[] => {
           (s.bold && s.at === lead) ||
           (!s.bold && s.at === lead + (b.text[lead] === "\\" ? 1 : 0) && /^\w/.test(s.name)),
       );
+      const known = target ? repo.names(target) : [];
+      const names = new Set(known.flatMap((n) => [n.name, n.full]));
+      const bullets = new Set(known.flatMap((n) => n.bullets ?? []));
+      const formHint = (s: Span): string | null => {
+        const name = cleanName(s.name);
+        const asBullet = !s.bold && bullets.has(name);
+        if (names.has(name))
+          return asBullet
+            ? `${advice} for the heading or step, or as ${FORM.bullet} for the bullet`
+            : advice;
+        return asBullet ? `cite it as ${FORM.bullet}` : null;
+      };
       const adjacent = !exact && opener !== undefined;
-      if (adjacent) hit(end, `a name next to ${cited}; ${advice}`);
+      if (adjacent) hit(end, `a name next to ${cited}; ${formHint(opener) ?? advice}`);
       if (!target) continue;
-      const names = new Set(repo.names(target).flatMap((n) => [n.name, n.full]));
       const afterEnd = end + after.length;
       for (const s of spans) {
         if (!((s.at >= from && s.end <= start) || (s.at >= end && s.end <= afterEnd))) continue;
         if (adjacent && s === opener) continue;
-        if (s.bold && exactAt.has(s.at)) continue;
-        const name = cleanName(s.name);
-        if (names.has(name)) hit(s.at, `${cited} "${name}" outside the citation form; ${advice}`);
+        if (exactAt.has(s.at)) continue;
+        const hint = formHint(s);
+        if (hint) hit(s.at, `${cited} "${cleanName(s.name)}" outside the citation form; ${hint}`);
       }
     }
   }

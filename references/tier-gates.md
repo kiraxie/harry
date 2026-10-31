@@ -75,7 +75,7 @@ Tiers are set by what a failure can break and whether it can be seen and undone,
 
 3. **Take the highest tier whose trigger is hit** (HARRY.md **Tiers**), scanning for red lines and branching too — whichever lands highest wins. Ties and uncertainty resolve upward.
 
-Text an always-loaded law hands its exceptions to counts as part of that law. Today that is the "Optimize on evidence" bullet of `references/review-rubric.md` **Engineering judgment**, which holds HARRY.md **Code**'s exceptions to measuring first. An edit that changes what that text allows hits the always-loaded trigger, whatever file it lands in, and promotes as rule 1 does.
+Text an always-loaded law hands its exceptions to counts as part of that law. Today that is the "Optimize on evidence, never on imagination" bullet of `references/review-rubric.md` **Engineering judgment**, which holds HARRY.md **Code**'s exceptions to measuring first. An edit that changes what that text allows hits the always-loaded trigger, whatever file it lands in, and promotes as rule 1 does.
 
 ## Incident lane
 

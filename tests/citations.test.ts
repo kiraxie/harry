@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   blockDimensionFailures,
+  bulletFailures,
   citationAttempts,
   citeFailures,
   dimensionFailures,
@@ -30,6 +31,10 @@ const docs: Record<string, string> = {
   "references/grilling.md": "## Handoff\n",
   "references/pr-body.md": "## Evidence\n",
   "references/red-green.md": "1. **Run *all* tests.** a\n2. **Use `**` marks.** b\n",
+  "references/doc-types.md":
+    "## Lifecycle rules\n- **Writers**: a\n  - **Nested.** b\n- **Optimize on evidence, never on imagination.** c\n" +
+    "- **Twin.** d\n- **Twin:** e\n- plain **Inside.** f\n\n1. **Step.** s\n### Sub\n- **Under sub.** g\n" +
+    "## Other\n- **Elsewhere.** h\n## Writers\n",
   "references/architecture-review.md": "## System level\n",
   "references/audit/SCAN-DIMENSIONS.md":
     "## 11. Low-value tests\n### Choosing dimensions and shaping agents\n" +
@@ -404,6 +409,94 @@ test("a cross-file citation names a heading or step its file has", () => {
   );
 });
 
+const BULLET_AT = "bullet of `references/doc-types.md` **Lifecycle rules**";
+const BULLET_ROWS: [string, string, string[]][] = [
+  ["a whole label resolves", `per "Writers" ${BULLET_AT}`, []],
+  [
+    "a label's trailing period is dropped",
+    `per "Optimize on evidence, never on imagination" ${BULLET_AT}`,
+    [],
+  ],
+  [
+    "line breaks between the parts and inside the name are whitespace",
+    'per "Optimize on evidence,\nnever on imagination"\nbullet of\n`references/doc-types.md`\n**Lifecycle\nrules**',
+    [],
+  ],
+  ["a bullet under a subsection belongs to its section", `per "Under sub" ${BULLET_AT}`, []],
+  [
+    "a leading part of a label fails naming the whole label",
+    `per "Optimize on evidence" ${BULLET_AT}`,
+    [
+      '1 -> "Optimize on evidence" bullet of references/doc-types.md **Lifecycle rules**: ' +
+        'cite its whole bold label "Optimize on evidence, never on imagination"',
+    ],
+  ],
+  [
+    "a nested bullet fails",
+    `per "Nested" ${BULLET_AT}`,
+    [
+      '1 -> "Nested" bullet of references/doc-types.md **Lifecycle rules** names no ' +
+        "top-level bold-labelled bullet of that section",
+    ],
+  ],
+  [
+    "a bold run past the item's start fails",
+    `per "Inside" ${BULLET_AT}`,
+    [
+      '1 -> "Inside" bullet of references/doc-types.md **Lifecycle rules** names no ' +
+        "top-level bold-labelled bullet of that section",
+    ],
+  ],
+  [
+    "a numbered step is not a bullet",
+    `per "Step" ${BULLET_AT}`,
+    [
+      '1 -> "Step" bullet of references/doc-types.md **Lifecycle rules** names no ' +
+        "top-level bold-labelled bullet of that section",
+    ],
+  ],
+  [
+    "a label's trailing mark kept in the name fails naming the mark",
+    `per "Writers:" ${BULLET_AT}`,
+    [
+      '1 -> "Writers:" bullet of references/doc-types.md **Lifecycle rules**: drop the trailing ":"',
+    ],
+  ],
+  [
+    "a bullet of another section fails",
+    `per "Elsewhere" ${BULLET_AT}`,
+    [
+      '1 -> "Elsewhere" bullet of references/doc-types.md **Lifecycle rules** names no ' +
+        "top-level bold-labelled bullet of that section",
+    ],
+  ],
+  [
+    "two bullets with one label are ambiguous",
+    `per "Twin" ${BULLET_AT}`,
+    [
+      '1 -> "Twin" bullet of references/doc-types.md **Lifecycle rules** is ambiguous: ' +
+        "2 bullets carry that label",
+    ],
+  ],
+  [
+    "a bold part naming a step fails as no section",
+    'per "Step" bullet of `references/doc-types.md` **Step**',
+    [
+      "1 -> references/doc-types.md **Step** is a step, not a section; a bullet is cited from its heading",
+    ],
+  ],
+  [
+    "a section the file lacks fails as the cross-file check does",
+    'per "Writers" bullet of `references/doc-types.md` **Lifecycle**',
+    ['1 -> references/doc-types.md has no heading or step "Lifecycle"'],
+  ],
+];
+
+for (const [label, text, failures] of BULLET_ROWS)
+  test(`a quoted-bullet citation: ${label}`, () => {
+    assert.deepEqual(bulletFailures(repo, md(text)), { seen: 1, failures });
+  });
+
 test("a law citation names a HARRY.md ## heading", () => {
   assert.deepEqual(
     lawFailures(md("per HARRY.md **Tiers** and `HARRY.md` **Ask\nfirst**,\nHARRY.md **Tier**")),
@@ -543,6 +636,9 @@ test("a citation attempt next to a path must be in the one form", () => {
       "per ` references/grilling.md ` **Handoff** here",
       "per ` skills/x ` **Steps** here",
       "per `\nreferences/grilling.md\n` **Handoff** here",
+      '"Optimize on evidence, never on imagination" bullet in `references/doc-types.md` **Lifecycle rules**',
+      'the "Optimize on evidence, never on imagination" bullet of `references/doc-types.md`',
+      'per `references/doc-types.md` **Lifecycle rules**, its "Optimize on evidence, never on imagination" bullet',
     ],
     [
       "simplify dual-lane — **Claude Code build:** in `commands/review.md`; **Codex build:**",
@@ -572,7 +668,38 @@ test("a citation attempt next to a path must be in the one form", () => {
       "per `  references/grilling.md  ` **Handoff** here",
       "see `references/grilling.md` for it\n- **Handoff** opens the item",
       "see `references/grilling.md` for it\n- (step 4) opens the item",
+      'per "Writers" bullet of `references/doc-types.md` **Lifecycle rules** here',
+      'per "Writers" bullet of `references/doc-types.md` **Lifecycle rules** and `references/grilling.md` **Handoff**',
     ],
+  );
+  const BOTH =
+    'cite it as `path` **Name** for the heading or step, or as "Bullet" bullet of `path` **Name** for the bullet';
+  assert.deepEqual(
+    [
+      'the "Writers" bullet in `references/doc-types.md` **Lifecycle rules**',
+      'per `references/doc-types.md` "Writers"',
+      'per `references/doc-types.md` "Twin"',
+      'the "Other" bullet in `references/doc-types.md` **Lifecycle rules**',
+    ].map((sample) => attempts(sample)),
+    [
+      [`1 -> references/doc-types.md "Writers" outside the citation form; ${BOTH}`],
+      [`1 -> a name next to references/doc-types.md; ${BOTH}`],
+      [
+        '1 -> a name next to references/doc-types.md; cite it as "Bullet" bullet of `path` **Name**',
+      ],
+      [
+        '1 -> references/doc-types.md "Other" outside the citation form; cite it as `path` **Name**',
+      ],
+    ],
+    "a hint no longer names every form a quoted name can be cited in",
+  );
+  assert.deepEqual(
+    attempts('the "Twin" bullet in `references/doc-types.md` **Lifecycle rules**'),
+    [
+      '1 -> references/doc-types.md "Twin" outside the citation form; ' +
+        'cite it as "Bullet" bullet of `path` **Name**',
+    ],
+    "a quoted bullet label next to a path outside the form no longer names the bullet form",
   );
   assert.deepEqual(
     attempts(

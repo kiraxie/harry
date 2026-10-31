@@ -168,6 +168,12 @@ kind has exactly one form:
   fine), then the bold name — `references/red-green.md` **What a good test is**.
 - A skill directory: through its file, `skills/executing/SKILL.md` **Steps**; never the bare
   directory.
+- A bullet in a section: the quoted name, `bullet of`, then the section's citation —
+  "Optimize on evidence, never on imagination" bullet of `references/review-rubric.md`
+  **Engineering judgment**. The name is the bullet's whole bold label with a trailing `.` or
+  `:` dropped, never a leading part of it, and exactly one top-level bullet (an unordered list
+  item) of that section, its subsections included, must carry it as its bold label. A numbered
+  item is a step, cited in the step form above.
 - A law: HARRY.md **Evidence**, with only whitespace between — no possessive, comma or colon,
   and never the law name in plain text or a section number (`§N`).
 - An audit dimension: dimension **Low-value tests**, by the name of a `##` heading of
@@ -185,9 +191,10 @@ kind has exactly one form:
   the rule to. `tests/audit-dimension-slugs.test.ts` checks these four rules; no test checks that
   any other slug names the right dimension.
 
-The name is the core name: the heading or bold step label without a leading `N. `, a trailing
-` — …` or a trailing `(…)`, so renumbering a step or rewording a subtitle leaves every citation
-standing. It must be unique in its file.
+A heading or step is cited by its core name: the heading, or the bold step label with a trailing
+`.` or `:` dropped, without a leading `N. `, a trailing ` — …` or a trailing `(…)`, so
+renumbering a step or rewording a subtitle leaves every citation standing. It must be unique in
+its file. A bullet is cited by its whole label, as its entry above says.
 
 `tests/citations.ts` reads Markdown as GitHub renders it (CommonMark plus GitHub's extensions, such
 as tables): bold is what renders bold. It reads an untagged fence whole, as prose: every line of it

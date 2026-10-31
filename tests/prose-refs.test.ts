@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   type Block,
+  bulletFailures,
   CONNECTORS,
   CORE_NAME_STRIPS,
   citationAttempts,
@@ -24,6 +25,7 @@ import {
   resolveCitation,
   stepAttempts,
   strayBold,
+  TRAILING_MARK,
 } from "./citations.ts";
 import { LINE_END_RE } from "./lines.ts";
 import {
@@ -399,6 +401,17 @@ test("every cross-file citation names a heading or step its file has, once", () 
   assert.deepEqual(failures, [], "citations pointing at a name their file lacks or repeats");
 });
 
+test("every quoted-bullet citation names one bullet of its section, by its whole label", () => {
+  let seen = 0;
+  const failures = citeCorpus().flatMap((relFile) => {
+    const checked = bulletFailures(repo, prose(relFile));
+    seen += checked.seen;
+    return checked.failures.map((f) => `${relFile}:${f}`);
+  });
+  assert.ok(seen > 0, "the quoted-bullet citation pattern matched nothing");
+  assert.deepEqual(failures, [], `cite a bullet as ${FORM.bullet}, by its whole bold label`);
+});
+
 test("no cross-file citation uses a legacy form", () => {
   const hits = citeCorpus().flatMap((relFile) =>
     legacyHits(prose(relFile)).map((h) => `${relFile}:${h}`),
@@ -456,7 +469,7 @@ test("the Citations section names every connector and core-name strip the check 
       String.raw`(?<![\p{L}\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\p{L}\p{N}])`,
       "u",
     ).test(prose);
-  const missing = [...Object.values(CONNECTORS).flat(), ...CORE_NAME_STRIPS]
+  const missing = [...Object.values(CONNECTORS).flat(), ...CORE_NAME_STRIPS, TRAILING_MARK]
     .map((entry) => entry.name)
     .filter((name) => !named(name));
   assert.deepEqual(missing, [], `${rel} Citations must name every entry the check reads`);
