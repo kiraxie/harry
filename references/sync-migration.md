@@ -78,11 +78,12 @@ directories:
    members.
 
 Never fabricate content — a section with nothing to carry over gets
-`_(not present in source)_`. Present the full topic→target mapping as a
-table (same shape as Step B below) and fold it into the same Step C
-questions below — the "which candidates to migrate" and "keep or delete
-originals" decisions cover this harry-native set together with the generic
-candidates from Step A.
+`_(not present in source)_`. Its topic→target rows join Step B's one table
+below, and the same Step C questions below — the "which candidates to
+migrate", "which existing targets to overwrite" and "keep or delete originals"
+decisions — cover this harry-native set together with the generic candidates
+from Step A. Step A's archive rule and Step B's distinct-target rule apply to
+it too.
 
 **Step A — Scan for candidates.** In the target directory, look for legacy
 design/plan artifacts. Default candidate set:
@@ -98,36 +99,63 @@ Exclude: already-conformant `.local/` files, `.references/`, `node_modules/`,
 `CONTRIBUTING.md`, `CHANGELOG.md`, license/notice files). Use light judgment —
 read a candidate's head if its kind is unclear.
 
-**Re-run safety:** a candidate that already has a conforming `.local` counterpart
-(same topic, already in harry format) is "already migrated" — exclude it by
-default.
+**Archived topics:** a candidate whose topic (as Step B derives it) already has a
+harry-format item (with `id:`/`status:` frontmatter) in `.local/archive/` is
+skipped, `--force` or not, and the report names it as archived — the archive is
+read-only (`references/doc-types.md` **Naming & location**). A `.local/archive/` file without that frontmatter is not an
+archived item: it is a misnamed candidate like any other.
 
-If `$ARGUMENTS` contains `--force`, do NOT exclude these; re-migrate and overwrite
-their `.local` targets.
+**Re-run safety:** a candidate that already has a conforming `.local/items/`
+counterpart (same topic, already in harry format) is "already migrated" — exclude
+it by default. If `$ARGUMENTS` contains `--force`, do NOT exclude these. That is
+all `--force` does: it never means overwrite, and an existing target is written
+only as Q_C in Step C allows.
 
 **If no candidates remain:** print one line (e.g. "No legacy spec/plan content to
-migrate.") and stop. Do not prompt.
+migrate."), naming any candidate skipped as archived, and stop. Do not prompt.
 
 **Step B — Classify & propose.** For each candidate, decide item vs milestone and
 propose a target path `.local/items/<topic>.md` (or `.local/archive/<topic>.md`
 if already complete). Topic: kebab-case, derived from the filename/content.
-Present the full candidate list as a table (source → proposed kind → target
-path).
+Every candidate gets a distinct target, across Step A0's set and Step A's
+together. A spec-class and a plan-class candidate with one topic are one item —
+spec → `## Why / What`, plan → `## Plan`, as Step A0 case 1 merges them — and
+one candidate from here on. Any other candidates that share a topic get
+distinct topics (from their filenames, with their directory when the filenames
+match too). Present the full candidate list as one table, one row per target
+(source(s) → proposed kind → target path).
 
 **Step C — Ask what's needed to migrate, one question at a time:**
 
 - Q_A — Which candidates to migrate? (multiselect; offer "all" and "skip".)
-- **If nothing was selected** (empty, or "skip"): stop here — nothing was chosen to
-  rewrite, so there is nothing to ask about disposing of.
+- **If nothing was selected** (empty, or "skip"): close with the report and stop —
+  nothing was chosen to rewrite, so there is nothing to ask about disposing of.
+- **Q_C — asked when any selected candidate's target already exists**, `--force`
+  or not (a misnamed `.local/` file's target is the file itself): which existing
+  targets to overwrite? List each with its state: its `status` (or "no
+  frontmatter"), whether it has `### Acceptance criteria`, and its `## Progress`
+  line count. Default keep — `.local/` is gitignored, so an overwritten target is
+  gone for good. One target: options "keep (Recommended)" and "overwrite". Two to
+  four: multiSelect, one option per target; a target not picked is kept. More than
+  four: the list goes in the question text, options "keep all (Recommended)" and
+  "overwrite all", and the user names a subset through Other. A candidate whose
+  target is kept is not written.
+- **If no selected candidate is left to write** after Q_C: close with the report
+  and stop, without asking Q_B — every original stays.
+- **If no candidate left to write has its original at another path than its
+  target** (each is a misnamed `.local/` file rewritten in place): skip Q_B and
+  go on to Step D.
 - **Otherwise ask Q_B** — After rewriting, keep the originals in place or delete
-  them? (Deleting is destructive — this answer IS the confirmation. Default to
-  keep.)
+  them? It covers only originals at another path than their target. (Deleting is
+  destructive — this answer IS the confirmation. Default to keep.)
 
 How to ask each one:
 
-`AskUserQuestion`, one call per question.
+`AskUserQuestion`, one call per question. When Q_C cannot be asked (no interactive
+answer, e.g. a headless run), every existing target is kept and named in the
+report.
 
-**Step D — Execute.** For each SELECTED candidate:
+**Step D — Execute.** For each candidate left to write after Q_C:
 
 1. Rewrite its content into harry's item format, faithfully — never fabricate
    decisions or content. spec-class → the item's `## Why / What` (Context (SCQA)
@@ -136,14 +164,21 @@ How to ask each one:
    `_(legacy plan — migrated as-is, no acceptance criteria)_` and carrying the
    source's steps as they stand; harry no longer writes plans, and a migration
    never invents `### Acceptance criteria` — a legacy `## Plan` is read as-is
-   (`references/doc-types.md`). Where
+   (`references/doc-types.md`). A merged spec and plan are one write, holding
+   both. Where
    the source lacks a section, write `_(not present in source)_` rather than
    invent.
 2. Write the new file at its target path (create `.local/items` /
-   `.local/archive` as needed). With a forced re-run (`--force` on Claude Code),
-   overwrite an existing target.
+   `.local/archive` as needed). An existing target is overwritten only when Q_C
+   picked it; any other existing target is left as is, its candidate is not
+   written, and its original is kept whatever Q_B said.
 3. Per Q_B: keep the original untouched, or delete it ONLY after its new file is
-   successfully written.
+   successfully written. An original whose target is its own path (a misnamed
+   `.local/` file rewritten in place) is never deleted, whatever Q_B says.
+
+**The report.** After Step D, or at a Step C stop that says so, close with a
+report: each target written, each existing target kept, and each candidate
+skipped as archived.
 
 This phase is best-effort and must never undo the earlier phases: if a scan or
 rewrite fails, report it and stop, leaving originals intact.
