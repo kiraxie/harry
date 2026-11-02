@@ -38,20 +38,23 @@ milestone: <slug>      # optional key — omit entirely if standalone
 Sections accumulate — never delete an earlier section when filling a later
 one (`## Notes` stays as history once `## Why / What` is written).
 
-A `## Notes` entry a writer files in a backlog item — a new item's first, or one
-merged into a similar item — is one block per line: a `From <source> …:` line, then
-the quote as a `>` blockquote. The block ends where its blockquote ends; other text
-in `## Notes` (finishing's discard line, an archive back-link, research notes)
-belongs to no block. `<source>` is one rule, applied in order: the item the line
-came from; with no item, the slash command that filed it and what it ran on; with
-neither, the branch. After it comes where in that source the line sat and when, a
-sha or a date. For example: `From scope-rule-followups' Follow-ups (94af1a1):`, `From
-/grill on the cache design (2026-10-27):`, `From /debt's DEBT: row at
-src/cache.ts:40 (2026-10-27):`, `From /distill's ruling on anthropics/skills
-(2026-10-27):`, `From fix/init-typo's leftover check (abc1234):`. Lines ruled into
-one new item each keep their own block. `/sync`'s migration is the exception
-(**Writers**, below; its `## Notes` is set in `references/sync-migration.md`
-**Phase 3**, Step A0's case 3).
+A `## Notes` entry a writer files in a backlog item — a new item's first, or one merged
+into a similar item — is one block per line: a `From <source> …:` line, then the quote
+as a `>` blockquote. The block ends where its blockquote ends; other text in `## Notes`
+(finishing's discard line, an archive back-link, research notes) belongs to no block. A
+`>` quote led by any other line — an entry filed in an older form — is a block too,
+ending where its blockquote ends. A block's lead is the paragraph directly above its
+quote — the run of consecutive non-blank lines that are neither quote lines nor headings
+— when its last line ends in `:`; a quote with no such paragraph is a block of its own
+lines. `<source>` is one rule, applied in order: the item the line came from; with no
+item, the slash command that filed it and what it ran on; with neither, the branch.
+After it comes where in that source the line sat and when, a sha or a date. For example:
+`From scope-rule-followups' Follow-ups (94af1a1):`, `From /grill on the cache design
+(2026-10-27):`, `From /debt's DEBT: row at src/cache.ts:40 (2026-10-27):`, `From
+/distill's ruling on anthropics/skills (2026-10-27):`, `From fix/init-typo's leftover
+check (abc1234):`. Lines ruled into one new item each keep their own block. `/sync`'s
+migration is the exception (**Writers**, below; its `## Notes` is set in
+`references/sync-migration.md` **Phase 3**, Step A0's case 3).
 
 `### Acceptance criteria` is a numbered `AC-1, AC-2, …` list. Each AC is an
 **outcome** ("invalid input returns 400"), never a step ("add `validate()`"),
@@ -184,8 +187,11 @@ milestone edit.
   text a new item's `## Notes` would hold; no new file and no new `INDEX.md` line, and the
   target's `INDEX.md` summary is updated when its scope widens. An `active` item is
   never a target (its AC is approved, and a merge would grow it), nor is the item the
-  writer is itself promoting or finishing, nor anything in the archive (read-only). Lines in one list that are similar to each other, with
-  no target, open one new item together. The writer names each line's target —
+  writer is itself promoting or finishing, nor anything in the archive (read-only). A
+  sweep item (`.local/items/sweep-*.md`) is a target only for `/debt`'s sweep
+  candidates, and they target no other item (`references/debt-audit.md`): its quotes
+  are what keep those archive lines from returning as candidates. Lines in one list
+  that are similar to each other, with no target, open one new item together. The writer names each line's target —
   "merge into `<slug>`" or "new item `<slug>`" — in the list the user rules, so the ruling
   confirms it. A writer that files the line later (finishing's flush) reads the target
   from the line's marker (**Ruled-backlog marker**, below).
@@ -226,13 +232,20 @@ milestone edit.
   - How the triage reads it: a marked line keeps its ruling; only its target is put to
     the user, by **Similar backlog items** above, and the user's answer confirms or
     changes it.
-  - How the flush reads it: each line is filed at the target its marker names. Lines
-    whose markers name one new-item slug open that one item; a new-item slug an item
-    already holds at flush time opens the item under another slug; a marker with no
-    target, or a merge-into target no longer an open `status: backlog` item (promoted,
-    archived, deleted), opens a new item.
-  - The flush's reply names each line filed somewhere other than its marker named, and
-    each line whose marker named no target, with where each one went.
+  - How the flush reads it: a line already quoted by a block (**The item model** above)
+    in any `.local/items/` item whose lead names this item's Follow-ups is skipped,
+    filed by an earlier run of this flush that stopped before clearing the section; the
+    quote and the line are compared with the marker and whitespace aside. Every other
+    line is filed at the target its marker names. Lines whose markers name one new-item
+    slug open that one item; a new-item slug an item already holds at flush time opens
+    the item under another slug, unless that item already holds a block from this item's
+    Follow-ups, or a line skipped above carried the same new-item slug: that item, or
+    the item holding the skipped line, is then this flush's own item for the slug, and
+    the line merges into it. A marker with no target, or a merge-into target no longer
+    an open `status: backlog` item (promoted, archived, deleted), opens a new item.
+  - The flush's reply names each line it skipped, with the item that holds it; each line
+    filed somewhere other than its marker named; and each line whose marker named no
+    target, with where each one went.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.
@@ -253,15 +266,15 @@ milestone edit.
 
 ## `/debt` and backlog
 
-`/debt` re-judges deferred *decisions* (`DEBT:` markers, and Scope &
-Non-Goals / follow-up lines inside an active item's `## Why / What` /
-`## Progress`) by checking whether each one's premise still holds, and
-separately re-judges every `status: backlog` item by asking whether it's
-still open. `status: backlog` is the **only** deferred-work source read from
-`.local/items/` — there is no separate research/Non-Goals corpus anymore;
-those cases now live as `## Notes` inside a backlog or active item. The verdict
-vocabulary is defined in `references/debt-audit.md`, which `commands/debt.md`
-reads — go there rather than to the command.
+`/debt` re-judges deferred *decisions* (`DEBT:` markers, and Scope & Non-Goals /
+follow-up lines inside an active item's `## Why / What` / `## Progress`) by checking
+whether each one's premise still holds, and separately re-judges every block of a
+`status: backlog` item (**The item model** above) by asking whether it's still open.
+`status: backlog` is the **only** deferred-work source read from `.local/items/` — there
+is no separate research/Non-Goals corpus anymore; those cases now live as `## Notes`
+inside a backlog or active item. The verdict vocabulary is defined in
+`references/debt-audit.md`, which `commands/debt.md` reads — go there rather than to the
+command.
 
 **Non-Goals do not survive archiving.** `/debt` reads Scope & Non-Goals only in `status: active`
 items (from the archive it reads `## Progress` leave-as-is lines alone,

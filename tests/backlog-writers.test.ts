@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { labelledItems } from "./citations.ts";
 import { MARKDOWN_CORPUS, SHIPPED_MARKDOWN } from "./prose-dirs.ts";
-import { headingSection } from "./section.ts";
+import { headingSection, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");
@@ -209,4 +209,42 @@ test("every site that writes or reads the ruled-backlog marker cites its bullet"
       .map((s) => `${file}: ${s.slice(0, 100)}`);
   });
   assert.deepEqual(wrong, [], `cite the "${MARKER}" bullet, not the Writers bullet`);
+});
+
+const DEBT_AUDIT = "references/debt-audit.md";
+const LEGACY_BLOCK = "is a block too";
+const CITES_ITEM_MODEL = /references\/doc-types\.md`? The item model/;
+
+test("a Notes quote with an older lead line is a block, defined only in The item model", () => {
+  const model = flat(headingSection(read(DOC_TYPES), DOC_TYPES, "## The item model"));
+  assert.ok(
+    model.includes(LEGACY_BLOCK),
+    `${ITEM_MODEL} no longer counts an older quote as a block`,
+  );
+  const restating = SHIPPED_MARKDOWN.filter(
+    (f) => f !== DOC_TYPES && flat(read(f)).includes(LEGACY_BLOCK),
+  );
+  assert.deepEqual(restating, [], `cite references/doc-types.md ${ITEM_MODEL} instead`);
+});
+
+test("/debt's Backlog items reading cites The item model's block", () => {
+  const backlog = labelledItems(
+    headingSection(read(DEBT_AUDIT), DEBT_AUDIT, "## 1. Reconcile the sources into one view"),
+  ).find((item) => item.label === "Backlog items");
+  assert.ok(backlog, `${DEBT_AUDIT} lost its Backlog items bullet`);
+  assert.match(flat(backlog.body), CITES_ITEM_MODEL, `${DEBT_AUDIT} Backlog items`);
+});
+
+test("the flush's read of the ruled-backlog marker cites The item model's block", () => {
+  const flushRead = section(
+    lifecycleBullets().get(MARKER) ?? "",
+    DOC_TYPES,
+    "How the flush reads it",
+    "The flush's reply",
+  );
+  assert.match(
+    flushRead,
+    /The item model/,
+    `doc-types' ${MARKER} flush read no longer cites ${ITEM_MODEL} for the block it skips`,
+  );
 });
