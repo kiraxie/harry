@@ -208,13 +208,15 @@ without backticks; without them, only when it ends in `.md` or names a tracked f
 code span that holds only a path is read as that path, and no other code span is read. Front matter
 is read as prose.
 
-The test reads three things as citation attempts, and each must be in the form above:
+The test reads four things as citation attempts, and each must be in the form above:
 
 - a bold or quoted string right after a path, even through an apostrophe-s, a comma, a colon, an
   em dash, an en dash, a hyphen with a space on each side or an opening parenthesis — whether
   it names anything or not;
 - a plain word right after a path that names a heading or step of that file;
-- a bold or quoted heading or step name of the path's file anywhere else in the same sentence.
+- a bold or quoted heading or step name of the path's file anywhere else in the same sentence;
+- a name without quotes right before `bullet of` and a path, when it is a bullet label of the
+  section cited after the path: quote it.
 
 A law heading set in bold outside HARRY.md needs HARRY.md directly before it, unless it is
 another file's citation of its own heading of that name.

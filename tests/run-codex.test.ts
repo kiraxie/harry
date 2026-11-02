@@ -60,7 +60,7 @@ test("typecheck holds spawnCodexSync to setup's queries, so codex exec has runCo
   const exec: Query = ["exec", "--ephemeral"];
   // @ts-expect-error a free-form argv is not a query
   const freeForm: Query = ["--version"] as string[];
-  assert.deepEqual([exec[0], freeForm[0]], ["exec", "--version"]);
+  void [exec, freeForm];
 });
 
 // An empty PATH entry (`:x`, `x:`, `a::b`) or a relative one (`.`, `bin`) means

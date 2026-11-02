@@ -2,7 +2,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 import { caseName, parseCasesJsonl } from "../scripts/lib/evals-cases.mts";
-import { lineAt } from "./lines.ts";
+import { LINE_END_RE, lineAt } from "./lines.ts";
 
 export type Name = { name: string; full: string; level?: number; bullets?: string[] };
 
@@ -25,14 +25,6 @@ export const LAW_HEADINGS = [
 
 export const NON_LAW_LABELS = ["rubric", "red-green", "plugin", "L&C", "grill"];
 
-export const FORM = {
-  path: "`path` **Name**",
-  law: "HARRY.md **Heading**",
-  dimension: "dimension **<SCAN-DIMENSIONS ## core name>**",
-  skillDir: "`dir/SKILL.md` **Name**",
-  dirFile: "`dir/FILE.md` **Name**",
-  bullet: '"Bullet" bullet of `path` **Name**',
-} as const;
 const QUOTE_SRC = [
   `"([^"]+)"`,
   `“([^”]+)”`,
@@ -41,16 +33,43 @@ const QUOTE_SRC = [
 ].join("|");
 const PATH_SRC = String.raw`(?:[\w.-]+\/)*[\w.-]+?`;
 const LAW_SRC = String.raw`(?<![\w.-])HARRY\.md\`?`;
-const CITE_FORMS: Record<"path" | "law" | "dimension" | "bullet", { re: RegExp; quoted: boolean }> =
-  {
-    path: { re: new RegExp(String.raw`\`(${PATH_SRC}\.md)\`\s+`, "g"), quoted: false },
-    law: { re: new RegExp(String.raw`${LAW_SRC}\s+`, "g"), quoted: false },
-    dimension: { re: /\bdimensions?\s+/gi, quoted: false },
-    bullet: {
-      re: new RegExp(`(?:${QUOTE_SRC})\\s+bullet\\s+of\\s+\`(?<path>${PATH_SRC}\\.md)\`\\s+`, "gu"),
-      quoted: true,
-    },
-  };
+type CiteForm = { re: RegExp; quoted: boolean; form: string; sample: string };
+export const CITE_FORMS: Record<"path" | "law" | "dimension" | "bullet", CiteForm> = {
+  path: {
+    re: new RegExp(String.raw`\`(${PATH_SRC}\.md)\`\s+`, "g"),
+    quoted: false,
+    form: "`path` **Name**",
+    sample: "`references/red-green.md` **What a good test is**",
+  },
+  law: {
+    re: new RegExp(String.raw`${LAW_SRC}\s+`, "g"),
+    quoted: false,
+    form: "HARRY.md **Heading**",
+    sample: "HARRY.md **Evidence**",
+  },
+  dimension: {
+    re: /\bdimensions?\s+/gi,
+    quoted: false,
+    form: "dimension **<SCAN-DIMENSIONS ## core name>**",
+    sample: "dimension **Low-value tests**",
+  },
+  bullet: {
+    re: new RegExp(`(?:${QUOTE_SRC})\\s+bullet\\s+of\\s+\`(?<path>${PATH_SRC}\\.md)\`\\s+`, "gu"),
+    quoted: true,
+    form: '"Bullet" bullet of `path` **Name**',
+    sample:
+      '"Optimize on evidence, never on imagination" bullet of `references/review-rubric.md` **Engineering judgment**',
+  },
+};
+
+export const FORM = {
+  path: CITE_FORMS.path.form,
+  law: CITE_FORMS.law.form,
+  dimension: CITE_FORMS.dimension.form,
+  bullet: CITE_FORMS.bullet.form,
+  skillDir: "`dir/SKILL.md` **Name**",
+  dirFile: "`dir/FILE.md` **Name**",
+};
 
 type Connector = { name: string; src: string };
 
@@ -121,7 +140,8 @@ type MdNode = {
   ordered?: boolean | null;
 };
 
-const FRONT_MATTER_RE = /^(---\r?\n)([\s\S]*?\r?\n)---[ \t]*(?=\r?\n|$)/;
+const EOL = `(?:${LINE_END_RE.source})`;
+const FRONT_MATTER_RE = new RegExp(String.raw`^(---${EOL})([\s\S]*?${EOL})---[ \t]*(?=${EOL}|$)`);
 
 const blank = (s: string): string => s.replace(/[^\r\n]/g, " ");
 
@@ -182,7 +202,7 @@ const toBlock = (src: string, node: MdNode): Parsed | null => {
   const text = src
     .slice(at, to)
     .replace(
-      /(\r?\n)([ \t>]*)/g,
+      new RegExp(String.raw`(${EOL})([ \t>]*)`, "g"),
       (_, nl: string, prefix: string) => nl + " ".repeat(prefix.length),
     );
   const code: CodeSpan[] = [];
@@ -599,6 +619,16 @@ const hitList = () => {
   };
 };
 
+const UNQUOTED_BULLET_HINT = `cite it as ${FORM.bullet}`;
+const unquotedBulletRe = (label: string): RegExp =>
+  new RegExp(
+    String.raw`(?<![\p{L}\p{N}])${label
+      .split(/\s+/)
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join(String.raw`\s+`)}\s+bullet\s+of\s+$`,
+    "u",
+  );
+
 export const citationAttempts = (repo: Repo, blocks: Block[]): string[] => {
   const { hitIn, list } = hitList();
   for (const [n, b] of blocks.entries()) {
@@ -628,6 +658,20 @@ export const citationAttempts = (repo: Repo, blocks: Block[]): string[] => {
       const adjacent = !exact && opener !== undefined;
       if (adjacent) hit(end, `a name next to ${cited}; ${formHint(opener) ?? advice}`);
       if (!target) continue;
+      const sectionAt = end + (/^\s*/.exec(after)?.[0].length ?? 0);
+      const section = spans.find((s) => s.bold && s.at === sectionAt);
+      const sectionName = section ? cleanName(section.name) : null;
+      const labels =
+        known.find((n) => n.level !== undefined && n.name === sectionName)?.bullets ?? [];
+      const before = b.text.slice(from, start);
+      for (const label of labels) {
+        const unquoted = unquotedBulletRe(label).exec(before);
+        if (unquoted)
+          hit(
+            from + unquoted.index,
+            `an unquoted bullet name before ${cited}; ${UNQUOTED_BULLET_HINT}`,
+          );
+      }
       const afterEnd = end + after.length;
       for (const s of spans) {
         if (!((s.at >= from && s.end <= start) || (s.at >= end && s.end <= afterEnd))) continue;

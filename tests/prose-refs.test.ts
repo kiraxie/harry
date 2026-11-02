@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   type Block,
   bulletFailures,
+  CITE_FORMS,
   CONNECTORS,
   CORE_NAME_STRIPS,
   citationAttempts,
@@ -71,7 +72,14 @@ const trackedKind = (rel: string): "file" | "dir" | "untracked" => {
   if (trackedFileSet.has(norm)) return "file";
   return trackedDirs.has(norm) ? "dir" : "untracked";
 };
-const namesOf = (rel: string): Name[] => namesIn(readFileSync(path.join(repoRoot, rel), "utf-8"));
+const byPath = <T>(read: (rel: string) => T): ((rel: string) => T) => {
+  const seen = new Map<string, T>();
+  return (rel) => {
+    if (!seen.has(rel)) seen.set(rel, read(rel));
+    return seen.get(rel) as T;
+  };
+};
+const namesOf = byPath((rel): Name[] => namesIn(readFileSync(path.join(repoRoot, rel), "utf-8")));
 const repo: Repo = { kind: trackedKind, names: namesOf };
 const isTracked = (abs: string): boolean =>
   trackedKind(path.relative(repoRoot, abs)) !== "untracked";
@@ -88,8 +96,9 @@ const evalsMarkdown = (): string[] =>
 
 const proseFiles = (): string[] => [...READER_CORPUS, ...evalsMarkdown()];
 const citeCorpus = proseFiles;
-const prose = (rel: string): Block[] =>
-  readProse(rel, readFileSync(path.join(repoRoot, rel), "utf-8"));
+const prose = byPath((rel): Block[] =>
+  readProse(rel, readFileSync(path.join(repoRoot, rel), "utf-8")),
+);
 
 // Three reference shapes:
 // 1. `${CLAUDE_PLUGIN_ROOT}/<path>` — path is everything after the prefix. Checked
@@ -135,12 +144,16 @@ function isPlaceholder(candidate: string): boolean {
   return false;
 }
 
-const pathCandidates = (rel: string, text: string): [number, string][] =>
+const pathCandidates = (
+  rel: string,
+  text: string,
+  blocks: Block[] = readProse(rel, text),
+): [number, string][] =>
   [
     ...outline(text).flatMap((line, idx) =>
       [...line.text.matchAll(PLUGIN_ROOT_RE)].map((m): [number, string] => [idx + 1, m[1] ?? ""]),
     ),
-    ...readProse(rel, text).flatMap((block) =>
+    ...blocks.flatMap((block) =>
       [BARE_PATH_RE, CLAUDE_DIR_PATH_RE].flatMap((re) =>
         [...block.text.matchAll(re)].map((m): [number, string] => [
           block.lineAt(m.index ?? 0),
@@ -185,7 +198,11 @@ test("every repo-relative path referenced in prose is tracked", () => {
   for (const relFile of proseFiles()) {
     const abs = path.join(repoRoot, relFile);
     const fileDir = path.dirname(abs);
-    for (const [line, candidate] of pathCandidates(relFile, readFileSync(abs, "utf-8")))
+    for (const [line, candidate] of pathCandidates(
+      relFile,
+      readFileSync(abs, "utf-8"),
+      prose(relFile),
+    ))
       if (!resolves(candidate, fileDir)) failures.push(`${relFile}:${line} -> ${candidate}`);
   }
 
@@ -457,13 +474,17 @@ test("no prose cites a step or category by its number", () => {
   );
 });
 
-test("the Citations section names every connector and core-name strip the check reads", () => {
-  const rel = ".claude/references/skill-authoring.md";
-  const prose = headingSection(
-    readFileSync(path.join(repoRoot, rel), "utf-8"),
-    rel,
+const SKILL_AUTHORING = ".claude/references/skill-authoring.md";
+const citationsProse = (): string =>
+  headingSection(
+    readFileSync(path.join(repoRoot, SKILL_AUTHORING), "utf-8"),
+    SKILL_AUTHORING,
     "## Citations",
   ).replace(/\s+/g, " ");
+
+test("the Citations section names every connector and core-name strip the check reads", () => {
+  const rel = SKILL_AUTHORING;
+  const prose = citationsProse();
   const named = (name: string): boolean =>
     new RegExp(
       String.raw`(?<![\p{L}\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\p{L}\p{N}])`,
@@ -473,6 +494,17 @@ test("the Citations section names every connector and core-name strip the check 
     .map((entry) => entry.name)
     .filter((name) => !named(name));
   assert.deepEqual(missing, [], `${rel} Citations must name every entry the check reads`);
+});
+
+test("the Citations section shows each citation form's sample, and its pattern reads it", () => {
+  const prose = citationsProse();
+  const wrong = Object.entries(CITE_FORMS).flatMap(([kind, { re, sample }]) => [
+    ...(prose.includes(sample) ? [] : [`${kind}: ${sample} is not in Citations`]),
+    ...(new RegExp(re.source, re.flags.replace("g", "")).exec(sample)?.index === 0
+      ? []
+      : [`${kind}: its pattern does not read ${sample}`]),
+  ]);
+  assert.deepEqual(wrong, [], `${SKILL_AUTHORING} Citations and CITE_FORMS disagree`);
 });
 
 test("no prose leaves a ** unpaired", () => {

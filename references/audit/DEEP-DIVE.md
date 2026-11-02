@@ -79,10 +79,10 @@ Return ONLY findings that clear the cost bar. For each, provide:
 - concrete_cost: the named future change made expensive/dangerous, OR the bug already caused.
   This is mandatory. No concrete_cost -> no finding.
 - evidence: the objective facts — file:line for each site, counts, cycle members, churn rank,
-  the substrate tool line if applicable. At least one; for `reusability-hoist` and `copy-paste`, at least the
-  two (or more) sites.
-- drift_test (for `reusability-hoist` and `copy-paste` findings): "bug if they diverge" or "normal to
-  diverge", with one sentence why. If "normal", you should not be reporting it.
+  the substrate tool line if applicable. At least one; for `reusability-hoist` and `copy-paste`,
+  at least the two (or more) sites.
+- drift_test (for `reusability-hoist` and `copy-paste` findings): "bug if they diverge" or
+  "normal to diverge", with one sentence why. If "normal", you should not be reporting it.
 - retention_check (for `low-value-tests` findings): what the test checks and can detect;
   the retained contract it guards, or "none" (anything else means keep it — do not
   report it; a test that guards nothing is always "none"); the test-only seams deleting

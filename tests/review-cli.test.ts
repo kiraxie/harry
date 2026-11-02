@@ -1564,10 +1564,7 @@ test("AC-10: typecheck holds the builder's handed text to the re-review and the 
   const fixCheck: ReviewPromptInput = { target, standard: "fix-check" };
   // @ts-expect-error the plain review takes no handed text
   const review: ReviewPromptInput = { target, standard: "review", handed: "4 · open" };
-  assert.deepEqual(
-    [rereview.standard, fixCheck.standard, review.standard],
-    ["rereview", "fix-check", "review"],
-  );
+  void [rereview, fixCheck, review];
 });
 
 test("AC-3: typecheck holds spec to the plain review", () => {

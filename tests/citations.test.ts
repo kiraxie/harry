@@ -191,19 +191,42 @@ const LINE_END_ROWS: [string, string][] = [
   ["CR", "\r"],
 ];
 
-for (const [label, end] of LINE_END_ROWS)
-  test(`readProse counts a paragraph's and a fence body's lines with ${label} line ends`, () => {
-    const text = "intro\n\nprose line\nmore\n\n```\nfirst\n\nsecond\n```\n".replace(/\n/g, end);
+const lineSpans = (text: string): number[][] =>
+  md(text).map((block) => [block.lineAt(0), block.lineAt(block.text.length)]);
+
+for (const [label, end] of LINE_END_ROWS) {
+  test(`readProse counts a paragraph's lines with ${label} line ends`, () => {
+    assert.deepEqual(lineSpans("intro\n\nprose line\nmore\n".replace(/\n/g, end)), [
+      [1, 1],
+      [3, 4],
+    ]);
+  });
+
+  test(`readProse counts a fence body's lines with ${label} line ends`, () => {
+    assert.deepEqual(lineSpans("intro\n\n```\nfirst\nmore\n\nsecond\n```\n".replace(/\n/g, end)), [
+      [1, 1],
+      [4, 5],
+      [7, 7],
+    ]);
+  });
+
+  test(`front matter with ${label} line ends is front matter, not a heading`, () => {
     assert.deepEqual(
-      md(text).map((block) => [block.lineAt(0), block.lineAt(block.text.length)]),
-      [
-        [1, 1],
-        [3, 4],
-        [7, 7],
-        [9, 9],
-      ],
+      namesIn("---\nname: x\n---\n## A\n".replace(/\n/g, end)).map((n) => n.name),
+      ["A"],
     );
   });
+
+  test(`a blockquote continuation with ${label} line ends drops its > prefix`, () => {
+    assert.deepEqual(
+      citeFailures(
+        repo,
+        md("> per `references/grilling.md`\n> **Handof** here".replace(/\n/g, end)),
+      ),
+      { seen: 1, failures: ['1 -> references/grilling.md has no heading or step "Handof"'] },
+    );
+  });
+}
 
 test("hits are listed by block, then by offset", () => {
   assert.deepEqual(laws("x **Tiers** a\n\n**Tiers** b\n"), [
@@ -749,6 +772,36 @@ test("a citation attempt next to a path must be in the one form", () => {
     "a hint no longer follows the kind of path it names",
   );
 });
+
+const UNQUOTED_BULLET =
+  '1 -> an unquoted bullet name before references/doc-types.md; cite it as "Bullet" bullet of `path` **Name**';
+const UNQUOTED_BULLET_ROWS: [string, string, string[]][] = [
+  [
+    "a one-word bullet label of the cited section is reported",
+    "per the Writers bullet of `references/doc-types.md` **Lifecycle rules** here",
+    [UNQUOTED_BULLET],
+  ],
+  [
+    "a label broken across lines is reported at its first line",
+    "per the Optimize on evidence,\nnever on imagination bullet of `references/doc-types.md`\n**Lifecycle rules**",
+    [UNQUOTED_BULLET],
+  ],
+  [
+    "a name that is no bullet label is not reported",
+    "per the first bullet of `references/doc-types.md` **Lifecycle rules** here",
+    [],
+  ],
+  [
+    "a bullet label of another section is not reported",
+    "per the Elsewhere bullet of `references/doc-types.md` **Lifecycle rules** here",
+    [],
+  ],
+];
+
+for (const [label, text, expected] of UNQUOTED_BULLET_ROWS)
+  test(`an unquoted bullet name before a path: ${label}`, () => {
+    assert.deepEqual(attempts(text), expected);
+  });
 
 test("bold is read where it renders", () => {
   assert.deepEqual(
