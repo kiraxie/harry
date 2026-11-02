@@ -695,9 +695,21 @@ test("runEvals: baseline gives an empty config dir; candidate's inlines the laws
   }
 });
 
+// The Read rules a copy under `link` (a symlink to `real`) must carry, sorted: one
+// absolute (//) rule for each spelling of the copy's path.
+function copyRules(real: string, link: string, copyDir: string): string[] {
+  const base = path.basename(copyDir);
+  return [path.join(realpathSync(real), base), path.join(link, base)]
+    .map((d) => `Read(/${d}/**)`)
+    .sort();
+}
+
 test("runEvals: the plugin condition runs against a frozen copy holding only what the plugin loads", () => {
   const binDir = tmpDir("harry-evals-bin-");
-  const root = tmpDir("harry-evals-root-");
+  // A root reached through a symlink: the copy then has two spellings on any OS.
+  const realRoot = tmpDir("harry-evals-root-");
+  const root = `${realRoot}-link`;
+  symlinkSync(realRoot, root);
   try {
     installFakeClaude(binDir);
     const env = {
@@ -729,7 +741,10 @@ test("runEvals: the plugin condition runs against a frozen copy holding only wha
     for (const left of ["evals", "tests", ".local", "scripts", "dist"])
       assert.ok(!existsSync(path.join(dir, left)), `the copy leaves out ${left}/`);
     assert.equal(calls[0]?.lawsPresent, true, "the plugin condition still loads the laws");
-    assert.equal(calls[0]?.allowedTools, "Skill", "Skill is approved; Read needs no approval");
+    const rules = copyRules(realRoot, root, dir);
+    const [skill, ...granted] = (calls[0]?.allowedTools ?? "").split(",");
+    assert.equal(skill, "Skill", "Skill is approved");
+    assert.deepEqual(granted.sort(), rules, "Read only inside the copy, one rule per spelling");
     assert.equal(calls[0]?.tools, "Skill,Read", "the text session has only Skill and Read");
     assert.equal(
       calls[0]?.disallowedTools,
@@ -737,7 +752,10 @@ test("runEvals: the plugin condition runs against a frozen copy holding only wha
       "Read is denied under the operator's home, where the repo and its grading patterns live",
     );
     assert.equal(calls[0]?.restricted, false, "restricted mode would drop the laws");
-    assert.equal(lines[0].toolSetup, "--tools Skill,Read --disallowedTools Read(~/**)");
+    assert.equal(
+      lines[0].toolSetup,
+      "--tools Skill,Read --disallowedTools Read(~/**) --allowedTools Skill,Read(//<copy>/**)",
+    );
     assert.equal(calls[1]?.pluginDir, dir, "every trial of a run shares one copy");
     assert.equal(calls[0]?.cwdHasClaudeMd, false, "cwd isolation holds");
     const sha = lines[0].pluginSha256;
@@ -750,13 +768,17 @@ test("runEvals: the plugin condition runs against a frozen copy holding only wha
     );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { force: true });
+    rmSync(realRoot, { recursive: true, force: true });
   }
 });
 
 test("runEvals: an agentic case under the plugin condition loads the copy, with home reads denied", () => {
   const binDir = tmpDir("harry-evals-bin-");
-  const root = tmpDir("harry-evals-root-");
+  // A root reached through a symlink: the copy then has two spellings on any OS.
+  const realRoot = tmpDir("harry-evals-root-");
+  const root = `${realRoot}-link`;
+  symlinkSync(realRoot, root);
   try {
     installFakeClaude(binDir);
     const env = {
@@ -765,7 +787,7 @@ test("runEvals: an agentic case under the plugin condition loads the copy, with 
       EVALS_FIXTURE_ROOT: root,
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     };
-    runEvals(
+    const { lines } = runEvals(
       {
         condition: "plugin",
         model: "m",
@@ -778,42 +800,64 @@ test("runEvals: an agentic case under the plugin condition loads the copy, with 
     const [call] = readCalls(binDir);
     const dir = call?.pluginDir ?? "";
     assert.notEqual(dir, pluginRoot);
-    assert.ok((call?.allowedTools ?? "").endsWith(",Skill"), "the agentic allowlist adds Skill");
+    const allowed = (call?.allowedTools ?? "").split(",");
+    const granted = allowed.filter((tool) => tool.startsWith("Read(")).sort();
+    assert.ok(allowed.includes("Skill"), "the agentic allowlist adds Skill");
+    assert.deepEqual(
+      granted,
+      copyRules(realRoot, root, dir),
+      "and Read inside the copy, per spelling",
+    );
     assert.equal(call?.disallowedTools, "Read(~/**)", "and denies Read under the operator's home");
     assert.match(call?.allowedTools ?? "", /^Bash\(git status:\*\)/, "and keeps its own tools");
+    assert.equal(
+      lines[0].toolSetup,
+      "agentic --allowedTools <agentic>,Skill,Read(//<copy>/**) --disallowedTools Read(~/**)",
+      "the line records the copy rule as an approval, beside Skill",
+    );
   } finally {
     rmSync(binDir, { recursive: true, force: true });
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { force: true });
+    rmSync(realRoot, { recursive: true, force: true });
   }
 });
 
-test("runEvals: the plugin condition refuses the sandbox, which it is not wired into", () => {
+test("runEvals plugin under EVALS_SANDBOX=1: an agentic trial runs in its jail, the home Read deny kept", {
+  skip: process.platform !== "darwin" ? "macOS-only (seatbelt)" : false,
+}, () => {
   const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
   try {
-    installFakeClaude(binDir);
+    installFakeClaude(binDir, undefined, { callsInConfigDir: true });
+    const { wrapper, log } = installLoggingSandboxExec(binDir);
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: fxRoot,
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
       EVALS_SANDBOX: "1",
+      EVALS_SANDBOX_EXEC: wrapper,
     };
-    assert.throws(
-      () =>
-        runEvals(
-          {
-            condition: "plugin",
-            model: "m",
-            cases: ["agentic-isolate-branch"],
-            out: path.join(binDir, "o.jsonl"),
-            agentic: true,
-          },
-          env,
-        ),
-      /the plugin condition is not wired into the sandbox/,
+    const { lines } = runEvals(
+      {
+        condition: "plugin",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+      },
+      env,
     );
-    assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+    const session = jailedSpawnsOf(log, lines[0].configDir).filter(
+      (argv) => path.basename(argv[2] ?? "") === "claude",
+    );
+    assert.equal(session.length, 1, "the agentic session ran under its trial's jail");
+    const [call] = readCalls(lines[0].configDir);
+    assert.ok(call?.pluginDir, "the jailed session loaded the copy");
+    assert.equal(call?.disallowedTools, "Read(~/**)", "the CLI home deny stays");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
   }
 });
 
@@ -1666,15 +1710,80 @@ test("runEvals: the plugin condition refuses a trial root under the operator's h
   }
 });
 
-test("runEvals: the plugin condition refuses the sandbox even for text cases alone", () => {
+// Each row makes the root under `parent` and returns it. The symlink rows put the
+// bad character in only one spelling: the root as given, or its realpath.
+const UNSAFE_ROOTS: [string, (parent: string) => string][] = [
+  ["a comma", (parent) => mkdirOf(path.join(parent, "a,b"))],
+  ["a glob star", (parent) => mkdirOf(path.join(parent, "a*b"))],
+  [
+    "a comma in the link's name only",
+    (parent) => linkTo(mkdirOf(path.join(parent, "safe")), path.join(parent, "x,y")),
+  ],
+  [
+    "a comma in the link's target only",
+    (parent) => linkTo(mkdirOf(path.join(parent, "x,y")), path.join(parent, "link")),
+  ],
+];
+
+function mkdirOf(dir: string): string {
+  mkdirSync(dir);
+  return dir;
+}
+
+function linkTo(target: string, link: string): string {
+  symlinkSync(target, link);
+  return link;
+}
+
+for (const [label, makeRoot] of UNSAFE_ROOTS) {
+  test(`runEvals: the plugin condition refuses a trial root holding ${label}, which would bend the copy's read rule`, () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const parent = tmpDir("harry-evals-parent-");
+    const root = makeRoot(parent);
+    try {
+      installFakeClaude(binDir);
+      const env = {
+        ...authFreeEnv(),
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_FIXTURE_ROOT: root,
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      };
+      assert.throws(
+        () =>
+          runEvals(
+            {
+              condition: "plugin",
+              model: "m",
+              cases: ["destructive-confirmation"],
+              out: path.join(binDir, "o.jsonl"),
+            },
+            env,
+          ),
+        /EVALS_FIXTURE_ROOT .*A-Za-z0-9/,
+      );
+      assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+      assert.deepEqual(readdirSync(root), [], "no trial dir or plugin copy was made");
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+}
+
+test("runEvals: a plugin text case under EVALS_SANDBOX=1 with no way to sandbox is refused", () => {
   const binDir = tmpDir("harry-evals-bin-");
+  const root = tmpDir("harry-evals-root-");
   try {
     installFakeClaude(binDir);
+    // EVALS_SANDBOX_EXEC="" is the "sandbox-exec not found" seam: darwin takes the
+    // missing-binary branch, any other platform the platform branch.
     const env = {
       ...authFreeEnv(),
       EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: root,
       EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
       EVALS_SANDBOX: "1",
+      EVALS_SANDBOX_EXEC: "",
     };
     assert.throws(
       () =>
@@ -1687,11 +1796,13 @@ test("runEvals: the plugin condition refuses the sandbox even for text cases alo
           },
           env,
         ),
-      /plugin condition is not wired into the sandbox/,
+      /refusing to run an agentic or plugin session unsandboxed/,
     );
     assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
+    assert.deepEqual(readdirSync(root), [], "no trial dir or plugin copy was made");
   } finally {
     rmSync(binDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -1719,6 +1830,22 @@ test("runEvals: every line records the claude CLI version, read without a sessio
   } finally {
     rmSync(binDir, { recursive: true, force: true });
   }
+});
+
+test("snapshotPlugin: refuses a trial root holding a comma before making any dir", () => {
+  const parent = tmpDir("harry-evals-parent-");
+  const root = mkdirOf(path.join(parent, "a,b"));
+  try {
+    assert.throws(() => snapshotPlugin(root), /EVALS_FIXTURE_ROOT .*A-Za-z0-9/);
+    assert.deepEqual(readdirSync(root), [], "no copy was made under the refused root");
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("snapshotPlugin: refuses a trial root under the home", () => {
+  const root = path.join(os.homedir(), "harry-evals-snapshot-under-home");
+  assert.throws(() => snapshotPlugin(root), /trial root .* under the home directory/);
 });
 
 test("snapshotPlugin: the content hash changes with any file's content", () => {
@@ -3086,7 +3213,7 @@ test(
         {
           home: os.homedir(),
           configDir: fake,
-          fixtureDir: fake,
+          workDir: fake,
           tmpDir: fake,
           bin: "claude",
           env: { ...syntheticOperatorEnv(), PATH: `${fake}:${NODE_DIR}:/usr/bin:/bin` },
@@ -3129,7 +3256,7 @@ test(
             },
             env,
           ),
-        /refusing to run an agentic session unsandboxed/,
+        /refusing to run an agentic or plugin session unsandboxed/,
       );
       assert.deepEqual(readKeys(), [], "`which` was never spawned");
       assert.equal(readCalls(binDir).length, 0, "no session was launched");
@@ -3436,7 +3563,7 @@ test("runEvals: EVALS_SANDBOX=1 with an agentic case but no sandbox-exec is a ha
           },
           env,
         ),
-      /refusing to run an agentic session unsandboxed/,
+      /refusing to run an agentic or plugin session unsandboxed/,
       "no way to sandbox + an agentic case queued → refuse, do not run unsandboxed",
     );
     assert.equal(readCalls(binDir).length, 0, "no session was launched before the refusal");
@@ -3446,12 +3573,12 @@ test("runEvals: EVALS_SANDBOX=1 with an agentic case but no sandbox-exec is a ha
   }
 });
 
-test("runEvals: EVALS_SANDBOX=1 on a TEXT-only run is ignored (no exec surface, no refusal)", () => {
+test("runEvals: EVALS_SANDBOX=1 on a candidate text-only run is ignored (no tools, no refusal)", () => {
   const binDir = tmpDir("harry-evals-bin-");
   try {
     installFakeClaude(binDir);
-    // Flag set, but no agentic case selected, and no sandbox-exec available: text
-    // mode has no exec surface, so the flag is ignored — the run must proceed
+    // Flag set, but no agentic case selected, and no sandbox-exec available: a
+    // candidate text case has no tools, so the flag is ignored — the run must proceed
     // normally and unwrapped rather than refuse.
     const env = {
       ...authFreeEnv(),
@@ -3537,6 +3664,176 @@ test(
     }
   },
 );
+
+// The argv each logged sandbox-exec spawn received: ["-p", <profile>, <bin>, ...args].
+function readSandboxLog(log: string): string[][] {
+  if (!existsSync(log)) return [];
+  return readFileSync(log, "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as string[]);
+}
+
+// The logged spawns whose profile grants writes to this trial's config dir.
+function jailedSpawnsOf(log: string, configDir: string): string[][] {
+  const own = `(subpath "${realpathSync(configDir)}")`;
+  return readSandboxLog(log).filter((argv) => argv[1]?.includes(own));
+}
+
+test(
+  "runEvals plugin under EVALS_SANDBOX=1: each text trial runs in its own jail, the home Read deny kept",
+  DARWIN_ONLY,
+  () => {
+    const binDir = tmpDir("harry-evals-bin-");
+    const fxRoot = tmpDir("harry-evals-fxroot-");
+    try {
+      installFakeClaude(binDir, undefined, { callsInConfigDir: true });
+      const { wrapper, log } = installLoggingSandboxExec(binDir);
+      const env = {
+        ...authFreeEnv(),
+        EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+        EVALS_FIXTURE_ROOT: fxRoot,
+        EVALS_SANDBOX: "1",
+        EVALS_SANDBOX_EXEC: wrapper,
+        EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+      };
+      const { lines } = runEvals(
+        {
+          condition: "plugin",
+          model: "m",
+          cases: ["destructive-confirmation"],
+          out: path.join(binDir, "o.jsonl"),
+          trials: 2,
+        },
+        env,
+      );
+      assert.equal(lines.length, 2, "both plugin text trials ran");
+      for (const line of lines) {
+        const spawns = jailedSpawnsOf(log, line.configDir);
+        assert.equal(spawns.length, 1, `trial ${line.trial} ran under a profile of its own`);
+        assert.equal(
+          path.basename(spawns[0][2] ?? ""),
+          "claude",
+          "the jailed spawn is the session",
+        );
+        const calls = readCalls(line.configDir);
+        assert.equal(calls.length, 1, `trial ${line.trial}'s session ran inside its jail`);
+        assert.equal(calls[0].tools, "Skill,Read", "the text session keeps Skill and Read");
+        assert.equal(calls[0].disallowedTools, "Read(~/**)", "the CLI home deny stays");
+        assert.equal(line.sandbox, true, "the line records the jail");
+      }
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+      rmSync(fxRoot, { recursive: true, force: true });
+    }
+  },
+);
+
+const checkoutUnderHome = pluginRoot.startsWith(`${realpathSync(os.homedir())}/`);
+
+test("a plugin text trial's jail profile reads the copy outside the home and not the grading cases under it", {
+  skip:
+    process.platform !== "darwin"
+      ? "macOS-only (seatbelt)"
+      : !checkoutUnderHome && "the checkout is not under the home",
+}, () => {
+  const binDir = tmpDir("harry-evals-bin-");
+  const fxRoot = tmpDir("harry-evals-fxroot-");
+  try {
+    installFakeClaude(binDir, undefined, { callsInConfigDir: true });
+    const { wrapper, log } = installLoggingSandboxExec(binDir);
+    const env = {
+      ...authFreeEnv(),
+      EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+      EVALS_FIXTURE_ROOT: fxRoot,
+      EVALS_SANDBOX: "1",
+      EVALS_SANDBOX_EXEC: wrapper,
+      EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+    };
+    const { lines } = runEvals(
+      {
+        condition: "plugin",
+        model: "m",
+        cases: ["destructive-confirmation"],
+        out: path.join(binDir, "o.jsonl"),
+      },
+      env,
+    );
+    const [spawn] = jailedSpawnsOf(log, lines[0].configDir);
+    const profile = spawn?.[1] ?? "";
+    assert.ok(profile, "the trial's profile was logged");
+    const read = (file: string) =>
+      spawnSync(
+        "/usr/bin/sandbox-exec",
+        [
+          "-p",
+          profile,
+          process.execPath,
+          "-e",
+          `require("node:fs").readFileSync(${JSON.stringify(file)})`,
+        ],
+        { encoding: "utf8" },
+      );
+    const copy = path.join(String(lines[0].pluginDir), "HARRY.md");
+    const inCopy = read(copy);
+    assert.equal(inCopy.status, 0, `the copy outside the home is readable: ${inCopy.stderr}`);
+    const underHome = read(path.join(pluginRoot, "evals", "cases.jsonl"));
+    assert.notEqual(underHome.status, 0, "a file under the home is not readable");
+    assert.match(underHome.stderr, /EPERM|operation not permitted/i, "denied by the jail");
+  } finally {
+    rmSync(binDir, { recursive: true, force: true });
+    rmSync(fxRoot, { recursive: true, force: true });
+  }
+});
+
+for (const condition of ["baseline", "candidate"]) {
+  test(
+    `runEvals ${condition} under EVALS_SANDBOX=1: text trials stay unjailed while agentic ones are jailed`,
+    DARWIN_ONLY,
+    () => {
+      const binDir = tmpDir("harry-evals-bin-");
+      const fxRoot = tmpDir("harry-evals-fxroot-");
+      try {
+        installFakeClaude(binDir, undefined, { callsInConfigDir: true });
+        const { wrapper, log } = installLoggingSandboxExec(binDir);
+        const env = {
+          ...authFreeEnv(),
+          EVALS_CLAUDE_BIN: path.join(binDir, "claude"),
+          EVALS_FIXTURE_ROOT: fxRoot,
+          EVALS_SANDBOX: "1",
+          EVALS_SANDBOX_EXEC: wrapper,
+          EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
+        };
+        const { lines } = runEvals(
+          {
+            condition,
+            model: "m",
+            cases: ["destructive-confirmation", "agentic-isolate-branch"],
+            out: path.join(binDir, "o.jsonl"),
+            agentic: true,
+          },
+          env,
+        );
+        const text = lines.find((l) => l.mode === "text");
+        const agentic = lines.find((l) => l.mode === "agentic");
+        assert.ok(text && agentic, "one text and one agentic trial ran");
+        assert.ok(jailedSpawnsOf(log, agentic.configDir).length > 0, "the jail was live this run");
+        assert.equal(
+          jailedSpawnsOf(log, text.configDir).length,
+          0,
+          "the text trial was not jailed",
+        );
+        assert.equal(readCalls(text.configDir).length, 1, "the text session still ran");
+        assert.equal(text.sandbox, false, "the text line records no jail");
+        assert.equal(agentic.sandbox, true, "the agentic line records its jail");
+      } finally {
+        rmSync(binDir, { recursive: true, force: true });
+        rmSync(fxRoot, { recursive: true, force: true });
+      }
+    },
+  );
+}
 
 // Stands in for sandbox-exec: logs its argv (the profile and the wrapped command),
 // then hands the same argv to the real /usr/bin/sandbox-exec, so the jail still
@@ -3866,7 +4163,7 @@ test(
         {
           home: os.homedir(),
           configDir: dir,
-          fixtureDir: dir,
+          workDir: dir,
           tmpDir: dir,
           bin: process.execPath,
           env: { PATH: "/usr/bin:/bin" },

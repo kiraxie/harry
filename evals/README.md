@@ -30,18 +30,26 @@ gap is the point).
   `references`) into its throwaway root and reads the laws from that copy; it leaves
   out `scripts/` and `dist/`, so no trial can run the installer or Codex, and
   `evals/`, `tests/` and `.local/`, so no trial can read the grading patterns. Text
-  cases get `--tools "Skill,Read" --disallowedTools "Read(~/**)"`. Read needs no
-  permission, so an allowlist never withholds it, and restricted mode, which would
+  cases get `--tools "Skill,Read" --disallowedTools "Read(~/**)"`, and Read is
+  pre-approved inside the copy only (`--allowedTools "Skill,Read(//<copy>/**)"`,
+  one rule per spelling of the copy's path, since macOS's temp dir is a symlink):
+  CLI 2.1.316 asks permission for a Read outside the cwd, which a headless session
+  cannot grant. Inside the cwd Read needs no permission, so an allowlist never
+  withholds it, and restricted mode, which would
   confine it, also drops the laws (`CLAUDE.md` is not loaded under `--restricted`).
   So Read is denied under the operator's home instead, where the checkout and its
   grading patterns live; the copy and the trial dirs sit in the temp dir, and a
-  trial root under the home is refused. Agentic cases add Skill and the same deny to
-  their own tools, but their `node` commands can still read the host, as under
-  candidate — only the sandbox contains that, and the plugin condition refuses
-  `EVALS_SANDBOX=1` because the jail is not wired to read the copy. Every line
-  carries `pluginSha256`, the copy's content hash, and `score` flags a group that
-  mixes copies the way it flags mixed law texts. A failing graded plugin group fails
-  `score` the way a candidate group does.
+  trial root under the home is refused, as is one holding any character outside
+  `[A-Za-z0-9/._-]` (the copy's path goes unescaped into the Read rule). Agentic
+  cases add Skill, the same copy Read rule and the same deny to their own tools, but
+  their `node` commands can still read the host, as under candidate — only the
+  sandbox contains that. With `EVALS_SANDBOX=1`, every plugin trial, text and
+  agentic, runs jailed: the jail is the first layer and the CLI's home deny the
+  second. The copy needs no jail read grant, since the jail denies reads only under
+  the home and the copy sits outside it. Every line carries `pluginSha256`, the
+  copy's content hash, and `score` flags a group that mixes copies the way it flags
+  mixed law texts. A failing graded plugin group fails `score` the way a candidate
+  group does.
 
 Text cases under baseline and candidate run with `--tools ""`, so no tool exists at
 all; `--allowedTools ""` alone would still leave Read. Every line records its tool
@@ -296,7 +304,8 @@ prompts**. Do not point this at untrusted input.
 
 ### OS sandbox (opt-in, `EVALS_SANDBOX`)
 
-`EVALS_SANDBOX=1` wraps each **agentic** session in a macOS
+`EVALS_SANDBOX=1` wraps each **agentic** session, and under the plugin condition
+each text session too, in a macOS
 [seatbelt](https://developer.apple.com/) profile via `sandbox-exec`. The profile
 is deny-by-default: a misbehaving or prompt-injected session can write only its
 own trial's dirs, read nothing under your `$HOME` and nothing you type into the
@@ -312,9 +321,9 @@ back only what `node`, `claude` and `git` need. A jailed process cannot:
 - read anything under your `$HOME` except its own trial's dirs, the `node`,
   `claude` and `git` install trees and the runner's own files, and cannot read
   the terminal you type in (`/dev/tty`, `/dev/ttysN`);
-- write anywhere but its own trial's config dir, fixture repo and temp dir (and
-  `/dev/null`): not another trial's dirs, not the shared temp root, not a
-  user-writable directory such as `/opt/homebrew/bin`;
+- write anywhere but its own trial's config dir, work dir (an agentic case's
+  fixture repo) and temp dir (and `/dev/null`): not another trial's dirs, not
+  the shared temp root, not a user-writable directory such as `/opt/homebrew/bin`;
 - run a program from a trial dir;
 - ask a system service to start or drive a program outside the jail, such as
   LaunchServices (`open`) or Apple Events (`osascript`) — launchd is the
@@ -434,15 +443,16 @@ outside `$HOME`, and the launchd residual) are recorded, with their upgrade
 path, in the `DEBT:` note on `buildSeatbeltProfile` in
 `scripts/lib/evals-jail.mts`.
 
-**Refusal (never silently unsandboxed):** if `EVALS_SANDBOX=1` is set and an agentic
-case is queued to run but the platform is not macOS, or `sandbox-exec` is not found,
-the run **hard-errors before any session starts**. It never falls back to an
-unsandboxed agentic run. **Text mode ignores the flag**: a text case runs
-`claude -p` with no tools (`--tools ""`), unjailed. Its config and
-work dirs belong to its own trial, which no jailed session can write. Setting the
-flag on a text-only run is a no-op, not a refusal — except under the plugin
-condition, which refuses the flag for every run: its text cases have Read, and the
-jail neither covers them nor may read the plugin copy.
+**Refusal (never silently unsandboxed):** if `EVALS_SANDBOX=1` is set and a trial
+to jail is queued (any agentic case, or any case under the plugin condition) but the
+platform is not macOS, or `sandbox-exec` is not found, the run **hard-errors before
+any session starts**. It never falls back to an unsandboxed run. **Baseline and
+candidate text cases ignore the flag**: they run `claude -p` with no tools
+(`--tools ""`), unjailed. Their config and work dirs belong to their own trial,
+which no jailed session can write. Setting the flag on a run of only those is a
+no-op, not a refusal. Under the plugin condition text cases have Skill and Read, so
+each runs in its own trial's jail, with the CLI's home Read deny kept as a second
+layer.
 
 Every result line also records `claudeVersion`, read once per run with
 `claude --version` (no session, no credential, a throwaway config dir): the CLI

@@ -13,7 +13,7 @@ export interface Jail {
 export interface JailInputs {
   home: string;
   configDir: string;
-  fixtureDir: string;
+  workDir: string;
   tmpDir: string;
   bin: string;
   gitBin?: string | null;
@@ -28,16 +28,16 @@ interface PathEntry {
   real: string | null;
 }
 
-// One trial's jail, shared by the session and by the post-session child that judges
-// it (see sandboxContext for the refusal path). Every path is resolved once, by
-// resolveJailPaths; the profile, the jailed PATH, the temp dir and the script that
-// child runs all come from that one resolution.
+// One trial's jail, shared by the session and, for an agentic case, by the
+// post-session child that judges it (see sandboxContext for the refusal path). Every
+// path is resolved once, by resolveJailPaths; the profile, the jailed PATH, the temp
+// dir and the script that child runs all come from that one resolution.
 export function trialJail(
   sandbox: { sandboxExec: string } | null,
   {
     home,
     configDir,
-    fixtureDir,
+    workDir,
     tmpDir,
     bin,
     gitBin,
@@ -51,7 +51,7 @@ export function trialJail(
   const paths = resolveJailPaths({
     home,
     configDir,
-    fixtureDir,
+    workDir,
     tmpDir,
     script,
     allowRead,
@@ -99,7 +99,7 @@ export function trialJail(
 function resolveJailPaths({
   home,
   configDir,
-  fixtureDir,
+  workDir,
   tmpDir,
   script,
   allowRead,
@@ -140,9 +140,7 @@ function resolveJailPaths({
   const realTmpDir = canonical(tmpDir);
   return {
     home: realpathSync(home),
-    allowWrite: [configDir, fixtureDir, tmpDir]
-      .map(canonical)
-      .filter((p): p is string => p !== null),
+    allowWrite: [configDir, workDir, tmpDir].map(canonical).filter((p): p is string => p !== null),
     tmpDir: realTmpDir ?? tmpDir,
     script: script ? realpathSync(script) : null,
     allowRead: allowRead.map((p) => realpathSync(p)),
@@ -214,9 +212,9 @@ const JAIL_MACH_SERVICES = ["com.apple.system.opendirectoryd.libinfo"];
 // machine (a CI runner or a VM) instead of the operator's own session, since that
 // also moves the jailed process out of the operator's launchd domain, which is
 // what actually closes it. Upgrade path for (1)-(3): a read allowlist (the
-// runtime trees, system libraries, the trial dirs) in place of (1), exec of
-// exactly the resolved binaries in place of (2), and a forwarder that gives the
-// session one loopback port to the API in place of (3) (the same one the
+// runtime trees, system libraries, the trial dirs, the plugin copy) in place of
+// (1), exec of exactly the resolved binaries in place of (2), and a forwarder that
+// gives the session one loopback port to the API in place of (3) (the same one the
 // credential DEBT on buildChildEnv names).
 //
 // SBPL is last-match-wins: the broad rules come first, then the narrow ones
@@ -241,7 +239,7 @@ export function buildSeatbeltProfile({
     );
   const lines = [
     "(version 1)",
-    ";; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).",
+    ";; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic and plugin sessions).",
     ";; Deny everything, then allow back only what node, claude and git need:",
     ";; no mach-lookup service can start a program outside this jail (launchd's",
     ";; bootstrap port is a separate, narrower exception; see the DEBT note).",
@@ -264,7 +262,7 @@ export function buildSeatbeltProfile({
   const writes = subpaths(allowWrite);
   if (writes.length) {
     lines.push(
-      ";; read+write: this trial's config dir, fixture repo and temp dir only.",
+      ";; read+write: this trial's config dir, work dir (an agentic case's fixture repo) and temp dir only.",
       "(allow file-read* file-write*",
       ...writes,
       ")",
@@ -324,26 +322,26 @@ export function wrapWithSandbox(
 // Pure gate: given the platform and the resolved sandbox-exec path, return the path
 // or THROW. The whole point is "never silently unsandboxed": if EVALS_SANDBOX=1 is
 // set but we can't sandbox (not macOS, or sandbox-exec absent), we refuse hard
-// BEFORE any session starts rather than run an agentic session in the open.
+// BEFORE any session starts rather than run an agentic or plugin session in the open.
 //
 // DEBT: the jail relies on `sandbox-exec`, which Apple has deprecated but still ships
 // and honors. It is opt-in and macOS-only (a hard refusal elsewhere, never a silent
 // unsandboxed run). Ceiling: works only while macOS keeps shipping and honoring
 // sandbox-exec, which is accepted for a local maintainer tool rather than taking on a
 // container/VM dependency now. Upgrade path: if Apple removes it or stops honoring
-// profiles, move the agentic session and the post-session step into a disposable VM
+// profiles, move the jailed sessions and the post-session step into a disposable VM
 // or container, which would also bring Linux into scope.
 export function requireSandboxSupport(platform: string, sandboxExecPath: string | null): string {
   if (platform !== "darwin") {
     throw new Error(
       `EVALS_SANDBOX=1 is macOS-only (seatbelt/sandbox-exec); refusing to run an ` +
-        `agentic session unsandboxed on "${platform}". Unset EVALS_SANDBOX to run without the jail.`,
+        `agentic or plugin session unsandboxed on "${platform}". Unset EVALS_SANDBOX to run without the jail.`,
     );
   }
   if (!sandboxExecPath) {
     throw new Error(
       "EVALS_SANDBOX=1 is set but sandbox-exec was not found; refusing to run an agentic " +
-        "session unsandboxed. (Expected /usr/bin/sandbox-exec; override with EVALS_SANDBOX_EXEC.)",
+        "or plugin session unsandboxed. (Expected /usr/bin/sandbox-exec; override with EVALS_SANDBOX_EXEC.)",
     );
   }
   return sandboxExecPath;
@@ -357,8 +355,8 @@ function resolveSandboxExec(env: Env): string | null {
   return findOnPath("sandbox-exec", env);
 }
 
-export function sandboxContext(env: Env, agenticWillRun: boolean): { sandboxExec: string } | null {
+export function sandboxContext(env: Env, jailWillRun: boolean): { sandboxExec: string } | null {
   if (env.EVALS_SANDBOX !== "1") return null;
-  if (!agenticWillRun) return null;
+  if (!jailWillRun) return null;
   return { sandboxExec: requireSandboxSupport(process.platform, resolveSandboxExec(env)) };
 }

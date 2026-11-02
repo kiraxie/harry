@@ -723,7 +723,19 @@ function invokeClaude(
   configDir: string,
   env: Env,
   tmpDir: string = tmpdir(),
+  jail: Jail | null = null,
 ): string {
+  if (jail) {
+    const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, bin, args);
+    return invokeClaude(
+      wrapped.bin,
+      wrapped.args,
+      cwd,
+      configDir,
+      { ...env, PATH: jail.path },
+      jail.tmpDir,
+    );
+  }
   const childEnv = buildChildEnv(env, configDir, tmpDir);
   let stdout: string;
   try {
@@ -768,8 +780,8 @@ function invokeClaude(
 //
 // `--tools ""` removes every tool, so a text case measures first-response prose,
 // not actions. `--allowedTools ""` alone does not: it only auto-approves nothing,
-// and Read needs no approval, so a session could still read host files (seen on
-// 2026-10-09 with a probe of a file outside the plugin copy).
+// and on CLI 2.1.295 Read needed no approval, so a session could still read host
+// files (seen on 2026-10-09 with a probe of a file outside the plugin copy).
 //
 // `cwd` MUST be an empty dir with no CLAUDE.md above it: claude reads project
 // memory by walking up from cwd, so running from the repo root would leak this
@@ -784,7 +796,8 @@ function runTextCase(
   workDir: string,
   env: Env,
   tmpDir: string,
-  pluginDir: string | null = null,
+  plugin: PluginCopy | null = null,
+  jail: Jail | null = null,
 ): string {
   const args = [
     "-p",
@@ -793,12 +806,11 @@ function runTextCase(
     model,
     "--output-format",
     "json",
-    "--allowedTools",
-    pluginDir ? "Skill" : "",
-    ...textToolArgs(Boolean(pluginDir)),
-    ...(pluginDir ? ["--plugin-dir", pluginDir] : []),
+    ...(plugin ? [] : ["--allowedTools", ""]),
+    ...textToolFlags(plugin?.spellings ?? null),
+    ...(plugin ? ["--plugin-dir", plugin.dir] : []),
   ];
-  return invokeClaude(bin, args, workDir, configDir, env, tmpDir);
+  return invokeClaude(bin, args, workDir, configDir, env, tmpDir, jail);
 }
 
 // One comma-joined `--allowedTools` value: a single arg avoids the variadic
@@ -835,13 +847,14 @@ const PLUGIN_PAYLOAD = [".claude-plugin", "HARRY.md", "skills", "commands", "age
 
 // Freeze the plugin once per run: every trial loads the same copy, so a checkout that
 // changes mid-run cannot change later trials, and the copy's content hash names the
-// tree a result was taken under. Realpath'd because the permission rule is matched
-// against canonical paths, and macOS's tmpdir is a symlink.
-export function snapshotPlugin(
-  root: string,
-  from: string = pluginRoot,
-): { dir: string; sha: string } {
-  const dir = realpathSync(mkdtempSync(join(root, "harry-evals-plugin-")));
+// tree a result was taken under. Realpath'd for --plugin-dir; `spellings` holds every
+// spelling of the copy's path, since macOS's tmpdir is a symlink and the CLI matches
+// a Read rule only to the spelling a session hands it.
+export type PluginCopy = { dir: string; sha: string; spellings: string[] };
+export function snapshotPlugin(root: string, from: string = pluginRoot): PluginCopy {
+  requirePluginTrialRoot(root);
+  const made = resolve(mkdtempSync(join(root, "harry-evals-plugin-")));
+  const dir = realpathSync(made);
   for (const entry of PLUGIN_PAYLOAD)
     cpSync(join(from, entry), join(dir, entry), { recursive: true });
   const hash = createHash("sha256");
@@ -854,21 +867,77 @@ export function snapshotPlugin(
     }
   };
   walk("");
-  return { dir, sha: hash.digest("hex").slice(0, 16) };
+  return { dir, sha: hash.digest("hex").slice(0, 16), spellings: [...new Set([dir, made])] };
 }
 
-// Read needs no permission, so an allowlist never withholds it, and restricted mode,
-// which would confine it, also drops the laws (CLAUDE.md is not loaded; probed
-// 2026-10-09). So a plugin session is denied Read under the operator's home, where
-// the checkout and its grading patterns live; the copy and the trial dirs sit outside
-// it (runEvals refuses a trial root under the home).
+const SAFE_ROOT = /^[A-Za-z0-9/._-]+$/;
+
+// Checked as given and as its realpath, before any dir exists. The home check also
+// keeps the trial dirs out of the home: runEvals makes them under the same root, after
+// this has run.
+function requirePluginTrialRoot(root: string): void {
+  const home = realpathSync(homedir());
+  const rootAbs = resolve(root);
+  const real = existsSync(rootAbs) ? realpathSync(rootAbs) : rootAbs;
+  if (real === home || real.startsWith(`${home}/`) || rootAbs.startsWith(`${homedir()}/`)) {
+    throw new Error(
+      `the plugin condition denies Read under the home directory, so its trial root ${root} cannot sit under the home directory; point EVALS_FIXTURE_ROOT elsewhere.`,
+    );
+  }
+  // The copy's path goes unescaped into a Read rule, where `,`, `(`, `)` or a space
+  // can split it and `*` or `\` changes what it matches; an allowlist closes the
+  // class under any CLI's rule parser.
+  if (!SAFE_ROOT.test(rootAbs) || !SAFE_ROOT.test(real)) {
+    throw new Error(
+      `the plugin condition names its copy in a Read rule, so EVALS_FIXTURE_ROOT ${root} may hold only [A-Za-z0-9/._-]; point it elsewhere.`,
+    );
+  }
+}
+
+// Read inside the cwd needs no permission, so an allowlist never withholds it, and
+// restricted mode, which would confine it, also drops the laws (CLAUDE.md is not
+// loaded; probed 2026-10-09). So a plugin session is denied Read under the
+// operator's home, where the checkout and its grading patterns live; the copy and
+// the trial dirs sit outside it (snapshotPlugin refuses a trial root under the home).
+// With EVALS_SANDBOX=1 the jail denies those reads first, and this deny is the
+// second layer.
 const HOME_READ_DENY = ["--disallowedTools", "Read(~/**)"];
 
-// `--allowedTools ""` alone would still leave Read, hence `--tools`. A result line
-// records the flags, so score can flag trials taken under different setups.
-function textToolArgs(withPlugin: boolean): string[] {
-  return withPlugin ? ["--tools", "Skill,Read", ...HOME_READ_DENY] : ["--tools", ""];
+// CLI 2.1.316 asks permission for a Read outside the cwd, which a headless session
+// cannot grant (2.1.295 did not ask), and the copy sits outside every trial's cwd.
+// The leading `//` makes each rule's path absolute.
+const copyReadRules = (spellings: string[]): string =>
+  spellings.map((d) => `Read(/${d}/**)`).join(",");
+
+// A session gets its tool flags from the builders below with the copy's spellings,
+// and its line records them from the same builders with these placeholders, so the
+// two cannot drift and trials of different runs pool under one tool setup.
+const COPY_PLACEHOLDER = ["/<copy>"];
+const AGENTIC_PLACEHOLDER = "<agentic>";
+
+// `--allowedTools ""` alone would still leave Read, hence `--tools`.
+function textToolFlags(spellings: string[] | null): string[] {
+  return spellings
+    ? [
+        "--tools",
+        "Skill,Read",
+        ...HOME_READ_DENY,
+        "--allowedTools",
+        `Skill,${copyReadRules(spellings)}`,
+      ]
+    : ["--tools", ""];
 }
+
+function agenticPluginToolFlags(baseTools: string, spellings: string[]): string[] {
+  return ["--allowedTools", `${baseTools},Skill,${copyReadRules(spellings)}`, ...HOME_READ_DENY];
+}
+
+// Jailed under EVALS_SANDBOX=1: every agentic trial, and under the plugin condition
+// every text trial too, since those have Read; the jail is their first layer and the
+// CLI's home Read deny the second. Baseline and candidate text trials have no tools.
+const jailsTrial = (condition: string, mode: string): boolean =>
+  mode === "agentic" || condition === "plugin";
+
 // Once per run, before any trial, with the base env, no credential and a throwaway
 // config dir, so it touches neither the operator's ~/.claude nor the API; a failure
 // refuses the run like a missing binary.
@@ -905,7 +974,7 @@ function runAgenticCase(
   env: Env,
   tmpDir: string,
   jail: Jail | null = null,
-  pluginDir: string | null = null,
+  plugin: PluginCopy | null = null,
 ): string {
   const args = [
     "-p",
@@ -916,18 +985,17 @@ function runAgenticCase(
     "json",
     "--permission-mode",
     "acceptEdits",
-    "--allowedTools",
-    pluginDir ? `${AGENTIC_ALLOWED_TOOLS},Skill` : AGENTIC_ALLOWED_TOOLS,
     // The session's node commands can still read the host; only the sandbox contains
     // that.
-    ...(pluginDir ? [...HOME_READ_DENY, "--plugin-dir", pluginDir] : []),
+    ...(plugin
+      ? [
+          ...agenticPluginToolFlags(AGENTIC_ALLOWED_TOOLS, plugin.spellings),
+          "--plugin-dir",
+          plugin.dir,
+        ]
+      : ["--allowedTools", AGENTIC_ALLOWED_TOOLS]),
   ];
-  if (!jail) {
-    return invokeClaude(bin, args, fixtureDir, configDir, env, tmpDir);
-  }
-  const wrapped = wrapWithSandbox(jail.sandboxExec, jail.profile, bin, args);
-  const jailedEnv = { ...env, PATH: jail.path };
-  return invokeClaude(wrapped.bin, wrapped.args, fixtureDir, configDir, jailedEnv, jail.tmpDir);
+  return invokeClaude(bin, args, fixtureDir, configDir, env, tmpDir, jail);
 }
 
 export type RunLine = ResultLine & {
@@ -983,19 +1051,13 @@ export function runEvals(
   }
 
   // Resolve the opt-in seatbelt jail BEFORE any dir is created or session starts:
-  // if EVALS_SANDBOX=1 is set with a runnable agentic case but we can't sandbox,
-  // this throws (never a silent unsandboxed run). Only agentic cases are jailed:
-  // text mode has no exec surface, so a text-only run ignores the flag entirely.
+  // if EVALS_SANDBOX=1 is set with a trial to jail but we can't sandbox, this throws
+  // (never a silent unsandboxed run).
   const agenticWillRun = runnable.some((c) => c.mode === "agentic");
-  // The jail's read allowlist does not include the plugin copy, and it jails no text
-  // case, while plugin text cases have Read: so the flag is refused for every plugin
-  // run rather than silently ignored for a text-only one.
-  if (condition === "plugin" && env.EVALS_SANDBOX === "1") {
-    throw new Error(
-      "the plugin condition is not wired into the sandbox: the jail is not allowed to read the plugin copy, and it covers no text case while plugin text cases have Read. Unset EVALS_SANDBOX.",
-    );
-  }
-  const sandbox = sandboxContext(env, agenticWillRun);
+  const sandbox = sandboxContext(
+    env,
+    runnable.some((c) => jailsTrial(condition, c.mode)),
+  );
 
   // Same "before any dir/session starts" timing as the sandbox refusal above: with
   // both or neither EVALS_ auth var set, refuse now with one clear message rather
@@ -1021,16 +1083,6 @@ export function runEvals(
   }
 
   const trialsRoot = env.EVALS_FIXTURE_ROOT || tmpdir();
-  if (condition === "plugin") {
-    const home = realpathSync(homedir());
-    const rootAbs = resolve(trialsRoot);
-    const real = existsSync(rootAbs) ? realpathSync(rootAbs) : rootAbs;
-    if (real === home || real.startsWith(`${home}/`) || rootAbs.startsWith(`${homedir()}/`)) {
-      throw new Error(
-        `the plugin condition denies Read under the home directory, so its trial root ${trialsRoot} cannot sit under the home directory; point EVALS_FIXTURE_ROOT elsewhere.`,
-      );
-    }
-  }
   const plugin = condition === "plugin" ? snapshotPlugin(trialsRoot) : null;
   // Under the plugin condition the laws come from the copy, so law and tree agree.
   const lawsText =
@@ -1049,7 +1101,6 @@ export function runEvals(
     claudeVersion: claudeVersion(claudeBin, env),
     lawBytes: Buffer.byteLength(lawsText),
     lawSha256: lawsText ? createHash("sha256").update(lawsText).digest("hex").slice(0, 16) : null,
-    sandbox: Boolean(sandbox),
     ...(plugin ? { pluginDir: plugin.dir, pluginSha256: plugin.sha } : {}),
   };
   const outPath =
@@ -1076,12 +1127,17 @@ export function runEvals(
         checks: expandChecks(c.checks),
         toolSetup:
           c.mode === "agentic"
-            ? toolSetup(plugin ? ["agentic", ...HOME_READ_DENY] : ["agentic"])
-            : toolSetup(textToolArgs(Boolean(plugin))),
+            ? toolSetup(
+                plugin
+                  ? ["agentic", ...agenticPluginToolFlags(AGENTIC_PLACEHOLDER, COPY_PLACEHOLDER)]
+                  : ["agentic"],
+              )
+            : toolSetup(textToolFlags(plugin ? COPY_PLACEHOLDER : null)),
         trialDir: dirs.trialDir,
         configDir: dirs.configDir,
         workDir: dirs.workDir,
         ...provenance,
+        sandbox: false,
         timestamp: new Date().toISOString(),
       };
       try {
@@ -1093,18 +1149,21 @@ export function runEvals(
           line.fixtureDir = fx.dir;
           line.initialBranch = fx.initialBranch;
           line.initialCommit = fx.initialCommit;
-          const jail = trialJail(sandbox, {
-            configDir: dirs.configDir,
-            fixtureDir: fx.dir,
-            tmpDir: dirs.tmpDir,
-            bin: claudeBin,
-            gitBin,
-            gitExecPath,
-            env,
-            home: homedir(),
-            script: fileURLToPath(import.meta.url),
-            allowRead: [fileURLToPath(new URL("./lib", import.meta.url))],
-          });
+          const jail = jailsTrial(condition, c.mode)
+            ? trialJail(sandbox, {
+                configDir: dirs.configDir,
+                workDir: fx.dir,
+                tmpDir: dirs.tmpDir,
+                bin: claudeBin,
+                gitBin,
+                gitExecPath,
+                env,
+                home: homedir(),
+                script: fileURLToPath(import.meta.url),
+                allowRead: [fileURLToPath(new URL("./lib", import.meta.url))],
+              })
+            : null;
+          line.sandbox = Boolean(jail);
           line.response = runAgenticCase(
             claudeBin,
             model,
@@ -1114,7 +1173,7 @@ export function runEvals(
             env,
             dirs.tmpDir,
             jail,
-            plugin?.dir ?? null,
+            plugin,
           );
           // Judge now, while the fixture dir exists — inside the jail when there is
           // one — and record per-check outcomes so `score` can judge offline
@@ -1140,6 +1199,19 @@ export function runEvals(
             detail: o.detail,
           }));
         } else {
+          // The copy needs no jail read grant: the profile denies reads only under the
+          // home, and snapshotPlugin's trial-root refusal keeps the copy out of it.
+          const jail = jailsTrial(condition, c.mode)
+            ? trialJail(sandbox, {
+                configDir: dirs.configDir,
+                workDir: dirs.workDir,
+                tmpDir: dirs.tmpDir,
+                bin: claudeBin,
+                env,
+                home: homedir(),
+              })
+            : null;
+          line.sandbox = Boolean(jail);
           line.response = runTextCase(
             claudeBin,
             model,
@@ -1148,7 +1220,8 @@ export function runEvals(
             dirs.workDir,
             env,
             dirs.tmpDir,
-            plugin?.dir ?? null,
+            plugin,
+            jail,
           );
           // Record per-check outcomes (same shape as agentic lines) so an
           // inspector can see WHICH check failed without re-scoring. Scoring

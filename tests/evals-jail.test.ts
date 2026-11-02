@@ -52,7 +52,7 @@ function jailOf({
   dir,
   home = os.homedir(),
   configDir = dir,
-  fixtureDir = dir,
+  workDir = dir,
   tmpDir = dir,
   bin = process.execPath,
   gitBin,
@@ -62,7 +62,7 @@ function jailOf({
   dir: string;
   home?: string;
   configDir?: string;
-  fixtureDir?: string;
+  workDir?: string;
   tmpDir?: string;
   bin?: string;
   gitBin?: string;
@@ -72,7 +72,7 @@ function jailOf({
   const jail = trialJail(SANDBOX, {
     home,
     configDir,
-    fixtureDir,
+    workDir,
     tmpDir,
     bin,
     gitBin,
@@ -121,7 +121,7 @@ test(GOLDEN_PROFILE, () => {
   assert.equal(
     profile,
     `(version 1)
-;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
+;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic and plugin sessions).
 ;; Deny everything, then allow back only what node, claude and git need:
 ;; no mach-lookup service can start a program outside this jail (launchd's
 ;; bootstrap port is a separate, narrower exception; see the DEBT note).
@@ -143,7 +143,7 @@ test(GOLDEN_PROFILE, () => {
   (subpath "/Users/op/.local/share/claude/versions")
   (subpath "/opt/homebrew/Cellar/node/26.9.0/bin")
 )
-;; read+write: this trial's config dir, fixture repo and temp dir only.
+;; read+write: this trial's config dir, work dir (an agentic case's fixture repo) and temp dir only.
 (allow file-read* file-write*
   (subpath "/private/var/folders/t/trial/config")
   (subpath "/private/var/folders/t/trial/fixture/repo")
@@ -165,7 +165,7 @@ test("buildSeatbeltProfile: with no trial dirs or runtime trees, those sections 
   assert.equal(
     buildSeatbeltProfile({ home: "/Users/op" }),
     `(version 1)
-;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic sessions).
+;; harry evals seatbelt profile (opt-in EVALS_SANDBOX=1, agentic and plugin sessions).
 ;; Deny everything, then allow back only what node, claude and git need:
 ;; no mach-lookup service can start a program outside this jail (launchd's
 ;; bootstrap port is a separate, narrower exception; see the DEBT note).
@@ -338,7 +338,7 @@ test("trialJail refuses a runtime tree that would re-open $HOME or cover a writa
       return bin;
     };
     const build =
-      (o: { bin?: string; gitExecPath?: string; configDir?: string; fixtureDir?: string }) => () =>
+      (o: { bin?: string; gitExecPath?: string; configDir?: string; workDir?: string }) => () =>
         jailOf({ home, dir: other, ...o }).profile;
     const refuses = (label: string, run: () => string, tree: string) =>
       assert.throws(run, (err: Error) => err.message.includes(`runtime tree ${tree}`), label);
@@ -351,7 +351,7 @@ test("trialJail refuses a runtime tree that would re-open $HOME or cover a writa
     );
     refuses(
       "a tree containing a writable dir",
-      build({ bin: claudeIn(trial), fixtureDir: path.join(trial, "fixture") }),
+      build({ bin: claudeIn(trial), workDir: path.join(trial, "fixture") }),
       trial,
     );
     refuses(
@@ -361,7 +361,7 @@ test("trialJail refuses a runtime tree that would re-open $HOME or cover a writa
     );
     // The ordinary shape still builds: disjoint trees and trial dirs.
     assert.match(
-      build({ bin: claudeIn(tool), fixtureDir: path.join(trial, "fixture") })(),
+      build({ bin: claudeIn(tool), workDir: path.join(trial, "fixture") })(),
       /\(subpath "[^"]*\/tool"\)/,
     );
   } finally {
@@ -540,7 +540,7 @@ test("requireSandboxSupport: refuses non-macOS and a missing sandbox-exec; passe
   );
   assert.throws(
     () => requireSandboxSupport("freebsd", "/x"),
-    /refusing to run an agentic session unsandboxed/,
+    /refusing to run an agentic or plugin session unsandboxed/,
     "any non-darwin platform is refused",
   );
   assert.throws(
@@ -643,7 +643,7 @@ test(GOLDEN_PATHS, () => {
       {
         home: path.join(link, "home"),
         configDir: path.join(link, "trial", "config"),
-        fixtureDir: path.join(link, "trial", "fixture"),
+        workDir: path.join(link, "trial", "fixture"),
         tmpDir: path.join(link, "trial", "tmp"),
         bin: path.join(link, "claude", "claude"),
         gitBin: path.join(link, "git", "bin", "git"),
