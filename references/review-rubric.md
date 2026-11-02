@@ -110,7 +110,7 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
   leftover check, `skills/finishing/SKILL.md` **Execute the choice**), sorts by the real
   check and the related check, AC or no AC: real and related → **backlog**, anything else →
   **leave as is**. A line the user
-  already ruled, marked as the "Writers" bullet of
+  already ruled, marked as the "Ruled-backlog marker" bullet of
   `references/doc-types.md` **Lifecycle rules** says where it was written, keeps that
   ruling as its recommendation. This is not the re-review's stop on findings returning in one area
   (`skills/executing/SKILL.md` **One fix wave**): that stop is about recurrence, this rule

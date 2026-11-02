@@ -12,6 +12,7 @@ import {
   fenceBlocks,
   fences,
   LEGACY_FORMS,
+  labelledItems,
   lawAttempts,
   lawFailures,
   lawLabelFailures,
@@ -938,4 +939,36 @@ test("a block led by [ and an autolink is read whole at its line", () => {
       blocks,
       `misread: ${sample}`,
     );
+});
+
+test("labelledItems returns each top-level bold-led list item of a section", () => {
+  const text = [
+    "Intro paragraph.",
+    "",
+    "- **First.** one",
+    "  - **Nested** inner",
+    "",
+    "  continued paragraph",
+    "- plain item",
+    "- **Second**: two",
+    "",
+    "Loose paragraph.",
+    "",
+    "1. **Step** three",
+  ].join("\n");
+  const items = labelledItems(text);
+  assert.deepEqual(
+    items.map(({ label, ordered }) => [label, ordered]),
+    [
+      ["First", false],
+      ["Second", false],
+      ["Step", true],
+    ],
+  );
+  assert.equal(
+    items[0]?.body,
+    "- **First.** one\n  - **Nested** inner\n\n  continued paragraph",
+    "an item's body runs to its last block, nested items and continuations kept",
+  );
+  assert.equal(items[1]?.body, "- **Second**: two");
 });

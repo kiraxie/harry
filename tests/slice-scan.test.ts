@@ -643,3 +643,139 @@ test("no test in tests/ walks the repo root or a prose dir on disk", () => {
 test("every dir-walk allowlist entry matches exactly one walk", () => {
   assert.deepEqual(staleEntries(DIR_WALK_ALLOWED, ownWalks()), [], "remove a stale entry");
 });
+
+const ITEM_OWNER = "citations.ts";
+const ITEM_LEAD =
+  /(?<![[\\])(?:\^|\\n)+(?:-|\\\*|\\\+|\[[-*+\\]+\]|(?:\\d|\[0-9\]|\d)\+?(?:\\\.|\[[.)\\]+\]))(?: |\\s)?(?:\\\*\\\*|\\\*\{2\})/;
+const TOKEN = /\\[\s\S]|\[(?:\\[\s\S]|[^\]\\])*\]|[\s\S]/g;
+const GROUP_PREFIX = /^\?(?::|<[A-Za-z_$][\w$]*>|<?[=!])/;
+const BRANCH_CAP = 64;
+
+const innermostGroup = (tokens: string[]): [number, number] | null => {
+  const close = tokens.indexOf(")");
+  for (let open = close - 1; open >= 0; open -= 1) if (tokens[open] === "(") return [open, close];
+  return null;
+};
+
+const splitBranches = (body: string): string[] => {
+  const out = [""];
+  for (const t of body.match(TOKEN) ?? []) {
+    if (t === "|") out.push("");
+    else out[out.length - 1] += t;
+  }
+  return out;
+};
+
+// JOINS runs a group's branches together, so groups are unwrapped innermost first, one variant per branch.
+const branches = (source: string): string[] => {
+  let out = [source];
+  for (let changed = true; changed && out.length <= BRANCH_CAP; ) {
+    changed = false;
+    out = out.flatMap((v) => {
+      const tokens = v.match(TOKEN) ?? [];
+      const group = innermostGroup(tokens);
+      if (!group) return [v];
+      changed = true;
+      const [open, close] = group;
+      const before = tokens.slice(0, open).join("");
+      const after = tokens.slice(close + 1).join("");
+      const body = tokens
+        .slice(open + 1, close)
+        .join("")
+        .replace(GROUP_PREFIX, "");
+      return splitBranches(body).map((b) => before + b + after);
+    });
+  }
+  return out;
+};
+
+const leadsItem = (source: string): boolean =>
+  branches(source).some((v) => ITEM_LEAD.test(v.replace(JOINS, "")));
+
+const itemLeadReads = (src: string): { line: number; text: string }[] =>
+  literals(src)
+    .filter((lit) => {
+      if (lit.kind === "regex") return leadsItem(lit.body);
+      const { call, raw } = callBefore(src, lit.at);
+      return call === "RegExp" && leadsItem(raw ? lit.body : lit.body.replace(/\\\\/g, "\\"));
+    })
+    .map((lit) => ({ line: lineAt(src, lit.at), text: src.slice(lit.at, lit.end) }));
+
+test("the item-lead scan catches each known shape and nothing else", () => {
+  assert.deepEqual(
+    [
+      "text.matchAll(/^- \\*\\*(.+?)\\*\\*/gm);",
+      "text.match(/^\\d+\\. \\*\\*/gm);",
+      "text.match(/^\\s*-\\s+\\*\\*/gm);",
+      "/^- \\*\\*(\\w+)\\*\\* — /.exec(l);",
+      "/^6\\. \\*\\*Write the item\\*\\*/;",
+      "/^- \\*\\*(.+?)[.:]?\\*\\*[.:]?/.exec(b);",
+      "text.split(/\\n- \\*\\*/);",
+      "/^[-*] \\*\\*/m.test(t);",
+      "/^\\* \\*\\*/m.test(t);",
+      "/^ *- \\*\\*/m.test(t);",
+      "/^\\d\\. \\*{2}/.test(t);",
+      "/(?:^|\\n)- \\*\\*/.test(t);",
+      "/^[0-9]+[.)] \\*\\*/m.test(t);",
+      "/^(?:-|\\d+\\.) \\*\\*(.+?)\\*\\*/gm;",
+      "/^(?:\\d+\\.|-)\\s+\\*\\*/gm;",
+      "/^[-*+] \\*\\*/m;",
+      "/^\\+ \\*\\*/m;",
+      "/^(-|\\d+\\.) \\*\\*/m;",
+      "/^(?<m>-|\\d+\\.) \\*\\*/m;",
+      "/^(\\d+[.|]) \\*\\*/;",
+      "/^(?:\\||-) \\*\\*/;",
+      "/^(?:-|(\\d+)\\.) \\*\\*/;",
+      "/^(-|(\\d+)\\.) \\*\\*(.+?)\\*\\*/;",
+      "/^(?:(?:x)|-) \\*\\*/;",
+      'new RegExp("^(?:-|\\\\d+\\\\.) \\\\*\\\\*", "m");',
+      'new RegExp("^- \\\\*\\\\*" + name, "m");',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: source text under scan, as a test would write it.
+      'new RegExp(String.raw`^- \\*\\*${name}`, "m");',
+    ].filter((src) => itemLeadReads(src).length === 0),
+    [],
+    "a known item-lead read now passes the scan",
+  );
+  assert.deepEqual(
+    [
+      "/^\\*\\*Slug:\\*\\* `([^`]+)`$/.exec(s);",
+      "assert.match(t, /\\*\\*Major\\*\\*/);",
+      "/^- \\[x\\]/.test(t);",
+      "/^\\d+\\. /.test(t);",
+      'const s = "^- \\\\*\\\\*";',
+      "/[^- ]\\*\\*/.test(t);",
+      "/\\\\n- \\*\\*/.test(t);",
+      "/^-- \\*\\*/.test(t);",
+      "/^(?:a\\|- \\*\\*)/.test(t);",
+    ].filter((src) => itemLeadReads(src).length > 0),
+    [],
+    "the scan now flags a regex that reads no list item's bold lead",
+  );
+});
+
+const ITEM_ALLOWED: { file: string; text: string; why: string }[] = [];
+
+const itemReads = (): { file: string; line: number; text: string }[] =>
+  [...scanned(), OWNER, SELF]
+    .filter((file) => file !== ITEM_OWNER)
+    .flatMap((file) =>
+      itemLeadReads(readFileSync(path.join(testsDir, file), "utf-8")).map((r) => ({
+        file,
+        ...r,
+      })),
+    );
+
+test("no test in tests/ reads bold-labelled list items on its own", () => {
+  const own = itemReads()
+    .filter((r) => !ITEM_ALLOWED.some((a) => a.file === r.file && a.text === r.text))
+    .map((r) => `${r.file}:${r.line}: ${r.text}`);
+  assert.deepEqual(
+    own,
+    [],
+    `read bold-labelled list items through tests/citations.ts labelledItems(), or add an allowlist entry with its reason:\n${own.join("\n")}`,
+  );
+});
+
+test("every item-lead allowlist entry matches exactly one read", () => {
+  assert.deepEqual(staleEntries(ITEM_ALLOWED, itemReads()), [], "remove a stale entry");
+});

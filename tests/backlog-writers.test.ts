@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { MARKDOWN_CORPUS } from "./prose-dirs.ts";
+import { labelledItems } from "./citations.ts";
+import { MARKDOWN_CORPUS, SHIPPED_MARKDOWN } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -81,15 +82,12 @@ const sentences = (text: string): string[] =>
 
 const mentions = (file: string): string[] => sentences(read(file)).filter((s) => MENTION.test(s));
 
-const lifecycleBullets = (): Map<string, string> =>
-  new Map(
-    headingSection(read(DOC_TYPES), DOC_TYPES, "## Lifecycle rules")
-      .split(/\n(?=- \*\*)/)
-      .flatMap((b) => {
-        const name = /^- \*\*(.+?)\*\*:/.exec(b)?.[1];
-        return name === undefined ? [] : [[name, flat(b)] as const];
-      }),
+const lifecycleEntries = (): (readonly [string, string])[] =>
+  labelledItems(headingSection(read(DOC_TYPES), DOC_TYPES, "## Lifecycle rules")).map(
+    ({ label, body }) => [label, flat(body)] as const,
   );
+
+const lifecycleBullets = (): Map<string, string> => new Map(lifecycleEntries());
 
 test("doc-types' Writers bullet names every writer", () => {
   const list = lifecycleBullets().get("Writers") ?? "";
@@ -162,4 +160,53 @@ test("a writer outside the Similar backlog items rule never names it", () => {
     [],
     `these files name ${SIMILAR} though doc-types' Writers puts them outside it`,
   );
+});
+
+const MARKER = "Ruled-backlog marker";
+const TARGET_FORM = "(ruled backlog →";
+const MARKER_FORMS = [
+  "(ruled backlog)",
+  "(ruled backlog → merge into <slug>)",
+  "(ruled backlog → new item <slug>)",
+];
+
+test("the ruled-backlog marker's target forms live only in its own Lifecycle bullet", () => {
+  const homes = lifecycleEntries().filter(([name]) => name === MARKER);
+  assert.equal(homes.length, 1, `one ${MARKER} bullet`);
+  const home = homes[0]?.[1] ?? "";
+  const missing = MARKER_FORMS.filter((form) => !home.includes(form));
+  assert.deepEqual(missing, [], `the ${MARKER} bullet no longer holds these forms`);
+  const elsewhere = SHIPPED_MARKDOWN.filter((f) =>
+    (f === DOC_TYPES ? flat(read(f)).replace(home, "") : flat(read(f))).includes(TARGET_FORM),
+  );
+  assert.deepEqual(elsewhere, [], `state the target forms only in the ${MARKER} bullet`);
+});
+
+const MARKER_SITES: { file: string; snippet: string }[] = [
+  { file: "skills/finishing/SKILL.md", snippet: "keeps its ruling, and only its target is asked" },
+  { file: "skills/finishing/SKILL.md", snippet: "the line stays, its marker carrying" },
+  { file: "skills/finishing/SKILL.md", snippet: "A kept leftover is appended to the item's" },
+  { file: "skills/finishing/SKILL.md", snippet: "at the target its marker names" },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "- **Conversation leftovers, before `gh pr create`.**",
+  },
+  { file: "skills/executing/SKILL.md", snippet: "A line the user's own ruling sends to" },
+  { file: "references/review-rubric.md", snippet: "A line the user already ruled" },
+];
+const CITES_MARKER = new RegExp(
+  `"${MARKER}" bullet of \`references/doc-types\\.md\` Lifecycle rules`,
+);
+const CITES_WRITERS = /"Writers" bullet of/;
+
+test("every site that writes or reads the ruled-backlog marker cites its bullet", () => {
+  const wrong = MARKER_SITES.flatMap(({ file, snippet }) => {
+    const found = sentences(read(file)).filter((s) => s.includes(snippet));
+    assert.ok(found.length > 0, `${file} no longer has a sentence holding "${snippet}"`);
+    return found
+      .map(flat)
+      .filter((s) => !CITES_MARKER.test(s) || CITES_WRITERS.test(s))
+      .map((s) => `${file}: ${s.slice(0, 100)}`);
+  });
+  assert.deepEqual(wrong, [], `cite the "${MARKER}" bullet, not the Writers bullet`);
 });

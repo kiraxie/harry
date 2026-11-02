@@ -284,6 +284,20 @@ const leadLabel = (src: string, item: MdNode): string | null => {
     .trim();
 };
 
+export type LabelledItem = { label: string; body: string; ordered: boolean };
+
+export const labelledItems = (text: string): LabelledItem[] =>
+  (parse(text).children ?? []).flatMap((list) =>
+    list.type !== "list"
+      ? []
+      : (list.children ?? []).flatMap((item) => {
+          const label = leadLabel(text, item);
+          if (label === null) return [];
+          const body = text.slice(offset(item, "start"), offset(item, "end"));
+          return [{ label, body, ordered: list.ordered === true }];
+        }),
+  );
+
 const labelOf = (src: string, item: MdNode): string | null =>
   item.position?.start.column === 1 && /^\d+\. /.test(src.slice(offset(item, "start")))
     ? leadLabel(src, item)

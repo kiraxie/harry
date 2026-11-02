@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { labelledItems } from "./citations.ts";
 import { MARKDOWN_CORPUS } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
 
@@ -32,18 +33,18 @@ test("Engineering judgment keeps its bullets, in order", () => {
     "## Engineering judgment",
   );
   assert.deepEqual(
-    [...judgmentRaw.matchAll(/^- \*\*([^*]+)\*\*/gm)].map((m) => m[1]),
+    labelledItems(judgmentRaw).map((item) => item.label),
     [
       "Correctness and leaving no legacy outrank saving cost",
       "The ladder",
-      "Optimize on evidence, never on imagination.",
-      "Clean legacy in the scope you touch.",
-      "Pull related changes into the same PR.",
-      "Scope grows only on the user's say.",
-      "DRY is about knowledge, not code.",
-      "A fix stays pure.",
-      "Findings carry their structural fix.",
-      "Automated findings are suggestions.",
+      "Optimize on evidence, never on imagination",
+      "Clean legacy in the scope you touch",
+      "Pull related changes into the same PR",
+      "Scope grows only on the user's say",
+      "DRY is about knowledge, not code",
+      "A fix stays pure",
+      "Findings carry their structural fix",
+      "Automated findings are suggestions",
     ],
     "Engineering judgment gained or lost a bullet. HARRY.md Code hands this section its exceptions to measuring first, so a bullet that changes what measuring first allows tiers Major (references/tier-gates.md Promotion rules): re-pin on purpose",
   );
@@ -68,7 +69,7 @@ test("the main-checkout store rule has one home, and every first writer reads it
     );
 });
 
-// A site's own block: its table row or list item, or the paragraph it opens.
+// A site's own block: its table row, or the paragraph it opens.
 const site = (rel: string, heading: string, start: RegExp): string => {
   const lines = headingSection(raw(rel), rel, heading).split("\n");
   const at = lines.findIndex((line) => start.test(line));
@@ -77,6 +78,14 @@ const site = (rel: string, heading: string, start: RegExp): string => {
     (line, i) => i > at && (!line.trim() || /^(\||\d+\. |- )/.test(line)),
   );
   return flatten(lines.slice(at, end === -1 ? undefined : end).join("\n"));
+};
+
+const labelledItem = (rel: string, heading: string, label: string): string => {
+  const found = labelledItems(headingSection(raw(rel), rel, heading)).find(
+    (i) => i.label === label,
+  );
+  assert.ok(found, `${rel} ${heading} lost the item ${label}`);
+  return flatten(found.body);
 };
 
 test("the item's shape has one home, and every site that shapes an item cites it", () => {
@@ -89,7 +98,6 @@ test("the item's shape has one home, and every site that shapes an item cites it
     ["references/tier-gates.md", "### Standard", /^\| Item \|/],
     ["references/tier-gates.md", "### Major", /^\| Item \|/],
     ["skills/brainstorming/SKILL.md", "## Entry: tier, then depth", /^\| Compressed \|/],
-    ["skills/brainstorming/SKILL.md", "## Full Flow", /^6\. \*\*Write the item\*\*/],
     ["skills/brainstorming/SKILL.md", "## Full Flow", /^The compressed path runs/],
     ["skills/brainstorming/SKILL.md", "## Item Template", /gives the AC list alone/],
   ] as const)
@@ -99,7 +107,12 @@ test("the item's shape has one home, and every site that shapes an item cites it
       `${rel} ${heading} ${start} no longer cites the item's shape`,
     );
   assert.match(
-    site("references/doc-types.md", "## Lifecycle rules", /Backlog → active promotion/),
+    labelledItem("skills/brainstorming/SKILL.md", "## Full Flow", "Write the item"),
+    /references\/doc-types\.md The item model/,
+    "brainstorming's Write the item step no longer cites the item's shape",
+  );
+  assert.match(
+    labelledItem("references/doc-types.md", "## Lifecycle rules", "Backlog → active promotion"),
     /The item model/,
     "doc-types' promotion bullet no longer points at The item model",
   );

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { labelledItems } from "./citations.ts";
 import { section } from "./section.ts";
 
 // HARRY.md's red-line list (in **Tiers**) and references/tier-gates.md's promotion-trigger list
@@ -72,9 +73,7 @@ test("tier-gates.md promotion list names all nine promotion-trigger domains", ()
 // --- count locks: a 10th domain added to ONE file only must fail ---
 
 test("tier-gates.md promotion list has exactly N domain bullets", () => {
-  // Each domain is one "- **…**" sub-bullet in the marked region; count them.
-  const bullets =
-    section(read(TIER_GATES), TIER_GATES, ...DOMAIN_LIST).match(/^\s*-\s+\*\*/gm) ?? [];
+  const bullets = labelledItems(section(read(TIER_GATES), TIER_GATES, ...DOMAIN_LIST));
   assert.equal(
     bullets.length,
     N,

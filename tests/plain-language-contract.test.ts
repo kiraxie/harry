@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { labelledItems } from "./citations.ts";
 import { LINE_END_RE } from "./lines.ts";
 import { PROSE_DIR_FILES, TOP_LEVEL } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
@@ -109,10 +110,7 @@ for (const [term, { re, allowed }] of Object.entries(SURVIVING)) {
 
 test("AC-6: 'tier' is defined by the enumeration in HARRY.md's Tiers and tier-gates.md", () => {
   const tiersLaw = headingSection(read("HARRY.md"), "HARRY.md", "## Tiers");
-  const tiers = tiersLaw
-    .split("\n")
-    .map((l) => /^- \*\*(\w+)\*\* — /.exec(l)?.[1])
-    .filter(Boolean);
+  const tiers = labelledItems(tiersLaw).map((item) => item.label);
   assert.deepEqual(
     tiers,
     ["Trivial", "Standard", "Major"],

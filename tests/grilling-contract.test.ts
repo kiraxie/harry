@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { labelledItems } from "./citations.ts";
 import { LINE_END_RE } from "./lines.ts";
 import { READER_CORPUS } from "./prose-dirs.ts";
 import { headingSection, section, sectionLines } from "./section.ts";
@@ -56,7 +57,7 @@ test("AC-1: the /grill door points at grilling.md", () => {
 
 test("AC-2: grilling.md carries the loop and its three termination conditions", () => {
   const loop = section(read(GRILLING), GRILLING, "## The loop and its close", "### Re-walk");
-  const conditions = loop.match(/^\d+\. \*\*/gm) ?? [];
+  const conditions = labelledItems(loop).filter((item) => item.ordered);
   assert.equal(
     conditions.length,
     3,
@@ -75,7 +76,9 @@ test("AC-2: grilling.md carries the loop and its three termination conditions", 
 
 test("AC-3: the assumption gate has exactly three dispositions", () => {
   const gate = headingSection(read(GRILLING), GRILLING, "### Assumption gate");
-  const labels = Array.from(gate.matchAll(/^- \*\*(.+?)\*\*/gm), (m) => m[1].trim());
+  const labels = labelledItems(gate)
+    .filter((item) => !item.ordered)
+    .map((item) => item.label);
   assert.deepEqual(
     labels,
     ["confirmed fact", "returned as an open question", "pinned by an AC"],
@@ -93,7 +96,9 @@ test("AC-3: the assumption gate has exactly three dispositions", () => {
 
 test("AC-5: the ledger keeps four lists", () => {
   const ledger = headingSection(read(GRILLING), GRILLING, "## The ledger");
-  const lists = Array.from(ledger.matchAll(/^\d+\. \*\*(.+?)\*\*/gm), (m) => m[1].trim());
+  const lists = labelledItems(ledger)
+    .filter((item) => item.ordered)
+    .map((item) => item.label);
   assert.deepEqual(
     lists,
     ["Decided", "Open", "Deferred", "Assumptions"],
