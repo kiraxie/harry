@@ -619,6 +619,9 @@ probe works and the model genuinely no longer branches.
   and no other. A tier word outside a declaration ("a major change") does not count.
   A result line embeds it expanded into its `regex_must` / `regex_must_not` pair, so
   `score` judges archived results by the matcher they were run with.
+- `law` — the rule the case measures: a HARRY.md `##` heading (`Tiers`, `Code`, …),
+  or one of the labels for a rule kept elsewhere, `rubric`, `red-green`, `plugin`,
+  `L&C` and `grill`. `validate`, and every `run`, rejects any other value.
 
 Prompts are realistic user requests and never mention harry or the laws — asking
 "would you classify this?" would cue the answer. Checks are robust regexes, not

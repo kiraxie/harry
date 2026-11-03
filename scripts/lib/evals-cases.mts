@@ -56,6 +56,19 @@ const PATTERN_CHECK_TYPES = new Set([
   "repo_grep_absent",
   "commit_message_matches",
 ]);
+export const LAW_HEADINGS = [
+  "Priority",
+  "Tiers",
+  "Ask first",
+  "Secrets",
+  "Root cause",
+  "Evidence",
+  "Clarify first",
+  "Code",
+  "Talk",
+];
+const NON_LAW_LABELS = ["rubric", "red-green", "plugin", "L&C", "grill"];
+const LAW_LABELS = [...LAW_HEADINGS, ...NON_LAW_LABELS];
 export const SUPPORTED_MODES: ReadonlySet<string> = new Set(["text", "agentic"]);
 
 const isRecord = (v: unknown): v is EvalRecord =>
@@ -171,6 +184,8 @@ export function validateCases(entries: { record: unknown; line: number }[]): str
     }
     if (typeof c.law !== "string" || !c.law.trim()) {
       violations.push(`${where}: missing/empty string "law"`);
+    } else if (!LAW_LABELS.includes(c.law)) {
+      violations.push(`${where}: "law" must be one of ${LAW_LABELS.join(", ")}`);
     }
     if (c.informative !== undefined && typeof c.informative !== "boolean") {
       violations.push(`${where}: "informative" must be a boolean when present`);

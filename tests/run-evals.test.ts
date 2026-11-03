@@ -176,6 +176,21 @@ test("a non-object line, case or check is reported as not an object", () => {
   );
 });
 
+test("a case whose id is not a string is named by its source line", () => {
+  const record = {
+    id: 5,
+    mode: "text",
+    prompt: "p",
+    law: "Code",
+    checks: [{ type: "regex_must", pattern: "x" }],
+  };
+  assert.deepEqual(
+    validateCases([{ record, line: 2 }]),
+    ['line 2: missing/empty string "id"'],
+    "a case with a non-string id is no longer named by its source line",
+  );
+});
+
 // ---- scoring (core red-green target) ---------------------------------------
 
 test("scoreResults: candidate must pass; a failing candidate check sets candidateFailed", () => {
@@ -325,6 +340,25 @@ test("validateCases: declared_tier names one of the three tiers", () => {
   assert.deepEqual(validateCases([{ record: mk("standard"), line: 1 }]), []);
   assert.ok(validateCases([{ record: mk("huge"), line: 1 }]).some((v) => v.includes('"tier"')));
   assert.ok(validateCases([{ record: mk(undefined), line: 1 }]).some((v) => v.includes('"tier"')));
+});
+
+test("validateCases: law names a HARRY.md heading or a non-law label", () => {
+  const mk = (law: string) => ({
+    id: `l-${law}`,
+    mode: "text",
+    prompt: "hi",
+    law,
+    checks: [{ type: "regex_must", pattern: "x" }],
+  });
+  for (const law of ["Ask first", "Clarify first", "rubric", "red-green", "plugin", "L&C", "grill"])
+    assert.deepEqual(validateCases([{ record: mk(law), line: 1 }]), [], `${law} is refused`);
+  const [violation, ...rest] = validateCases([{ record: mk("Tier"), line: 3 }]);
+  assert.deepEqual(rest, [], "an unknown law label raises more than one violation");
+  assert.match(
+    violation ?? "",
+    /^case "l-Tier": "law" must be one of .*\bTiers\b.*\bgrill\b/,
+    "an unknown law label is accepted, or reported without its case and the allowed values",
+  );
 });
 
 test("validateResultLines: a row with nothing to score is reported by its line and left out", () => {

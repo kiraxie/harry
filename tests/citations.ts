@@ -1,7 +1,7 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
-import { caseName, parseCasesJsonl } from "../scripts/lib/evals-cases.mts";
+import { LAW_HEADINGS } from "../scripts/lib/evals-cases.mts";
 import { LINE_END_RE, lineAt } from "./lines.ts";
 
 export type Name = { name: string; full: string; level?: number; bullets?: string[] };
@@ -10,20 +10,6 @@ export type Repo = {
   kind: (rel: string) => "file" | "dir" | "untracked";
   names: (rel: string) => Name[];
 };
-
-export const LAW_HEADINGS = [
-  "Priority",
-  "Tiers",
-  "Ask first",
-  "Secrets",
-  "Root cause",
-  "Evidence",
-  "Clarify first",
-  "Code",
-  "Talk",
-];
-
-export const NON_LAW_LABELS = ["rubric", "red-green", "plugin", "L&C", "grill"];
 
 const QUOTE_SRC = [
   `"([^"]+)"`,
@@ -469,23 +455,6 @@ export const lawFailures = (blocks: Block[]): Checked =>
   checkEach(blocks, CITE_FORMS.law.re, (_, name) =>
     LAW_HEADINGS.includes(name) ? null : `HARRY.md **${name}**`,
   );
-
-export const lawLabelFailures = (jsonl: string): Checked => {
-  const { entries, errors } = parseCasesJsonl(jsonl);
-  return {
-    seen: entries.length + errors.length,
-    failures: [
-      ...errors,
-      ...entries.flatMap(({ record, line }) => {
-        const law: unknown = record.law;
-        return typeof law === "string" &&
-          (LAW_HEADINGS.includes(law) || NON_LAW_LABELS.includes(law))
-          ? []
-          : [`${caseName(record, line)} -> law ${String(law)}`];
-      }),
-    ],
-  };
-};
 
 const dimensionFailure = (repo: Repo, name: string): string | null =>
   resolveCitation(repo, SCAN_DIMENSIONS, name, 2);

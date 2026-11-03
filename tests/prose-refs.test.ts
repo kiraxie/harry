@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LAW_HEADINGS } from "../scripts/lib/evals-cases.mts";
 import {
   type Block,
   bulletFailures,
@@ -13,10 +14,8 @@ import {
   citeFailures,
   dimensionFailures,
   FORM,
-  LAW_HEADINGS,
   lawAttempts,
   lawFailures,
-  lawLabelFailures,
   legacyHits,
   type Name,
   namesIn,
@@ -367,19 +366,12 @@ test("every HARRY.md citation names a heading HARRY.md actually has", () => {
     );
   }
 
-  // `evals/cases.jsonl`'s `law` field names the law a case measures, and the
-  // runner validates it only as a non-empty string. Read unguarded, so a moved
-  // file fails loudly instead of dropping every case from the check.
-  const labels = lawLabelFailures(readFileSync(path.join(repoRoot, "evals/cases.jsonl"), "utf-8"));
-  assert.ok(labels.seen > 0, "evals/cases.jsonl holds no case; the label check reads nothing");
-  const failures = labels.failures.map((f) => `evals/cases.jsonl:${f}`);
-
   let seen = 0;
-  for (const relFile of citeCorpus()) {
+  const failures = citeCorpus().flatMap((relFile) => {
     const checked = lawFailures(prose(relFile));
     seen += checked.seen;
-    failures.push(...checked.failures.map((f) => `${relFile}:${f}`));
-  }
+    return checked.failures.map((f) => `${relFile}:${f}`);
+  });
   assert.ok(
     seen > 0,
     "the law citation pattern matched nothing; it is no longer checking anything",
