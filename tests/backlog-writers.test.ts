@@ -145,7 +145,7 @@ test("every site that writes a backlog item's Notes entry cites The item model",
     ["Follow-ups flush", bullets.get("Follow-ups flush") ?? ""],
     [SIMILAR, bullets.get(SIMILAR) ?? ""],
     ...[
-      ["skills/finishing/SKILL.md", "For each line, open a `status: backlog` item"],
+      ["skills/finishing/SKILL.md", "For each line, file it as a `status: backlog` entry"],
       ["references/debt-audit.md", "row as a `status: backlog` item"],
     ].map(([file, snippet]) => [file, flat(mentions(file).find((s) => s.includes(snippet)) ?? "")]),
   ];
