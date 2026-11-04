@@ -18,6 +18,11 @@
       "synced_version": "2026.10.5",
       "synced_commit": "f7968d7f0f9a7e36a608bbfc9abf1ea3a105c464",
       "synced_date": "2026-10-20"
+    },
+    "ub-mode": {
+      "repo": "https://github.com/unclebob/ub-mode",
+      "synced_commit": "3da62bf3fcfd2034de41f30d920d2739e566171f",
+      "synced_date": "2026-11-04"
     }
   },
   "historical_sources": {
@@ -148,6 +153,11 @@
       "skill": "wait-what",
       "from": "mattpocock-skills:skills/productivity/wait-what",
       "note": "Name and idea borrowed: the command names the reader's state, not the output. Harry's own: the rules live in references/plain-language.md (the deeper level) and the door stays three lines; a previous message that was a question is asked again plainer, keeping its recommendation; one-shot, never a mode. Skipped: ASD-STE100 (English-only; chat here is Traditional Chinese) and the GLOSSARY.md vocabulary (harry keeps no glossary). Upstream re-pitches 'that', letting the agent choose how far back; harry stays on the previous message, since its grounding rule already establishes every earlier term the message leaned on."
+    },
+    {
+      "skill": "root-cause-tracing (partial)",
+      "from": "ub-mode:SKILL.md",
+      "note": "2026-11-05 adaptation of Attack the Premise into references/root-cause-tracing.md **The rule**: after the failed fixes, write their shared premise in one sentence and check it before any further fix. Deviations: the threshold stays three (upstream: two fixes); the premise is the design assumption, not the hypothesis, checked against the red loop too, and one premise deeper when every part holds (harry's); upstream's 'count which actors hold the imbalance' and 'remove the assignment' lines skipped. Kept by the user and pending as backlog items: its idempotency rule (a review-check proposal) and its crapper/dryer/mutator tools (an evaluation). Everything else in SKILL.md was surveyed and skipped: already covered, its glossary (harry keeps no glossary), and 'push to the main line' (conflicts with HARRY.md **Ask first**)."
     },
     {
       "skill": "init",

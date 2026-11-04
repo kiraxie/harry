@@ -141,4 +141,8 @@ absent at one spot.
 
 **Never fix just where the error appears.** Trace back to the original trigger. After 3 failed
 fixes — failures of the hypothesis, not infra flakes (a flaky CI run doesn't count) — stop — it's
-a wrong design, not a failed hypothesis (HARRY.md **Root cause**).
+a wrong design, not a failed hypothesis (HARRY.md **Root cause**). Before any further fix, write
+in your reply, as one sentence, the premise those failed fixes share — the design assumption they
+all rest on, not the hypothesis itself — then check it against the code and the red loop; the
+design question starts from the part that is false. If every part holds, it is not yet the shared
+premise: write the one beneath it.
