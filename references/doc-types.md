@@ -168,8 +168,9 @@ milestone edit.
 - **Follow-ups flush**: before archiving, every line under the item's
   `## Follow-ups` becomes a `status: backlog` item in `.local/items/` — its
   own new one (title + one `## Notes` entry, **The item model** above), or merged into
-  a similar one (**Similar backlog items**, below), at the target its marker names
-  (**Ruled-backlog marker**, below). Each line leaves the source item's
+  an open one — at the target its marker names (**Ruled-backlog marker**, below). Its
+  target, when it has one, was chosen when the user ruled the line
+  (**Similar backlog items**, below). Each line leaves the source item's
   `## Follow-ups` as it is filed (**Ruled-backlog marker**, "How the flush reads
   it"), so the section ends empty. The flush treats
   every entry the same, whatever its source. Before the merge menu, finishing's
@@ -182,8 +183,10 @@ milestone edit.
   line, removes its `## In flight` line and flips its `INDEX.md` item line
   to backlog; the file does not move.
 - **Similar backlog items**: a writer about to open a new `status: backlog` item,
-  `/sync`'s migration excepted (**Writers**, below), first looks for a similar one — an open `status: backlog` item whose work would
-  land in the same unit: the same files, or the same rule. Found → the line is
+  `/sync`'s migration (**Writers**, below) and the Follow-ups flush
+  (**Follow-ups flush**, above) excepted, first looks for a similar one — an open
+  `status: backlog` item whose work would land in the same unit: the same files, or
+  the same rule. Found → the line is
   appended to that item's `## Notes` as one entry (**The item model**, above), the
   text a new item's `## Notes` would hold; no new file and no new `INDEX.md` line, and the
   target's `INDEX.md` summary is updated when its scope widens. An `active` item is
@@ -207,7 +210,7 @@ milestone edit.
       in step c and before a PR opens);
     - `/debt`, on request, for its rows that need acting on and for its sweep candidates;
     - `/sync`'s legacy migration, for an old backlog or research file — the one writer
-      outside **Similar backlog items**: it opens one item per legacy file and never
+      here outside **Similar backlog items**: it opens one item per legacy file and never
       merges.
   - `## Follow-ups` entries come from:
     - brainstorming's residue manifest (deferred discussion items);
@@ -230,8 +233,8 @@ milestone edit.
     own ruling sends to `## Follow-ups`; finishing's triage writes the target form on
     every line it leaves ruled backlog; finishing's step c and Option 2 write the target
     form on a leftover the user keeps, its target the one their list named; the flush
-    rewrites a new-item group's remaining markers to the merge-into form in its step 3,
-    below.
+    rewrites the markers of the remaining lines that share a filed line's target to the
+    merge-into form in its step 3, below.
   - How the triage reads it: a marked line keeps its ruling; only its target is put to
     the user, by **Similar backlog items** above, and the user's answer confirms or
     changes it.
@@ -239,25 +242,29 @@ milestone edit.
     three steps: (1) the line's entry lands at the target its marker names; (2) the index
     follows — a new item gets its `.local/INDEX.md` line when the index lacks one, and a
     merge target whose scope widened gets its wider summary (**Similar backlog items**
-    above); (3) one write of the source item's `## Follow-ups` removes the line and, when
-    step 1 opened a new item, rewrites every remaining line marked `new item <the slug
-    this line's marker named>` to `(ruled backlog → merge into <opened slug>)`, so the
-    lines the user ruled into one new item land in it; when step 3 cannot be one write, the
-    rewrites come first and the removal last. Only the line that is first when
-    the flush starts can be part-filed, by an earlier run of this flush that stopped
-    before its step 3 finished, and only that line is checked: when it is already quoted by a
-    block (**The item model** above) in a `.local/items/` item whose lead names this
-    item's Follow-ups — the quote and the line compared with the marker and whitespace
-    aside — the flush finishes it: step 2 for the holding item, then step 3, the holding
-    item counting as the item step 1 opened when the line's marker names a new item.
-    Every other line is filed at the target its marker names when its turn comes, a
-    marker step 3 rewrote included. A line whose marker then still names a new-item slug
-    an item already holds opens the item under another slug; a marker with
-    no target, or a merge-into target no longer an open `status: backlog` item (promoted,
-    archived, deleted), opens a new item.
-  - The flush's reply names each line it finished from an earlier run, with the item
-    that holds it; each line filed somewhere other than its marker named; and each line
-    whose marker named no target, with where each one went.
+    above); (3) one write of the source item's `## Follow-ups` removes the line and,
+    when step 1 opened a new item for a line whose marker names a target, rewrites every
+    remaining line whose marker names that same target — the same `new item <slug>`, or
+    the same `merge into <slug>` — to `(ruled backlog → merge into <opened slug>)`, so
+    the lines the user ruled into one target land together. A line marked
+    `(ruled backlog)` names no target, so step 3 re-points no other line for it; it opens
+    a new item, as below. When step 3 cannot be one write, the rewrites come first and the
+    removal last. Only the line that is first when the flush starts can be part-filed,
+    by an earlier run of this flush that stopped before its step 3 finished, and only
+    that line is checked: when it is already quoted by a block (**The item model**
+    above) in a `.local/items/` item whose lead names this item's Follow-ups — the quote
+    and the line compared with the marker and whitespace aside — the flush finishes it:
+    step 2 for the holding item, then step 3, the holding item counting as the item step
+    1 opened unless it is the merge-into target the line's marker names. Every other
+    line is filed at the target its marker names when its turn comes, a marker step 3
+    rewrote included. A line whose marker then still names a new-item slug an item
+    already holds opens the item under another slug; a marker with no target, or a
+    merge-into target no longer an open `status: backlog` item (promoted, archived,
+    deleted), opens a new item.
+  - The flush's reply names these lines, each with the item that holds it: each line it
+    finished from an earlier run; each line filed somewhere other than the target its
+    marker named when this run of the flush started; and each line whose marker named no
+    target.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.

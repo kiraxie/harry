@@ -686,7 +686,7 @@ here is written only when the user names the behavior as load-bearing.
 - a fix inside a unit is tiered like a task: small only when Trivial and no test weakens; the fix wave cites that rule once; the scope brake applies to the re-review; three failed fixes of one hypothesis stop
 
 **Backlog writers and the review door**
-- doc-types owns the Notes entry's shape, the superseded-AC rule and the ruled-backlog marker forms; a kept Non-Goal is ruled in the residue manifest; /sync's migration is the one writer outside the Similar rule
+- doc-types owns the Notes entry's shape, the superseded-AC rule and the ruled-backlog marker forms; a kept Non-Goal is ruled in the residue manifest; /sync's migration and the Follow-ups flush are the writers outside the Similar rule
 - the review door documents each flag's file, that it needs `--base`, what it excludes, that an empty range fails the handed modes, and what `--context` must not carry
 - `/sync`'s shared Phase 2 stops on init's non-zero exit before Phase 3
 - `/release` passes `--start` to the state script, takes the latest tag from it, and greps with its token boundary, never `grep -w`

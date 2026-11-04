@@ -14,8 +14,9 @@ const DOC_TYPES = "references/doc-types.md";
 const MENTION = /status: backlog|## Follow-ups/;
 
 // The writers doc-types' Writers bullet must name, the sentences that open a backlog
-// item and so cite the Similar backlog items rule, and the one writer doc-types puts
-// outside that rule.
+// item and so cite the Similar backlog items rule, and /sync's migration, which doc-types
+// puts outside that rule. The Follow-ups flush is outside it too but stays off
+// OUTSIDE_SIMILAR: its bullet cites the rule by design, for where a target came from.
 const WRITERS = [
   "brainstorming's residue manifest",
   "an author copying in a Non-Goal",
@@ -153,7 +154,7 @@ test("every site that writes a backlog item's Notes entry cites The item model",
   assert.deepEqual(uncited, [], `these sites no longer cite ${ITEM_MODEL}`);
 });
 
-test("a writer outside the Similar backlog items rule never names it", () => {
+test("/sync's migration, outside the Similar backlog items rule, never names it", () => {
   const citing = OUTSIDE_SIMILAR.filter((f) => flat(read(f)).includes(SIMILAR));
   assert.deepEqual(
     citing,
