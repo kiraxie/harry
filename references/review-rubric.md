@@ -31,7 +31,9 @@ mutation; its report is its final message.
    not done, however clean the code. This is the dimension frontier reviewers
    under-weight and the one worth keeping.
 2. **Code quality.** Clear separation of concerns; error handling at trust
-   boundaries; edge cases (empty / null / overflow / concurrency); type safety
+   boundaries; edge cases (empty / null / overflow / concurrency, and a re-run: an
+   operation with a side effect (a write, a commit, a PR), run twice or resumed after
+   failing halfway, ends in the state one clean run leaves); type safety
    where the language offers it; integrates cleanly with surrounding code. Flag a
    comment that says what the code does, restates a reason the code already shows,
    or defends a workaround in place of fixing its cause; keep one that says why the

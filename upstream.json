@@ -157,7 +157,12 @@
     {
       "skill": "root-cause-tracing (partial)",
       "from": "ub-mode:SKILL.md",
-      "note": "2026-11-05 adaptation of Attack the Premise into references/root-cause-tracing.md **The rule**: after the failed fixes, write their shared premise in one sentence and check it before any further fix. Deviations: the threshold stays three (upstream: two fixes); the premise is the design assumption, not the hypothesis, checked against the red loop too, and one premise deeper when every part holds (harry's); upstream's 'count which actors hold the imbalance' and 'remove the assignment' lines skipped. Kept by the user and pending as backlog items: its idempotency rule (a review-check proposal) and its crapper/dryer/mutator tools (an evaluation). Everything else in SKILL.md was surveyed and skipped: already covered, its glossary (harry keeps no glossary), and 'push to the main line' (conflicts with HARRY.md **Ask first**)."
+      "note": "2026-11-05 adaptation of Attack the Premise into references/root-cause-tracing.md **The rule**: after the failed fixes, write their shared premise in one sentence and check it before any further fix. Deviations: the threshold stays three (upstream: two fixes); the premise is the design assumption, not the hypothesis, checked against the red loop too, and one premise deeper when every part holds (harry's); upstream's 'count which actors hold the imbalance' and 'remove the assignment' lines skipped. Its idempotency rule is ported separately (see the review-rubric entry); kept by the user and pending as a backlog item: its crapper/dryer/mutator tools (an evaluation). Everything else in SKILL.md was surveyed and skipped: already covered, its glossary (harry keeps no glossary), and 'push to the main line' (conflicts with HARRY.md **Ask first**)."
+    },
+    {
+      "skill": "review-rubric (partial)",
+      "from": "ub-mode:SKILL.md",
+      "note": "2026-11-05 adaptation of Make Operations Idempotent into references/review-rubric.md **Four dimensions** (Code quality): a re-run joins the edge-case list — an operation with a side effect (a write, a commit, a PR), run twice or resumed after failing halfway, ends in the state one clean run leaves. Harry's: a review check, not a build rule, and worded to cover prose procedures too (finishing's duplicate HISTORY line on resume was the observed case)."
     },
     {
       "skill": "init",
