@@ -264,9 +264,11 @@ milestone edit.
       opened unless it is the merge-into target the line's marker names. Every other line
       is filed in the three steps when its turn comes.
   - The flush's reply names these lines, each with the item that holds it: each line it
-    finished from an earlier run; each line filed somewhere other than the target its
-    marker named when this run of the flush started; and each line whose marker named no
-    target.
+    finished from an earlier run; each line whose marker named no target; and, for each
+    new item step 1 opened for a line whose marker named a target, unless that target was
+    `new item <slug>` and the item opened under `<slug>`, that line and every other line
+    whose marker named that same target when this run of the flush started — a rerun's
+    holding item counting as the item step 1 opened, as the rerun above says.
 - **Milestone membership**: if the finishing item's frontmatter has
   `milestone: <slug>`, move its link from that milestone item's
   `## Members` to `## Delivered`.
