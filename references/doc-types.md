@@ -238,29 +238,31 @@ milestone edit.
   - How the triage reads it: a marked line keeps its ruling; only its target is put to
     the user, by **Similar backlog items** above, and the user's answer confirms or
     changes it.
-  - How the flush reads it: it files the lines top to bottom, one at a time, each in
-    three steps: (1) the line's entry lands at the target its marker names; (2) the index
-    follows — a new item gets its `.local/INDEX.md` line when the index lacks one, and a
-    merge target whose scope widened gets its wider summary (**Similar backlog items**
-    above); (3) one write of the source item's `## Follow-ups` removes the line and,
-    when step 1 opened a new item for a line whose marker names a target, rewrites every
-    remaining line whose marker names that same target — the same `new item <slug>`, or
-    the same `merge into <slug>` — to `(ruled backlog → merge into <opened slug>)`, so
-    the lines the user ruled into one target land together. A line marked
-    `(ruled backlog)` names no target, so step 3 re-points no other line for it; it opens
-    a new item, as below. When step 3 cannot be one write, the rewrites come first and the
-    removal last. Only the line that is first when the flush starts can be part-filed,
-    by an earlier run of this flush that stopped before its step 3 finished, and only
-    that line is checked: when it is already quoted by a block (**The item model**
-    above) in a `.local/items/` item whose lead names this item's Follow-ups — the quote
-    and the line compared with the marker and whitespace aside — the flush finishes it:
-    step 2 for the holding item, then step 3, the holding item counting as the item step
-    1 opened unless it is the merge-into target the line's marker names. Every other
-    line is filed at the target its marker names when its turn comes, a marker step 3
-    rewrote included. A line whose marker then still names a new-item slug an item
-    already holds opens the item under another slug; a marker with no target, or a
-    merge-into target no longer an open `status: backlog` item (promoted, archived,
-    deleted), opens a new item.
+  - How the flush reads it: it files the lines top to bottom, one at a time.
+    - What a marker resolves to, when its line's turn comes: a merge-into target that is
+      an open `status: backlog` item → that item; a new-item slug → a new item under that
+      slug, or under another slug when an item already holds it; a marker with no
+      target, or a merge-into target no longer an open `status: backlog` item (promoted,
+      archived, deleted) → a new item. A marker step 3 rewrote resolves the same way.
+    - Filing a line, in three steps: (1) the line's entry lands at the target its marker
+      names; (2) the index follows — a new item gets its `.local/INDEX.md` line when the
+      index lacks one, and a merge target whose scope widened gets its wider summary
+      (**Similar backlog items** above); (3) one write of the source item's
+      `## Follow-ups` removes the line and, when step 1 opened a new item for a line whose
+      marker names a target, rewrites every remaining line whose marker names that same
+      target — the same `new item <slug>`, or the same `merge into <slug>` — to
+      `(ruled backlog → merge into <opened slug>)`, so the lines the user ruled into one
+      target land together. A line marked `(ruled backlog)` names no target, so step 3
+      re-points no other line for it; it opens a new item, as above. When step 3 cannot be
+      one write, the rewrites come first and the removal last.
+    - A rerun: only the line that is first when the flush starts can be part-filed, by an
+      earlier run of this flush that stopped before its step 3 finished, and only that
+      line is checked: when it is already quoted by a block (**The item model** above) in
+      a `.local/items/` item whose lead names this item's Follow-ups — the quote and the
+      line compared with the marker and whitespace aside — the flush finishes it: step 2
+      for the holding item, then step 3, the holding item counting as the item step 1
+      opened unless it is the merge-into target the line's marker names. Every other line
+      is filed in the three steps when its turn comes.
   - The flush's reply names these lines, each with the item that holds it: each line it
     finished from an earlier run; each line filed somewhere other than the target its
     marker named when this run of the flush started; and each line whose marker named no
