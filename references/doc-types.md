@@ -242,8 +242,9 @@ milestone edit.
     - What a marker resolves to, when its line's turn comes: a merge-into target that is
       an open `status: backlog` item → that item; a new-item slug → a new item under that
       slug, or under another slug when an item already holds it; a marker with no
-      target, or a merge-into target no longer an open `status: backlog` item (promoted,
-      archived, deleted) → a new item. A marker step 3 rewrote resolves the same way.
+      target → a new item; a merge-into target no longer an open `status: backlog` item
+      (promoted, archived, deleted) → a new item, never under that target's slug. A
+      marker step 3 rewrote resolves the same way.
     - Filing a line, in three steps: (1) the line's entry lands at the target its marker
       names; (2) the index follows — a new item gets its `.local/INDEX.md` line when the
       index lacks one, and a merge target whose scope widened gets its wider summary
