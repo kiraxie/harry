@@ -22,17 +22,14 @@ current design's vocabulary into the independent design.
 
 ## 2. Independent design
 
-Run the design from an empty working directory, so the model finds no code, no
-project `CLAUDE.md` or `AGENTS.md` by looking around where it starts. The
+`ask --isolated` runs the model in a new empty working directory, so it finds no
+code, no project `CLAUDE.md` or `AGENTS.md` by looking around where it starts;
+the companion removes that directory itself, on success and on failure. The
 read-only sandbox can still read absolute paths; the prompt's "do not read the
 filesystem" is what keeps it to the brief.
 
-1. Create the directory, in one Bash call, and note the path it prints:
-
-   ```bash
-   D="$(mktemp -d)" && mkdir "$D/cwd" && echo "$D"
-   ```
-
+1. Create a directory for the brief and note the path it prints:
+   `mktemp -d -t harry-prompt.XXXXXX`
 2. Write the user's brief, verbatim, to `<D>/brief.md` with the Write tool. The
    brief goes in through a file, never through shell source, so nothing in it can
    run as a command.
@@ -40,19 +37,15 @@ filesystem" is what keeps it to the brief.
    turn can outlast the foreground timeout), `<D>` pasted as the literal path:
 
    ```bash
-   D='<D>' && { [ -f "$D/brief.md" ] || { echo "rethink: no brief at $D/brief.md" >&2; exit 1; }; } && trap 'rm -rf "$D"' EXIT INT TERM HUP && cd "$D/cwd" && node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "Design this subsystem from scratch, from the Background alone. You have no access to any codebase: do not read the filesystem or run commands. Give the design (data model, interfaces, mechanisms), then list every assumption you made where the Background was silent." --reasoning high --context @"$D/brief.md"
+   node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask --isolated "Design this subsystem from scratch, from the Background alone. You have no access to any codebase: do not read the filesystem or run commands. Give the design (data model, interfaces, mechanisms), then list every assumption you made where the Background was silent." --reasoning high --context @'<D>/brief.md'
    ```
 
-   The `[ -f ]` check confirms `<D>` is the directory holding the brief before the
-   `trap` can remove it; the `trap` then removes that one directory, and only it,
-   on success, on failure and on an interrupt. If anything stops before the `trap`
-   is set, remove `<D>` with `{ [ -d '<D>/cwd' ] || { echo "rethink: no cwd under <D>, nothing removed" >&2; exit 1; }; } && rm -rf '<D>'`.
-   It checks `cwd`, not `brief.md`: the brief may be the missing piece on that
-   path, and `cwd` exists only where step 1 made it. A `SIGKILL` cannot be trapped and
-   leaves `<D>` behind.
+4. Once the run has ended, remove the brief and its directory, only when its path
+   carries the prefix; `rmdir` refuses a directory holding anything else:
+   `case '<D>' in */harry-prompt.*) rm -f '<D>/brief.md' && rmdir '<D>';; esac`
 
 A call with no result after 20 minutes counts as a failure: stop the background
-task, and if `<D>` remains, remove it with the same guarded command.
+task, then run step 4.
 
 **On failure** — a non-zero exit, whose stdout is `# Ask Failed`, a blank line and
 one reason line, or a `Fatal error:` line on stderr — give the user the error text

@@ -42,7 +42,7 @@ const APPROVED: { file: string; line: string; why: string }[] = [
   },
   {
     file: "commands/rethink.md",
-    line: 'D=\'<D>\' && { [ -f "$D/brief.md" ] || { echo "rethink: no brief at $D/brief.md" >&2; exit 1; }; } && trap \'rm -rf "$D"\' EXIT INT TERM HUP && cd "$D/cwd" && node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "Design this subsystem from scratch, from the Background alone. You have no access to any codebase: do not read the filesystem or run commands. Give the design (data model, interfaces, mechanisms), then list every assumption you made where the Background was silent." --reasoning high --context @"$D/brief.md"',
+    line: 'node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask --isolated "Design this subsystem from scratch, from the Background alone. You have no access to any codebase: do not read the filesystem or run commands. Give the design (data model, interfaces, mechanisms), then list every assumption you made where the Background was silent." --reasoning high --context @\'<D>/brief.md\'',
     why: "a fixed literal written in the command; the user's brief goes by --context @file",
   },
 ];

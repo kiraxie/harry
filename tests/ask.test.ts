@@ -181,7 +181,7 @@ function makeBin(): string {
   const shim = path.join(bin, "codex");
   fs.writeFileSync(
     shim,
-    `#!/bin/sh\npwd > "$FAKE_CODEX_CLI_RECORD_DIR/cwd.txt"\nexec "${process.execPath}" "${FAKE}" "$@"\n`,
+    `#!/bin/sh\npwd > "$FAKE_CODEX_CLI_RECORD_DIR/cwd.txt"\nls -A > "$FAKE_CODEX_CLI_RECORD_DIR/cwd-entries.txt"\nexec "${process.execPath}" "${FAKE}" "$@"\n`,
   );
   fs.chmodSync(shim, 0o755);
   return bin;
@@ -388,6 +388,51 @@ test("ask runs codex in the invoking cwd, which need not be a git repo", () => {
   assert.equal(run.status, 0, run.stderr);
   const cwd = fs.readFileSync(path.join(run.record, "cwd.txt"), "utf8").trim();
   assert.equal(fs.realpathSync(cwd), run.cwd);
+});
+
+const recordedCwd = (run: Run): string =>
+  fs.readFileSync(path.join(run.record, "cwd.txt"), "utf8").trim();
+
+test("ask --isolated runs codex in a new empty dir", () => {
+  const run = runAsk(["--isolated", "hello"]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.notEqual(recordedCwd(run), run.cwd);
+  assert.equal(fs.readFileSync(path.join(run.record, "cwd-entries.txt"), "utf8"), "");
+});
+
+test("ask --isolated removes its dir after a run", () => {
+  const run = runAsk(["--isolated", "hello"]);
+  assert.equal(run.status, 0, run.stderr);
+  const cwd = recordedCwd(run);
+  assert.equal(fs.existsSync(cwd), false, `${cwd} should be gone`);
+});
+
+function isolatedRepo(): { repo: string; dataDir: string } {
+  const repo = makeTempDir("harry-ask-repo-");
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  fs.writeFileSync(path.join(repo, "brief.md"), "the brief");
+  return { repo, dataDir: makeTempDir("harry-ask-data-") };
+}
+
+test("ask --isolated keeps the caller's state dir", () => {
+  const { repo, dataDir } = isolatedRepo();
+  const plain = runAsk(["hello"], { cwd: repo, dataDir });
+  const isolated = runAsk(["--isolated", "hello"], { cwd: repo, dataDir });
+  assert.equal(isolated.status, 0, isolated.stderr);
+  assert.equal(path.dirname(answerPathOf(isolated)), path.dirname(answerPathOf(plain)));
+});
+
+test("ask --isolated resolves --context against the caller's cwd", () => {
+  const { repo, dataDir } = isolatedRepo();
+  const run = runAsk(["--isolated", "hello", "--context", "@brief.md"], { cwd: repo, dataDir });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(recordedPrompt(run), /the brief/);
+});
+
+test("ask --isolated removes its dir when codex fails, keeping the failure contract", () => {
+  const run = runAsk(["--isolated", "hello"], { fake: { FAKE_CODEX_CLI_EXIT: "3" } });
+  assertFailedStdout(run, /codex exec failed \(exit 3\)/);
+  assert.equal(fs.existsSync(recordedCwd(run)), false);
 });
 
 test("ask opens every prompt with the independent-voice preamble", () => {

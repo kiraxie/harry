@@ -75,7 +75,7 @@ const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ["SIGTERM", "SIGINT", "SIGH
  */
 function spawnCodex(
   args: readonly string[],
-  options: { cwd: string; input: string; logFd: number },
+  options: { cwd: string; input: string; logFd: number; onStop?: () => void },
 ): Promise<CodexResult> {
   const command = resolveOnPath("codex", process.env);
   if (command === null) {
@@ -89,6 +89,11 @@ function spawnCodex(
       } catch {
         // Undeliverable here: codex is left running, but the companion must still
         // die by the signal rather than by an uncaught exception in this handler.
+      }
+      try {
+        options.onStop?.();
+      } catch {
+        // The caller's cleanup failed; the companion must still die by the signal.
       }
       stopForwarding();
       // No listener is left, so the default action applies: the companion dies by it.
@@ -254,6 +259,9 @@ export interface CodexExecInput {
   outputPath: string;
   logPath: string;
   outputNoun: string;
+  // Called only when a forwarded signal stops codex, and synchronously: the
+  // companion re-raises the signal right after, so async work never finishes.
+  onStop?: () => void;
 }
 
 function codexExecArgs(opts: CodexExecInput): string[] {
@@ -271,7 +279,12 @@ export async function runCodexExec(opts: CodexExecInput): Promise<string> {
   const logFd = openSync(opts.logPath, "w", 0o600);
   let res: CodexResult;
   try {
-    res = await spawnCodex(codexExecArgs(opts), { cwd: opts.cwd, input: opts.input, logFd });
+    res = await spawnCodex(codexExecArgs(opts), {
+      cwd: opts.cwd,
+      input: opts.input,
+      logFd,
+      onStop: opts.onStop,
+    });
   } finally {
     closeSync(logFd);
   }

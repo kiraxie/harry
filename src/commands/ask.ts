@@ -5,6 +5,8 @@
  * to pass a failure off as an answer.
  */
 
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveTextFlag } from "../lib/context.ts";
 import {
@@ -20,6 +22,7 @@ export interface AskOptions {
   prompt: string;
   reasoning?: ReasoningEffort;
   context?: string;
+  isolated?: boolean;
 }
 
 const ASK_FAILED_MARKER = "# Ask Failed";
@@ -57,6 +60,16 @@ function failureReason(err: unknown): string {
   return reason.replace(/\s+/g, " ").trim();
 }
 
+function removeIsolatedDir(dir: string): void {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    process.stderr.write(
+      `ask: could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+  }
+}
+
 async function ask(cwd: string, options: AskOptions): Promise<void> {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");
@@ -71,15 +84,26 @@ async function ask(cwd: string, options: AskOptions): Promise<void> {
   pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
   const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
 
-  const answer = await runCodexExec({
-    skipGitRepoCheck: true,
-    reasoning: options.reasoning,
-    cwd,
-    input: buildAskPrompt(prompt, context),
-    outputPath,
-    logPath,
-    outputNoun: "answer",
-  });
+  // DEBT: a SIGKILL, or a signal outside run-codex's forwarding window (before it
+  // starts or after codex exits), skips both cleanups and leaves the empty dir in
+  // tmpdir; nothing holds data there, so the OS tmp cleaner is the ceiling.
+  const codexCwd = options.isolated ? mkdtempSync(join(tmpdir(), "harry-ask-")) : cwd;
+  const isolated = codexCwd !== cwd;
+  let answer: string;
+  try {
+    answer = await runCodexExec({
+      skipGitRepoCheck: true,
+      reasoning: options.reasoning,
+      cwd: codexCwd,
+      input: buildAskPrompt(prompt, context),
+      outputPath,
+      logPath,
+      outputNoun: "answer",
+      onStop: isolated ? () => removeIsolatedDir(codexCwd) : undefined,
+    });
+  } finally {
+    if (isolated) removeIsolatedDir(codexCwd);
+  }
   process.stdout.write(answer);
   process.stderr.write(`Log: ${logPath}\n`);
 }

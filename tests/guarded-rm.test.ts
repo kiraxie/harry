@@ -15,18 +15,6 @@ const RM_RECURSIVE = /\brm\s+(?:-\S+\s+)*(?:-[a-zA-Z]*[rR]|--recursive\b)/;
 // removes, so each approved removal is pinned with the reason a reviewer read.
 const REMOVALS: { file: string; guard: string; rm: string; why: string }[] = [
   {
-    file: "commands/rethink.md",
-    guard: `[ -f "$D/brief.md" ]`,
-    rm: `trap 'rm -rf "$D"'`,
-    why: "brief.md confirms <D> is step 1's dir before the trap can remove it",
-  },
-  {
-    file: "commands/rethink.md",
-    guard: `[ -d '<D>/cwd' ]`,
-    rm: `rm -rf '<D>'`,
-    why: "cwd exists only where step 1 made it; the brief may be the missing piece",
-  },
-  {
     file: "skills/finishing/SKILL.md",
     guard: `case '<store>/.local/tmp/<branch>' in */.local/tmp/?*)`,
     rm: `rm -rf '<store>/.local/tmp/<branch>'`,

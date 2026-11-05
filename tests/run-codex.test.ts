@@ -463,14 +463,50 @@ for (const [command, signal] of [
   });
 }
 
-const runCodexExecCall = (dir: string): string =>
-  `runCodexExec(${JSON.stringify({
+for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+  test(`a companion ask --isolated killed by ${signal} removes its isolated dir`, async () => {
+    const dir = tempDir("harry-rc-iso-");
+    const bin = path.join(dir, "bin");
+    mkdirSync(bin);
+    const cwdFile = path.join(dir, "codex.cwd");
+    writeFileSync(path.join(bin, "codex"), `#!/bin/sh\npwd > "${cwdFile}"\nexec sleep 30\n`);
+    chmodSync(path.join(bin, "codex"), 0o755);
+    const companion = spawn(process.execPath, [CLI, "ask", "--isolated", "hi"], {
+      cwd: dir,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
+        CLAUDE_PLUGIN_DATA: path.join(dir, "data"),
+      },
+    });
+    const exited = new Promise<NodeJS.Signals | null>((resolve) =>
+      companion.on("exit", (_code, sig) => resolve(sig)),
+    );
+    try {
+      await waitFor(
+        () => existsSync(cwdFile) && readFileSync(cwdFile, "utf8").endsWith("\n"),
+        "codex to record its cwd",
+      );
+      const isolated = readFileSync(cwdFile, "utf8").trim();
+      assert.ok(isolated !== "" && existsSync(isolated), `isolated dir not seen: "${isolated}"`);
+      companion.kill(signal);
+      assert.equal(await exited, signal);
+      assert.equal(existsSync(isolated), false, `${isolated} should be gone`);
+    } finally {
+      companion.kill("SIGKILL");
+    }
+  });
+}
+
+const runCodexExecCall = (dir: string, extra = ""): string =>
+  `runCodexExec({ ...${JSON.stringify({
     cwd: dir,
     input: "",
     outputPath: path.join(dir, "out.md"),
     logPath: path.join(dir, "run.log"),
     outputNoun: "answer",
-  })})`;
+  })}, ${extra} })`;
 
 test("a signal that lands as spawn returns still takes codex with it", async () => {
   const dir = tempDir("harry-rc-spawnrace-");
@@ -568,4 +604,81 @@ test("a signal whose forward to codex throws still re-raises on the companion", 
       // codex never started: nothing to clean up.
     }
   }
+});
+
+async function runWithOnStop(
+  prefix: string,
+  onStop: (log: string) => string,
+): Promise<{ code: number | null; signal: NodeJS.Signals | null; stderr: string; log: string }> {
+  const dir = tempDir(prefix);
+  const bin = path.join(dir, "bin");
+  mkdirSync(bin);
+  const pidFile = path.join(dir, "codex.pid");
+  const log = path.join(dir, "order.log");
+  writeFileSync(path.join(bin, "codex"), `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 30\n`);
+  chmodSync(path.join(bin, "codex"), 0o755);
+  const runCodex = path.join(REPO_ROOT, "src/lib/run-codex.ts");
+  const script = `
+    import { ChildProcess } from "node:child_process";
+    import { appendFileSync, readFileSync } from "node:fs";
+    import { runCodexExec } from ${JSON.stringify(runCodex)};
+    const kill = ChildProcess.prototype.kill;
+    ChildProcess.prototype.kill = function (...args) {
+      appendFileSync(${JSON.stringify(log)}, "kill\\n");
+      return kill.apply(this, args);
+    };
+    ${runCodexExecCall(dir, `onStop: () => { ${onStop(JSON.stringify(log))} }`)};
+    const poll = setInterval(() => {
+      let pid = "";
+      try {
+        pid = readFileSync(${JSON.stringify(pidFile)}, "utf8").trim();
+      } catch {}
+      if (!pid) return;
+      clearInterval(poll);
+      process.kill(process.pid, "SIGTERM");
+    }, 20);
+  `;
+  const companion = spawn(process.execPath, ["--input-type=module", "-e", script], {
+    stdio: ["ignore", "ignore", "pipe"],
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+  });
+  let stderr = "";
+  companion.stderr.on("data", (d) => {
+    stderr += d;
+  });
+  const exited = new Promise<[number | null, NodeJS.Signals | null]>((resolve) =>
+    companion.on("exit", (code, sig) => resolve([code, sig])),
+  );
+  let pid = 0;
+  try {
+    const [code, signal] = await exited;
+    pid = Number(readFileSync(pidFile, "utf8").trim());
+    await waitFor(() => !alive(pid), `codex (pid ${pid}) to exit with the companion`);
+    return { code, signal, stderr, log: existsSync(log) ? readFileSync(log, "utf8") : "" };
+  } finally {
+    companion.kill("SIGKILL");
+    if (pid && alive(pid)) process.kill(pid, "SIGKILL");
+  }
+}
+
+test("a signal runs the caller's onStop after it kills codex", async () => {
+  const run = await runWithOnStop(
+    "harry-rc-onstop-",
+    (log) => `appendFileSync(${log}, "onStop\\n");`,
+  );
+  assert.deepEqual(
+    { code: run.code, signal: run.signal },
+    { code: null, signal: "SIGTERM" },
+    run.stderr,
+  );
+  assert.equal(run.log, "kill\nonStop\n");
+});
+
+test("a throwing onStop still lets the companion die by the signal", async () => {
+  const run = await runWithOnStop("harry-rc-onstopthrow-", () => `throw new Error("boom");`);
+  assert.deepEqual(
+    { code: run.code, signal: run.signal },
+    { code: null, signal: "SIGTERM" },
+    run.stderr,
+  );
 });

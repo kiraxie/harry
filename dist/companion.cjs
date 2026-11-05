@@ -27,6 +27,8 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var import_node_process = __toESM(require("node:process"), 1);
 
 // src/commands/ask.ts
+var import_node_fs6 = require("node:fs");
+var import_node_os2 = require("node:os");
 var import_node_path5 = require("node:path");
 
 // src/lib/context.ts
@@ -171,6 +173,10 @@ function spawnCodex(args, options) {
         child.kill(signal);
       } catch {
       }
+      try {
+        options.onStop?.();
+      } catch {
+      }
       stopForwarding();
       process.kill(process.pid, signal);
     };
@@ -280,7 +286,12 @@ async function runCodexExec(opts) {
   const logFd = (0, import_node_fs4.openSync)(opts.logPath, "w", 384);
   let res;
   try {
-    res = await spawnCodex(codexExecArgs(opts), { cwd: opts.cwd, input: opts.input, logFd });
+    res = await spawnCodex(codexExecArgs(opts), {
+      cwd: opts.cwd,
+      input: opts.input,
+      logFd,
+      onStop: opts.onStop
+    });
   } finally {
     (0, import_node_fs4.closeSync)(logFd);
   }
@@ -394,6 +405,16 @@ function failureReason(err) {
   const reason = err instanceof CodexRunError && err.kind === "exit" && err.logPath ? lastErrorLine(err.logPath) ?? err.message.replace(/\.$/, "") : err instanceof Error ? err.message : String(err);
   return reason.replace(/\s+/g, " ").trim();
 }
+function removeIsolatedDir(dir) {
+  try {
+    (0, import_node_fs6.rmSync)(dir, { recursive: true, force: true });
+  } catch (err) {
+    process.stderr.write(
+      `ask: could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}
+`
+    );
+  }
+}
 async function ask(cwd, options) {
   const prompt = options.prompt.trim();
   if (!prompt) throw new Error("ask: empty prompt");
@@ -402,15 +423,23 @@ async function ask(cwd, options) {
   ensureDir(dir);
   pruneRunFiles(dir, ASK_PREFIX, ASK_RETENTION_MS);
   const { outputPath, logPath } = reserveRunFiles(dir, ASK_PREFIX);
-  const answer = await runCodexExec({
-    skipGitRepoCheck: true,
-    reasoning: options.reasoning,
-    cwd,
-    input: buildAskPrompt(prompt, context),
-    outputPath,
-    logPath,
-    outputNoun: "answer"
-  });
+  const codexCwd = options.isolated ? (0, import_node_fs6.mkdtempSync)((0, import_node_path5.join)((0, import_node_os2.tmpdir)(), "harry-ask-")) : cwd;
+  const isolated = codexCwd !== cwd;
+  let answer;
+  try {
+    answer = await runCodexExec({
+      skipGitRepoCheck: true,
+      reasoning: options.reasoning,
+      cwd: codexCwd,
+      input: buildAskPrompt(prompt, context),
+      outputPath,
+      logPath,
+      outputNoun: "answer",
+      onStop: isolated ? () => removeIsolatedDir(codexCwd) : void 0
+    });
+  } finally {
+    if (isolated) removeIsolatedDir(codexCwd);
+  }
   process.stdout.write(answer);
   process.stderr.write(`Log: ${logPath}
 `);
@@ -431,7 +460,7 @@ ${reason}
 }
 
 // src/commands/review.ts
-var import_node_fs7 = require("node:fs");
+var import_node_fs8 = require("node:fs");
 var import_node_path8 = require("node:path");
 
 // src/lib/git.ts
@@ -526,10 +555,10 @@ function resolveReviewTarget(cwd, options = {}) {
 }
 
 // src/lib/review-modes.ts
-var import_node_fs6 = require("node:fs");
+var import_node_fs7 = require("node:fs");
 var import_node_path7 = require("node:path");
 function pluginRoot() {
-  return (0, import_node_path7.dirname)((0, import_node_path7.dirname)((0, import_node_fs6.realpathSync)(process.argv[1])));
+  return (0, import_node_path7.dirname)((0, import_node_path7.dirname)((0, import_node_fs7.realpathSync)(process.argv[1])));
 }
 var PER_DIFF = [
   { file: "review-rubric.md", heading: "Review standard" },
@@ -539,7 +568,7 @@ function loadReference(file) {
   const refPath = (0, import_node_path7.join)(pluginRoot(), "references", file);
   let text;
   try {
-    text = (0, import_node_fs6.readFileSync)(refPath, "utf8");
+    text = (0, import_node_fs7.readFileSync)(refPath, "utf8");
   } catch (err) {
     throw new Error(
       `Review reference not found at ${refPath} (${err.message}). Reinstall the harry plugin.`
@@ -729,7 +758,7 @@ var REVIEW_WRITTEN = "Review written to";
 function resolveOutputDir(repoRoot) {
   const branch = getBranchOrShortSha(repoRoot);
   const local = (0, import_node_path8.join)(getMainCheckoutRoot(repoRoot), ".local");
-  const dir = (0, import_node_fs7.existsSync)(local) && (0, import_node_fs7.statSync)(local).isDirectory() ? (0, import_node_path8.join)(local, "tmp", branch) : (0, import_node_path8.join)(resolveStateDir(repoRoot), "reviews", branch);
+  const dir = (0, import_node_fs8.existsSync)(local) && (0, import_node_fs8.statSync)(local).isDirectory() ? (0, import_node_path8.join)(local, "tmp", branch) : (0, import_node_path8.join)(resolveStateDir(repoRoot), "reviews", branch);
   ensureDir(dir);
   return dir;
 }
@@ -839,7 +868,7 @@ async function runSetup(options = {}) {
 }
 
 // src/lib/args.ts
-var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "json", "architecture"]);
+var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "json", "architecture", "isolated"]);
 var KNOWN_FLAGS = {
   setup: /* @__PURE__ */ new Set(["json"]),
   review: /* @__PURE__ */ new Set([
@@ -851,7 +880,7 @@ var KNOWN_FLAGS = {
     "rereview",
     "fix-check"
   ]),
-  ask: /* @__PURE__ */ new Set(["task", "reasoning", "context"])
+  ask: /* @__PURE__ */ new Set(["task", "reasoning", "context", "isolated"])
 };
 function assertKnownFlags(command, flags) {
   const allowed = KNOWN_FLAGS[command];
@@ -947,7 +976,7 @@ function printUsage() {
       "                   [--context <text|@file|@->] [--spec <text|@file|@->]",
       "                   [--architecture | --rereview <text|@file|@-> | --fix-check <text|@file|@->]",
       "                   [focus...]",
-      '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
+      '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--isolated]',
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
@@ -987,7 +1016,8 @@ async function main() {
       await runAsk(import_node_process.default.cwd(), {
         prompt: extractTask(args, flags),
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
-        context: flagRequiredString(flags, "context")
+        context: flagRequiredString(flags, "context"),
+        isolated: flags.isolated === true
       });
       break;
     }

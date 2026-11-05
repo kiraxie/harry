@@ -29,7 +29,7 @@ function printUsage(): void {
       "                   [--context <text|@file|@->] [--spec <text|@file|@->]",
       "                   [--architecture | --rereview <text|@file|@-> | --fix-check <text|@file|@->]",
       "                   [focus...]",
-      '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]',
+      '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--isolated]',
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
@@ -80,6 +80,7 @@ async function main(): Promise<void> {
         prompt: extractTask(args, flags),
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
         context: flagRequiredString(flags, "context"),
+        isolated: flags.isolated === true,
       });
       break;
     }
