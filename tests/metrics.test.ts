@@ -117,9 +117,10 @@ const path = require("node:path");
 const args = process.argv.slice(2);
 const cwd = process.cwd();
 const argAfter = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; };
+const root = argAfter("--root") ?? cwd;
 fs.appendFileSync(path.join(__dirname, "calls.jsonl"), JSON.stringify({ args, cwd }) + "\\n");
 const out = (rel, text) => {
-  const f = path.join(cwd, rel);
+  const f = path.join(root, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, text);
 };
@@ -128,6 +129,14 @@ const walk = (dir, rel = "") => fs.readdirSync(dir, { withFileTypes: true }).fla
   const r = rel ? rel + "/" + e.name : e.name;
   return e.isDirectory() ? walk(path.join(dir, e.name), r) : [r];
 });
+`;
+
+/** Every real tool is `python -m`/`-c`, which puts cwd first on sys.path: a stdlib-named file there shadows the import. */
+const PYTHON_STARTUP = `
+if (fs.existsSync(path.join(cwd, "json.py"))) {
+  process.stderr.write("ImportError: json shadowed by " + path.join(cwd, "json.py") + "\\n");
+  process.exit(1);
+}
 `;
 
 function writeExecutable(file: string, text: string): void {
@@ -147,9 +156,9 @@ function installStub(
   extra: Record<string, string> = {},
 ): string {
   const dir = path.join(home, ".claude", "harry", "tools", name);
-  writeExecutable(path.join(dir, name), `${STUB_PRELUDE}\n${body}\n`);
+  writeExecutable(path.join(dir, name), `${STUB_PRELUDE}${PYTHON_STARTUP}\n${body}\n`);
   for (const [rel, text] of Object.entries(extra)) {
-    writeExecutable(path.join(dir, rel), `${STUB_PRELUDE}\n${text}\n`);
+    writeExecutable(path.join(dir, rel), `${STUB_PRELUDE}${PYTHON_STARTUP}\n${text}\n`);
   }
   writeFileSync(path.join(dir, ".gitignore"), "calls.jsonl\n");
   git(dir, ["init", "-q"]);
@@ -173,7 +182,7 @@ function calls(home: string, name: string): { args: string[]; cwd: string }[] {
 }
 
 const DRYER_ALL_PAIRS = `
-const files = walk(cwd).filter((f) => f.endsWith(".ts")).sort();
+const files = walk(root).filter((f) => f.endsWith(".ts")).sort();
 const spans = (f) => '{:file "' + f + '", :start-line 1, :end-line 9}';
 const rows = [];
 for (let i = 0; i < files.length; i++)
@@ -200,7 +209,7 @@ test("dryer lists only pairs touching a changed file, and never an untracked pat
   assert.match(dryer, /src\/b\.ts:1-9 .* src\/c\.ts:1-9/);
   assert.doesNotMatch(dryer, /src\/a\.ts:1-9 .* src\/c\.ts/);
   assert.doesNotMatch(run.facts, /\.worktrees/);
-  assert.notEqual(calls(home, "dryer")[0].cwd, repo);
+  assert.notEqual(argAfter(calls(home, "dryer")[0].args, "--root"), repo);
 });
 
 test("with no tool installed, every tool is reported not installed and the checkout is untouched", () => {
@@ -226,7 +235,6 @@ test("with no tool installed, every tool is reported not installed and the check
  * tool does (nil coverage and CRAP under --no-coverage).
  */
 const CRAPPER_FROM_MARKERS = `
-const root = argAfter("--root") ?? cwd;
 const scored = !args.includes("--no-coverage");
 const given = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--root");
 const files = given.length > 0 ? given : walk(root).filter((f) => /.(ts|py)$/.test(f));
@@ -248,10 +256,10 @@ fs.writeFileSync(path.join(root, ".metrics", "crap.edn"), "{:entries [" + rows.j
 
 /** Stub of crapper's venv python: a function spans from the line after its marker to the line before the next one. */
 const SPANS_FROM_MARKERS = `
-const [, , root, ...files] = args;
+const [, , spansRoot, ...files] = args;
 const spans = [];
 for (const f of files) {
-  const lines = fs.readFileSync(path.resolve(root, f), "utf8").split("\\n");
+  const lines = fs.readFileSync(path.resolve(spansRoot, f), "utf8").split("\\n");
   const marks = [];
   lines.forEach((l, i) => {
     const m = l.match(/\\/\\/ crap (\\S+)/);
@@ -357,7 +365,7 @@ test("crapper lists new functions at CRAP >= 10 and touched ones that got worse,
 /** The mode flag of each crapper run inside the checkout (base-snapshot runs excluded). */
 function checkoutModes(home: string, repo: string): string[] {
   return calls(home, "crapper")
-    .filter((c) => c.cwd.startsWith(repo))
+    .filter((c) => argAfter(c.args, "--root")?.startsWith(repo))
     .map((c) => c.args[0]);
 }
 
@@ -429,7 +437,6 @@ for (const c of COMPLEXITY_ONLY_CASES) {
  * handed file becomes one outcome, keyed the real way (byte span of the token).
  */
 const MUTATOR_FROM_MARKERS = `
-const root = argAfter("--root") ?? cwd;
 const skip = new Set(["--root", "--test-command", "--max-workers"]);
 const files = args.filter((a, i) => !a.startsWith("--") && !skip.has(args[i - 1]));
 let survived = false;
@@ -444,7 +451,7 @@ for (const f of files) {
     outcomes.push(JSON.stringify(id) + " :" + m[3]);
     if (m[3] === "survived") survived = true;
   }
-  out(path.relative(cwd, path.join(root, ".metrics/mutate", ns + ".edn")),
+  out(path.join(".metrics/mutate", ns + ".edn"),
     '{:version 1 :source "' + f + '" :namespace "' + ns + '" :outcomes {' + outcomes.join(" ") + '} :forms []}\\n');
 }
 process.exit(survived ? 3 : 0);
@@ -593,11 +600,7 @@ test("a tool failure, a bad exit or an unparsable snapshot, is recorded with its
     "dryer",
     'process.stderr.write("boom\\n"); process.exit(1);',
   );
-  const crapperCommit = installStub(
-    home,
-    "crapper",
-    'out(path.relative(cwd, path.join(argAfter("--root"), ".metrics/crap.edn")), "{:entries [");',
-  );
+  const crapperCommit = installStub(home, "crapper", 'out(".metrics/crap.edn", "{:entries [");');
   installStub(home, "mutator", MUTATOR_FROM_MARKERS);
 
   const run = runMetrics(repo, home, { binDir: fakeBin() });
@@ -655,7 +658,8 @@ test("audit runs dryer and complexity-only crapper on a tracked snapshot and wri
     /ghost|\.worktrees/,
   );
   for (const c of [...calls(home, "dryer"), ...calls(home, "crapper")]) {
-    assert.ok(!c.cwd.startsWith(repo), `ran in the checkout: ${c.cwd}`);
+    const root = argAfter(c.args, "--root") ?? "";
+    assert.ok(!root.startsWith(repo), `ran in the checkout: ${root}`);
   }
   assert.deepEqual(calls(home, "mutator"), []);
   assert.deepEqual(pmCalls(bin), []);
@@ -675,7 +679,9 @@ test("audit --run-tests adds coverage and mutator in the checkout and leaves it 
   assert.equal(run.status, 0, run.stderr);
   const facts = readFileSync(path.join(run.out, "metrics.md"), "utf8");
   assert.ok(
-    calls(home, "crapper").some((c) => c.cwd === repo && c.args[0] === "--use-existing-coverage"),
+    calls(home, "crapper").some(
+      (c) => argAfter(c.args, "--root") === repo && c.args[0] === "--use-existing-coverage",
+    ),
   );
   assert.match(toolSection(facts, "crapper"), /^- `big` \(.*\) src\/a\.ts:2 — CC 12/m);
   assert.match(toolSection(facts, "mutator"), /src\/a\.ts:2 `>` → `>=`/);
@@ -934,4 +940,28 @@ test("an interrupted run still names the files it left changed", () => {
 
   assert.equal(run.status, 130, run.stderr);
   assert.match(run.stderr, /stray\.txt/);
+});
+
+test("a stdlib-named file at a Python group root shadows no tool", () => {
+  const repo = makeRepo(
+    { "pyproject.toml": "[project]\nname = 'p'\n", "json.py": "raise ImportError\n" },
+    { "src/p.py": "# // crap p 12 0\ndef p(a):\n    return a > 1  # // mut > >= survived\n" },
+  );
+  writeExecutable(path.join(repo, ".venv/bin/python"), FAKE_VENV_PYTHON);
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\n");
+  const home = tempDir("harry-metrics-home-");
+  installStub(home, "dryer", DRYER_ALL_PAIRS);
+  installCrapper(home);
+  installStub(home, "mutator", MUTATOR_FROM_MARKERS);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.doesNotMatch(run.facts, /failed|shadowed/, run.facts);
+  assert.match(toolSection(run.facts, "crapper"), /`p` \(.*\) src\/p\.py:2 /, run.facts);
+  assert.match(toolSection(run.facts, "mutator"), /src\/p\.py:3 `>` → `>=`/, run.facts);
+  for (const tool of ["crapper", "mutator"]) {
+    const roots = calls(home, tool).map((c) => argAfter(c.args, "--root"));
+    assert.ok(roots.includes(repo), `${tool} --root ${roots.join(", ")}`);
+  }
 });

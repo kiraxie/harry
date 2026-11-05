@@ -20,7 +20,7 @@ export const DRYER_SCOPE_NOTE =
   "dryer compares TypeScript (.ts .tsx .mts .cts), Java, Go, Rust, Python and Clojure; .js/.mjs files are not compared.";
 
 export function runDryer(tool: Tool, dir: string): Pair[] {
-  const run = runTool(tool, [], dir);
+  const run = runTool(tool, ["--root", dir]);
   if (run.status !== 0) throw new Error(`dryer exited ${run.status}\n${failureTail(run)}`);
   let text: string;
   try {

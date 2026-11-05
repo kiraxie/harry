@@ -723,9 +723,12 @@ function findTool(name) {
   const commit = head.status === 0 ? head.stdout.trim() : "unknown";
   return { name, dir, launcher, commit };
 }
-function runTool(tool, args, cwd) {
+function toolCwd(tool) {
+  return tool.dir;
+}
+function runTool(tool, args) {
   const res = (0, import_node_child_process5.spawnSync)(tool.launcher, args, {
-    cwd,
+    cwd: toolCwd(tool),
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024
   });
@@ -744,7 +747,7 @@ var CRAP_LIMIT = 10;
 var key = (namespace, name) => `${namespace}\0${name}`;
 function runCrapper(tool, root, files, coverage) {
   const mode = coverage ? "--use-existing-coverage" : "--no-coverage";
-  const run = runTool(tool, [mode, "--root", root, ...files], root);
+  const run = runTool(tool, [mode, "--root", root, ...files]);
   if (run.status !== 0) throw new Error(`crapper exited ${run.status}
 ${failureTail(run)}`);
   const text = (0, import_node_fs8.readFileSync)(import_node_path9.default.join(root, ".metrics", "crap.edn"), "utf8");
@@ -772,7 +775,7 @@ print(json.dumps(out))
 function functionSpans(tool, root, files) {
   const python = import_node_path9.default.join(tool.dir, ".venv", "bin", "python");
   const res = (0, import_node_child_process6.spawnSync)(python, ["-c", SPANS_SCRIPT, root, ...files], {
-    cwd: root,
+    cwd: toolCwd(tool),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024
   });
@@ -846,7 +849,7 @@ var import_node_fs9 = require("node:fs");
 var import_node_path10 = __toESM(require("node:path"), 1);
 var DRYER_SCOPE_NOTE = "dryer compares TypeScript (.ts .tsx .mts .cts), Java, Go, Rust, Python and Clojure; .js/.mjs files are not compared.";
 function runDryer(tool, dir) {
-  const run = runTool(tool, [], dir);
+  const run = runTool(tool, ["--root", dir]);
   if (run.status !== 0) throw new Error(`dryer exited ${run.status}
 ${failureTail(run)}`);
   let text;
@@ -1202,7 +1205,7 @@ function snapshots(dir) {
 function runMutator(tool, dir, files, coverage, testCommand) {
   const args = ["--root", dir, coverage ? "--use-existing-coverage" : "--no-coverage"];
   if (testCommand !== null) args.push("--test-command", testCommand);
-  const run = runTool(tool, [...args, ...files], dir);
+  const run = runTool(tool, [...args, ...files]);
   if (run.status === 2) throw new Error(`baseline tests fail
 ${failureTail(run)}`);
   if (run.status !== 0 && run.status !== 3) {

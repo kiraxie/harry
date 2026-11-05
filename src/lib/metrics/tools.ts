@@ -39,9 +39,16 @@ export interface ToolRun {
   stderr: string;
 }
 
-export function runTool(tool: Tool, args: string[], cwd: string): ToolRun {
+// DEBT: python -m and -c put cwd first on sys.path, so a tool's own executables run from its
+// clone and get the group only as --root; that holds while a clone root has no stdlib-named
+// module — past that, a fresh empty mkdtemp cwd per run.
+export function toolCwd(tool: Tool): string {
+  return tool.dir;
+}
+
+export function runTool(tool: Tool, args: string[]): ToolRun {
   const res = spawnSync(tool.launcher, args, {
-    cwd,
+    cwd: toolCwd(tool),
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
   });

@@ -41,7 +41,7 @@ export function runMutator(
 ): Survivor[] {
   const args = ["--root", dir, coverage ? "--use-existing-coverage" : "--no-coverage"];
   if (testCommand !== null) args.push("--test-command", testCommand);
-  const run = runTool(tool, [...args, ...files], dir);
+  const run = runTool(tool, [...args, ...files]);
   if (run.status === 2) throw new Error(`baseline tests fail\n${failureTail(run)}`);
   if (run.status !== 0 && run.status !== 3) {
     throw new Error(`mutator exited ${run.status}\n${failureTail(run)}`);

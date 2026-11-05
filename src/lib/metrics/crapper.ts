@@ -5,7 +5,7 @@ import path from "node:path";
 import { gitChecked } from "../git.ts";
 import { parseEdn } from "./edn.ts";
 import { throwIfInterrupted } from "./interrupt.ts";
-import { failureTail, runTool, type Tool } from "./tools.ts";
+import { failureTail, runTool, type Tool, toolCwd } from "./tools.ts";
 
 export interface CrapEntry {
   name: string;
@@ -35,7 +35,7 @@ export function runCrapper(
   coverage: boolean,
 ): CrapEntry[] {
   const mode = coverage ? "--use-existing-coverage" : "--no-coverage";
-  const run = runTool(tool, [mode, "--root", root, ...files], root);
+  const run = runTool(tool, [mode, "--root", root, ...files]);
   if (run.status !== 0) throw new Error(`crapper exited ${run.status}\n${failureTail(run)}`);
   const text = readFileSync(path.join(root, ".metrics", "crap.edn"), "utf8");
   const snap = parseEdn(text) as { entries?: CrapEntry[] };
@@ -64,7 +64,7 @@ print(json.dumps(out))
 export function functionSpans(tool: Tool, root: string, files: string[]): FunctionSpan[] {
   const python = path.join(tool.dir, ".venv", "bin", "python");
   const res = spawnSync(python, ["-c", SPANS_SCRIPT, root, ...files], {
-    cwd: root,
+    cwd: toolCwd(tool),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
