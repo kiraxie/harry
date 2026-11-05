@@ -1,7 +1,7 @@
 ---
 description: Ask a single frontier model one read-only prompt through codex exec and print the answer verbatim.
 argument-hint: '"<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]'
-allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask:*)
+allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask:*), Bash(mktemp -d -t harry-prompt.XXXXXX)
 ---
 
 Ask one frontier model a single prompt through Codex and return its answer.
@@ -20,10 +20,23 @@ prompt asks about files in it. It never passes a model —
 `~/.codex/config.toml` decides which one runs; `--reasoning` overrides effort
 for that one call.
 
-Execute:
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->]
-```
+Execute, passing the prompt by file so none of it is parsed as shell:
+
+1. Create a directory and note the path it prints:
+   `mktemp -d -t harry-prompt.XXXXXX`
+2. Write the prompt, verbatim, to the new file `<D>/prompt.md` with the Write
+   tool. A literal `--context <text>` goes the same way: write it to
+   `<D>/context.md` and pass `--context @'<D>/context.md'` (the `@<file>` form
+   below).
+3. Run, with `<D>` pasted as the literal path:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "$(cat '<D>/prompt.md')" [--reasoning <low|medium|high|xhigh>] [--context @<file>|@-]
+   ```
+
+4. Remove the files and the directory, only when its path carries the prefix;
+   `rmdir` refuses a directory holding anything else:
+   `case '<D>' in */harry-prompt.*) rm -f '<D>/prompt.md' '<D>/context.md' && rmdir '<D>';; esac`
 
 ## Success
 

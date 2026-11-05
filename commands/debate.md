@@ -1,7 +1,7 @@
 ---
 description: Three frontier models (opus, gpt via Codex, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
 argument-hint: '"<topic>" [--context <text|@file|@->]'
-allowed-tools: Read, Agent, Bash(node:*), Bash(agy:*), AskUserQuestion
+allowed-tools: Read, Agent, Bash(node:*), Bash(agy:*), Bash(mktemp -d -t harry-prompt.XXXXXX), AskUserQuestion
 ---
 
 # Three-Model Debate
@@ -22,13 +22,20 @@ Google subscription via `agy`.
 | Voice | How you call it |
 |-------|-----------------|
 | `opus` | Dispatch `harry:analyst` via the Agent tool; it runs opus at high effort, so pass no `model`. |
-| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "<prompt>" --reasoning high`, run with `run_in_background: true` (a high-effort `ask` turn — harry sets no timeout of its own on the `codex exec` call it spawns — can run past the 10-min foreground Bash timeout — see below) |
-| `gemini` | Bash: `agy -p "<prompt>" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
+| `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "$(cat '<D>/prompt.md')" --reasoning high`, run with `run_in_background: true` (a high-effort `ask` turn — harry sets no timeout of its own on the `codex exec` call it spawns — can run past the 10-min foreground Bash timeout — see below) |
+| `gemini` | Bash: `agy -p "$(cat '<D>/prompt.md')" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
 
 `${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when this command runs. The `ask` and
 `agy` calls are single-shot stateless calls, so the **entire** prompt (including all
-prior-round context) must be in that one string. `opus` (Agent tool) and `gpt`
-(`ask`, via a shell variable / heredoc) accept multi-line prompts normally.
+prior-round context) must be in that one string. That string carries the user's
+topic and the other voices' text, so it never goes into shell source: make a
+directory per prompt with `mktemp -d -t harry-prompt.XXXXXX`, write the prompt to
+the new file `<D>/prompt.md` with the Write tool, and pass it as
+`"$(cat '<D>/prompt.md')"`. Make both prompts' directories and files before the
+message that sends both Bash calls. Once a call has landed, remove its directory
+with `case '<D>' in */harry-prompt.*) rm -f '<D>/prompt.md' && rmdir '<D>';; esac`;
+`rmdir` refuses a directory holding anything else.
+`opus` (Agent tool) takes the prompt directly.
 
 **`agy` is slow and high-variance — plan for it.** `Gemini 3.1 Pro (High)` via
 `agy -p` answers the same prompt in under half a minute on some runs and in 18+
