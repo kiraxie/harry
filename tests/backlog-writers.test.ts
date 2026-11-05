@@ -29,6 +29,8 @@ const WRITERS = [
   "finishing's leftover check for a unit with no item",
   "finishing's leftover check",
   "`/debt`, on request",
+  "`/retro`, for a candidate the user keeps",
+  "finishing's lessons offer, for a check the user keeps",
   "`/sync`'s legacy migration",
 ];
 
@@ -63,6 +65,11 @@ const SIMILAR_SITES: { file: string; snippet: string }[] = [
   {
     file: "references/debt-audit.md",
     snippet: "Sweep candidates persist, on request, as **one** `status: backlog` sweep item",
+  },
+  { file: "commands/retro.md", snippet: "A kept candidate is filed as a `status: backlog` item" },
+  {
+    file: "skills/finishing/SKILL.md",
+    snippet: "A check the user keeps is filed as a `status: backlog` item",
   },
 ];
 
@@ -148,6 +155,8 @@ test("every site that writes a backlog item's Notes entry cites The item model",
     ...[
       ["skills/finishing/SKILL.md", "For each line, file it as a `status: backlog` entry"],
       ["references/debt-audit.md", "row as a `status: backlog` item"],
+      ["commands/retro.md", "A kept candidate is filed as a `status: backlog` item"],
+      ["skills/finishing/SKILL.md", "A check the user keeps is filed as a `status: backlog` item"],
     ].map(([file, snippet]) => [file, flat(mentions(file).find((s) => s.includes(snippet)) ?? "")]),
   ];
   const uncited = sites.filter(([, text]) => !text.includes(ITEM_MODEL)).map(([site]) => site);
@@ -248,4 +257,51 @@ test("the flush's read of the ruled-backlog marker cites The item model's block"
     /The item model/,
     `doc-types' ${MARKER} flush read no longer cites ${ITEM_MODEL} for the block it skips`,
   );
+});
+
+const ALREADY = "Already recorded";
+const CITES_ALREADY = new RegExp(
+  `"${ALREADY}" bullet of \`references/doc-types\\.md\` Lifecycle rules`,
+);
+const ALREADY_SITES: { file: string; snippet: string }[] = [
+  { file: "skills/finishing/SKILL.md", snippet: "Skip anything already" },
+  { file: "skills/finishing/SKILL.md", snippet: "a check an open item already holds" },
+  { file: "commands/retro.md", snippet: "already recorded in" },
+];
+
+test("every writer that skips an already-recorded line cites the Already recorded rule", () => {
+  assert.ok(
+    lifecycleBullets().has(ALREADY),
+    `doc-types' Lifecycle rules have no ${ALREADY} bullet`,
+  );
+  const uncited = ALREADY_SITES.flatMap(({ file, snippet }) => {
+    const found = sentences(read(file)).filter((s) => s.includes(snippet));
+    assert.ok(found.length > 0, `${file} no longer has a sentence holding "${snippet}"`);
+    return found
+      .filter((s) => !CITES_ALREADY.test(flat(s)))
+      .map((s) => `${file}: ${s.slice(0, 100)}`);
+  });
+  assert.deepEqual(
+    uncited,
+    [],
+    `cite the "${ALREADY}" bullet of \`references/doc-types.md\` **Lifecycle rules**`,
+  );
+});
+
+const ALREADY_EXCEPTS =
+  /the Follow-ups flush \(Follow-ups flush, above\) and `\/sync`'s migration \(Writers, below\) excepted/;
+
+test("the Already recorded rule excepts the flush and /sync's migration, and neither names it", () => {
+  const bullets = lifecycleBullets();
+  assert.match(
+    bullets.get(ALREADY) ?? "",
+    ALREADY_EXCEPTS,
+    `the ${ALREADY} bullet no longer excepts both`,
+  );
+  assert.ok(
+    !(bullets.get("Follow-ups flush") ?? "").includes(ALREADY),
+    `the Follow-ups flush names ${ALREADY} though the bullet excepts it`,
+  );
+  const citing = OUTSIDE_SIMILAR.filter((f) => flat(read(f)).includes(ALREADY));
+  assert.deepEqual(citing, [], `these files name ${ALREADY} though the bullet excepts them`);
 });

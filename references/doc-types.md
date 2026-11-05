@@ -145,6 +145,12 @@ milestone edit.
   STORE="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
   ```
 
+- **Work outside the working tree has no repo store.** A change that lands outside the
+  repo's working tree — the user's global steering, a user-level tool, permission or MCP
+  server — is not filed in any repo's `.local/`: a writer that meets one hands the user the
+  exact change to make instead. A gitignored file inside the working tree
+  (`CLAUDE.local.md`, a local settings file) is the repo's, and its work is filed as usual.
+
 - **If the project has no `.local/` at all, set it up or confirm it with the user first:**
   don't scatter untracked docs into a repo whose `.gitignore` lacks harry's block.
 
@@ -182,6 +188,13 @@ milestone edit.
   chooses Back to backlog, sets `status: backlog`, appends a `## Notes`
   line, removes its `## In flight` line and flips its `INDEX.md` item line
   to backlog; the file does not move.
+- **Already recorded**: before **Similar backlog items** below, a writer — the Follow-ups
+  flush (**Follow-ups flush**, above) and `/sync`'s migration (**Writers**, below)
+  excepted — checks whether an open item (backlog or active) already holds the line — in
+  its `## Notes`, its `## Why / What` or its `## Follow-ups`. The item the writer is
+  itself finishing counts only by its `## Follow-ups`, so its own unmet AC is never read
+  as recorded. A line already held takes no ruling and nothing is filed for it; each
+  writer says how it shows one.
 - **Similar backlog items**: a writer about to open a new `status: backlog` item,
   `/sync`'s migration (**Writers**, below) and the Follow-ups flush
   (**Follow-ups flush**, above) excepted, first looks for a similar one — an open
@@ -209,6 +222,8 @@ milestone edit.
     - finishing's leftover check for a unit with no item (a leftover the user keeps,
       in step c and before a PR opens);
     - `/debt`, on request, for its rows that need acting on and for its sweep candidates;
+    - `/retro`, for a candidate the user keeps;
+    - finishing's lessons offer, for a check the user keeps;
     - `/sync`'s legacy migration, for an old backlog or research file — the one writer
       here outside **Similar backlog items**: it opens one item per legacy file and never
       merges.

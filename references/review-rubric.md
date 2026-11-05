@@ -131,6 +131,13 @@ keeps only what must be known before acting (HARRY.md **Code**, HARRY.md **Root 
   now disguised as fixed. Normal → leave the duplication (rule of three). Logic shareable
   across repos: suggest the extraction and its destination, not for a single use point or
   clearly product-specific logic, and don't move it without confirmation.
+- **Lesson or check.** A repo-specific rule learned in a session is one of two kinds. A
+  mechanical violation — a fixed syntax pattern, a banned API, an import shape, a file
+  location — becomes a deterministic check (a lint rule, a pre-commit hook or a CI job),
+  never a steering line. A judgement lesson is a rule no check could enforce that is
+  specific to this repo and changes what the agent would do by default; it goes to
+  `CLAUDE.local.md` through finishing's lessons offer (`skills/finishing/SKILL.md`
+  **Execute the choice**). Anything else is neither.
 - **A fix stays pure.** No "while I'm here" edits in a fix commit; cleanup goes in its own
   commit, same PR. A proposed fix lists its side-effect flags — every setting it flips
   beyond the one it targets; a password reset that also sets `shouldChangePassword=true`

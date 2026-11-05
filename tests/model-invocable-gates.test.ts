@@ -31,10 +31,10 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
  * adds it here by name, with its own reasoning. A generic "skip every blocked command's own
  * commands/<name>.md" rule would silently exempt that future file too; this list is the fix.
  *
- * Empty today: no command in this repo currently carries `disable-model-invocation` (the file
- * banner's history is why the shape exists — `commands/review.md` used to, back when `/review`
- * itself set the flag). A blocked name with no matching entry here gets no free pass; its file
- * is scanned in full, own-file or not.
+ * Empty today: `commands/retro.md`, the one command here that carries `disable-model-invocation`,
+ * never names itself, so it needs no entry (the file banner's history is why the shape exists —
+ * `commands/review.md` used to carry the flag too). A blocked name with no matching entry here
+ * gets no free pass; its file is scanned in full, own-file or not.
  */
 const GATE_SCAN_EXEMPTIONS: ReadonlyArray<{ path: string; names: string[]; reason: string }> = [];
 
@@ -105,8 +105,8 @@ test("the mention matcher catches both invocation forms and no path", () => {
 });
 
 test("the blocked-command scan actually finds the commands it is meant to find", () => {
-  // No command in this repo carries the flag any more, so the frontmatter parse is proven
-  // against a fixture — otherwise a broken parse would read as "nothing is blocked".
+  // Proven against a fixture rather than the repo's own commands, so a broken parse cannot
+  // read as "nothing is blocked" if the one flagged command ever drops the flag.
   const dir = mkdtempSync(path.join(os.tmpdir(), "harry-gates-"));
   try {
     const blockedFile = path.join(dir, "blocked.md");
@@ -126,6 +126,13 @@ test("/review is model-invocable, so the executing skill can call it", () => {
   assert.ok(
     !blockedCommandNames().includes("review"),
     "commands/review.md sets disable-model-invocation again",
+  );
+});
+
+test("commands/retro.md keeps disable-model-invocation", () => {
+  assert.ok(
+    blockedCommandNames().includes("retro"),
+    "commands/retro.md no longer sets disable-model-invocation",
   );
 });
 

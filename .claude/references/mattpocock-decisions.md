@@ -30,7 +30,7 @@ Re-judge a skip only when the condition in its **Re-evaluate when** cell now hol
 | prototype | A prototype opens by stating the question it answers | `skills/brainstorming/SKILL.md` |
 | code-review | The reviewer also judges against the repo's own documented standards. No smell baseline and no parallel reviewers: one reviewer plus two independent lanes is enough. | `references/review-rubric.md` |
 | research | Not a skill. The discipline of tracing a claim to its first-hand source is a claim-evidence row. | `references/claim-evidence.md` |
-| retro | Not a command. It became finishing's leftover check and lessons offer. | `skills/finishing/SKILL.md` |
+| retro | Split in two. Leftovers and repo-specific judgement lessons became finishing's leftover check and lessons offer. The environment review (navigation, automated checks and guardrails, steering size, no-ops, tool economy, information access) is the user-invoked `/retro`, reading the current session only; it proposes, and kept candidates become backlog items. Coding standards and `HARRY.md` stay out of it. | `skills/finishing/SKILL.md`, `commands/retro.md` |
 | to-tickets | Three splitting rules: vertical slices, prefactor first, expand then contract for a wide refactor. | `skills/brainstorming/SKILL.md` |
 
 ## Kept harry's own

@@ -42,6 +42,7 @@ test("Engineering judgment keeps its bullets, in order", () => {
       "Pull related changes into the same PR",
       "Scope grows only on the user's say",
       "DRY is about knowledge, not code",
+      "Lesson or check",
       "A fix stays pure",
       "Findings carry their structural fix",
       "Automated findings are suggestions",

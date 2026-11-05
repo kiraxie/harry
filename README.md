@@ -39,7 +39,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 harry's commands share the `/harry:` namespace. The one whose bare name collides
 with a Claude Code built-in — `/harry:review` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
-(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:rethink`, `/harry:wait-what`)
+(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:rethink`, `/harry:retro`, `/harry:wait-what`)
 accept the bare name when unambiguous.
 
 `/harry:sync` does three things: deploys harry's resident laws (`HARRY.md`, which
@@ -77,6 +77,7 @@ Claude-native or local scripts.
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
 | `/harry:rethink <subsystem>` | Rethink a subsystem from scratch — an independent design from your brief alone, compared with the current design, then a direction and an incremental path |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
+| `/harry:retro` | Look back on the current session for what in the agent's environment slowed or misled it; ranked proposals, the kept ones filed as backlog items. Typed by you only — the model never starts it |
 | `/harry:wait-what` | Re-explain harry's previous message once, in plainer words — one-shot, not a mode |
 
 `--context` reads `@file` from a file and `@-` from stdin; any other text is literal. Text that must begin with a literal `@` has no escape: pass it through `@-` or a file.
@@ -113,7 +114,7 @@ These auto-trigger (no slash command); they are the pipeline:
 ```text
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · executing · finishing
-commands/           review · ask · debate · debt · sync · audit · grill · rethink · wait-what
+commands/           review · ask · debate · debt · sync · audit · grill · rethink · retro · wait-what
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs)
 scripts/            install.mjs · init.mjs · lib/markers.mjs · lib/stale-entries.mjs

@@ -58,6 +58,17 @@ const HOISTED: Record<string, string[]> = {
     "references/debt-audit.md",
     "references/sync-migration.md",
   ],
+  retro: [
+    "references/doc-types.md",
+    "references/review-rubric.md",
+    "references/architecture-review.md",
+    "references/debt-audit.md",
+    "references/fix-check.md",
+    "references/grilling.md",
+    "references/red-green.md",
+    "references/sync-migration.md",
+    "references/tier-gates.md",
+  ],
   "wait-what": [
     "references/plain-language.md",
     "references/architecture-review.md",
