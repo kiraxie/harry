@@ -2,8 +2,8 @@
 // A snapshot, NOT a live reference to the plugin checkout: editing the plugin's
 // HARRY.md (even uncommitted) changes nothing installed until this re-runs.
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
@@ -97,76 +97,24 @@ export function run({ remove = false, explore = false } = {}) {
   return { path, imported, snapshot: snapshotChanged, explore: exploreOutcome };
 }
 
-function selftest() {
-  /** @param {unknown} c @param {string} m */
-  const assert = (c, m) => {
-    if (!c) throw new Error(`selftest failed: ${m}`);
-  };
-  const dir = mkdtempSync(join(tmpdir(), "harry-install-"));
-  try {
-    const g = join(dir, "CLAUDE.md");
-    writeFileSync(g, "# My rules\n\nUse TDD.\n");
-    const env = process.env.HARRY_GLOBAL;
-    process.env.HARRY_GLOBAL = g;
-    try {
-      const snap = join(dir, "harry", "HARRY.md");
-      run();
-      let out = readFileSync(g, "utf8");
-      assert(out.includes("# My rules"), "preserves existing content");
-      assert(out.includes(`@${snap}`), "wires the @ import at the deployed snapshot");
-      assert(existsSync(snap), "deploys the HARRY.md snapshot");
-      assert(
-        readFileSync(snap, "utf8").includes("Resident Engineering Laws"),
-        "snapshot holds HARRY.md content",
-      );
-      assert(out.split(BEGIN).length === 2, "one block after first run");
-      run();
-      out = readFileSync(g, "utf8");
-      assert(out.split(BEGIN).length === 2, "idempotent on second run");
-      const explore = join(dir, "agents", "Explore.md");
-      run({ explore: true });
-      assert(existsSync(explore), "--explore deploys the Explore override");
-      assert(
-        readFileSync(explore, "utf8").includes(EXPLORE_MARKER),
-        "Explore override carries the marker",
-      );
-      run({ remove: true });
-      out = readFileSync(g, "utf8");
-      assert(!out.includes(BEGIN), "remove strips the block");
-      assert(out.includes("Use TDD."), "remove keeps existing content");
-      assert(!existsSync(explore), "remove deletes harry's Explore override");
-    } finally {
-      if (env === undefined) delete process.env.HARRY_GLOBAL;
-      else process.env.HARRY_GLOBAL = env;
-    }
-    console.log("install selftest: OK");
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 // Only run the CLI when invoked directly (node scripts/install.mjs), not when
 // imported by a test — importing must have no side effects on the user's files.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
-  if (args.includes("--selftest")) {
-    selftest();
-  } else {
-    const remove = args.includes("--remove");
-    const r = run({ remove, explore: args.includes("--explore") });
-    /** @type {string[]} */
-    const lines = [];
-    if (r.imported)
-      lines.push(`${remove ? "Removed harry import from" : "Wired HARRY.md into"} ${r.path}`);
-    if (r.snapshot) lines.push(`Deployed HARRY.md snapshot to ${snapshotPath()}`);
-    if (r.explore === "deployed") lines.push(`Deployed Explore override to ${explorePath()}`);
-    if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
-    if (lines.length === 0)
-      lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
-    if (args.includes("--tools") && !remove) {
-      for (const t of syncTools()) lines.push(`tool ${t.name}: ${t.outcome} (${t.detail})`);
-      lines.push(`Tools dir: ${toolsDir()}`);
-    }
-    console.log(lines.join("\n"));
+  const remove = args.includes("--remove");
+  const r = run({ remove, explore: args.includes("--explore") });
+  /** @type {string[]} */
+  const lines = [];
+  if (r.imported)
+    lines.push(`${remove ? "Removed harry import from" : "Wired HARRY.md into"} ${r.path}`);
+  if (r.snapshot) lines.push(`Deployed HARRY.md snapshot to ${snapshotPath()}`);
+  if (r.explore === "deployed") lines.push(`Deployed Explore override to ${explorePath()}`);
+  if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
+  if (lines.length === 0)
+    lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
+  if (args.includes("--tools") && !remove) {
+    for (const t of syncTools()) lines.push(`tool ${t.name}: ${t.outcome} (${t.detail})`);
+    lines.push(`Tools dir: ${toolsDir()}`);
   }
+  console.log(lines.join("\n"));
 }

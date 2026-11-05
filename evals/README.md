@@ -654,6 +654,8 @@ here is written only when the user names the behavior as load-bearing.
 - new issues number on from the handed list's last number; two lanes' new issues merge into one numbering
 - the re-review's Assessment carries Quality and Verdict, no per-AC spec; the both-verdicts rule names the re-review as its one exception
 - the Codex lane's re-review gets the open list through `--rereview`, never `--context`; the facts file carries no AC, which go through `--spec` with their probe lines; every hand-off names the unit's tier
+- the re-review is handed the fix check's verdicts and the merged list's last number
+- a numbered file's `<k>` is one more than the files of that kind already there, stated once in executing; finishing numbers its files by that rule
 
 **Grilling**
 - the exit gate (residue manifest: decided, deferred, assumptions; the settled decisions as numbered AC; what approval covers) is defined once, in grilling.md
@@ -661,6 +663,7 @@ here is written only when the user names the behavior as load-bearing.
 - listing an assumption is not closing it; only the user defers a question; the ledger is written to a file only on request
 - one question per round in both phases; batching is opt-in; the re-walk runs after every answer and every design draft, from the destination down, reopening a decision out loud and withdrawing its AC; the handoff lets a re-walk reopen a settled decision
 - tier sets the interview's depth (divergence brief, convergence on the frontier, exit gate unabridged), never its cadence
+- the interview keeps four running lists: decided, open, deferred (each tagged deferred-in-scope or destination-outside), assumptions
 
 **The architecture review's inputs and rulings**
 - merge, PR and keep all pass through the review; only Discard skips it; a pre-decided path still runs it; a bug fix that alters a shape is reviewed like a feature
@@ -671,6 +674,8 @@ here is written only when the user names the behavior as load-bearing.
 - rulings are fix now (a new AC that names the one it supersedes; approved text never edited; back to executing), backlog (a new or merged item), leave as is (recorded in the architecture form, handed to later rounds)
 - every round records the head it reviews; a later round lists and packages only the changes since that head; rounds 2 and 3 start on their own, none after, and round 3 with a Critical or Important open stops with a status report
 - the leave-as-is record's fields are listed once, in doc-types The item model, and the architecture review cites its architecture form; the review door points at the step's Reviewer list instead of copying it
+- line-level code quality and tests are out of the architecture review's scope; the per-diff review standard owns them
+- findings never go to an automatic fixer; finishing puts them to the user as one numbered list
 
 **Who writes**
 - the session writes everything and dispatches only analyst, referee and scout, naming no model; lanes dispatched at once, one fix wave, exactly one scoped re-review, no second wave
@@ -684,6 +689,8 @@ here is written only when the user names the behavior as load-bearing.
 - code carries no comment by default; the one kept kind says why the code is this way and not the obvious way, as short as that allows, never what it does; a DEBT: note names its ceiling and upgrade path; tool directives are not comments
 - every review and architecture finding carries a structural fix, a short-term one only when that is not simple, a workaround never; a comment that says what the code does, restates a reason the code shows, or defends a workaround in place of fixing its cause is flagged; one that says why the code is this way and not the obvious way, as short as that point allows, is kept
 - a fix inside a unit is tiered like a task: small only when Trivial and no test weakens; the fix wave cites that rule once; the scope brake applies to the re-review; three failed fixes of one hypothesis stop
+- keep only hedges that carry real uncertainty; a plausible-sounding fix not verified to exist is a fabrication, so say "I don't know of one"
+- one question per message; a list the user has seen counts as one, separate decisions arriving at once do not
 
 **Backlog writers and the review door**
 - doc-types owns the Notes entry's shape, the superseded-AC rule and the ruled-backlog marker forms; a kept Non-Goal is ruled in the residue manifest; /sync's migration and the Follow-ups flush are the writers outside the Similar rule
@@ -698,6 +705,9 @@ here is written only when the user names the behavior as load-bearing.
 - an AC states an outcome and carries its verification; the rubric gives one verdict line per AC; executing's analyst lane is handed every file the rubric declares as its standard
 - executing's Build step sends Standard and Major to red-green.md before writing a test; red-green's scope sentence binds Every test to every tier that writes one and adds the full cycle at Major
 - Standard and Major build to the rubric's Engineering judgment, read before the first commit, and the fix wave applies it too
+- executing's pre-flight AC review does not count a later AC that names the AC it supersedes as a conflict
+- a probe line whose old and new answers match is not watched failing: at Major it fails the AC, at Standard it is judged on the line's reason
+- `small fix: <what> (commit <sha7>)` is a record only; no rule reads it back
 - finishing cites HARRY.md **Ask first** for its destructive step; doc-types says a work unit is one item, status backlog → active → done
 - tier-gates defines brainstorm depth once and no tier row prescribes interview cadence; brainstorming and tier-gates restate none of the depth rule
 - finishing checks a PR's reviews, inline comments and CodeRabbit status, never merges over an unmet conditional approval, and keeps planning language out of the title and body

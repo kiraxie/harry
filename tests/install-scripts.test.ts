@@ -372,6 +372,41 @@ test("init.mjs: appends plain ignore entries (no harry branding) with a .bak", (
   }
 });
 
+function withPresetGitignore(fn: (gi: string, lines: () => string[]) => void): void {
+  const dir = tmpDir("harry-init-test-");
+  try {
+    const gi = path.join(dir, ".gitignore");
+    writeFileSync(gi, "node_modules/\n.local/\n");
+    fn(gi, () => readFileSync(gi, "utf8").split("\n"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("init.mjs: an entry already present is not added twice, while the missing ones are", () => {
+  withPresetGitignore((gi, lines) => {
+    initRun(path.dirname(gi));
+    assert.equal(
+      lines().filter((l) => l === ".local/").length,
+      1,
+      "the present .local/ is not added twice",
+    );
+    assert.ok(lines().includes("*worktrees/"), "the missing entries are still added");
+    assert.ok(lines().includes("CLAUDE.local.md"), "the missing entries are still added");
+  });
+});
+
+test("init.mjs: --remove strips a hand-typed entry and keeps unrelated lines", () => {
+  withPresetGitignore((gi, lines) => {
+    initRun(path.dirname(gi), { remove: true });
+    assert.ok(
+      !lines().includes(".local/"),
+      "the hand-typed .local/ goes too: there is no marker to spare it",
+    );
+    assert.ok(lines().includes("node_modules/"), "unrelated entries kept");
+  });
+});
+
 test("safeWrite: backs up once and never clobbers the .bak", () => {
   const dir = tmpDir("harry-safewrite-test-");
   try {

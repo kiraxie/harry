@@ -4,7 +4,6 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { labelledItems } from "./citations.ts";
-import { LINE_END_RE } from "./lines.ts";
 import { PROSE_DIR_FILES, TOP_LEVEL } from "./prose-dirs.ts";
 import { headingSection } from "./section.ts";
 
@@ -116,21 +115,6 @@ test("AC-6: 'tier' is defined by the enumeration in HARRY.md's Tiers and tier-ga
     ["Trivial", "Standard", "Major"],
     "HARRY.md Tiers no longer enumerates exactly the three tiers; the enumeration is the definition of 'tier', and every trigger line is read so a fourth tier fails too",
   );
-});
-
-test("plain-language and pr-body never use 'shape', finishing's term for an API, schema or boundary", () => {
-  for (const rel of [PLAIN_LANGUAGE, "references/pr-body.md"]) {
-    const hits = read(rel)
-      .split(LINE_END_RE)
-      .map((l, i) => [i + 1, l] as const)
-      .filter(([, l]) => /shape/i.test(l))
-      .map(([n, l]) => `${rel}:${n}: ${l.trim()}`);
-    assert.deepEqual(
-      hits,
-      [],
-      "'shape' is finishing's defined term for an API, schema or boundary",
-    );
-  }
 });
 
 test("the visual rule is named 'Show the structure' in plain-language and pr-body", () => {

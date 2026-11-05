@@ -20,25 +20,24 @@ test("the deletion test is defined once in shipped prose, in architecture-review
   assert.deepEqual(defining, [OWNER]);
 });
 
-test("/audit dimension 10 points at architecture-review.md for the deletion test", () => {
-  const ten = flatten(
-    headingSection(
-      raw("references/audit/SCAN-DIMENSIONS.md"),
-      "references/audit/SCAN-DIMENSIONS.md",
-      "## 10.",
-    ),
-  );
-  assert.ok(ten.includes("`references/architecture-review.md`"), ten);
-  assert.match(ten, /\*\*Bar:\*\*/);
+const SCAN = "references/audit/SCAN-DIMENSIONS.md";
+const ABSTRACTION_TIMING = "`references/architecture-review.md` **Abstraction timing**";
+
+const dimensionTenParagraph = (topic: RegExp): string => {
+  const paragraphs = headingSection(raw(SCAN), SCAN, "## 10.")
+    .split(/\n\s*\n/)
+    .map(flatten)
+    .filter((p) => topic.test(p));
+  assert.equal(paragraphs.length, 1, `expected one dimension-10 paragraph matching ${topic}`);
+  return paragraphs[0] ?? "";
+};
+
+test("/audit dimension 10's deletion-test paragraph cites Abstraction timing", () => {
+  const paragraph = dimensionTenParagraph(/\bthe deletion test\b/);
+  assert.ok(paragraph.includes(ABSTRACTION_TIMING), paragraph);
 });
 
-test("/audit dimension 10 takes when a single implementation is too early from Abstraction timing", () => {
-  const ten = flatten(
-    headingSection(
-      raw("references/audit/SCAN-DIMENSIONS.md"),
-      "references/audit/SCAN-DIMENSIONS.md",
-      "## 10.",
-    ),
-  );
-  assert.ok(ten.includes("`references/architecture-review.md` **Abstraction timing**"), ten);
+test("/audit dimension 10's What paragraph, on single-implementation interfaces, cites Abstraction timing", () => {
+  const paragraph = dimensionTenParagraph(/^\*\*What:\*\*/);
+  assert.ok(paragraph.includes(ABSTRACTION_TIMING), paragraph);
 });
