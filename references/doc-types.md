@@ -220,7 +220,7 @@ milestone edit.
     - `/grill`'s residue manifest, for a line the user names as a backlog item;
     - finishing's **backlog** ruling on an architecture finding, on the user's naming;
     - finishing's leftover check for a unit with no item (a leftover the user keeps,
-      in step c and before a PR opens);
+      at merge or before a PR opens);
     - `/debt`, on request, for its rows that need acting on and for its sweep candidates;
     - `/retro`, for a candidate the user keeps;
     - finishing's lessons offer, for a check the user keeps;
@@ -235,7 +235,8 @@ milestone edit.
       - findings adjudicated to Follow-ups;
       - findings the user rules backlog before the fix wave;
     - finishing's leftover check, on the user's say (work from the session or the
-      files with no outcome, in step c and before a PR opens);
+      files with no outcome, in finishing's **Leftover check, then flush Follow-ups** and
+      before a PR opens);
     - an author copying in a Non-Goal (**Non-Goals do not survive archiving**, below).
 - **Ruled-backlog marker**: a `## Follow-ups` line written on the user's own ruling — a
   finding the user rules backlog, a leftover the user keeps — ends in a marker, so
@@ -246,8 +247,8 @@ milestone edit.
     lines the user ruled into one new item share it.
   - Who writes it, and when: executing writes `(ruled backlog)` on each line the user's
     own ruling sends to `## Follow-ups`; finishing's triage writes the target form on
-    every line it leaves ruled backlog; finishing's step c and Option 2 write the target
-    form on a leftover the user keeps, its target the one their list named; the flush
+    every line it leaves ruled backlog; finishing's **Leftover check, then flush
+    Follow-ups** and Option 2 write the target form on a leftover the user keeps, its target the one their list named; the flush
     rewrites the markers of the remaining lines that share a filed line's target to the
     merge-into form in its step 3, below.
   - How the triage reads it: a marked line keeps its ruling; only its target is put to

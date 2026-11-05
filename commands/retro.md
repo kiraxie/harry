@@ -59,7 +59,7 @@ lesson is finishing's lessons offer's, not this list's.
 ## 3. Severity
 
 - **high** — it produced a wrong result, or the user had to correct the agent.
-- **medium** — it cost several turns or tool calls. A repo with no guardrail is medium.
+- **medium** — it cost several turns or tool calls, or a single expensive one (long run time or large output). A repo with no guardrail is medium.
 - **low** — friction that cost little.
 
 ## 4. Present
