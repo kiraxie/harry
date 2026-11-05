@@ -146,12 +146,20 @@ export function renderJudged(j: Judged, where: (span: FunctionSpan) => string): 
   return `- ${j.kind} \`${e.name}\` (${e.namespace})${at} — ${cc}, ${scored(e)}`;
 }
 
-export function renderOverBar(entries: CrapEntry[]): string {
+export function renderOverBar(
+  entries: CrapEntry[],
+  located?: { spans: FunctionSpan[]; where: (span: FunctionSpan) => string },
+): string {
   const over = entries
     .filter((e) => crapFloor(e) >= CRAP_LIMIT)
     .sort((a, b) => crapFloor(b) - crapFloor(a));
   if (over.length === 0) return "No function crosses the bar.";
+  const spanOf = new Map((located?.spans ?? []).map((s) => [key(s.namespace, s.name), s]));
   return over
-    .map((e) => `- \`${e.name}\` (${e.namespace}) — CC ${e.complexity}, ${scored(e)}`)
+    .map((e) => {
+      const span = spanOf.get(key(e.namespace, e.name));
+      const at = span && located ? ` ${located.where(span)}` : "";
+      return `- \`${e.name}\` (${e.namespace})${at} — CC ${e.complexity}, ${scored(e)}`;
+    })
     .join("\n");
 }

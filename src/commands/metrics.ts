@@ -287,8 +287,13 @@ async function runAudit(cwd: string, out: string, runTests: boolean): Promise<vo
         root,
         groupFiles(root, trackedSourceFiles(root)),
         tools,
-        (tool) => (group, gap) =>
-          renderOverBar(runCrapper(tool, path.join(root, group.dir), group.files, gap === null)),
+        (tool) => (group, gap) => {
+          const dir = path.join(root, group.dir);
+          return renderOverBar(runCrapper(tool, dir, group.files, gap === null), {
+            spans: functionSpans(tool, dir, group.files),
+            where: (s) => `${repoPath(group, s.file)}:${s.start}`,
+          });
+        },
       )
     : null;
 

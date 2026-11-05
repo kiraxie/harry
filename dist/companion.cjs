@@ -830,10 +830,15 @@ function renderJudged(j, where) {
   const cc = j.before === void 0 ? `CC ${e.complexity}` : `CC ${j.before} \u2192 ${e.complexity}`;
   return `- ${j.kind} \`${e.name}\` (${e.namespace})${at} \u2014 ${cc}, ${scored(e)}`;
 }
-function renderOverBar(entries) {
+function renderOverBar(entries, located) {
   const over = entries.filter((e) => crapFloor(e) >= CRAP_LIMIT).sort((a, b) => crapFloor(b) - crapFloor(a));
   if (over.length === 0) return "No function crosses the bar.";
-  return over.map((e) => `- \`${e.name}\` (${e.namespace}) \u2014 CC ${e.complexity}, ${scored(e)}`).join("\n");
+  const spanOf = new Map((located?.spans ?? []).map((s) => [key(s.namespace, s.name), s]));
+  return over.map((e) => {
+    const span2 = spanOf.get(key(e.namespace, e.name));
+    const at = span2 && located ? ` ${located.where(span2)}` : "";
+    return `- \`${e.name}\` (${e.namespace})${at} \u2014 CC ${e.complexity}, ${scored(e)}`;
+  }).join("\n");
 }
 
 // src/lib/metrics/dryer.ts
@@ -1502,7 +1507,13 @@ ${DRYER_SCOPE_NOTE}`;
     root,
     groupFiles(root, trackedSourceFiles(root)),
     tools,
-    (tool) => (group, gap) => renderOverBar(runCrapper(tool, import_node_path15.default.join(root, group.dir), group.files, gap === null))
+    (tool) => (group, gap) => {
+      const dir = import_node_path15.default.join(root, group.dir);
+      return renderOverBar(runCrapper(tool, dir, group.files, gap === null), {
+        spans: functionSpans(tool, dir, group.files),
+        where: (s) => `${repoPath(group, s.file)}:${s.start}`
+      });
+    }
   ) : null;
   const crapper = section("crapper", tools.crapper, (tool) => {
     const complexity = attempt(

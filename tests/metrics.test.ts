@@ -677,9 +677,27 @@ test("audit --run-tests adds coverage and mutator in the checkout and leaves it 
   assert.ok(
     calls(home, "crapper").some((c) => c.cwd === repo && c.args[0] === "--use-existing-coverage"),
   );
+  assert.match(toolSection(facts, "crapper"), /^- `big` \(.*\) src\/a\.ts:2 — CC 12/m);
   assert.match(toolSection(facts, "mutator"), /src\/a\.ts:2 `>` → `>=`/);
   assert.equal(status(repo), before);
   assert.ok(!existsSync(path.join(repo, "target")));
+});
+
+test("audit --run-tests locates a nested package's function by its repo-relative path", () => {
+  const repo = makeRepo(
+    {
+      "package.json": JSON.stringify({ scripts: { test: "node --test" } }),
+      "packages/x/package.json": JSON.stringify({ scripts: { test: "node --test" } }),
+    },
+    { "packages/x/src/x.ts": "// crap deep 12 0\nfunction deep() {}\n" },
+  );
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+  const run = runAudit(repo, home, fakeBin(), ["--run-tests"]);
+
+  assert.equal(run.status, 0, run.stderr);
+  const facts = readFileSync(path.join(run.out, "metrics.md"), "utf8");
+  assert.match(toolSection(facts, "crapper"), /^- `deep` \(.*\) packages\/x\/src\/x\.ts:2 — /m);
 });
 
 test("changed files under directories the tools skip, such as dist/, are not scored", () => {
