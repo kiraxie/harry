@@ -1,5 +1,5 @@
 ---
-description: Three frontier models (opus, gpt via Codex, gemini-3.1-pro) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
+description: Three frontier models (opus, gpt via Codex, gemini-4-argon) reason independently, debate their disagreements over two fixed rounds, then Claude synthesizes a neutral verdict.
 argument-hint: '"<topic>" [--context <text|@file|@->]'
 allowed-tools: Read, Agent, Bash(node:*), Bash(agy:*), Bash(mktemp -d -t harry-prompt.XXXXXX), AskUserQuestion
 ---
@@ -23,7 +23,7 @@ Google subscription via `agy`.
 |-------|-----------------|
 | `opus` | Dispatch `harry:analyst` via the Agent tool; it runs opus at high effort, so pass no `model`. |
 | `gpt` | Bash: `node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" ask "$(cat '<D>/prompt.md')" --reasoning high`, run with `run_in_background: true` (a high-effort `ask` turn — harry sets no timeout of its own on the `codex exec` call it spawns — can run past the 10-min foreground Bash timeout — see below) |
-| `gemini` | Bash: `agy -p "$(cat '<D>/prompt.md')" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
+| `gemini` | Bash: `agy -p "$(cat '<D>/prompt.md')" --model "Gemini 4 Argon (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini's worst case — see below) |
 
 `${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when this command runs. The `ask` and
 `agy` calls are single-shot stateless calls, so the **entire** prompt (including all
@@ -39,9 +39,9 @@ remove its directory with
 `rmdir` refuses a directory holding anything else.
 `opus` (Agent tool) takes the prompt directly.
 
-**`agy` is slow and high-variance — plan for it.** `Gemini 3.1 Pro (High)` via
-`agy -p` answers the same prompt in under half a minute on some runs and in 18+
-minutes on others, unrelated to prompt length or formatting, and `--print-timeout`
+**`agy` is slow and high-variance — plan for it.** `agy -p` has answered the
+same prompt in under half a minute on some runs and in 18+ minutes on others
+(measured on Gemini 3.1 Pro), unrelated to prompt length or formatting, and `--print-timeout`
 does not reliably cap the wait. Consequences for the conductor:
 - Run the gemini call with `run_in_background: true` — a backgrounded Bash task
   is not subject to the 10-min foreground timeout, so an 18-min Gemini turn can
@@ -54,9 +54,8 @@ does not reliably cap the wait. Consequences for the conductor:
   hang, not mere slowness, as failure. If gemini fails twice, proceed with a
   **two-voice debate** (opus + gpt) and say so explicitly in the final report
   rather than blocking the whole debate on the slowest leg.
-- If predictable latency matters more than peak reasoning depth, `Gemini 3.1 Pro
-  (Low)` answers in seconds — but the fixed routing calls for High, so only drop
-  to Low if the user opts in.
+- `Gemini 4 Argon (Low)` is the lower-effort option, but the fixed routing calls
+  for High, so only drop to Low if the user opts in.
 
 **`gpt`'s failure signal is simpler: gate on the exit code.** A failed `ask`
 call exits non-zero and prints exactly three lines to stdout: `# Ask Failed`, a
@@ -76,7 +75,9 @@ into the prompt. Do not pass `--add-dir`, `--dangerously-skip-permissions`, or
 any write/shell flag to `agy`. `gpt` runs under `ask`, which is read-only —
 the model may read files and run read-only commands under Codex's own
 read-only sandbox, but it cannot write (`ask` itself writes only its answer
-file and log, under the plugin state dir).
+file and log, under the plugin state dir). `agy` keeps each call's whole
+conversation, prompt and answer, as conversations, transcripts, summaries and
+logs under `~/.gemini/antigravity-cli/`; harry does not remove them.
 
 ## Input
 
@@ -179,6 +180,6 @@ strongest on each contested point and why>
 ```
 
 Write no transcript to disk: the prompt files are the only files you write, each
-removed once its call is settled (`ask` keeps its own answer and log, as
+removed once its call is settled (`ask` and `agy` keep their own records, as
 **Permissions** says). Only print this report. Quote each voice's
 actual output faithfully — do not invent positions a model did not take (HARRY.md **Talk**).

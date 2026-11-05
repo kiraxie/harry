@@ -73,7 +73,7 @@ Claude-native or local scripts.
 |---------|--------------|
 | `/harry:review [--base <ref>] [--architecture] [--reasoning <effort>] [--context <text\|@file\|@->]` | Read-only code review via `codex exec` — working tree, a branch against its default, or a diff against `--base`; `--architecture` runs the architecture review by hand, out of session |
 | `/harry:ask "<prompt>" [--reasoning <effort>] [--context <text\|@file\|@->]` | One read-only prompt to Codex via `codex exec` |
-| `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
+| `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-4-argon) deliberate over 2 rounds; Claude synthesizes |
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit [--run-tests]` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting; `--run-tests` adds coverage and mutation testing from the metrics tools |
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |

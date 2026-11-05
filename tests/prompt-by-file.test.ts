@@ -32,12 +32,12 @@ const APPROVED: { file: string; line: string; why: string }[] = [
   },
   {
     file: "commands/debate.md",
-    line: '| `gemini` | Bash: `agy -p "$(cat \'<D>/prompt.md\')" --model "Gemini 3.1 Pro (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini\'s worst case — see below) |',
+    line: '| `gemini` | Bash: `agy -p "$(cat \'<D>/prompt.md\')" --model "Gemini 4 Argon (High)" --print-timeout 20m`, run with `run_in_background: true` (the foreground Bash timeout caps at 10m, below Gemini\'s worst case — see below) |',
     why: "the gemini prompt carries the same text, so it goes by file",
   },
   {
     file: "commands/debate.md",
-    line: "`agy -p` answers the same prompt in under half a minute on some runs and in 18+",
+    line: "**`agy` is slow and high-variance — plan for it.** `agy -p` has answered the",
     why: "prose naming the CLI; no call",
   },
   {
