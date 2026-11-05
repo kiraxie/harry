@@ -60,7 +60,8 @@ The laws are a **snapshot**, not a live reference to the plugin checkout: after
 updating the plugin (or editing `HARRY.md`), re-run `/harry:sync` (or
 `pnpm run install-laws`) to re-deploy and resync. "Release" = re-run sync.
 
-Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run build`.
+Contributors, after changing `src/` or the `scripts/lib` modules it imports:
+`pnpm install && pnpm run build`.
 
 ## Commands
 

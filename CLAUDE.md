@@ -15,7 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    `scripts/lib/path-search.mjs`; nothing under `scripts/` imports `src/`.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
-required to install it. Rebuild `dist/` when changing `src/` **or `package.json`'s version** —
+required to install it. Rebuild `dist/` when changing `src/`, the `scripts/lib` modules it
+imports, **or `package.json`'s version** —
 the bundle inlines that version and nothing else from `package.json`, so every version bump
 needs a rebuild (CI's dist drift gate fails otherwise).
 
@@ -104,23 +105,12 @@ handed file: `--rereview` (executing's scoped re-review: the per-diff standard p
 (a fix check run by hand: `references/fix-check.md` in full, and the proposed
 fixes).
 
-`metrics` is the one command that is not read-only. It runs whichever of crapper, dryer
-and mutator are installed under `~/.claude/harry/tools/` (`/harry:sync --tools`). dryer, and
-crapper's before-state, run on `git archive` snapshots of tracked files; coverage, crapper's
-after-state and mutator run in the user's checkout, where they run the project's tests and
-write artifacts (`.metrics/`, `coverage/`, `target/…`). `src/lib/metrics/guard.ts` moves
-any pre-existing artifact path aside first, deletes the artifact paths the run created,
-restores the rest, and checks that `git status --porcelain -uall` and the bytes of every file
-it listed are unchanged; a difference exits non-zero naming the paths. Ignored caches a test
-run creates elsewhere (`.pytest_cache/`) are out of its scope. The stash dir
-(`<git-dir>/harry-metrics-stash`) is also the lock: a run refuses while one exists, naming
-what it holds. An interrupt that kills the running child too (Ctrl+C, a process-group
-signal) restores and exits 128+signal; a child that catches it and exits with a code
-(pytest), or a git command, is read as that command failing. The run is synchronous, so a signal sent to the
-companion's pid alone is held until the run ends and changes nothing; `kill -9` skips the
-restore and leaves the stash dir, whose manifest names what to put back. mutator's own test
-children run in their own session.
-It never installs a package: a gap in coverage tooling scores complexity only, with the reason.
+`metrics` is the one command that is not read-only. It runs the project's tests in the
+user's checkout and writes tool artifacts there; `src/lib/metrics/guard.ts` removes the tool
+artifacts the run wrote and restores what existed, and `metrics` exits non-zero naming any
+path git sees changed. It never installs a package. The guard's lock, interrupt and
+recovery behavior is documented in `src/lib/metrics/guard.ts` and
+`src/lib/metrics/interrupt.ts`.
 
 `review` is read-only by construction: the spawned codex process runs in its own read-only
 sandbox. `commands/review.md`'s `allowed-tools` only **pre-approves** the review invocation

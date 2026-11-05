@@ -155,6 +155,8 @@ function guarded<T>(
   try {
     for (const p of existed) {
       const aside = path.join(stash, String(moved.length));
+      // Written before the move: kill -9 skips the restore, and the manifest is then
+      // what names where each entry goes back.
       appendFileSync(path.join(stash, "manifest"), `${moved.length}\t${p}\n`);
       renameSync(p, aside);
       moved.push([p, aside]);
