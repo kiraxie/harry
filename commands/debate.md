@@ -32,8 +32,10 @@ topic and the other voices' text, so it never goes into shell source: make a
 directory per prompt with `mktemp -d -t harry-prompt.XXXXXX`, write the prompt to
 the new file `<D>/prompt.md` with the Write tool, and pass it as
 `"$(cat '<D>/prompt.md')"`. Make both prompts' directories and files before the
-message that sends both Bash calls. Once a call has landed, remove its directory
-with `case '<D>' in */harry-prompt.*) rm -f '<D>/prompt.md' && rmdir '<D>';; esac`;
+message that sends both Bash calls. A retry reuses the same file. Once that
+prompt's call is settled (its answer is in, or it has failed for the last time),
+remove its directory with
+`case '<D>' in */harry-prompt.*) rm -f '<D>/prompt.md' && rmdir '<D>';; esac`;
 `rmdir` refuses a directory holding anything else.
 `opus` (Agent tool) takes the prompt directly.
 
@@ -176,5 +178,7 @@ voices, not three:
 strongest on each contested point and why>
 ```
 
-Do not write transcripts to disk. Only print this report. Quote each voice's
+Write no transcript to disk: the prompt files are the only files you write, each
+removed once its call is settled (`ask` keeps its own answer and log, as
+**Permissions** says). Only print this report. Quote each voice's
 actual output faithfully — do not invent positions a model did not take (HARRY.md **Talk**).
