@@ -86,7 +86,9 @@ async function ask(cwd: string, options: AskOptions): Promise<void> {
 
   // DEBT: a SIGKILL, or a signal outside run-codex's forwarding window (before it
   // starts or after codex exits), skips both cleanups and leaves the empty dir in
-  // tmpdir; nothing holds data there, so the OS tmp cleaner is the ceiling.
+  // tmpdir; nothing holds data there, so the OS tmp cleaner is the ceiling. Upgrade
+  // if leftovers pile up: sweep stale empty harry-ask-* dirs at the start of a run,
+  // as pruneRunFiles does for run files.
   const codexCwd = options.isolated ? mkdtempSync(join(tmpdir(), "harry-ask-")) : cwd;
   const isolated = codexCwd !== cwd;
   let answer: string;
