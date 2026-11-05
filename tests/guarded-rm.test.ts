@@ -16,9 +16,9 @@ const RM_RECURSIVE = /\brm\s+(?:-\S+\s+)*(?:-[a-zA-Z]*[rR]|--recursive\b)/;
 const REMOVALS: { file: string; guard: string; rm: string; why: string }[] = [
   {
     file: "skills/finishing/SKILL.md",
-    guard: `case '<store>/.local/tmp/<branch>' in */.local/tmp/?*)`,
-    rm: `rm -rf '<store>/.local/tmp/<branch>'`,
-    why: "the case requires a name after tmp/, so an empty <branch> cannot reach sibling dirs",
+    guard: `T="$STORE/.local/tmp/<branch>" && case "$T" in /?*/.local/tmp/?*)`,
+    rm: `rm -rf "$T"`,
+    why: "the case requires an absolute store and a name after tmp/, so an unresolved store or an empty <branch> cannot reach other dirs",
   },
 ];
 

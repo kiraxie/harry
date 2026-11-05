@@ -139,7 +139,10 @@ milestone edit.
   no main checkout — the formula lands beside the bare dir; confirm a store
   location with the user there.) Never create a `.local/` inside a worktree;
   if one exists there, it is a stray — merge its content back, then delete it (confirm the deletion with the user first).
-  Resolve it inside the same command that uses it, as `$STORE`:
+  Resolve it inside the same command that uses it, as `$STORE`, and use it
+  only double-quoted, `"$STORE/…"`; never paste the resolved path into a shell
+  command as text, since a path may hold `'` or a space (an `@<path>` argument
+  handed to a slash command is outside this rule):
 
   ```bash
   STORE="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
