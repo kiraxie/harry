@@ -251,7 +251,7 @@ milestone edit.
   - Who writes it, and when: executing writes `(ruled backlog)` on each line the user's
     own ruling sends to `## Follow-ups`; finishing's triage writes the target form on
     every line it leaves ruled backlog; `skills/finishing/SKILL.md` **Leftover check, then
-    flush Follow-ups** and finishing's Option 2 write the target form on a leftover the
+    flush Follow-ups** and `skills/finishing/SKILL.md` **Option 2** write the target form on a leftover the
     user keeps, its target the one their list named; the flush rewrites the markers of the
     remaining lines that share a filed line's target to the merge-into form in its step 3,
     below.
@@ -344,7 +344,9 @@ graduates, or a milestone's Members/Delivered set changes.
 ### `## In flight` — the active-work list
 
 `.local/INDEX.md` opens with an `## In flight` section, one line per active
-unit of work, `<topic> · <branch> · <started YYYY-MM-DD>`. Gitignored,
+unit of work, `<topic> · <branch> · <started YYYY-MM-DD>`, with an optional
+`· PR #<n> open` tail while its pull request is open (`skills/finishing/SKILL.md`
+**Option 2**). Gitignored,
 **NOT auto-loaded** (lazy) — check it yourself at session start so you don't
 duplicate an in-flight item. Mark a unit started when you begin it (wired
 into the executing skill), update at commit time; on completion move a
