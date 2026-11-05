@@ -164,8 +164,9 @@ load on every word, every turn, so it earns the hardest pruning.
 A name in prose that points into another file is checked by `tests/prose-refs.test.ts`, so each
 kind has exactly one form:
 
-- A heading or numbered step of a `.md` file: the backticked path, whitespace (a line break is
-  fine), then the bold name — `references/red-green.md` **What a good test is**.
+- A heading, numbered step or lettered step (`a. **Label**`, as finishing's tail uses) of a
+  `.md` file: the backticked path, whitespace (a line break is fine), then the bold name —
+  `references/red-green.md` **What a good test is**.
 - A skill directory: through its file, `skills/executing/SKILL.md` **Steps**; never the bare
   directory.
 - A bullet in a section: the quoted name, `bullet of`, then the section's citation —

@@ -281,13 +281,17 @@ export const TRAILING_MARK: { name: string; re: RegExp } = {
   re: /[.:]$/,
 };
 
+const strongLabel = (src: string, lead: MdNode | undefined): string | null =>
+  lead?.type === "strong"
+    ? cleanName(src.slice(offset(lead, "start") + 2, offset(lead, "end") - 2))
+        .replace(TRAILING_MARK.re, "")
+        .trim()
+    : null;
+
 const leadLabel = (src: string, item: MdNode): string | null => {
   const [first] = item.children ?? [];
   const [lead] = first?.type === "paragraph" ? (first.children ?? []) : [];
-  if (lead?.type !== "strong") return null;
-  return cleanName(src.slice(offset(lead, "start") + 2, offset(lead, "end") - 2))
-    .replace(TRAILING_MARK.re, "")
-    .trim();
+  return strongLabel(src, lead);
 };
 
 export type LabelledItem = { label: string; body: string; ordered: boolean };
@@ -308,6 +312,14 @@ const labelOf = (src: string, item: MdNode): string | null =>
   item.position?.start.column === 1 && /^\d+\. /.test(src.slice(offset(item, "start")))
     ? leadLabel(src, item)
     : null;
+
+const letteredLabels = (src: string, para: MdNode): { at: number; full: string }[] =>
+  (para.children ?? []).flatMap((child) => {
+    const at = offset(child, "start");
+    const lineStart = at - ((child.position?.start.column ?? 1) - 1);
+    const full = /^[a-z]\. $/.test(src.slice(lineStart, at)) ? strongLabel(src, child) : null;
+    return full ? [{ at: lineStart, full }] : [];
+  });
 
 const sectionBullets = (src: string, root: MdNode): Map<MdNode, string[]> => {
   const bullets = new Map<MdNode, string[]>();
@@ -343,6 +355,10 @@ export const namesIn = (text: string): Name[] => {
       const full = node.type === "listItem" ? labelOf(src, node) : null;
       if (full) found.push({ at: offset(node, "start"), name: { name: coreName(full), full } });
     });
+    for (const node of root.children ?? [])
+      if (node.type === "paragraph")
+        for (const step of letteredLabels(src, node))
+          found.push({ at: step.at, name: { name: coreName(step.full), full: step.full } });
   }
   return found.sort((a, b) => a.at - b.at).map(({ name }) => name);
 };
