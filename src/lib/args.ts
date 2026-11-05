@@ -13,7 +13,14 @@ export interface ParsedArgs {
 // Flags that never take a value. Without this set, a positional like
 // `--json extra` would bind "extra" to --json (string, not boolean) and
 // silently disable strict `=== true` checks downstream.
-export const BOOLEAN_FLAGS = new Set<string>(["help", "json", "architecture", "isolated"]);
+export const BOOLEAN_FLAGS = new Set<string>([
+  "help",
+  "json",
+  "architecture",
+  "isolated",
+  "audit",
+  "run-tests",
+]);
 
 // Allowed flag keys per command. An unrecognized `--flag` errors loudly instead
 // of being silently swallowed — a typo, or a flag `review` no longer takes
@@ -31,6 +38,7 @@ export const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
     "fix-check",
   ]),
   ask: new Set(["task", "reasoning", "context", "isolated"]),
+  metrics: new Set(["base", "out", "audit", "run-tests"]),
 };
 
 export function assertKnownFlags(command: string, flags: Record<string, string | boolean>): void {

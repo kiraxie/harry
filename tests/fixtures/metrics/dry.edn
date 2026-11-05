@@ -1,0 +1,8 @@
+{:candidates [
+ {:score 1.0
+  :language "typescript"
+  :left {:file "src/a2.ts", :start-line 9, :end-line 17}
+  :right {:file "src/b2.ts", :start-line 1, :end-line 9}
+  :left-nodes 59
+  :right-nodes 59}
+]}

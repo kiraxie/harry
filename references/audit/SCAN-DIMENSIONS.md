@@ -34,7 +34,7 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 **What:** Literal or near-literal duplicated blocks — the easy case, where the drift test almost always says "bug if they diverge" because they're still identical.
 
-**Seed:** `jscpd` / `dupl` output directly.
+**Seed:** `jscpd` / `dupl` output directly, and dryer's structural pairs (`substrate/metrics/dry.edn`) when it ran.
 
 **Bar:** More than incidental (past the rule of three, or cross-boundary on first occurrence), and divergence would be a bug. A duplicated 3-line guard that's genuinely independent is not a finding.
 
@@ -94,7 +94,7 @@ Every finding, in every dimension, must clear the same bar: name the concrete fu
 
 **What:** Not a coverage *percentage* — a *type* of logic branch that is entirely untested (all error paths in a subsystem, a whole state-machine transition class, the concurrency guards). Also: tests that don't actually exercise the real code (mock-only tests that reimplement the logic they claim to test).
 
-**Seed:** test-file-to-source mapping; branch/error paths from complexity output cross-referenced with what tests touch.
+**Seed:** test-file-to-source mapping; branch/error paths from complexity output cross-referenced with what tests touch; mutator's surviving mutants (`substrate/metrics/metrics.md`) when the audit ran with `--run-tests`.
 
 **Bar:** Name the class of bug that ships undetected: "no test drives the `PENDING→FAILED` transition, so a regression there passes CI." A single missing edge-case test is not a structural hole.
 

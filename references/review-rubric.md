@@ -183,6 +183,12 @@ never Critical. In a fresh review, acknowledge what was done well before listing
 - **Review it yourself.** Never dispatch a subagent to review part of the diff or
   for a second opinion; every review seat is already provided. A diff too large
   for one pass is reviewed in passes — say so in the report.
+- **Metrics facts are answered line by line.** When the review is handed a metrics facts
+  file (`skills/executing/SKILL.md` **Steps**), every hit in it — a dryer pair, a crapper
+  line, a mutator survivor — gets a finding at the severity this rubric sets, or one line
+  in the report saying why it is not one (an equivalent mutant, an incidental shape match).
+  A tool marked not installed, skipped or failed is not a hit. The numbers are evidence
+  for a judgment, not a merge gate.
 - **Unreadable evidence is a gap, not a failure.** An AC whose named verification path is
   missing or unreadable is at least Important and blocks `pass` for that AC
   (report it as evidence missing).

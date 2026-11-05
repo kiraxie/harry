@@ -390,7 +390,7 @@ for (const c of KNOWN_FLAG_CASES) {
 }
 
 test("KNOWN_FLAGS lists exactly the live commands (status is retired)", () => {
-  assert.deepEqual(Object.keys(KNOWN_FLAGS).sort(), ["ask", "review", "setup"]);
+  assert.deepEqual(Object.keys(KNOWN_FLAGS).sort(), ["ask", "metrics", "review", "setup"]);
 });
 
 // Generative: a newly added command must accept --help too.

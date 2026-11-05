@@ -56,10 +56,11 @@ If an agent is killed mid-task (quota/session limit, transient API error), **res
 
 ## Setup
 
-Establish two paths before starting:
+Establish these before starting:
 
 - **Target**: the codebase to audit (from `$ARGUMENTS`, falling back to the current working directory). Confirm the scope — whole repo, or a named subsystem / set of workspaces.
 - **Output directory**: where all audit artifacts go. If an output directory was named (`--output <dir>` in `$ARGUMENTS`), use it. Otherwise, if the repo has a gitignored `.local/` directory, default to `.local/audit/run-<N>/`; else default to `.code-audit/run-<N>/`. `<N>` is the next unused integer (check with `ls`). Ask the user if they want somewhere else. Create it if missing. Separate run directories are what make the audit **iterative** (see below).
+- **Run tests**: whether `$ARGUMENTS` contains `--run-tests`. Only then does Round 1's metrics adapter run coverage and mutation testing, which run the target's test suite in the user's checkout (`references/audit/RECON.md` **Step 1a**).
 
 All files written during the audit go in the output directory:
 

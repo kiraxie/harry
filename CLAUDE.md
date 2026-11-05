@@ -10,7 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    and `brainstorm → execute → finish` pipeline that ship to consumers. This is prose/markdown,
    not code.
 2. **The `companion` runtime** (`src/` → bundled to `dist/companion.cjs`) — a TypeScript CLI that
-   backs the `review` and `ask` slash commands by spawning the `codex` CLI.
+   backs the `review` and `ask` slash commands by spawning the `codex` CLI, and `metrics`, which
+   runs external quality tools. `src/` imports `scripts/lib/tools.mjs` and
+   `scripts/lib/path-search.mjs`; nothing under `scripts/` imports `src/`.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
 required to install it. Rebuild `dist/` when changing `src/` **or `package.json`'s version** —
@@ -84,7 +86,7 @@ hides the newest tags.
 ## Runtime architecture (`src/`)
 
 Single CLI entry point `src/companion.ts` parses `argv` and routes to `src/commands/*.ts`
-(`review`, `ask`, `setup`). Bundled by `build.mjs`
+(`review`, `ask`, `setup`, `metrics`). Bundled by `build.mjs`
 (esbuild, CJS, Node built-ins kept external) into the one committed file `dist/companion.cjs`.
 
 Both `ask` and `review` spawn the `codex` CLI as a separate, ephemeral, read-only
@@ -101,6 +103,24 @@ handed file: `--rereview` (executing's scoped re-review: the per-diff standard p
 `references/fix-check.md` **Three levels**, and the open findings) and `--fix-check`
 (a fix check run by hand: `references/fix-check.md` in full, and the proposed
 fixes).
+
+`metrics` is the one command that is not read-only. It runs whichever of crapper, dryer
+and mutator are installed under `~/.claude/harry/tools/` (`/harry:sync --tools`). dryer, and
+crapper's before-state, run on `git archive` snapshots of tracked files; coverage, crapper's
+after-state and mutator run in the user's checkout, where they run the project's tests and
+write artifacts (`.metrics/`, `coverage/`, `target/…`). `src/lib/metrics/guard.ts` moves
+any pre-existing artifact path aside first, deletes the artifact paths the run created,
+restores the rest, and checks that `git status --porcelain -uall` and the bytes of every file
+it listed are unchanged; a difference exits non-zero naming the paths. Ignored caches a test
+run creates elsewhere (`.pytest_cache/`) are out of its scope. The stash dir
+(`<git-dir>/harry-metrics-stash`) is also the lock: a run refuses while one exists, naming
+what it holds. An interrupt that kills the running child too (Ctrl+C, a process-group
+signal) restores and exits 128+signal; a child that catches it and exits with a code
+(pytest), or a git command, is read as that command failing. The run is synchronous, so a signal sent to the
+companion's pid alone is held until the run ends and changes nothing; `kill -9` skips the
+restore and leaves the stash dir, whose manifest names what to put back. mutator's own test
+children run in their own session.
+It never installs a package: a gap in coverage tooling scores complexity only, with the reason.
 
 `review` is read-only by construction: the spawned codex process runs in its own read-only
 sandbox. `commands/review.md`'s `allowed-tools` only **pre-approves** the review invocation

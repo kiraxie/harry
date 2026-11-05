@@ -407,6 +407,9 @@ for (const { missing, args } of [
   test(`A3: a missing ${missing} fails loudly and never spawns codex (${args.join(" ") || "review"})`, () => {
     const root = tempDir("harry-rcli-plugin-");
     cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
+    cpSync(path.join(REPO_ROOT, "scripts/lib"), path.join(root, "scripts/lib"), {
+      recursive: true,
+    });
     cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
     cpSync(path.join(REPO_ROOT, "references"), path.join(root, "references"), {
       recursive: true,
@@ -792,6 +795,7 @@ for (const flag of ["--rereview", "--fix-check"]) {
 test("AC-3: a fix-check.md with no `## Three levels` heading fails a re-review and never spawns codex", () => {
   const root = tempDir("harry-rcli-plugin-");
   cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
+  cpSync(path.join(REPO_ROOT, "scripts/lib"), path.join(root, "scripts/lib"), { recursive: true });
   cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
   cpSync(path.join(REPO_ROOT, "references"), path.join(root, "references"), { recursive: true });
   const copy = path.join(root, "references", "fix-check.md");
@@ -822,6 +826,7 @@ for (const flag of ["--rereview", "--fix-check"]) {
 test("a re-review with no changes still fails on a fix-check.md with no `## Three levels` heading first", () => {
   const root = tempDir("harry-rcli-plugin-");
   cpSync(path.join(REPO_ROOT, "src"), path.join(root, "src"), { recursive: true });
+  cpSync(path.join(REPO_ROOT, "scripts/lib"), path.join(root, "scripts/lib"), { recursive: true });
   cpSync(path.join(REPO_ROOT, "package.json"), path.join(root, "package.json"));
   cpSync(path.join(REPO_ROOT, "references"), path.join(root, "references"), { recursive: true });
   const copy = path.join(root, "references", "fix-check.md");

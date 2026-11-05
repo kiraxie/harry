@@ -25,6 +25,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 - [Claude Code](https://claude.com/claude-code)
 - For the agent commands (`review`, `ask`, `debate`, `rethink`): the `codex` CLI on `PATH`, logged in (`codex login`).
 - For `debate`'s Gemini voice: the `agy` (Antigravity) CLI on `PATH`.
+- Optional, for metrics: Python **>= 3.11** (crapper, dryer and mutator; see **Metrics** below).
 
 ## Install
 
@@ -73,10 +74,10 @@ Claude-native or local scripts.
 | `/harry:ask "<prompt>" [--reasoning <effort>] [--context <text\|@file\|@->]` | One read-only prompt to Codex via `codex exec` |
 | `/harry:debate "<topic>"` | 3 models (opus / gpt via Codex / gemini-3.1-pro) deliberate over 2 rounds; Claude synthesizes |
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
-| `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
+| `/harry:audit [--run-tests]` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting; `--run-tests` adds coverage and mutation testing from the metrics tools |
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
 | `/harry:rethink <subsystem>` | Rethink a subsystem from scratch — an independent design from your brief alone, compared with the current design, then a direction and an incremental path |
-| `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
+| `/harry:sync [--tools] [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs; `--tools` installs the metrics tools |
 | `/harry:retro` | Look back on the current session for what in the agent's environment slowed or misled it; ranked proposals, the kept ones filed as backlog items. Typed by you only — the model never starts it |
 | `/harry:wait-what` | Re-explain harry's previous message once, in plainer words — one-shot, not a mode |
 
@@ -101,6 +102,28 @@ Neither passes a model — `~/.codex/config.toml` decides which one runs;
 `--reasoning` overrides effort for that one call. One-time setup: install the
 `codex` CLI, then `codex login`.
 
+## Metrics
+
+Review and `/audit` judge duplication, complexity and test strength by reading code, and
+that judgment varies run to run. Three tools by Robert C. Martin give the same answer
+every time:
+
+- **crapper** — CRAP per function: complexity × how much of it no test runs.
+- **dryer** — function pairs with the same structure under different names.
+- **mutator** — mutation testing: small edits (`>` to `>=`) the tests do not catch.
+
+`/harry:sync --tools` clones them into `~/.claude/harry/tools/` at the commits harry
+pins; a release moves the pins. They are optional: without them, everything else works
+and the metrics output says each tool is not installed.
+
+When installed, the executing skill runs `companion metrics` before review. It scores
+the unit's changed files, writes a facts file, and the reviewers must answer every line
+in it with a finding or a reason it is not one. Nothing is a merge gate. It runs the
+project's tests for coverage and mutation testing, removes the tools' output, and fails
+loudly if a file git sees is left changed (ignored caches a test run makes, such as
+`.pytest_cache/`, are left as they are). `/audit` uses the same tools over the
+whole tracked tree; `--run-tests` adds coverage and mutation testing there.
+
 ## Skills
 
 These auto-trigger (no slash command); they are the pipeline:
@@ -116,8 +139,8 @@ HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · executing · finishing
 commands/           review · ask · debate · debt · sync · audit · grill · rethink · retro · wait-what
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
-src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs)
-scripts/            install.mjs · init.mjs · lib/markers.mjs · lib/stale-entries.mjs
+src/ + dist/        companion CLI — ask/review via the codex CLI, metrics (bundled via build.mjs)
+scripts/            install.mjs · init.mjs · lib/markers.mjs · lib/stale-entries.mjs · lib/tools.mjs · lib/path-search.mjs · lib/atomic-write.mjs
 .claude-plugin/     Claude Code plugin manifest
 .claude/            repo-local maintainer tooling, not loaded by the plugin: commands (release · upgrade-deps · distill) · references · scripts
 upstream.json       tracks the pinned upstreams by commit (see .claude/references/upstream-sync.md)

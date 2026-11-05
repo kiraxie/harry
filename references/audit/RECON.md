@@ -13,6 +13,22 @@ Detect which languages are present (by file extension and manifest files: `packa
 
 Tools are pulled on-demand (npx / go run / uvx) so the audit **adds nothing to the target's manifests**. If a tool can't be fetched (offline, missing runtime), note the gap in the substrate and fall back to an LLM `research` agent for that signal — but prefer the tool: it is ground truth and the LLM is not.
 
+### harry's metrics adapter
+
+Run it first, from the target's repo root:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/companion.cjs" metrics --audit --out <output dir>/substrate/metrics
+```
+
+Add `--run-tests` only when the Setup's **Run tests** is on, and then run the command with `run_in_background: true` and wait for it before launching the adapters below: it runs the whole test suite in the checkout, can pass the 10-minute foreground Bash timeout, whose kill skips its cleanup, and no other adapter may touch the checkout while it runs. It runs whichever of crapper, dryer and mutator are installed (`/harry:sync --tools` installs them; a tool not installed is a line in its output, not an error) and writes `metrics.md`, `dry.edn` and `crap.edn` there:
+
+- **dryer** → structural duplication: function pairs whose normalized syntax trees match, across the whole tracked tree. Its pairs are a Stage A signal below and a seed for dimension `copy-paste`.
+- **crapper** → complexity per function (CC), and with `--run-tests` complexity × untested (CRAP). Where it covers a language, it is that language's complexity signal in the matrix below.
+- **mutator** (`--run-tests` only) → surviving mutants: code the tests execute but do not check. A seed for dimension `test-coverage`.
+
+Without `--run-tests` it reads only a snapshot of the tracked files and never touches the checkout. With it, coverage and mutator run in the checkout, and the command removes what they wrote; a non-zero exit names what it could not account for — stop and show the user. Record in `substrate/README.md` which tools ran and which were missing.
+
 ### Tool matrix
 
 | Signal | TS / JS | Go | Python | Language-agnostic |
@@ -40,13 +56,15 @@ Launch the adapters in parallel (they're independent). Write each tool's raw out
 
 Same-intent code that drifted apart evades token clone detectors *because* it drifted — a distinct signal from the token-level duplication tool above, and it belongs in the substrate for the same reason: this stage only gathers facts, it doesn't judge them. Pure LLM comparison of every module against every other is O(n²) and unaffordable, so generate candidates deterministically here in Round 1 (high recall, cheap). Round 2's dimension hunters don't adjudicate these — a dedicated Stage B step does, once Round 2 starts (see `references/audit/DEEP-DIVE.md` **Hoist-candidate funnel**).
 
-Take the **union** of these three signals. They're cheap and over-generate on purpose — noise here only costs one wasted Stage-B comparison later; a miss is the only real loss. Run this as a script yourself: it is deterministic, so it needs no agent. It produces a candidate list, each entry a pair/cluster of locations plus which signal(s) fired, which you write to `substrate/hoist-candidates.json`.
+Take the **union** of these signals. They're cheap and over-generate on purpose — noise here only costs one wasted Stage-B comparison later; a miss is the only real loss. Run this as a script yourself: it is deterministic, so it needs no agent. It produces a candidate list, each entry a pair/cluster of locations plus which signal(s) fired, which you write to `substrate/hoist-candidates.json`.
 
 1. **Cross-boundary symbol/filename fuzzy match.** Collect exported symbol names and filenames per workspace; find names that are equal or fuzzy-close **across** workspace/package boundaries (`nova/core/utils/tenant-client.ts` ↔ `shared/src/getTenantPrisma`). Cross-boundary is the key filter — matches *within* one package are usually fine. This directly implements "extract cross-boundary on first occurrence."
 
 2. **Shared external-dependency fingerprint.** For each module, take the set of external (third-party / infra) imports as a fingerprint. Two modules in different workspaces with a strongly overlapping fingerprint (both import the same cloud-storage SDK + pool library) likely serve the same infrastructure purpose — a classic "product module re-implements shared infra" case.
 
 3. **Git provenance.** Use history to find files merged in from another repo (`git log --follow`, merge commits that imported a tree) and mine **prior hoist PRs** (search merged PR titles/commits for hoist/extract/shared/consolidate). Prior hoists tell you what *kind* of thing this team extracts — and the still-un-hoisted siblings of past hoists are prime candidates.
+
+4. **Structural clones.** When dryer ran (`substrate/metrics/dry.edn`), each of its pairs that crosses a workspace/package boundary is a candidate.
 
 Write the candidate list to `substrate/hoist-candidates.json`. Note explicitly in `substrate/README.md` what Stage A **cannot** catch in v1: code that drifted so far it shares neither names nor dependencies. That gap is the documented future-work item (see README.md → intent-fingerprint / embedding).
 

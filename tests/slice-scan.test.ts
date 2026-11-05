@@ -62,6 +62,16 @@ const ALLOWED: { file: string; line: string; why: string }[] = [
     line: "const start = lines.indexOf(opener);",
     why: "line-array lookup; a missing opener returns no paths and the caller's asserts fail",
   },
+  {
+    file: "metrics.test.ts",
+    line: "const argAfter = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; };",
+    why: "argv lookup",
+  },
+  {
+    file: "metrics.test.ts",
+    line: "const i = args.indexOf(flag);",
+    why: "argv lookup",
+  },
 ];
 
 const scanned = (): string[] =>
@@ -475,6 +485,21 @@ test("the code-span scan catches a read of a span's content and nothing else", (
 });
 
 const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
+  {
+    file: "metrics.test.ts",
+    text: "/^- (new|touched) `(\\w+)`/gm",
+    why: "the metrics facts file's crapper line, not prose",
+  },
+  {
+    file: "metrics.test.ts",
+    text: "/`rose`.*CC 3 → 5/",
+    why: "the metrics facts file's crapper line, not prose",
+  },
+  {
+    file: "metrics.test.ts",
+    text: "/^- (\\S+) `(.+)` → `(.+)`/gm",
+    why: "the metrics facts file's mutator line, not prose",
+  },
   {
     file: "slice-scan.test.ts",
     text: "/`(?:[([.]|\\\\[wWdDsS])/",

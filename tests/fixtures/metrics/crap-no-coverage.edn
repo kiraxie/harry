@@ -1,0 +1,5 @@
+{:entries [
+  {:name "classify", :namespace "a", :complexity 5, :coverage nil, :crap nil}
+  {:name "copyOne", :namespace "a", :complexity 3, :coverage nil, :crap nil}
+  {:name "copyTwo", :namespace "b", :complexity 3, :coverage nil, :crap nil}
+]}

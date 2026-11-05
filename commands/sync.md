@@ -1,6 +1,6 @@
 ---
 description: Set up or resync harry here — wire the resident laws into your global instructions, add the .gitignore block, and offer to migrate legacy spec/plan docs. Re-run after updating the plugin or editing HARRY.md to resync. --remove strips this project's .gitignore block (laws stay).
-argument-hint: '[--remove] [--force] [targetDir]'
+argument-hint: '[--tools] [--remove] [--force] [targetDir]'
 allowed-tools: Bash(node:*), Glob, Grep, Read, Write, Edit, AskUserQuestion
 ---
 
@@ -31,6 +31,14 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs"            # laws only
 # …or, if they opted into the Explore override:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/install.mjs" --explore  # laws + Explore override
 ```
+
+**When `$ARGUMENTS` contains `--tools`**, append `--tools` to that command. It clones
+crapper, dryer and mutator (unclebob, 0BSD) into `~/.claude/harry/tools/<tool>` at the
+commits harry pins, and runs each once so its Python venv is built now. An existing
+clean clone moves to the pin; a clone with local changes is left as is and reported.
+These are the tools `companion metrics` runs (`skills/executing/SKILL.md` **Steps**,
+`/audit`); without them metrics reports each as not installed. Without `--tools`, sync
+never touches `~/.claude/harry/tools/`. The tools need Python 3.11 or newer.
 
 It deploys a snapshot of the plugin's current `HARRY.md` to
 `~/.claude/harry/HARRY.md` and inserts a marker-wrapped `@~/.claude/harry/HARRY.md`

@@ -2,6 +2,7 @@
 
 import process from "node:process";
 import { runAsk } from "./commands/ask.ts";
+import { runMetrics } from "./commands/metrics.ts";
 import { runReview } from "./commands/review.ts";
 import { runSetup } from "./commands/setup.ts";
 import {
@@ -30,11 +31,14 @@ function printUsage(): void {
       "                   [--architecture | --rereview <text|@file|@-> | --fix-check <text|@file|@->]",
       "                   [focus...]",
       '  companion ask "<prompt>" [--reasoning <low|medium|high|xhigh>] [--context <text|@file|@->] [--isolated]',
+      "  companion metrics --base <ref> --out <file>",
+      "  companion metrics --audit --out <dir> [--run-tests]",
       "",
       "Commands:",
       "  setup       Check Codex auth and availability",
       "  review      Review the branch or working tree via `codex exec`",
       "  ask         Ask a single prompt (read-only) and print the answer",
+      "  metrics     Run the installed crapper, dryer and mutator; write a facts file",
     ].join("\n"),
   );
 }
@@ -81,6 +85,16 @@ async function main(): Promise<void> {
         reasoning: flagEnum(flags, "reasoning", REASONING_EFFORTS),
         context: flagRequiredString(flags, "context"),
         isolated: flags.isolated === true,
+      });
+      break;
+    }
+
+    case "metrics": {
+      await runMetrics(process.cwd(), {
+        base: flagRequiredString(flags, "base"),
+        out: flagRequiredString(flags, "out"),
+        audit: flags.audit === true,
+        runTests: flags["run-tests"] === true,
       });
       break;
     }

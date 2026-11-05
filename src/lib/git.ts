@@ -21,7 +21,7 @@ function failureReason(result: CommandResult): string {
   return result.status === null ? "killed by a signal or failed to spawn" : `exit ${result.status}`;
 }
 
-function git(cwd: string, args: string[]): CommandResult {
+export function git(cwd: string, args: string[]): CommandResult {
   // Resolved first, never spawned by bare name: cwd is the repo under review
   // (see path-search.ts). Not found keeps the ENOENT a failed spawn reports.
   const command = resolveOnPath("git", process.env);
@@ -37,7 +37,7 @@ function git(cwd: string, args: string[]): CommandResult {
   };
 }
 
-function gitChecked(cwd: string, args: string[]): CommandResult {
+export function gitChecked(cwd: string, args: string[]): CommandResult {
   const result = git(cwd, args);
   if (result.error) throw result.error;
   if (result.status !== 0) {

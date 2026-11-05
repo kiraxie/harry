@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 import { warnStale } from "./lib/stale-entries.mjs";
+import { syncTools, toolsDir } from "./lib/tools.mjs";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -162,6 +163,10 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
     if (lines.length === 0)
       lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
+    if (args.includes("--tools") && !remove) {
+      for (const t of syncTools()) lines.push(`tool ${t.name}: ${t.outcome} (${t.detail})`);
+      lines.push(`Tools dir: ${toolsDir()}`);
+    }
     console.log(lines.join("\n"));
   }
 }

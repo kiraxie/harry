@@ -59,11 +59,11 @@ for (const command of ["result", "status"]) {
   });
 }
 
-test("usage lists exactly setup, review and ask", () => {
+test("usage lists exactly setup, review, ask and metrics", () => {
   const res = runCli(["help"]);
   assert.equal(res.status, 0, res.stderr);
   const commands = [...res.stdout.matchAll(/^ {2}companion (\S+)/gm)].map((m) => m[1]);
-  assert.deepEqual([...new Set(commands)], ["setup", "review", "ask"]);
+  assert.deepEqual([...new Set(commands)], ["setup", "review", "ask", "metrics"]);
   assert.ok(!/\bstatus\b/.test(res.stdout), res.stdout);
   assert.ok(!res.stdout.includes("--model"), res.stdout);
 });
