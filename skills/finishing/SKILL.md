@@ -16,6 +16,8 @@ A unit's **layout** says which checkout holds its work. Work it out whenever a s
 
 Whether the main checkout is on `<branch>` right now is not part of it either; only Discard needs that, and checks it itself.
 
+Before any command pastes `<branch>`, check the name as `skills/executing/SKILL.md` **Branch** says; a name outside its set stops here, handled as that step says.
+
 ## 1. Verify tests first — never finish on red
 
 Run the project's suite before anything else. Read the output (exit code, failure count) — an unread "pass" is not evidence (HARRY.md **Evidence**).
@@ -105,7 +107,7 @@ i. **Lessons offer.** Look back over the session for a repo-specific rule worth 
 
 - Draft the title + body, show it for approval BEFORE `gh pr create` (unless the user said "just open it"). The body follows `references/pr-body.md`. Title and body must not leak internal planning language (no sprint/phase/wave names, `.local/` paths, personal TODOs, "per AC-3").
 - **Conversation leftovers, before `gh pr create`.** The conversation is here now and may not be at merge, so run step c's conversation half now: list what was raised and never closed, with the same fields and the same recommendation; the user keeps or drops each; a kept one is appended to the item's `## Follow-ups`, marked as the "Ruled-backlog marker" bullet of `references/doc-types.md` **Lifecycle rules** says, its marker carrying the target the list named by the "Similar backlog items" bullet of `references/doc-types.md` **Lifecycle rules**, and a dropped one gets step c's `## Progress` line (a unit with no item: the reply holds a dropped one, and a kept one lands in a `status: backlog` item at once, as step 2's **No item** says). At merge, step c reads the conversation since this point, or only the files when the session is a new one.
-- Push the branch and open the PR. From a detached HEAD, publish with `git push origin HEAD:refs/heads/<new-branch>`.
+- Push the branch and open the PR. From a detached HEAD, publish with `git push origin HEAD:refs/heads/<new-branch>`; `<new-branch>` uses the set `skills/executing/SKILL.md` **Branch** allows, and a name outside it stops for the user to pick another.
 - Before merging a PR — even when not asked — check its reviews, inline comments, and CodeRabbit status. Any unresolved actionable item or unmet conditional approval → report and do NOT merge (unless the user says "force merge").
 - Merge it as a squash: `gh pr merge --squash --subject "<PR title>" --body "<why and what>"` — pass both, or GitHub's default squash message may list every branch commit. Never a merge commit or rebase merge.
 - Keep the branch, and its worktree if it has one, alive — the user needs it to iterate on feedback.
