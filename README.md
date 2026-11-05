@@ -23,7 +23,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 
 - Node.js **>= 26**
 - [Claude Code](https://claude.com/claude-code)
-- For the agent commands (`review`, `ask`, `debate`): the `codex` CLI on `PATH`, logged in (`codex login`).
+- For the agent commands (`review`, `ask`, `debate`, `rethink`): the `codex` CLI on `PATH`, logged in (`codex login`).
 - For `debate`'s Gemini voice: the `agy` (Antigravity) CLI on `PATH`.
 
 ## Install
@@ -39,7 +39,7 @@ Any red line (security/auth/money/delete/migration/external contract/cross-bound
 harry's commands share the `/harry:` namespace. The one whose bare name collides
 with a Claude Code built-in — `/harry:review` —
 **must** be typed with the prefix, or the built-in runs instead; the rest
-(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:wait-what`)
+(`/harry:sync`, `/harry:ask`, `/harry:debate`, `/harry:debt`, `/harry:audit`, `/harry:grill`, `/harry:rethink`, `/harry:wait-what`)
 accept the bare name when unambiguous.
 
 `/harry:sync` does three things: deploys harry's resident laws (`HARRY.md`, which
@@ -63,7 +63,7 @@ Contributors rebuilding the runtime under `src/`: `pnpm install && pnpm run buil
 
 ## Commands
 
-`review`, `ask`, and `debate` run through Codex, on your Codex/ChatGPT subscription —
+`review`, `ask`, `debate`, and `rethink` run through Codex, on your Codex/ChatGPT subscription —
 token-quota consumption, not a per-call premium-request count. The rest are
 Claude-native or local scripts.
 
@@ -75,6 +75,7 @@ Claude-native or local scripts.
 | `/harry:debt` | Re-judge deferred decisions and open backlog items (`DEBT:` markers + item deferrals + backlog entries) into a triaged ledger |
 | `/harry:audit` | Whole-repo structural/architecture health-check — 6 rounds, iterative, incl. over-engineering hunting |
 | `/harry:grill <topic>` | Adversarial interview that stress-tests a plan, decision, or idea — every decision settled, deferred, or surfaced; closes on a residue manifest |
+| `/harry:rethink <subsystem>` | Rethink a subsystem from scratch — an independent design from your brief alone, compared with the current design, then a direction and an incremental path |
 | `/harry:sync [--remove] [--force]` | Set up or resync harry here — wire the resident laws, add the `.gitignore` block, migrate legacy spec/plan docs |
 | `/harry:wait-what` | Re-explain harry's previous message once, in plainer words — one-shot, not a mode |
 
@@ -112,7 +113,7 @@ These auto-trigger (no slash command); they are the pipeline:
 ```text
 HARRY.md            resident laws (loaded via @)
 skills/             brainstorming · executing · finishing
-commands/           review · ask · debate · debt · sync · audit · grill · wait-what
+commands/           review · ask · debate · debt · sync · audit · grill · rethink · wait-what
 references/         on-demand tables + techniques (tier gates, claim→evidence, red-green, ...)
 src/ + dist/        companion CLI — spawns the codex CLI for ask/review (bundled via build.mjs)
 scripts/            install.mjs · init.mjs · lib/markers.mjs · lib/stale-entries.mjs

@@ -7,8 +7,7 @@
  * argv it spawns, the prompt it sends on stdin, where the answer lands, and
  * that every failure is self-describing.
  *
- * Both of `ask`'s doors instruct their consumers to "Return the command stdout
- * verbatim, exactly as-is", and `/debate` folds that stdout into a three-voice
+ * `ask`'s doors relay its stdout verbatim, and `/debate` folds that stdout into a three-voice
  * synthesis. So a failed run MUST be self-describing on stdout: `# Ask Failed`
  * as the first line, then the reason, and a non-zero exit.
  */
@@ -88,7 +87,8 @@ interface AskDoor {
  * the exit code rather than on the marker at all, so the marker is explanatory
  * there and the positional word carries no obligation. Pinning it anyway would
  * manufacture a contract rather than record one (same reasoning as
- * `Ask failed:` above).
+ * `Ask failed:` above). `rethink.md` gates on the exit code too, so it does not
+ * pin MARKER_POSITION either.
  */
 const ASK_DOORS: readonly AskDoor[] = [
   {
@@ -100,6 +100,11 @@ const ASK_DOORS: readonly AskDoor[] = [
     path: "commands/debate.md",
     quotes: [ASK_FAILED_MARKER],
     prohibition: "never relay",
+  },
+  {
+    path: "commands/rethink.md",
+    quotes: [ASK_FAILED_MARKER, FATAL_ERROR_PREFIX],
+    prohibition: "never present",
   },
 ];
 
