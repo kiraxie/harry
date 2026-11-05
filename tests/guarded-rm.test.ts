@@ -26,6 +26,12 @@ const REMOVALS: { file: string; guard: string; rm: string; why: string }[] = [
     rm: `rm -rf '<D>'`,
     why: "cwd exists only where step 1 made it; the brief may be the missing piece",
   },
+  {
+    file: "skills/finishing/SKILL.md",
+    guard: `case '<store>/.local/tmp/<branch>' in */.local/tmp/?*)`,
+    rm: `rm -rf '<store>/.local/tmp/<branch>'`,
+    why: "the case requires a name after tmp/, so an empty <branch> cannot reach sibling dirs",
+  },
 ];
 
 type Hit = { rel: string; n: number; line: string };
