@@ -5,6 +5,46 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] - 2026-11-06
+
+### Added
+
+- **`/harry:next` picks the next unit or briefs a named one.** It reads the item
+  store read-only, never offers a unit already in flight, orders candidates by
+  `## Roadmap`, and ends on one question; a brief lists what blocks the item and
+  ends on its tier. A project can add a tracker supplement within fixed limits.
+  Finishing ends its merge tail with the pick.
+- **`/rethink` designs from the target shape alone**, then compares it with the
+  current design and picks a direction; it runs through `ask --isolated`, which
+  makes and removes its own empty working directory.
+- **`/retro`, a user-invoked retrospective** of the session's environment and tooling.
+- **`companion metrics` runs crapper, dryer and mutator as review evidence.** They
+  run from the tool's own clone with the group only as `--root`, so a group file
+  named like a stdlib module cannot shadow their imports; `audit --run-tests`
+  crapper lines carry `file:line`.
+- **Root cause names the shared premise.** After three failed fixes of one
+  hypothesis, `references/root-cause-tracing.md` asks for the design assumption
+  they all rest on, in one sentence, before the next fix.
+- **The review rubric checks a re-run.** An operation with a side effect, run twice
+  or resumed after failing halfway, must end in the state one clean run leaves.
+- **Evals:** plugin trials run jailed under `EVALS_SANDBOX=1`, `validate` rejects an
+  unknown `law` label, and three informative cases cover this release's prose
+  (only `/next` discriminates so far).
+
+### Changed
+
+- **`/ask` and `/debate` pass prompts by file**, never as shell source; a prompt
+  file is kept until its call is settled. `/debate` routes gemini to Gemini 4 Argon
+  and lists what each backend keeps on disk.
+- **Branch names stay within a shell-safe set** (`A-Z a-z 0-9 . _ / -`), checked
+  before any command pastes one; a name outside it stops for the user. The store
+  path is used as `"$STORE"`, never pasted.
+- **Finishing** removes a unit's tmp dir with a guarded command, writes HISTORY
+  safely on resume, and reads a rebase merge by its PR.
+- **`/sync` never overwrites a migration target without asking.**
+- The Follow-ups flush, the ruled-backlog marker, `/debt`'s Notes block and the
+  review door's cited rules each have one home.
+
 ## [0.26.0] - 2026-10-30
 
 ### Added
