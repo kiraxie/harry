@@ -51,9 +51,25 @@ status `active` whose file has no `type:` frontmatter key and holds
 `### Acceptance criteria` or a legacy `## Plan` (a milestone itself and a state note are
 not candidates); and each member still listed under an open milestone's `## Members` (an
 item whose frontmatter has `type: milestone`). Remove every unit in flight; list each
-candidate once. Order them as `## Roadmap` names them first, then in index file order.
+candidate once. Their base order is `## Roadmap` first, then index file order.
 Read each candidate's item file: when its `## Notes` says it waits on something (a
 release, another item, a date, an outside answer), it is 🔒 with that wait in a few words.
+
+**Groups and order.** From the item files, group the candidates that touch the same
+files, share a topic, or name one another; two candidates where one depends on the other
+are always in one group. Each group gets a short name and a one-line reason it holds
+together; the candidates in no group form one last group, `Other`. Within a group, a
+candidate goes after every candidate it depends on — a wait its `## Notes` names on that
+candidate, or an order you infer from the item files, marked `suggested` with its reason
+— and this overrides the base order; with no dependency the base order holds. Groups
+follow the base position of their earliest member; `Other` is always last. A group whose
+members are worth doing one after another (the same files read, or one change setting up
+the next) gets one line `#a → #b` with its reason: a suggestion only, since each member
+is still its own unit, started on its own. With a supplement, grouping runs on the rows
+and the base order it sets, and its rules keep their precedence: a dependency still
+orders rows within a group and adds the order column, unless the supplement has its own
+rule for dependency order or that column. A row with no item file is grouped by what the
+supplement gives for it, or falls to `Other`.
 
 Output, these parts in this order and nothing else:
 
@@ -61,13 +77,21 @@ Output, these parts in this order and nothing else:
    unreadable supplement — none of these → nothing.
 2. One line naming what is in flight now, each unit with its branch, marked as running —
    never offered as a pick. None → `In flight: none`.
-3. One table of the candidates. By default one row per candidate: `#`, slug, one-line
-   summary from its index line, and
-   `▶` (movable), `▶ approved` (an `active` item: its acceptance criteria are approved,
-   ready to execute) or `🔒 <wait>`, plus a live-status column when a supplement gives one.
-   No candidate → say the backlog is empty instead.
-4. One question: which number to start, or a slug to brief. A number the user picks is
-   briefed as the slug mode below does before anything starts.
+3. The candidates, one table per group in group order: each table under one line naming
+   its group and the reason, and the group's `#a → #b` line, when it has one, after the
+   table. Rows are numbered continuously across groups. When no group holds two or more
+   candidates, one table with no group lines. By default one row per candidate: `#`,
+   slug, one-line summary from its index line, `▶` (movable), `▶ approved` (an `active`
+   item: its acceptance criteria are approved, ready to execute) or `🔒 <wait>`, and, when
+   grouped, the order: `after #<n>` with its reason, plus `suggested` when inferred, or
+   `—`; plus a live-status column when a supplement gives one. No candidate → say the
+   backlog is empty instead.
+4. One line recommending a number to start and why — the first `▶` or `▶ approved` row in
+   the printed order, counting each `Other` row at its own base position rather than last
+   (an ungrouped movable Roadmap item ahead of every group's earliest member is the one
+   named, by its printed number); a 🔒 row only when no row is movable, naming its wait —
+   then one question: which number to start, or a slug to brief. A number the user picks
+   is briefed as the slug mode below does before anything starts.
 
 ## With a slug — brief
 
