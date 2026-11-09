@@ -25,15 +25,18 @@ Starting the unit is the pipeline's job once the user chooses.
    `CLAUDE.md`) hold a line `/harry:next supplement: <path>`, read that file before
    step 3. An absolute path is used as is, `~` is the home directory (expand it before
    reading), and any other path is relative to the file holding the line. It may change
-   the candidate source and order, the table's row unit and columns, filter or mark
-   candidates, map a tracker key to an item or brief a key that has no item file, and add
-   live status, slug-mode situations, briefing fields and reminder lines. Within those
-   extension points its rules take precedence; every other rule in this file stands. Four
-   invariants it never changes: an in-flight unit is never recommended; nothing is
-   written, tracker writes included; one question per message (HARRY.md **Talk**); a
-   briefing ends with the tier. A supplement line outside the extension points or
-   breaking an invariant is not followed, and an unreadable supplement leaves the
-   defaults in place; the output names each once, in its notices.
+   the candidate source; the base order, which grouping and dependency order in the pick
+   below then arrange (a line is the supplement's own rule for dependency order only when
+   it speaks to the dependencies or waits the pick below orders by, so an order line
+   alone, however strict, sets only the base order); each table's row unit and columns;
+   filter or mark candidates; map a tracker key to an item or brief a key that has no item
+   file; and add live status, slug-mode situations, briefing fields and reminder lines.
+   Within those extension points its rules take precedence; every other rule in this file
+   stands. Four invariants it never changes: an in-flight unit is never recommended;
+   nothing is written, tracker writes included; one question per message (HARRY.md
+   **Talk**); a briefing ends with the tier. A supplement line outside the extension
+   points or breaking an invariant is not followed, and an unreadable supplement leaves
+   the defaults in place; the output names each once, in its notices.
 3. **Index.** Read the whole of `.local/INDEX.md`. Its lines are told apart by shape,
    under any heading or none: an item line has the shape `references/doc-types.md`
    **Global index `.local/INDEX.md`** sets; an in-flight line has the shape
