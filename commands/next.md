@@ -115,11 +115,14 @@ first:
 - **BLOCKED** — its `## Notes` names a wait. Quote the wait; the ask is whether to start
   anyway.
 - **DONE** — it is in `.local/archive/`; the ask is whether the slug is the one meant.
-- **CLEAR TO START** — none of the above matched.
+- **CLEAR TO START** — none of the above matched; the ask is whether to start it.
 
-List the matched situations before the briefing, then their asks folded into one
-question. Then the briefing, these fields in this order, each one line or a short list,
-`none` when empty:
+List the matched situations before the briefing. Then, when the session talks to the user
+in a language other than English (a language instruction the session is under counts),
+two or three plain lines in that language: one for what the unit is, one for why it exists
+and, when it waits on something, one for the wait. Then the situations' asks folded into
+one question. Then the briefing, these fields in this order, each one line or a short
+list, `none` when empty:
 
 ```text
 Status:            <situations matched; the live status when a supplement gives one>
