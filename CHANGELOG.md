@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.1] - 2026-11-10
+
+### Changed
+
+- **`/harry:next` groups the pick and orders it by dependency.** Candidates that
+  touch the same files or wait on one another share a table; an item goes after
+  the one it waits on, even ahead of `## Roadmap` order, and a group worth doing
+  back to back gets a `#a → #b` line. A tracker supplement's order line sets only
+  the base order unless it speaks to dependencies.
+- **A `/harry:next` briefing opens in the chat's language.** When the session
+  talks to the user in a language other than English, two or three plain lines in
+  that language (what the unit is, why it exists, what it waits on) come before
+  the question; the briefing block is unchanged.
+- **Evals:** cases for the dependency order and the chat-language lines, and a
+  linear pattern for the language check, which had backtracked for hours on a
+  reply with no `Status:` line.
+
 ## [0.27.0] - 2026-11-06
 
 ### Added
