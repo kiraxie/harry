@@ -708,6 +708,9 @@ var import_node_path7 = require("node:path");
 function toolsDir() {
   return (0, import_node_path7.join)((0, import_node_os4.homedir)(), ".claude", "harry", "tools");
 }
+function venvPython(clone) {
+  return (0, import_node_path7.join)(clone, ".venv", "bin", "python");
+}
 
 // src/lib/metrics/tools.ts
 var TOOL_NAMES = ["dryer", "crapper", "mutator"];
@@ -715,13 +718,16 @@ function displayPath(p) {
   const home = import_node_os5.default.homedir();
   return p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p;
 }
-function findTool(name) {
+function toolPaths(name) {
   const dir = import_node_path8.default.join(toolsDir(), name);
-  const launcher = import_node_path8.default.join(dir, name);
-  if (!isExecutableFile(launcher)) return null;
-  const head = git(dir, ["rev-parse", "HEAD"]);
+  return { dir, launcher: import_node_path8.default.join(dir, name), python: venvPython(dir) };
+}
+function findTool(name) {
+  const paths = toolPaths(name);
+  if (!isExecutableFile(paths.launcher) || !isExecutableFile(paths.python)) return null;
+  const head = git(paths.dir, ["rev-parse", "HEAD"]);
   const commit = head.status === 0 ? head.stdout.trim() : "unknown";
-  return { name, dir, launcher, commit };
+  return { name, ...paths, commit };
 }
 function toolCwd(tool) {
   return tool.dir;
@@ -773,7 +779,7 @@ for rel in sys.argv[2:]:
 print(json.dumps(out))
 `;
 function functionSpans(tool, root, files) {
-  const python = import_node_path9.default.join(tool.dir, ".venv", "bin", "python");
+  const python = tool.python;
   const res = (0, import_node_child_process6.spawnSync)(python, ["-c", SPANS_SCRIPT, root, ...files], {
     cwd: toolCwd(tool),
     encoding: "utf8",
@@ -1321,8 +1327,11 @@ function withSnapshot(root, ref, fn) {
 
 // src/commands/metrics.ts
 function notInstalled(name) {
-  const where = displayPath(import_node_path15.default.join(toolsDir(), name, name));
-  return `not installed (expected at ${where}; \`/harry:sync --tools\` installs it)`;
+  const { launcher, python } = toolPaths(name);
+  if (!isExecutableFile(launcher)) {
+    return `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`;
+  }
+  return `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`;
 }
 function failed(err, tool) {
   return `failed: ${err.message.trim()} (tool commit ${tool.commit})`;

@@ -50,13 +50,43 @@ interface Source {
   later: string;
 }
 
+const BUILDS_VENV = '#!/bin/sh\nmkdir -p "$(dirname "$0")/.venv"\n';
+
+/** As the real launchers do: builds the venv only when its python is missing, and needs the install to have finished. */
+const NEEDS_INSTALLED_VENV = `#!/bin/sh
+venv="$(dirname "$0")/.venv"
+if [ ! -e "$venv/bin/python" ]; then
+  mkdir -p "$venv/bin" && touch "$venv/bin/python" "$venv/installed"
+fi
+[ -e "$venv/installed" ] || { echo "No module named tool" >&2; exit 1; }
+`;
+
+/** Half-builds its venv on every run, then fails, as an old pip refusing the install does. */
+const ALWAYS_FAILS = `#!/bin/sh
+mkdir -p "$(dirname "$0")/.venv/bin" && touch "$(dirname "$0")/.venv/bin/python"
+echo "pip refused the install" >&2
+exit 1
+`;
+
+/** Fails before it builds any venv, as a machine with no python3 does. */
+const FAILS_WITHOUT_VENV = '#!/bin/sh\necho "python3: command not found" >&2\nexit 1\n';
+
+/** Half-builds its venv and fails; from its second run on it also leaves its clone unwritable. */
+const UNWRITABLE_ON_RETRY = `#!/bin/sh
+dir="$(dirname "$0")"
+mkdir -p "$dir/.venv/bin" && touch "$dir/.venv/bin/python"
+if [ -e "$dir/.git/ran-once" ]; then chmod 555 "$dir"; else touch "$dir/.git/ran-once"; fi
+echo "pip refused the install" >&2
+exit 1
+`;
+
 /** A bare repo whose first commit is the pin and whose second is newer; its launcher builds .venv. */
-function source(name: string): Source {
+function source(name: string, launcherBody = BUILDS_VENV): Source {
   const work = tempDir(`harry-tool-${name}-`);
   git(work, ["init", "-q", "-b", "main"]);
   writeFileSync(path.join(work, ".gitignore"), ".venv/\n");
   const launcher = path.join(work, name);
-  writeFileSync(launcher, '#!/bin/sh\nmkdir -p "$(dirname "$0")/.venv"\n');
+  writeFileSync(launcher, launcherBody);
   chmodSync(launcher, 0o755);
   git(work, ["add", "-A"]);
   git(work, ["commit", "-q", "-m", "pin"]);
@@ -70,8 +100,8 @@ function source(name: string): Source {
   return { name, url: bare, pin, later };
 }
 
-function sources(): Source[] {
-  return ["crapper", "dryer", "mutator"].map(source);
+function sources(launcherBody = BUILDS_VENV): Source[] {
+  return ["crapper", "dryer", "mutator"].map((name) => source(name, launcherBody));
 }
 
 const asTools = (s: Source[]) => s.map(({ name, url, pin }) => ({ name, url, commit: pin }));
@@ -121,13 +151,16 @@ test("an existing clean clone moves to the pin", () => {
 });
 
 test("a clone with local changes is left as it is and reported", () => {
-  const src = sources();
+  const src = [source("crapper"), source("dryer"), source("mutator", ALWAYS_FAILS)];
   const home = tempDir("harry-tools-home-");
   const dir = path.join(home, ".claude", "harry", "tools");
   mkdirSync(dir, { recursive: true });
   for (const s of src) git(dir, ["clone", "-q", s.url, s.name]);
   const edited = path.join(dir, "mutator", "NEWS");
   writeFileSync(edited, "my local patch\n");
+  const kept = path.join(dir, "mutator", ".venv", "mine");
+  mkdirSync(path.dirname(kept));
+  writeFileSync(kept, "mine\n");
 
   const results = inHome(() => syncTools({ tools: asTools(src) }), home);
 
@@ -135,6 +168,7 @@ test("a clone with local changes is left as it is and reported", () => {
   assert.equal(mutator?.outcome, "local changes");
   assert.equal(git(path.join(dir, "mutator"), ["rev-parse", "HEAD"]), src[2].later);
   assert.equal(readFileSync(edited, "utf8"), "my local patch\n");
+  assert.equal(readFileSync(kept, "utf8"), "mine\n");
   assert.equal(git(path.join(dir, "crapper"), ["rev-parse", "HEAD"]), src[0].pin);
 });
 
@@ -152,6 +186,96 @@ test("a clone at its pin whose venv is missing is run again and rebuilt", () => 
   assert.ok(existsSync(path.join(dir, "dryer", ".venv")));
 });
 
+test("a clone at its pin whose venv cannot run the tool is rebuilt in the same sync", () => {
+  const src = sources(NEEDS_INSTALLED_VENV);
+  const home = tempDir("harry-tools-home-");
+  const dir = inHome((d) => {
+    syncTools({ tools: asTools(src) });
+    return d;
+  }, home);
+  const venv = path.join(dir, "dryer", ".venv");
+  rmSync(path.join(venv, "installed"));
+  assert.ok(existsSync(path.join(venv, "bin", "python")), "the broken venv still looks built");
+
+  const results = inHome(() => syncTools({ tools: asTools(src) }), home);
+
+  assert.deepEqual(
+    results.map((r) => [r.name, r.outcome]),
+    src.map((s) => [s.name, "current"]),
+  );
+  assert.ok(existsSync(path.join(venv, "installed")), "the venv was not rebuilt");
+});
+
+test("a tool that still fails after the retry is left with no venv, and its report says so", () => {
+  const src = sources(ALWAYS_FAILS);
+
+  const [dir, results] = inHome((d) => [d, syncTools({ tools: asTools(src) })] as const);
+
+  for (const r of results) {
+    assert.equal(r.outcome, "failed", r.name);
+    assert.match(r.detail, /pip refused the install/, "the launcher's own error is reported");
+    assert.match(r.detail, /\.venv was removed/);
+    assert.ok(!existsSync(path.join(dir, r.name, ".venv")), `${r.name} kept its venv`);
+  }
+});
+
+test("a tool that fails before building any venv is reported once, with no venv claimed removed", () => {
+  const src = [source("crapper", FAILS_WITHOUT_VENV)];
+
+  const results = inHome(() => syncTools({ tools: asTools(src) }));
+
+  assert.equal(results[0].outcome, "failed");
+  assert.equal(results[0].detail, "first run failed: python3: command not found");
+});
+
+test("a venv left by the failed retry that cannot be removed is not reported as removed", () => {
+  const src = [source("crapper", UNWRITABLE_ON_RETRY)];
+  const home = tempDir("harry-tools-home-");
+  const clone = path.join(home, ".claude", "harry", "tools", "crapper");
+
+  let results: ReturnType<typeof syncTools>;
+  try {
+    results = inHome(() => syncTools({ tools: asTools(src) }), home);
+  } finally {
+    chmodSync(clone, 0o755);
+  }
+
+  assert.equal(results[0].outcome, "failed");
+  assert.match(results[0].detail, /pip refused the install/);
+  assert.match(results[0].detail, /could not remove/);
+  assert.doesNotMatch(results[0].detail, /was removed/);
+});
+
+test("a broken venv that cannot be removed is reported, and the other tools still sync", () => {
+  const src = sources(NEEDS_INSTALLED_VENV);
+  const home = tempDir("harry-tools-home-");
+  const dir = inHome((d) => {
+    syncTools({ tools: asTools(src) });
+    return d;
+  }, home);
+  const clone = path.join(dir, "crapper");
+  rmSync(path.join(clone, ".venv", "installed"));
+  chmodSync(clone, 0o555);
+
+  let results: ReturnType<typeof syncTools>;
+  try {
+    results = inHome(() => syncTools({ tools: asTools(src) }), home);
+  } finally {
+    chmodSync(clone, 0o755);
+  }
+
+  assert.deepEqual(
+    results.map((r) => [r.name, r.outcome]),
+    [
+      ["crapper", "failed"],
+      ["dryer", "current"],
+      ["mutator", "current"],
+    ],
+  );
+  assert.match(results[0].detail, /could not remove/);
+  assert.doesNotMatch(results[0].detail, /was removed/);
+});
+
 test("a tools entry that is not its own git clone is reported, never treated as the repo above it", () => {
   const src = sources();
   const home = tempDir("harry-tools-home-");
@@ -159,6 +283,11 @@ test("a tools entry that is not its own git clone is reported, never treated as 
   const plain = path.join(home, ".claude", "harry", "tools", "crapper");
   mkdirSync(plain, { recursive: true });
   writeFileSync(path.join(plain, "notes.txt"), "mine\n");
+  writeFileSync(path.join(plain, "crapper"), ALWAYS_FAILS);
+  chmodSync(path.join(plain, "crapper"), 0o755);
+  const kept = path.join(plain, ".venv", "mine");
+  mkdirSync(path.dirname(kept));
+  writeFileSync(kept, "mine\n");
 
   const results = inHome(() => syncTools({ tools: asTools(src) }), home);
 
@@ -166,9 +295,10 @@ test("a tools entry that is not its own git clone is reported, never treated as 
   assert.equal(crapper?.outcome, "failed");
   assert.match(crapper?.detail ?? "", /not a git clone/);
   assert.equal(readFileSync(path.join(plain, "notes.txt"), "utf8"), "mine\n");
+  assert.equal(readFileSync(kept, "utf8"), "mine\n");
 });
 
-test("install.mjs --tools clones the pinned tools into the tools dir under HOME", () => {
+test("install.mjs --tools prints its full report and exits 1 when a tool failed", () => {
   const home = tempDir("harry-tools-cli-home-");
   const mirror = tempDir("harry-tools-mirror-");
   for (const s of sources()) git(mirror, ["clone", "-q", "--bare", s.url, `${s.name}.git`]);
@@ -184,7 +314,7 @@ test("install.mjs --tools clones the pinned tools into the tools dir under HOME"
     },
   });
 
-  assert.equal(res.status, 0, res.stderr);
+  assert.equal(res.status, 1, res.stderr);
   const dir = path.join(home, ".claude", "harry", "tools");
   assert.match(res.stdout, new RegExp(`Tools dir: ${dir}`));
   for (const name of ["crapper", "dryer", "mutator"]) {
@@ -196,6 +326,58 @@ test("install.mjs --tools clones the pinned tools into the tools dir under HOME"
     assert.ok(existsSync(path.join(dir, name, "NEWS")), "cloned from the local mirror");
     assert.ok(!existsSync(path.join(dir, name, ".venv")));
   }
+});
+
+test("install.mjs --tools exits 0 when every tool was left for its local changes", () => {
+  const home = tempDir("harry-tools-cli-home-");
+  const dir = path.join(home, ".claude", "harry", "tools");
+  mkdirSync(dir, { recursive: true });
+  for (const s of sources()) {
+    git(dir, ["clone", "-q", s.url, s.name]);
+    writeFileSync(path.join(dir, s.name, "NEWS"), "my local patch\n");
+  }
+
+  const res = spawnSync(process.execPath, [INSTALL, "--tools"], {
+    encoding: "utf8",
+    env: { ...process.env, HOME: home, HARRY_GLOBAL: path.join(home, ".claude", "CLAUDE.md") },
+  });
+
+  assert.equal(res.status, 0, res.stderr);
+  for (const name of ["crapper", "dryer", "mutator"]) {
+    assert.match(res.stdout, new RegExp(`tool ${name}: local changes`), res.stdout);
+  }
+});
+
+test("install.mjs --tools exits 1 when one tool failed beside others left for local changes", () => {
+  const home = tempDir("harry-tools-cli-home-");
+  const dir = path.join(home, ".claude", "harry", "tools");
+  const mirror = tempDir("harry-tools-mirror-");
+  mkdirSync(dir, { recursive: true });
+  for (const s of sources()) {
+    if (s.name === "mutator") {
+      git(mirror, ["clone", "-q", "--bare", s.url, `${s.name}.git`]);
+      continue;
+    }
+    git(dir, ["clone", "-q", s.url, s.name]);
+    writeFileSync(path.join(dir, s.name, "NEWS"), "my local patch\n");
+  }
+
+  const res = spawnSync(process.execPath, [INSTALL, "--tools"], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      HOME: home,
+      HARRY_GLOBAL: path.join(home, ".claude", "CLAUDE.md"),
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: `url.${mirror}/.insteadOf`,
+      GIT_CONFIG_VALUE_0: "https://github.com/unclebob/",
+    },
+  });
+
+  assert.match(res.stdout, /tool crapper: local changes/);
+  assert.match(res.stdout, /tool dryer: local changes/);
+  assert.match(res.stdout, /tool mutator: failed/);
+  assert.equal(res.status, 1, res.stderr);
 });
 
 test("sync never runs a git from a relative PATH entry, such as a repo's own ./git", () => {

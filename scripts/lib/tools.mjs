@@ -2,7 +2,7 @@
 // following upstream HEAD would run unreviewed third-party code in every unit.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { resolveOnPath } from "./path-search.mjs";
@@ -32,6 +32,11 @@ export const PINNED_TOOLS = [
 
 export function toolsDir() {
   return join(homedir(), ".claude", "harry", "tools");
+}
+
+/** @param {string} clone */
+export function venvPython(clone) {
+  return join(clone, ".venv", "bin", "python");
 }
 
 /** @param {string[]} args @param {string} [cwd] */
@@ -86,8 +91,8 @@ function install(tool, dir) {
 }
 
 /**
- * Its first run builds the tool's own .venv; running it here keeps that out of
- * the first metrics run.
+ * Its first run builds the tool's own .venv; metrics never builds one, so a
+ * tool is usable only once this has run.
  * @param {string} clone @param {string} name
  */
 function firstRun(clone, name) {
@@ -95,6 +100,36 @@ function firstRun(clone, name) {
   return res.status === 0
     ? null
     : (res.stderr || res.error?.message || `exit ${res.status}`).trim();
+}
+
+/** @param {string} venv */
+function removeVenv(venv) {
+  try {
+    rmSync(venv, { recursive: true, force: true });
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+/**
+ * The launcher builds a venv only when .venv/bin/python is missing, so a
+ * half-built one left behind would fail every later run.
+ * @param {string} clone @param {string} name
+ */
+function buildVenv(clone, name) {
+  const venv = join(clone, ".venv");
+  const first = firstRun(clone, name);
+  if (first === null) return null;
+  if (!existsSync(venv)) return `first run failed: ${first}`;
+  const stale = removeVenv(venv);
+  if (stale) return `first run failed: ${first}; could not remove ${venv}: ${stale}`;
+  const retry = firstRun(clone, name);
+  if (retry === null) return null;
+  const left = removeVenv(venv);
+  return left
+    ? `first run failed twice: ${retry}; could not remove ${venv}: ${left}`
+    : `first run failed twice: ${retry}; its .venv was removed`;
 }
 
 /**
@@ -108,8 +143,8 @@ export function syncTools({ tools = PINNED_TOOLS } = {}) {
     const clone = join(dir, tool.name);
     const result = existsSync(clone) ? update(tool, clone) : install(tool, dir);
     if (result.outcome === "cloned" || result.outcome === "moved" || result.outcome === "current") {
-      const err = firstRun(clone, tool.name);
-      if (err) return { ...result, outcome: "failed", detail: `first run failed: ${err}` };
+      const err = buildVenv(clone, tool.name);
+      if (err) return { ...result, outcome: "failed", detail: err };
     }
     return result;
   });

@@ -32,8 +32,9 @@ import {
   TOOL_NAMES,
   type Tool,
   type ToolName,
-  toolsDir,
+  toolPaths,
 } from "../lib/metrics/tools.ts";
+import { isExecutableFile } from "../lib/path-search.ts";
 
 export interface MetricsOptions {
   base?: string;
@@ -45,8 +46,11 @@ export interface MetricsOptions {
 type Tools = Record<ToolName, Tool | null>;
 
 function notInstalled(name: ToolName): string {
-  const where = displayPath(path.join(toolsDir(), name, name));
-  return `not installed (expected at ${where}; \`/harry:sync --tools\` installs it)`;
+  const { launcher, python } = toolPaths(name);
+  if (!isExecutableFile(launcher)) {
+    return `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`;
+  }
+  return `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`;
 }
 
 function failed(err: unknown, tool: Tool): string {

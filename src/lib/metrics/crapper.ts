@@ -62,7 +62,7 @@ print(json.dumps(out))
 `;
 
 export function functionSpans(tool: Tool, root: string, files: string[]): FunctionSpan[] {
-  const python = path.join(tool.dir, ".venv", "bin", "python");
+  const python = tool.python;
   const res = spawnSync(python, ["-c", SPANS_SCRIPT, root, ...files], {
     cwd: toolCwd(tool),
     encoding: "utf8",

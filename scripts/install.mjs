@@ -112,9 +112,13 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
   if (lines.length === 0)
     lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
+  let failed = false;
   if (args.includes("--tools") && !remove) {
-    for (const t of syncTools()) lines.push(`tool ${t.name}: ${t.outcome} (${t.detail})`);
+    const tools = syncTools();
+    for (const t of tools) lines.push(`tool ${t.name}: ${t.outcome} (${t.detail})`);
     lines.push(`Tools dir: ${toolsDir()}`);
+    failed = tools.some((t) => t.outcome === "failed");
   }
   console.log(lines.join("\n"));
+  if (failed) process.exitCode = 1;
 }

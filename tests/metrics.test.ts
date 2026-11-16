@@ -147,7 +147,7 @@ function writeExecutable(file: string, text: string): void {
 
 /**
  * Installs a stub `name` under HOME's tool dir: STUB_PRELUDE, then `body`, in a
- * one-commit repo; `extra` maps tool-relative paths to more stub bodies.
+ * one-commit repo with a built venv; `extra` maps tool-relative paths to more stub bodies.
  */
 function installStub(
   home: string,
@@ -157,10 +157,11 @@ function installStub(
 ): string {
   const dir = path.join(home, ".claude", "harry", "tools", name);
   writeExecutable(path.join(dir, name), `${STUB_PRELUDE}${PYTHON_STARTUP}\n${body}\n`);
+  writeExecutable(path.join(dir, ".venv/bin/python"), "#!/bin/sh\n");
   for (const [rel, text] of Object.entries(extra)) {
     writeExecutable(path.join(dir, rel), `${STUB_PRELUDE}${PYTHON_STARTUP}\n${text}\n`);
   }
-  writeFileSync(path.join(dir, ".gitignore"), "calls.jsonl\n");
+  writeFileSync(path.join(dir, ".gitignore"), "calls.jsonl\n.venv/\n");
   git(dir, ["init", "-q"]);
   git(dir, ["-c", "user.email=t@e", "-c", "user.name=t", "add", "-A"]);
   git(dir, ["-c", "user.email=t@e", "-c", "user.name=t", "commit", "-q", "-m", "stub"]);
@@ -224,9 +225,75 @@ test("with no tool installed, every tool is reported not installed and the check
 
   assert.equal(run.status, 0, run.stderr);
   for (const tool of ["dryer", "crapper", "mutator"]) {
-    assert.match(run.facts, new RegExp(`## ${tool}\\n+not installed`), run.facts);
+    assert.match(
+      run.facts,
+      new RegExp(`## ${tool}\\n+not installed \\(expected at .*/${tool}/${tool}; `),
+      run.facts,
+    );
   }
   assert.equal(status(repo), before);
+});
+
+/** As the real launchers do on a run with no venv Python: build it. */
+const BUILDS_VENV_PYTHON = `
+const venvPython = path.join(__dirname, ".venv", "bin", "python");
+if (!fs.existsSync(venvPython)) {
+  fs.mkdirSync(path.dirname(venvPython), { recursive: true });
+  fs.writeFileSync(venvPython, "#!/bin/sh\\n", { mode: 0o755 });
+}
+`;
+
+test("a tool with no venv Python is reported not installed: its launcher never runs, no venv is built, no test runs", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    { "src/a.ts": "// crap a 2 1\nfunction a() {} // mut > >= survived\n" },
+  );
+  const home = tempDir("harry-metrics-home-");
+  const tools = ["dryer", "crapper", "mutator"];
+  for (const tool of tools) {
+    installStub(home, tool, BUILDS_VENV_PYTHON);
+    rmSync(path.join(home, ".claude", "harry", "tools", tool, ".venv"), {
+      recursive: true,
+      force: true,
+    });
+  }
+  const bin = fakeBin();
+
+  const run = runMetrics(repo, home, { binDir: bin });
+
+  assert.equal(run.status, 0, run.stderr);
+  for (const tool of tools) {
+    const clone = path.join(home, ".claude", "harry", "tools", tool);
+    const section = toolSection(run.facts, tool);
+    assert.match(section, /^\n+not installed \(/, section);
+    assert.ok(section.includes(`${tool}/.venv/bin/python`), section);
+    assert.match(section, /`\/harry:sync --tools` builds it/);
+    assert.match(section, /run the launcher once by hand when sync leaves the clone as is/);
+    assert.deepEqual(calls(home, tool), [], `${tool}'s launcher ran`);
+    assert.ok(!existsSync(path.join(clone, ".venv")), `${tool} got a venv`);
+  }
+  assert.deepEqual(pmCalls(bin), []);
+});
+
+test("a tool whose venv Python is not executable is not installed, while a built tool beside it still runs", () => {
+  const repo = makeRepo(
+    { "package.json": PKG, "src/a.ts": "export const a = 1;\n" },
+    { "src/b.ts": "export const b = 2; // mut > >= survived\n" },
+  );
+  const home = tempDir("harry-metrics-home-");
+  const dryerCommit = installStub(home, "dryer", DRYER_ALL_PAIRS);
+  installStub(home, "mutator", MUTATOR_FROM_MARKERS);
+  chmodSync(path.join(home, ".claude", "harry", "tools", "mutator", ".venv/bin/python"), 0o644);
+  const bin = fakeBin();
+
+  const run = runMetrics(repo, home, { binDir: bin });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.ok(toolSection(run.facts, "dryer").startsWith(` (${dryerCommit.slice(0, 7)})`));
+  assert.equal(calls(home, "dryer").length, 1);
+  assert.match(toolSection(run.facts, "mutator"), /^\n+not installed \(no venv Python at /);
+  assert.deepEqual(calls(home, "mutator"), []);
+  assert.deepEqual(pmCalls(bin), []);
 });
 
 /**
