@@ -2814,16 +2814,10 @@ test("buildChildEnv: forwards the chosen value exactly, and refuses a padded one
 
 test("buildChildEnv: built from the allowlist plus one credential; nothing else survives", () => {
   const inherited = {
+    ...syntheticOperatorEnv(),
     PATH: "/usr/bin:relative/bin::/bin",
     HOME: "/home/evaluser",
     TMPDIR: "/somewhere/else",
-    ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
-    CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
-    ANTHROPIC_AUTH_TOKEN: FAKE_INHERITED_OAUTH,
-    ANTHROPIC_BASE_URL: "http://fake.invalid",
-    CLAUDE_CODE_USE_BEDROCK: "1",
-    NODE_OPTIONS: "--no-warnings",
-    SSH_AUTH_SOCK: "/nonexistent/agent.sock",
     GIT_CONFIG_GLOBAL: "/home/evaluser/.gitconfig",
     DISABLE_TELEMETRY: "0",
   };
@@ -2832,6 +2826,12 @@ test("buildChildEnv: built from the allowlist plus one credential; nothing else 
     // session wrote), so only absolute ones survive, behind the running node's dir.
     PATH: `${NODE_DIR}:/usr/bin:/bin`,
     HOME: "/home/evaluser",
+    USER: "evaluser",
+    LOGNAME: "evaluser",
+    SHELL: "/bin/sh",
+    TERM: "dumb",
+    LANG: "C.UTF-8",
+    LC_CTYPE: "C.UTF-8",
     TMPDIR: os.tmpdir(),
     GIT_AUTHOR_NAME: "Eval Fixture",
     GIT_AUTHOR_EMAIL: "eval@localhost",
@@ -3006,6 +3006,7 @@ function syntheticOperatorEnv(): Record<string, string> {
     LC_CTYPE: "C.UTF-8",
     TMPDIR: "/nonexistent-eval-tmp",
     NODE_OPTIONS: "--no-warnings",
+    ...RUNTIME_ADDED_ENV,
     SSH_AUTH_SOCK: "/nonexistent/agent.sock",
     ANTHROPIC_API_KEY: FAKE_INHERITED_API_KEY,
     CLAUDE_CODE_OAUTH_TOKEN: FAKE_INHERITED_OAUTH,
@@ -3032,11 +3033,21 @@ const BASE_KEYS = [
   "TMPDIR",
   "USER",
 ];
-// macOS CoreFoundation sets __CF_USER_TEXT_ENCODING inside any process that loads
-// it, node included, so it shows up in a child's env whatever env it was handed.
-// The builder tests pin that the runner never passes it; the spawn tests drop it.
+// Keys the runtime adds to a child's env whatever env it was handed. macOS
+// CoreFoundation sets __CF_USER_TEXT_ENCODING inside any process that loads it, node
+// included. Node copies NODE_V8_COVERAGE from its own env into every child's, so it
+// appears when the suite itself runs under coverage (c8).
+// syntheticOperatorEnv() spreads this object, so every key the spawn tests drop is one
+// the builder tests pin the runner never passes; the coverage key is dropped only
+// under coverage.
+const RUNTIME_ADDED_ENV: Record<string, string> = {
+  __CF_USER_TEXT_ENCODING: "0x0:0:0",
+  NODE_V8_COVERAGE: "/nonexistent-eval-coverage",
+};
 function spawnedKeys(keys: string[]): string[] {
-  return keys.filter((k) => k !== "__CF_USER_TEXT_ENCODING");
+  const added = new Set(Object.keys(RUNTIME_ADDED_ENV));
+  if (process.env.NODE_V8_COVERAGE === undefined) added.delete("NODE_V8_COVERAGE");
+  return keys.filter((k) => !added.has(k));
 }
 const PRIVACY_KEYS = [
   "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
@@ -3918,17 +3929,26 @@ function runJailedTrial(
     EVALS_ANTHROPIC_API_KEY: "sk-ant-test",
     ...extraEnv,
   };
-  return runEvals(
-    {
-      condition: "candidate",
-      model: "m",
-      cases: ["agentic-isolate-branch"],
-      out: path.join(binDir, "o.jsonl"),
-      agentic: true,
-      ...extraOpts,
-    },
-    env,
-  ).lines;
+  // Under coverage Node hands NODE_V8_COVERAGE to every child, and the jail denies the
+  // coverage dir, so each jailed process would append a failed coverage write to the
+  // stderr these tests match. A jailed child cannot write coverage either way.
+  const coverageDir = process.env.NODE_V8_COVERAGE;
+  delete process.env.NODE_V8_COVERAGE;
+  try {
+    return runEvals(
+      {
+        condition: "candidate",
+        model: "m",
+        cases: ["agentic-isolate-branch"],
+        out: path.join(binDir, "o.jsonl"),
+        agentic: true,
+        ...extraOpts,
+      },
+      env,
+    ).lines;
+  } finally {
+    if (coverageDir !== undefined) process.env.NODE_V8_COVERAGE = coverageDir;
+  }
 }
 
 test(

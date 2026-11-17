@@ -549,7 +549,13 @@ test("in a pnpm repo, coverage and mutator run per nearest package.json with pnp
   assert.deepEqual(
     pmCalls(bin).map((c) => [c.bin, c.args.join(" "), c.cwd]),
     [
-      ["npx", "--yes c8 --reporter=lcov --reports-dir target/coverage/typescript pnpm test", px],
+      [
+        "npx",
+        "--yes c8 --reporter=lcov --reports-dir target/coverage/typescript " +
+          "--extension .ts --extension .tsx --extension .mts --extension .cts " +
+          "--extension .js --extension .jsx --extension .mjs --extension .cjs pnpm test",
+        px,
+      ],
       ["pnpm", "run coverage", py],
     ],
   );

@@ -126,6 +126,8 @@ function nodePlan(groupDir: string, pm: PackageManager): CoveragePlan {
         "--reporter=lcov",
         "--reports-dir",
         "target/coverage/typescript",
+        // c8's default extension list has no .mts or .cts, and the flag replaces it.
+        ...[...NODE_EXT].flatMap((ext) => ["--extension", ext]),
         pm,
         "test",
       ],
