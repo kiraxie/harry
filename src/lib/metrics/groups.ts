@@ -66,7 +66,10 @@ export function packageManager(root: string): PackageManager {
   return "npm";
 }
 
-export type CoveragePlan = { commands: string[][] } | { skip: string };
+/** How a group's coverage report is made: commands with the label the facts print, or why not. */
+export type CoveragePlan = { commands: string[][]; label: string } | { skip: string };
+
+type OwnPlan = { commands: string[][] } | { skip: string };
 
 function readPackage(dir: string): {
   scripts?: Record<string, string>;
@@ -89,7 +92,7 @@ function resolvesFrom(dir: string, request: string): boolean {
   }
 }
 
-function nodePlan(groupDir: string, pm: PackageManager): CoveragePlan {
+function nodePlan(groupDir: string, pm: PackageManager): OwnPlan {
   const pkg = readPackage(groupDir);
   const scripts = pkg.scripts ?? {};
   if (scripts.coverage) return { commands: [[pm, "run", "coverage"]] };
@@ -149,7 +152,7 @@ function canImport(python: string, module: string, cwd: string): boolean {
   return res.status === 0;
 }
 
-function pythonPlan(groupDir: string): CoveragePlan {
+function pythonPlan(groupDir: string): OwnPlan {
   const py = pythonInterpreter(groupDir);
   if (py === null) return { skip: "no python3 on PATH" };
   if (!canImport(py, "coverage", groupDir)) {
@@ -164,11 +167,20 @@ function pythonPlan(groupDir: string): CoveragePlan {
   };
 }
 
-export function coveragePlan(root: string, group: Group): CoveragePlan {
+/**
+ * The group's coverage plan. `override` is the user's `--coverage-command`: it
+ * replaces the group's own plan, even one that would skip, and runs through the shell.
+ */
+export function coveragePlan(root: string, group: Group, override: string | null): CoveragePlan {
+  if (override !== null) return { commands: [["sh", "-c", override]], label: override };
   const dir = path.join(root, group.dir);
-  if (group.kind === "node") return nodePlan(dir, packageManager(root));
-  if (group.kind === "python") return pythonPlan(dir);
-  return { skip: "metrics runs coverage for JavaScript/TypeScript and Python only" };
+  const own: OwnPlan =
+    group.kind === "node"
+      ? nodePlan(dir, packageManager(root))
+      : group.kind === "python"
+        ? pythonPlan(dir)
+        : { skip: "metrics runs coverage for JavaScript/TypeScript and Python only" };
+  return "skip" in own ? own : { commands: own.commands, label: describe(own.commands) };
 }
 
 function findLcov(dir: string): boolean {
@@ -184,23 +196,30 @@ export function hasLcovReport(groupDir: string): boolean {
   );
 }
 
-export function runCoverage(groupDir: string, commands: string[][]): string | null {
-  for (const [bin, ...args] of commands) {
+/**
+ * Runs the plan's commands in the group directory; null when they leave an
+ * lcov.info, else why there is no report, naming the step that failed.
+ */
+export function runCoverage(
+  groupDir: string,
+  plan: { commands: string[][]; label: string },
+): string | null {
+  for (const command of plan.commands) {
+    const [bin, ...args] = command;
     const resolved = path.isAbsolute(bin) ? bin : resolveOnPath(bin, process.env);
     if (resolved === null) return `${bin} is not on PATH`;
     const res = spawnSync(resolved, args, { cwd: groupDir, stdio: "ignore" });
     throwIfInterrupted(res);
     if (res.status !== 0) {
-      return `coverage command \`${[bin, ...args].join(" ")}\` exited ${res.status ?? "by signal"}`;
+      const step = plan.commands.length === 1 ? plan.label : describe([command]);
+      return `coverage command \`${step}\` exited ${res.status ?? "by signal"}`;
     }
   }
-  if (!hasLcovReport(groupDir)) {
-    return `coverage command \`${commands.map((c) => c.join(" ")).join(" && ")}\` produced no lcov.info`;
-  }
+  if (!hasLcovReport(groupDir)) return `coverage command \`${plan.label}\` produced no lcov.info`;
   return null;
 }
 
-export function describe(commands: string[][]): string {
+function describe(commands: string[][]): string {
   return commands
     .map((c) => c.map((p) => (path.isAbsolute(p) ? path.basename(p) : p)).join(" "))
     .join(" && ");

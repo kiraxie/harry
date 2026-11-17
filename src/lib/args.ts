@@ -20,6 +20,7 @@ export const BOOLEAN_FLAGS = new Set<string>([
   "isolated",
   "audit",
   "run-tests",
+  "plan",
 ]);
 
 // Allowed flag keys per command. An unrecognized `--flag` errors loudly instead
@@ -38,7 +39,18 @@ export const KNOWN_FLAGS: Record<string, ReadonlySet<string>> = {
     "fix-check",
   ]),
   ask: new Set(["task", "reasoning", "context", "isolated"]),
-  metrics: new Set(["base", "out", "audit", "run-tests"]),
+  metrics: new Set([
+    "base",
+    "out",
+    "audit",
+    "run-tests",
+    "plan",
+    "only",
+    "test-command",
+    "coverage-command",
+    "max-workers",
+    "max-mutants",
+  ]),
 };
 
 export function assertKnownFlags(command: string, flags: Record<string, string | boolean>): void {
@@ -144,4 +156,17 @@ export function flagRequiredString(
   if (typeof v !== "string") throw new Error(`Flag --${key} requires a value.`);
   if (v.trim() === "") throw new Error(`Flag --${key} requires a value; got an empty one.`);
   return v;
+}
+
+/** A `--key <n>` flag holding a positive integer: undefined when absent, an error naming the flag otherwise. */
+export function flagPositiveInt(
+  flags: Record<string, string | boolean>,
+  key: string,
+): number | undefined {
+  const v = flagRequiredString(flags, key);
+  if (v === undefined) return undefined;
+  if (!/^[1-9]\d*$/.test(v.trim())) {
+    throw new Error(`Flag --${key} requires a positive integer; got "${v}".`);
+  }
+  return Number(v.trim());
 }

@@ -2,9 +2,9 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { gitChecked } from "../git.ts";
 import { parseEdn } from "./edn.ts";
 import { throwIfInterrupted } from "./interrupt.ts";
+import { diffHunks } from "./scope.ts";
 import { failureTail, runTool, type Tool, toolCwd } from "./tools.ts";
 
 export interface CrapEntry {
@@ -79,14 +79,9 @@ export function functionSpans(tool: Tool, root: string, files: string[]): Functi
 
 /** New-side line ranges `git diff -U0` reports for one file; a pure deletion after line n is [n, n+1]. */
 export function changedRanges(repo: string, base: string, file: string): [number, number][] {
-  const diff = gitChecked(repo, ["diff", "-U0", "--no-renames", `${base}...HEAD`, "--", file]);
-  const ranges: [number, number][] = [];
-  for (const m of diff.stdout.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm)) {
-    const start = Number(m[1]);
-    const count = m[2] === undefined ? 1 : Number(m[2]);
-    ranges.push(count === 0 ? [start, start + 1] : [start, start + count - 1]);
-  }
-  return ranges;
+  return diffHunks(repo, base, file).map(([start, count]) =>
+    count === 0 ? [start, start + 1] : [start, start + count - 1],
+  );
 }
 
 function touches(span: FunctionSpan, ranges: [number, number][]): boolean {

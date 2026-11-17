@@ -73,6 +73,24 @@ export function changedSourceFiles(root: string, base: string): string[] {
   return lines(diff.stdout).filter(isSourceFile).sort();
 }
 
+/** `[start, count]` of each new-side hunk `git diff -U0 <base>...HEAD` reports for one repo-relative file. */
+export function diffHunks(root: string, base: string, file: string): [number, number][] {
+  const diff = gitChecked(root, ["diff", "-U0", "--no-renames", `${base}...HEAD`, "--", file]);
+  return [...diff.stdout.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm)].map((m) => [
+    Number(m[1]),
+    m[2] === undefined ? 1 : Number(m[2]),
+  ]);
+}
+
+/** Lines `<base>...HEAD` added or modified in one file; a new file is all of its lines. */
+export function addedLines(root: string, base: string, file: string): Set<number> {
+  const lines = new Set<number>();
+  for (const [start, count] of diffHunks(root, base, file)) {
+    for (let n = start; n < start + count; n++) lines.add(n);
+  }
+  return lines;
+}
+
 export function trackedSourceFiles(root: string): string[] {
   return lines(gitChecked(root, ["ls-files"]).stdout)
     .filter(isSourceFile)

@@ -22,6 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { failureTail } from "../src/lib/metrics/tools.ts";
 import { headingSection } from "./section.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
@@ -500,29 +501,48 @@ for (const c of COMPLEXITY_ONLY_CASES) {
 }
 
 /**
- * Stub mutator: each `// mut <original> <mutant> <killed|survived>` line in a
- * handed file becomes one outcome, keyed the real way (byte span of the token).
+ * Stub mutator: each `// mut <original> <mutant> <killed|survived|uncovered>` marker
+ * in a handed file is one site on the marker's line, keyed the real way (byte span
+ * of the token). Like the real tool, `--lines` keeps only sites on those line
+ * numbers in every handed file, `--scan` lists the sites in the real format and
+ * writes nothing, and an uncovered site gets no outcome under existing coverage.
  */
 const MUTATOR_FROM_MARKERS = `
-const skip = new Set(["--root", "--test-command", "--max-workers"]);
+const skip = new Set(["--root", "--test-command", "--max-workers", "--lines"]);
 const files = args.filter((a, i) => !a.startsWith("--") && !skip.has(args[i - 1]));
+const only = argAfter("--lines") ? new Set(argAfter("--lines").split(",").map(Number)) : null;
+const covered = args.includes("--use-existing-coverage");
 let survived = false;
 for (const f of files) {
-  const buf = fs.readFileSync(path.resolve(root, f));
-  const text = buf.toString("utf8");
+  const text = fs.readFileSync(path.resolve(root, f), "utf8");
   const ns = path.basename(f).replace(/\\.[^.]+$/, "");
+  const sites = [...text.matchAll(/\\/\\/ mut (\\S+) (\\S+) (killed|survived|uncovered)/g)]
+    .map((m) => ({ m, line: text.slice(0, m.index).split("\\n").length }))
+    .filter((s) => only === null || only.has(s.line));
+  if (args.includes("--scan")) {
+    process.stdout.write("Scan: " + sites.length + " mutation sites in " + f + "\\n");
+    for (const { m, line } of sites) process.stdout.write("  " + f + ":" + line + " " + m[1] + " -> " + m[2] + "  [defn/fn]\\n");
+    continue;
+  }
   const outcomes = [];
-  for (const m of text.matchAll(/\\/\\/ mut (\\S+) (\\S+) (killed|survived)/g)) {
+  for (const { m } of sites) {
+    if (m[3] === "uncovered" && covered) continue;
+    const status = m[3] === "uncovered" ? "killed" : m[3];
     const start = Buffer.byteLength(text.slice(0, m.index));
     const id = JSON.stringify([f, ns, "defn/fn", start, start + m[1].length, m[1], m[2]]);
-    outcomes.push(JSON.stringify(id) + " :" + m[3]);
-    if (m[3] === "survived") survived = true;
+    outcomes.push(JSON.stringify(id) + " :" + status);
+    if (status === "survived") survived = true;
   }
   out(path.join(".metrics/mutate", ns + ".edn"),
     '{:version 1 :source "' + f + '" :namespace "' + ns + '" :outcomes {' + outcomes.join(" ") + '} :forms []}\\n');
 }
 process.exit(survived ? 3 : 0);
 `;
+
+/** The stub mutator's runs that executed mutants, its scans left out. */
+function mutatorRuns(home: string): { args: string[]; cwd: string }[] {
+  return calls(home, "mutator").filter((c) => !c.args.includes("--scan"));
+}
 
 test("in a pnpm repo, coverage and mutator run per nearest package.json with pnpm", () => {
   const repo = makeRepo(
@@ -532,8 +552,8 @@ test("in a pnpm repo, coverage and mutator run per nearest package.json with pnp
       "packages/y/package.json": PKG,
     },
     {
-      "packages/x/src/x.ts": "// crap x 2 1\nfunction x() {}\n",
-      "packages/y/src/y.ts": "// crap y 2 1\nfunction y() {}\n",
+      "packages/x/src/x.ts": "// crap x 2 1\nfunction x() { return 1; } // mut 1 0 killed\n",
+      "packages/y/src/y.ts": "// crap y 2 1\nfunction y() { return 1; } // mut 1 0 killed\n",
     },
   );
   const home = tempDir("harry-metrics-home-");
@@ -559,7 +579,7 @@ test("in a pnpm repo, coverage and mutator run per nearest package.json with pnp
       ["pnpm", "run coverage", py],
     ],
   );
-  const mut = calls(home, "mutator").map((c) => [
+  const mut = mutatorRuns(home).map((c) => [
     argAfter(c.args, "--root"),
     argAfter(c.args, "--test-command"),
   ]);
@@ -1037,4 +1057,596 @@ test("a stdlib-named file at a Python group root shadows no tool", () => {
     const roots = calls(home, tool).map((c) => argAfter(c.args, "--root"));
     assert.ok(roots.includes(repo), `${tool} --root ${roots.join(", ")}`);
   }
+});
+
+// --- Unit mode: changed lines, plan, commands, scope ---
+
+/**
+ * `a.ts` changes line 5 and `b.ts` line 2. `b.ts`'s unchanged line 5 carries a
+ * surviving mutant: `--lines 2,5` reaches it, as with the real tool, so only
+ * harry's own changed-line filter keeps it out of the facts.
+ */
+function collisionRepo(): string {
+  const lines = (marks: Record<number, string>) =>
+    Array.from({ length: 6 }, (_, i) => `export const v${i + 1} = 1;${marks[i + 1] ?? ""}`).join(
+      "\n",
+    );
+  return makeRepo(
+    {
+      "package.json": PKG,
+      "src/a.ts": lines({}),
+      "src/b.ts": lines({ 5: " // mut > >= survived" }),
+    },
+    {
+      "src/a.ts": lines({ 5: " // mut 1 0 killed" }),
+      "src/b.ts": lines({ 2: " // mut 1 0 killed", 5: " // mut > >= survived" }),
+    },
+  );
+}
+
+function mutatorHome(): string {
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+  installStub(home, "mutator", MUTATOR_FROM_MARKERS);
+  return home;
+}
+
+test("mutator runs once per group on the changed lines and lists no survivor from an unchanged line", () => {
+  const repo = collisionRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const runs = mutatorRuns(home);
+  assert.equal(runs.length, 1);
+  assert.equal(argAfter(runs[0].args, "--lines"), "2,5");
+  const mutator = toolSection(run.facts, "mutator");
+  assert.doesNotMatch(mutator, /src\/b\.ts:5/, mutator);
+  assert.match(mutator, /No mutant survived\./, mutator);
+  assert.match(mutator, /Sites on changed lines: 2 · run: 2 · /, mutator);
+  assert.match(
+    mutator,
+    /^Executed by mutator, off-line sites included: 3 \(src\/a\.ts 1, src\/b\.ts 2\)$/m,
+  );
+});
+
+/**
+ * A scan that lists 14 sites for `src/a.ts`, more stdout than a 12-line tail
+ * holds, and skips `src/b.ts` with a reason on stderr.
+ */
+const SCAN_SKIPS_B = `const site = "  src/a.ts:5 1 -> 0  [defn/fn]\\n";
+process.stdout.write("Scan: 14 mutation sites in src/a.ts\\n" + site.repeat(14));
+process.stderr.write("Skipping test file src/b.ts\\n");`;
+
+test("a scan that prints no header for a handed file fails --plan and the mutator section, naming it", () => {
+  const repo = collisionRepo();
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+  installStub(home, "mutator", SCAN_SKIPS_B);
+
+  const plan = runPlan(repo, home, fakeBin());
+  assert.notEqual(plan.status, 0, plan.stdout);
+  assert.match(plan.stderr, /mutator --scan printed no header for src\/b\.ts/, plan.stderr);
+  assert.match(plan.stderr, /Skipping test file src\/b\.ts/, plan.stderr);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(mutator, /failed: .*mutator --scan printed no header for src\/b\.ts/s, mutator);
+  assert.doesNotMatch(mutator, /No mutant survived/, mutator);
+});
+
+test("a scan that prints a handed file's header twice fails --plan, naming it", () => {
+  const repo = collisionRepo();
+  const home = tempDir("harry-metrics-home-");
+  installStub(
+    home,
+    "mutator",
+    `const a = "Scan: 1 mutation sites in src/a.ts\\n  src/a.ts:5 1 -> 0  [defn/fn]\\n";
+process.stdout.write(a + a + "Scan: 0 mutation sites in src/b.ts\\n");`,
+  );
+
+  const plan = runPlan(repo, home, fakeBin());
+
+  assert.notEqual(plan.status, 0, plan.stdout);
+  assert.match(
+    plan.stderr,
+    /mutator --scan printed more than one header for src\/a\.ts/,
+    plan.stderr,
+  );
+});
+
+test("a tool failure keeps stderr's tail beside a long stdout's", () => {
+  const stdout = Array.from({ length: 20 }, (_, i) => `site ${i + 1}`).join("\n");
+  const tail = failureTail({ status: 1, stdout, stderr: "Skipping test file src/b.ts\n" });
+  assert.match(tail, /Skipping test file src\/b\.ts/);
+  assert.match(tail, /site 20$/);
+});
+
+test("a tracked symlink is not handed to mutator's scan", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    { "src/a.ts": "export const a = 1; // mut 1 0 killed\n" },
+  );
+  symlinkSync("a.ts", path.join(repo, "src/link.ts"));
+  commitAll(repo, "link");
+  const home = mutatorHome();
+
+  const plan = runPlan(repo, home, fakeBin());
+
+  assert.equal(plan.status, 0, plan.stderr);
+  const scans = calls(home, "mutator").filter((c) => c.args.includes("--scan"));
+  assert.ok(scans.length > 0);
+  for (const scan of scans) assert.ok(!scan.args.includes("src/link.ts"), scan.args.join(" "));
+  assert.match(plan.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed$/m, plan.stdout);
+});
+
+function runPlan(repo: string, home: string, binDir: string, extra: string[] = []) {
+  return spawnSync(process.execPath, [CLI, "metrics", "--base", "main", "--plan", ...extra], {
+    cwd: repo,
+    encoding: "utf8",
+    env: { ...process.env, HOME: home, PATH: `${binDir}:${process.env.PATH}` },
+  });
+}
+
+test("--plan prints the changed-line sites per group, the cores and the load, running nothing and changing nothing", () => {
+  const repo = collisionRepo();
+  const home = mutatorHome();
+  const bin = fakeBin();
+  const before = status(repo);
+
+  const res = runPlan(repo, home, bin);
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout, /^- \. \(node\): 2 on changed lines, 3 executed$/m, res.stdout);
+  assert.match(res.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed$/m, res.stdout);
+  assert.match(res.stdout, /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed$/m, res.stdout);
+  assert.match(res.stdout, /^Cores: \d+$/m);
+  assert.match(res.stdout, /^Load average: 1 min \d+\.\d\d · 5 min \d+\.\d\d$/m);
+  assert.deepEqual(pmCalls(bin), []);
+  assert.deepEqual(mutatorRuns(home), []);
+  assert.deepEqual(calls(home, "crapper"), []);
+  assert.equal(status(repo), before);
+});
+
+test("--plan exits non-zero when a scan's listed sites disagree with its own count", () => {
+  const repo = collisionRepo();
+  const home = tempDir("harry-metrics-home-");
+  installStub(
+    home,
+    "mutator",
+    'process.stdout.write("Scan: 3 mutation sites in src/a.ts\\n  src/a.ts:5 1 -> 0  [defn/fn]\\n");',
+  );
+
+  const res = runPlan(repo, home, fakeBin());
+
+  assert.notEqual(res.status, 0);
+  assert.match(res.stderr, /lists 1 sites in src\/a\.ts but counts 3/, res.stderr);
+});
+
+/** Five new sites: two on line 1, two on line 2, one on line 3. */
+function fiveSiteRepo(): string {
+  return makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts": [
+        "export const a = 1 + 2; // mut 1 0 killed // mut + - killed",
+        "export const b = 3 + 4; // mut 3 0 killed // mut + - survived",
+        "export const c = 5; // mut 5 0 survived",
+        "",
+      ].join("\n"),
+    },
+  );
+}
+
+test("--max-mutants runs the first n sites, finishing the line the cut falls in, and lists the rest", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "3"] });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(argAfter(mutatorRuns(home)[0].args, "--lines"), "1,2");
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /Sites on changed lines: 5 · run: 4 · .* not selected \(--max-mutants\): 1/,
+  );
+  assert.match(mutator, /Not selected \(--max-mutants\):\n- src\/a\.ts:3$/m, mutator);
+  assert.doesNotMatch(mutator, /src\/a\.ts:3 `5`/, mutator);
+});
+
+test("without --max-mutants every changed-line site runs and none is listed as not selected", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(argAfter(mutatorRuns(home)[0].args, "--lines"), "1,2,3");
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /Sites on changed lines: 5 · run: 5 · .* not selected \(--max-mutants\): 0/,
+  );
+  assert.doesNotMatch(mutator, /Not selected/);
+  assert.match(mutator, /src\/a\.ts:3 `5` → `0`/, mutator);
+});
+
+test("--test-command and --max-workers reach mutator's run, and --max-workers never its scan", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, {
+    binDir: fakeBin(),
+    extra: ["--test-command", "make check", "--max-workers", "3"],
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  const [only] = mutatorRuns(home);
+  assert.equal(argAfter(only.args, "--test-command"), "make check");
+  assert.equal(argAfter(only.args, "--max-workers"), "3");
+  const scans = calls(home, "mutator").filter((c) => c.args.includes("--scan"));
+  assert.ok(scans.length > 0);
+  for (const scan of scans) assert.ok(!scan.args.includes("--max-workers"), scan.args.join(" "));
+  assert.match(toolSection(run.facts, "mutator"), /Test command: `make check`/);
+});
+
+test("with no command flag the facts state the default test and coverage commands", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(argAfter(mutatorRuns(home)[0].args, "--test-command"), "npm test");
+  assert.match(
+    toolSection(run.facts, "mutator"),
+    /Test command: `npm test` · Coverage command: `npm run coverage`/,
+  );
+});
+
+test("--coverage-command replaces the coverage plan, run through the shell in the group dir", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+  const bin = fakeBin();
+  const command = "mkdir -p coverage && echo TN: > coverage/lcov.info";
+
+  const run = runMetrics(repo, home, { binDir: bin, extra: ["--coverage-command", command] });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(pmCalls(bin), []);
+  assert.ok(mutatorRuns(home)[0].args.includes("--use-existing-coverage"));
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(mutator, /— uncovered lines skipped/);
+  assert.ok(mutator.includes(`Coverage command: \`${command}\``), mutator);
+  assert.equal(status(repo), "");
+});
+
+test("a --coverage-command that leaves no lcov.info is a coverage gap", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, {
+    binDir: fakeBin(),
+    extra: ["--coverage-command", "true"],
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(
+    toolSection(run.facts, "crapper"),
+    /complexity only: coverage command `true` produced no lcov\.info/,
+  );
+  assert.match(toolSection(run.facts, "mutator"), /— every site run \(no coverage\)/);
+  assert.ok(mutatorRuns(home)[0].args.includes("--no-coverage"));
+});
+
+test("a --coverage-command scores a group whose own coverage plan would skip", () => {
+  const repo = makeRepo(
+    { "package.json": "{}\n" },
+    { "src/r.ts": "// crap r 2 1\nfunction r() {}\n" },
+  );
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+  const command = "mkdir -p coverage && echo TN: > coverage/lcov.info";
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--coverage-command", command] });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.ok(toolSection(run.facts, "crapper").includes(`— coverage: ${command}`), run.facts);
+});
+
+test("a --coverage-command that fails is named as typed", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, {
+    binDir: fakeBin(),
+    extra: ["--coverage-command", "exit 4"],
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(
+    toolSection(run.facts, "crapper"),
+    /complexity only: coverage command `exit 4` exited 4/,
+  );
+});
+
+test("a default coverage plan whose first step fails names only that step", () => {
+  const repo = makeRepo(
+    { "pyproject.toml": "[project]\nname = 'p'\n" },
+    { "src/p.py": "# // crap p 2 1\n" },
+  );
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\n");
+  writeExecutable(
+    path.join(repo, ".venv/bin/python"),
+    `#!/bin/sh\ncase "$*" in *"coverage run"*) exit 2 ;; esac\nexit 0\n`,
+  );
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const crapper = toolSection(run.facts, "crapper");
+  assert.match(
+    crapper,
+    /complexity only: coverage command `python -m coverage run -m pytest` exited 2/,
+  );
+  assert.doesNotMatch(crapper, /coverage lcov/, crapper);
+});
+
+test("a site the coverage report leaves uncovered is counted as not run", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts":
+        "export const a = 1; // mut 1 0 killed\nexport const b = 2; // mut 2 0 uncovered\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(
+    toolSection(run.facts, "mutator"),
+    /Sites on changed lines: 2 · run: 1 · not run \(uncovered\): 1 · not selected \(--max-mutants\): 0/,
+  );
+});
+
+function twoPackageRepo(): string {
+  return makeRepo(
+    {
+      "packages/x/package.json": PKG,
+      "packages/y/package.json": PKG,
+    },
+    {
+      "packages/x/src/x.ts": "export const x = 1; // mut 1 0 killed\n",
+      "packages/y/src/y.ts": "export const y = 1; // mut 1 0 killed\n",
+    },
+  );
+}
+
+for (const flag of ["--test-command", "--coverage-command"]) {
+  test(`${flag} with two group dirs in scope and no --only exits naming them and runs nothing`, () => {
+    const repo = twoPackageRepo();
+    const home = mutatorHome();
+    installStub(home, "dryer", DRYER_ALL_PAIRS);
+    const bin = fakeBin();
+
+    const run = runMetrics(repo, home, { binDir: bin, extra: [flag, "make check"] });
+
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /2 are in scope: packages\/x, packages\/y\. Pick one with --only/);
+    assert.deepEqual(calls(home, "mutator"), []);
+    assert.deepEqual(calls(home, "crapper"), []);
+    assert.deepEqual(calls(home, "dryer"), []);
+    assert.deepEqual(pmCalls(bin), []);
+    assert.equal(run.facts, "");
+  });
+}
+
+test("--max-workers needs no --only with two group dirs in scope", () => {
+  const repo = twoPackageRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-workers", "2"] });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(
+    mutatorRuns(home).map((c) => argAfter(c.args, "--max-workers")),
+    ["2", "2"],
+  );
+});
+
+test("--only <dir> limits the run to the groups at that dir", () => {
+  const repo = twoPackageRepo();
+  const home = mutatorHome();
+  const bin = fakeBin();
+
+  const run = runMetrics(repo, home, {
+    binDir: bin,
+    extra: ["--only", "packages/x", "--test-command", "make check"],
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  const px = path.join(repo, "packages/x");
+  assert.deepEqual(
+    mutatorRuns(home).map((c) => [argAfter(c.args, "--root"), argAfter(c.args, "--test-command")]),
+    [[px, "make check"]],
+  );
+  assert.deepEqual(
+    pmCalls(bin).map((c) => c.cwd),
+    [px],
+  );
+  assert.doesNotMatch(run.facts, /packages\/y/);
+});
+
+test("--only . with a command flag covers every group at the root, one per language", () => {
+  const repo = makeRepo(
+    { "package.json": PKG, "pyproject.toml": "[project]\nname = 'p'\n" },
+    {
+      "src/a.ts": "export const a = 1; // mut 1 0 killed\n",
+      "src/p.py": "A = 1  # // mut 1 0 killed\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, {
+    binDir: fakeBin(),
+    extra: ["--only", ".", "--test-command", "make check", "--coverage-command", "true"],
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  const runs = mutatorRuns(home).map((c) => [c.args.at(-1), argAfter(c.args, "--test-command")]);
+  assert.deepEqual(runs.sort(), [
+    ["src/a.ts", "make check"],
+    ["src/p.py", "make check"],
+  ]);
+});
+
+test("unit-only flags are refused with --audit, and --plan with --out", () => {
+  const repo = collisionRepo();
+  const home = mutatorHome();
+  const audit = runAudit(repo, home, fakeBin(), ["--max-mutants", "2"]);
+  assert.notEqual(audit.status, 0);
+  assert.match(audit.stderr, /--max-mutants applies only to metrics --base/);
+
+  const plan = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--plan"] });
+  assert.notEqual(plan.status, 0);
+  assert.match(plan.stderr, /--plan writes no file; drop --out/);
+  assert.deepEqual(calls(home, "mutator"), []);
+});
+
+/**
+ * Only lines carrying a changed-line site are handed: `a.ts` and `c.ts` change a
+ * line with no site, so `b.ts`'s unchanged site on line 3 and `c.ts`'s on line 5
+ * are scanned but never executed, and `c.ts` is not handed at all.
+ */
+test("--plan counts the sites mutator executes on the handed lines, not every scanned site", () => {
+  const lines = (marks: Record<number, string>) =>
+    Array.from({ length: 6 }, (_, i) => `export const v${i + 1} = ${marks[i + 1] ?? "1;"}`).join(
+      "\n",
+    );
+  const repo = makeRepo(
+    {
+      "package.json": PKG,
+      "src/a.ts": lines({}),
+      "src/b.ts": lines({ 3: "1; // mut 1 0 killed", 5: "1; // mut 1 0 killed" }),
+      "src/c.ts": lines({ 5: "1; // mut 1 0 killed" }),
+    },
+    {
+      "src/a.ts": lines({ 3: "2;", 5: "1; // mut 1 0 killed" }),
+      "src/b.ts": lines({
+        2: "1; // mut 1 0 killed",
+        3: "1; // mut 1 0 killed",
+        5: "1; // mut 1 0 killed",
+      }),
+      "src/c.ts": lines({ 1: "2;", 5: "1; // mut 1 0 killed" }),
+    },
+  );
+  const home = mutatorHome();
+
+  const res = runPlan(repo, home, fakeBin());
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout, /^- \. \(node\): 2 on changed lines, 3 executed$/m, res.stdout);
+  assert.match(res.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed$/m, res.stdout);
+  assert.match(res.stdout, /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed$/m, res.stdout);
+  assert.doesNotMatch(res.stdout, /src\/c\.ts/, res.stdout);
+});
+
+test("--max-mutants takes sites by file before line across files", () => {
+  const repo = collisionRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "1"] });
+
+  assert.equal(run.status, 0, run.stderr);
+  const [only] = mutatorRuns(home);
+  assert.equal(argAfter(only.args, "--lines"), "5");
+  assert.equal(only.args.at(-1), "src/a.ts");
+  assert.ok(!only.args.includes("src/b.ts"), only.args.join(" "));
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(mutator, /Sites on changed lines: 2 · run: 1 · /, mutator);
+  assert.match(mutator, /Not selected \(--max-mutants\):\n- src\/b\.ts:2$/m, mutator);
+});
+
+test("--plan --max-mutants prints the cap's selection and what mutator executes for it", () => {
+  const repo = collisionRepo();
+  const home = mutatorHome();
+  const bin = fakeBin();
+  const before = status(repo);
+
+  const res = runPlan(repo, home, bin, ["--max-mutants", "1"]);
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(
+    res.stdout,
+    /^- \. \(node\): 2 on changed lines, 1 selected \(--max-mutants 1\), 1 executed$/m,
+    res.stdout,
+  );
+  assert.match(res.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 selected, 1 executed$/m);
+  assert.match(res.stdout, /^ {2}- src\/b\.ts: 1 on changed lines, 0 selected, 0 executed$/m);
+  assert.deepEqual(mutatorRuns(home), []);
+  assert.deepEqual(pmCalls(bin), []);
+  assert.equal(status(repo), before);
+});
+
+/**
+ * Two groups at the root. `src/a.ts` changes a line with no site, so the node
+ * group comes first and hands `src/c.ts`'s site ahead of the python group's
+ * `src/b.py`: only the shared comparator puts `src/b.py` first.
+ */
+function crossGroupRepo(): string {
+  return makeRepo(
+    { "package.json": PKG, "pyproject.toml": "[project]\nname = 'p'\n" },
+    {
+      "src/a.ts": "export const a = 'x';\n",
+      "src/b.py": "B = 1  # // mut 1 0 killed\n",
+      "src/c.ts": "export const c = 1; // mut 1 0 killed\n",
+    },
+  );
+}
+
+test("within a group, the cap and --plan's listing take paths in code-unit order", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    {
+      "src/api.ts": "export const a = 1; // mut 1 0 killed\n",
+      "src/Button.ts": "export const b = 1; // mut 1 0 killed\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const plan = runPlan(repo, home, fakeBin(), ["--max-mutants", "1"]);
+
+  assert.equal(plan.status, 0, plan.stderr);
+  assert.match(
+    plan.stdout,
+    /: on changed lines, selected by the cap, and executed .*\n.*\n {2}- src\/Button\.ts: 1 on changed lines, 1 selected, 1 executed\n {2}- src\/api\.ts: 1 on changed lines, 0 selected, 0 executed$/m,
+    plan.stdout,
+  );
+});
+
+test("the cap and --plan take files by repo path across groups, whatever order the groups come in", () => {
+  const repo = crossGroupRepo();
+  const home = mutatorHome();
+
+  const plan = runPlan(repo, home, fakeBin(), ["--max-mutants", "1"]);
+  assert.equal(plan.status, 0, plan.stderr);
+  assert.match(plan.stdout, /^ {2}- src\/b\.py: 1 on changed lines, 1 selected, 1 executed$/m);
+  assert.match(plan.stdout, /^ {2}- src\/c\.ts: 1 on changed lines, 0 selected, 0 executed$/m);
+
+  const run = runMetrics(repo, home, {
+    binDir: fakeBin(),
+    extra: ["--max-mutants", "1", "--coverage-command", "true"],
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(
+    mutatorRuns(home).map((c) => c.args.at(-1)),
+    ["src/b.py"],
+  );
 });

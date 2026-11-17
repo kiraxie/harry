@@ -62,7 +62,14 @@ export function runTool(tool: Tool, args: string[]): ToolRun {
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
 
+/**
+ * The last lines of a failed tool's stderr, then of its stdout, each tailed on its
+ * own so a long stdout never pushes stderr's reason out.
+ */
 export function failureTail(run: ToolRun): string {
-  const lines = `${run.stderr}\n${run.stdout}`.trim().split("\n");
-  return lines.slice(-12).join("\n");
+  const tail = (text: string) => text.trim().split("\n").slice(-12).join("\n");
+  return [run.stderr, run.stdout]
+    .map(tail)
+    .filter((t) => t !== "")
+    .join("\n");
 }
