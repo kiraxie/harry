@@ -11,6 +11,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   realpathSync,
@@ -22,8 +23,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { runCost } from "../src/lib/metrics/mutator.ts";
 import { failureTail } from "../src/lib/metrics/tools.ts";
-import { headingSection } from "./section.ts";
+import { headingSection, outline } from "./section.ts";
 
 const CLI = path.resolve(import.meta.dirname, "../src/companion.ts");
 
@@ -354,6 +356,11 @@ test("--plan reports mutator not installed when its venv lacks the mutator packa
     /^- mutator not installed \(venv at ~\/\.claude\/harry\/tools\/mutator\/\.venv lacks the mutator package; /m,
     res.stdout,
   );
+  assert.match(
+    res.stdout.trimEnd().split("\n").at(-1) ?? "",
+    /^Estimate: none \(mutator not installed \(venv at .* lacks the mutator package; .*\)\)$/,
+    res.stdout,
+  );
   assert.deepEqual(mutatorRuns(home), []);
 });
 
@@ -499,7 +506,7 @@ function checkoutModes(home: string, repo: string): string[] {
 
 const FAKE_VENV_PYTHON = `#!/bin/sh
 echo "$@" >> "$(dirname "$0")/py.log"
-case "$2" in "import coverage") exit 1 ;; esac
+case "$2" in *"import coverage") exit 1 ;; esac
 exit 0
 `;
 
@@ -1239,11 +1246,22 @@ test("a tracked symlink is not handed to mutator's scan", () => {
   const scans = calls(home, "mutator").filter((c) => c.args.includes("--scan"));
   assert.ok(scans.length > 0);
   for (const scan of scans) assert.ok(!scan.args.includes("src/link.ts"), scan.args.join(" "));
-  assert.match(plan.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed$/m, plan.stdout);
+  assert.match(
+    plan.stdout,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round$/m,
+    plan.stdout,
+  );
 });
 
+/**
+ * Every plan runs on a 3-core machine whose `availableParallelism` says 5, so the
+ * plan's numbers hold on any host and only the count mutator sizes workers by fits.
+ */
+const THREE_CORES = `data:text/javascript,import os from "node:os"; os.cpus = () => Array.from({ length: 3 }, () => ({})); os.availableParallelism = () => 5;`;
+
 function runPlan(repo: string, home: string, binDir: string, extra: string[] = []) {
-  return spawnSync(process.execPath, [CLI, "metrics", "--base", "main", "--plan", ...extra], {
+  const args = ["--import", THREE_CORES, CLI, "metrics", "--base", "main", "--plan", ...extra];
+  return spawnSync(process.execPath, args, {
     cwd: repo,
     encoding: "utf8",
     env: { ...process.env, HOME: home, PATH: `${binDir}:${process.env.PATH}` },
@@ -1259,15 +1277,208 @@ test("--plan prints the changed-line sites per group, the cores and the load, ru
   const res = runPlan(repo, home, bin);
 
   assert.equal(res.status, 0, res.stderr);
-  assert.match(res.stdout, /^- \. \(node\): 2 on changed lines, 3 executed$/m, res.stdout);
-  assert.match(res.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed$/m, res.stdout);
-  assert.match(res.stdout, /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed$/m, res.stdout);
-  assert.match(res.stdout, /^Cores: \d+$/m);
+  assert.match(
+    res.stdout,
+    /^- \. \(node\): 2 on changed lines, 3 executed, 2 rounds$/m,
+    res.stdout,
+  );
+  assert.match(
+    res.stdout,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round$/m,
+    res.stdout,
+  );
+  assert.match(
+    res.stdout,
+    /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed, 2 workers, 1 round$/m,
+    res.stdout,
+  );
+  assert.match(res.stdout, /^Cores: 3$/m);
   assert.match(res.stdout, /^Load average: 1 min \d+\.\d\d · 5 min \d+\.\d\d$/m);
   assert.deepEqual(pmCalls(bin), []);
   assert.deepEqual(mutatorRuns(home), []);
   assert.deepEqual(calls(home, "crapper"), []);
   assert.equal(status(repo), before);
+});
+
+test("runCost takes mutator's workers per file, the fewest of sites, cores and --max-workers, and rounds up", () => {
+  const rows: [number, number | null, number, { workers: number; rounds: number }][] = [
+    [0, null, 8, { workers: 0, rounds: 0 }],
+    [0, 4, 8, { workers: 0, rounds: 0 }],
+    [1, null, 8, { workers: 1, rounds: 1 }],
+    [2, null, 8, { workers: 2, rounds: 1 }],
+    [5, 1, 8, { workers: 1, rounds: 5 }],
+    [5, 2, 8, { workers: 2, rounds: 3 }],
+    [17, null, 8, { workers: 8, rounds: 3 }],
+    [17, 13, 8, { workers: 8, rounds: 3 }],
+    [5, null, 0, { workers: 1, rounds: 5 }],
+  ];
+  for (const [executed, maxWorkers, cores, want] of rows) {
+    const sites = Array.from({ length: executed }, (_, i) => ({ file: "f.ts", line: i + 1 }));
+    const cost = runCost(sites, sites, maxWorkers, cores);
+    const got = cost.files.get("f.ts");
+    const row = `${executed}, ${maxWorkers}, ${cores}`;
+    assert.deepEqual(
+      got === undefined ? { workers: 0, rounds: 0 } : { workers: got.workers, rounds: got.rounds },
+      want,
+      row,
+    );
+    assert.equal(cost.rounds, want.rounds, row);
+    assert.equal(cost.baselines, executed > 0 ? 1 : 0, row);
+  }
+});
+
+test("--plan --max-workers sets the workers and rounds it prints", () => {
+  const repo = fiveSiteRepo();
+  const home = mutatorHome();
+
+  const one = runPlan(repo, home, fakeBin(), ["--max-workers", "1"]);
+  const four = runPlan(repo, home, fakeBin(), ["--max-workers", "4"]);
+
+  assert.equal(one.status, 0, one.stderr);
+  assert.equal(four.status, 0, four.stderr);
+  assert.match(
+    one.stdout,
+    /^- \. \(node\): 5 on changed lines, 5 executed, 5 rounds$/m,
+    one.stdout,
+  );
+  assert.match(
+    one.stdout,
+    /^ {2}- src\/a\.ts: 5 on changed lines, 5 executed, 1 worker, 5 rounds$/m,
+    one.stdout,
+  );
+  assert.match(
+    four.stdout,
+    /^- \. \(node\): 5 on changed lines, 5 executed, 2 rounds$/m,
+    four.stdout,
+  );
+  assert.match(
+    four.stdout,
+    /^ {2}- src\/a\.ts: 5 on changed lines, 5 executed, 3 workers, 2 rounds$/m,
+    four.stdout,
+  );
+});
+
+/** A repo with `files` changed on `feat` and a `.venv` python whose every import succeeds. */
+function repoWithPython(base: Record<string, string>, change: Record<string, string>): string {
+  const repo = makeRepo(base, change);
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\n");
+  writeExecutable(path.join(repo, ".venv/bin/python"), "#!/bin/sh\nexit 0\n");
+  return repo;
+}
+
+/** The last line `--plan` prints. */
+function lastLine(stdout: string): string {
+  return stdout.trimEnd().split("\n").at(-1) ?? "";
+}
+
+test("--plan ends with one coverage run and one baseline per group, two groups at one dir included", () => {
+  const repo = repoWithPython(
+    { "package.json": PKG, "pyproject.toml": "[project]\nname = 'p'\n" },
+    {
+      "src/a.ts": "export const a = 1; // mut 1 0 killed\nexport const b = 2; // mut 2 0 killed\n",
+      "src/p.py": "A = 1  # // mut 1 0 killed\n",
+    },
+  );
+  const home = mutatorHome();
+  const before = status(repo);
+
+  const res = runPlan(repo, home, fakeBin(), ["--max-workers", "1"]);
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.equal(
+    lastLine(res.stdout),
+    "Estimate: 2 coverage runs + 2 baselines + 3 test-command rounds",
+    res.stdout,
+  );
+  assert.equal(status(repo), before);
+});
+
+test("--plan counts no baseline for a group the cap leaves empty", () => {
+  const repo = repoWithPython(
+    { "package.json": PKG, "pyproject.toml": "[project]\nname = 'p'\n" },
+    {
+      "src/b.py": "B = 1  # // mut 1 0 killed\n",
+      "src/c.ts": "export const c = 1; // mut 1 0 killed\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const res = runPlan(repo, home, fakeBin(), ["--max-mutants", "1"]);
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.equal(
+    lastLine(res.stdout),
+    "Estimate: 2 coverage runs + 1 baseline + 1 test-command round",
+    res.stdout,
+  );
+});
+
+test("--plan counts no coverage run for a skipped coverage plan unless --coverage-command replaces it", () => {
+  const repo = makeRepo(
+    { "package.json": "{}\n" },
+    { "src/a.ts": "export const a = 1; // mut 1 0 killed\n" },
+  );
+  const home = mutatorHome();
+
+  const own = runPlan(repo, home, fakeBin());
+  const replaced = runPlan(repo, home, fakeBin(), ["--coverage-command", "true"]);
+
+  assert.equal(own.status, 0, own.stderr);
+  assert.equal(
+    lastLine(own.stdout),
+    "Estimate: 0 coverage runs + 1 baseline + 1 test-command round",
+    own.stdout,
+  );
+  assert.equal(replaced.status, 0, replaced.stderr);
+  assert.equal(
+    lastLine(replaced.stdout),
+    "Estimate: 1 coverage run + 1 baseline + 1 test-command round",
+    replaced.stdout,
+  );
+});
+
+const HOST_PYTHON = spawnSync("sh", ["-c", "command -v python3"], {
+  encoding: "utf8",
+}).stdout.trim();
+
+test("--plan's python import probe never imports a module from the group dir", {
+  skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
+}, () => {
+  const repo = makeRepo(
+    { "pyproject.toml": "[project]\nname = 'p'\n" },
+    { "src/p.py": "A = 1  # // mut 1 0 killed\n" },
+  );
+  const marker = path.join(tempDir("harry-metrics-marker-"), "imported");
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\ncoverage.py\n");
+  // -S keeps the host's site-packages out, so only a module in the group dir could answer.
+  writeExecutable(
+    path.join(repo, ".venv/bin/python"),
+    `#!/bin/sh\nexec "${HOST_PYTHON}" -S "$@"\n`,
+  );
+  write(repo, "coverage.py", `open(${JSON.stringify(marker)}, "w").write("x")\n`);
+  const home = mutatorHome();
+  const before = status(repo);
+
+  const res = runPlan(repo, home, fakeBin());
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.equal(
+    lastLine(res.stdout),
+    "Estimate: 0 coverage runs + 1 baseline + 1 test-command round",
+    res.stdout,
+  );
+  assert.equal(existsSync(marker), false, "the group dir's coverage.py was imported");
+  assert.equal(status(repo), before);
+});
+
+test("--plan with no changed source file estimates none, naming why", () => {
+  const repo = makeRepo({}, { "README.md": "y\n" });
+  const home = mutatorHome();
+
+  const res = runPlan(repo, home, fakeBin());
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.equal(lastLine(res.stdout), "Estimate: none (no changed source files)", res.stdout);
 });
 
 test("--plan exits non-zero when a scan's listed sites disagree with its own count", () => {
@@ -1612,9 +1823,21 @@ test("--plan counts the sites mutator executes on the handed lines, not every sc
   const res = runPlan(repo, home, fakeBin());
 
   assert.equal(res.status, 0, res.stderr);
-  assert.match(res.stdout, /^- \. \(node\): 2 on changed lines, 3 executed$/m, res.stdout);
-  assert.match(res.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed$/m, res.stdout);
-  assert.match(res.stdout, /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed$/m, res.stdout);
+  assert.match(
+    res.stdout,
+    /^- \. \(node\): 2 on changed lines, 3 executed, 2 rounds$/m,
+    res.stdout,
+  );
+  assert.match(
+    res.stdout,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round$/m,
+    res.stdout,
+  );
+  assert.match(
+    res.stdout,
+    /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed, 2 workers, 1 round$/m,
+    res.stdout,
+  );
   assert.doesNotMatch(res.stdout, /src\/c\.ts/, res.stdout);
 });
 
@@ -1645,11 +1868,17 @@ test("--plan --max-mutants prints the cap's selection and what mutator executes 
   assert.equal(res.status, 0, res.stderr);
   assert.match(
     res.stdout,
-    /^- \. \(node\): 2 on changed lines, 1 selected \(--max-mutants 1\), 1 executed$/m,
+    /^- \. \(node\): 2 on changed lines, 1 selected \(--max-mutants 1\), 1 executed, 1 round$/m,
     res.stdout,
   );
-  assert.match(res.stdout, /^ {2}- src\/a\.ts: 1 on changed lines, 1 selected, 1 executed$/m);
-  assert.match(res.stdout, /^ {2}- src\/b\.ts: 1 on changed lines, 0 selected, 0 executed$/m);
+  assert.match(
+    res.stdout,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round$/m,
+  );
+  assert.match(
+    res.stdout,
+    /^ {2}- src\/b\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds$/m,
+  );
   assert.deepEqual(mutatorRuns(home), []);
   assert.deepEqual(pmCalls(bin), []);
   assert.equal(status(repo), before);
@@ -1686,9 +1915,85 @@ test("within a group, the cap and --plan's listing take paths in code-unit order
   assert.equal(plan.status, 0, plan.stderr);
   assert.match(
     plan.stdout,
-    /: on changed lines, selected by the cap, and executed .*\n.*\n {2}- src\/Button\.ts: 1 on changed lines, 1 selected, 1 executed\n {2}- src\/api\.ts: 1 on changed lines, 0 selected, 0 executed$/m,
+    /: on changed lines, selected by the cap, and executed .*\n.*\n {2}- src\/Button\.ts: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round\n {2}- src\/api\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds$/m,
     plan.stdout,
   );
+});
+
+test("the survivor list and the Not selected list take paths in code-unit order", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    {
+      "src/A.ts": "export const z = 1; // mut 1 0 killed\n",
+      "src/api.ts": "export const a = 1; // mut 1 0 survived\n",
+      "src/Button.ts": "export const b = 1; // mut 1 0 survived\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const all = runMetrics(repo, home, { binDir: fakeBin() });
+  assert.equal(all.status, 0, all.stderr);
+  assert.match(
+    toolSection(all.facts, "mutator"),
+    /^- src\/Button\.ts:1 .*\n- src\/api\.ts:1 /m,
+    all.facts,
+  );
+
+  const capped = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "1"] });
+  assert.equal(capped.status, 0, capped.stderr);
+  assert.match(
+    toolSection(capped.facts, "mutator"),
+    /Not selected \(--max-mutants\):\n- src\/Button\.ts:1\n- src\/api\.ts:1$/m,
+    capped.facts,
+  );
+});
+
+test("groups list in the order the cap reaches them, mixed-case and prefix-named dirs included", () => {
+  const pkg = (name: string) => ({ [`${name}/package.json`]: PKG });
+  const site = (name: string) => ({
+    [`${name}/src/m.ts`]: "export const m = 1; // mut 1 0 killed\n",
+  });
+  const names = ["api", "app", "app-web", "Web"];
+  const repo = makeRepo(
+    Object.assign({}, ...names.map(pkg)),
+    Object.assign({}, ...names.map(site)),
+  );
+  const home = mutatorHome();
+
+  const plan = runPlan(repo, home, fakeBin(), ["--max-mutants", "1"]);
+  assert.equal(plan.status, 0, plan.stderr);
+  const listed = [...plan.stdout.matchAll(/^- (\S+) \(node\): .*$/gm)];
+  assert.deepEqual(
+    listed.map((m) => m[1]),
+    ["Web", "api", "app-web", "app"],
+    plan.stdout,
+  );
+  assert.match(listed[0][0], / 1 selected /, plan.stdout);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "1"] });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(
+    outline(toolSection(run.facts, "mutator"))
+      .filter((l) => l.level === 3 && !l.fenced)
+      .map((l) => l.title.split(" ")[0]),
+    ["Web", "api", "app-web", "app"],
+    run.facts,
+  );
+});
+
+test("no localeCompare and no comparator-less sort in the metrics modules", () => {
+  const dir = path.resolve(import.meta.dirname, "../src/lib/metrics");
+  const files = [
+    ...readdirSync(dir)
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => path.join(dir, f)),
+    path.resolve(import.meta.dirname, "../src/commands/metrics.ts"),
+  ];
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    assert.doesNotMatch(text, /localeCompare\(/, file);
+    assert.doesNotMatch(text, /\.sort\(\)/, file);
+  }
 });
 
 test("the cap and --plan take files by repo path across groups, whatever order the groups come in", () => {
@@ -1697,8 +2002,14 @@ test("the cap and --plan take files by repo path across groups, whatever order t
 
   const plan = runPlan(repo, home, fakeBin(), ["--max-mutants", "1"]);
   assert.equal(plan.status, 0, plan.stderr);
-  assert.match(plan.stdout, /^ {2}- src\/b\.py: 1 on changed lines, 1 selected, 1 executed$/m);
-  assert.match(plan.stdout, /^ {2}- src\/c\.ts: 1 on changed lines, 0 selected, 0 executed$/m);
+  assert.match(
+    plan.stdout,
+    /^ {2}- src\/b\.py: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round$/m,
+  );
+  assert.match(
+    plan.stdout,
+    /^ {2}- src\/c\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds$/m,
+  );
 
   const run = runMetrics(repo, home, {
     binDir: fakeBin(),

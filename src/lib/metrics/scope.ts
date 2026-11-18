@@ -7,6 +7,14 @@ import { gitChecked } from "../git.ts";
 import { resolveOnPath } from "../path-search.ts";
 import { throwIfInterrupted } from "./interrupt.ts";
 
+/**
+ * The one order for paths, the cap's and every listing's: UTF-16 code units, which match
+ * git's byte order for ASCII and for BMP paths below U+E000.
+ */
+export function byPath(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 const SOURCE_EXTENSIONS = new Set([
   ".clj",
   ".cljc",
@@ -70,7 +78,7 @@ export function changedSourceFiles(root: string, base: string): string[] {
     "--diff-filter=AM",
     `${base}...HEAD`,
   ]);
-  return lines(diff.stdout).filter(isSourceFile).sort();
+  return lines(diff.stdout).filter(isSourceFile).sort(byPath);
 }
 
 /** `[start, count]` of each new-side hunk `git diff -U0 <base>...HEAD` reports for one repo-relative file. */
@@ -94,7 +102,7 @@ export function addedLines(root: string, base: string, file: string): Set<number
 export function trackedSourceFiles(root: string): string[] {
   return lines(gitChecked(root, ["ls-files"]).stdout)
     .filter(isSourceFile)
-    .sort();
+    .sort(byPath);
 }
 
 export function withSnapshot<T>(root: string, ref: string, fn: (dir: string) => T): T {

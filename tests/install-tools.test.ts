@@ -20,6 +20,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { PINNED_TOOLS, syncTools, venvInstalled } from "../scripts/lib/tools.mjs";
+import { SCHEDULE_READ_AT } from "../src/lib/metrics/mutator.ts";
 import { TOOL_NAMES } from "../src/lib/metrics/tools.ts";
 
 const INSTALL = path.resolve(import.meta.dirname, "../scripts/install.mjs");
@@ -411,6 +412,15 @@ test("install.mjs without --tools never touches the tools dir", () => {
 test("the pins name exactly the tools metrics looks for, each at a full commit", () => {
   assert.deepEqual(PINNED_TOOLS.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
   for (const t of PINNED_TOOLS) assert.match(t.commit, /^[0-9a-f]{40}$/, t.name);
+});
+
+test("the mutator pin is the commit runCost's scheduling facts were read at", () => {
+  const pin = PINNED_TOOLS.find((t) => t.name === "mutator")?.commit;
+  assert.equal(
+    pin,
+    SCHEDULE_READ_AT,
+    "the mutator pin moved: re-read worker_count (workers.py), the per-invocation baseline cache (cli.py) and its (command, cwd) key (engine.py) at the new commit, update runCost in src/lib/metrics/mutator.ts and the executing skill's Workers bullet to match, then set SCHEDULE_READ_AT to the new pin",
+  );
 });
 
 test("venvInstalled holds only for the tool's own dist-info, and never throws on a missing lib", () => {

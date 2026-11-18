@@ -463,7 +463,7 @@ ${reason}
 
 // src/commands/metrics.ts
 var import_node_fs14 = require("node:fs");
-var import_node_os7 = __toESM(require("node:os"), 1);
+var import_node_os8 = __toESM(require("node:os"), 1);
 var import_node_path15 = __toESM(require("node:path"), 1);
 
 // src/lib/git.ts
@@ -701,6 +701,9 @@ var import_node_child_process4 = require("node:child_process");
 var import_node_fs7 = require("node:fs");
 var import_node_os4 = __toESM(require("node:os"), 1);
 var import_node_path7 = __toESM(require("node:path"), 1);
+function byPath(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".clj",
   ".cljc",
@@ -759,7 +762,7 @@ function changedSourceFiles(root, base) {
     "--diff-filter=AM",
     `${base}...HEAD`
   ]);
-  return lines(diff.stdout).filter(isSourceFile).sort();
+  return lines(diff.stdout).filter(isSourceFile).sort(byPath);
 }
 function diffHunks(root, base, file) {
   const diff = gitChecked(root, ["diff", "-U0", "--no-renames", `${base}...HEAD`, "--", file]);
@@ -770,13 +773,13 @@ function diffHunks(root, base, file) {
 }
 function addedLines(root, base, file) {
   const lines2 = /* @__PURE__ */ new Set();
-  for (const [start, count] of diffHunks(root, base, file)) {
-    for (let n = start; n < start + count; n++) lines2.add(n);
+  for (const [start, count2] of diffHunks(root, base, file)) {
+    for (let n = start; n < start + count2; n++) lines2.add(n);
   }
   return lines2;
 }
 function trackedSourceFiles(root) {
-  return lines(gitChecked(root, ["ls-files"]).stdout).filter(isSourceFile).sort();
+  return lines(gitChecked(root, ["ls-files"]).stdout).filter(isSourceFile).sort(byPath);
 }
 function withSnapshot(root, ref, fn) {
   const dir = (0, import_node_fs7.mkdtempSync)(import_node_path7.default.join(import_node_os4.default.tmpdir(), "harry-metrics-snap-"));
@@ -932,7 +935,7 @@ function functionSpans(tool, root, files) {
 }
 function changedRanges(repo, base, file) {
   return diffHunks(repo, base, file).map(
-    ([start, count]) => count === 0 ? [start, start + 1] : [start, start + count - 1]
+    ([start, count2]) => count2 === 0 ? [start, start + 1] : [start, start + count2 - 1]
   );
 }
 function touches(span2, ranges) {
@@ -1045,7 +1048,7 @@ function groupFiles(root, files) {
     group.files.push(dir === "" ? rel : import_node_path12.default.posix.relative(dir, rel));
     groups.set(key2, group);
   }
-  return [...groups.values()].sort((a, b) => a.dir.localeCompare(b.dir));
+  return [...groups.values()].sort((a, b) => byPath(repoPath(a, ""), repoPath(b, "")));
 }
 function repoPath(group, file) {
   return group.dir === "" ? file : `${group.dir}/${file}`;
@@ -1121,7 +1124,8 @@ function pythonInterpreter(groupDir) {
   return resolveOnPath("python3", process.env);
 }
 function canImport(python, module2, cwd) {
-  const res = (0, import_node_child_process8.spawnSync)(python, ["-c", `import ${module2}`], { cwd });
+  const probe = `import sys; sys.path = [p for p in sys.path if p]; import ${module2}`;
+  const res = (0, import_node_child_process8.spawnSync)(python, ["-c", probe], { cwd });
   throwIfInterrupted(res);
   return res.status === 0;
 }
@@ -1330,7 +1334,9 @@ ${unrestored.join("\n")}`;
 
 // src/lib/metrics/mutator.ts
 var import_node_fs13 = require("node:fs");
+var import_node_os7 = __toESM(require("node:os"), 1);
 var import_node_path14 = __toESM(require("node:path"), 1);
+var siteKey = (s) => `${s.file}:${s.line}`;
 function lineAt(dir, file, byte) {
   const buf = (0, import_node_fs13.readFileSync)(import_node_path14.default.join(dir, file));
   let line = 1;
@@ -1426,12 +1432,62 @@ ${failureTail(run)}`);
       });
     }
   }
-  return outcomes.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+  return outcomes.sort((a, b) => byPath(a.file, b.file) || a.line - b.line);
 }
 function renderSurvivor(s, where) {
   const fn = s.form.replace(/^defn-?\//, "");
   const mutation = s.mutant === "" ? `delete \`${s.original}\`` : `\`${s.original}\` \u2192 \`${s.mutant}\``;
   return `- ${where} ${mutation} in ${fn}`;
+}
+function scanChanged(tool, dir, changedByFile) {
+  const files = [...changedByFile].filter(([, lines3]) => lines3.size > 0).map(([f]) => f);
+  const on = (file) => changedByFile.get(file) ?? /* @__PURE__ */ new Set();
+  const lines2 = [...new Set(files.flatMap((f) => [...on(f)]))].sort((a, b) => a - b);
+  const scanned = scanSites(tool, dir, files, lines2);
+  return { scanned, onChanged: scanned.filter((s) => on(s.file).has(s.line)) };
+}
+function handed(selected) {
+  return {
+    files: [...new Set(selected.map((s) => s.file))].sort(byPath),
+    lines: [...new Set(selected.map((s) => s.line))].sort((a, b) => a - b)
+  };
+}
+function handOff(scanned, selected) {
+  const { files, lines: lines2 } = handed(selected);
+  const executed = new Map(files.map((f) => [f, 0]));
+  const onLine = new Set(lines2);
+  for (const s of scanned) {
+    const n = executed.get(s.file);
+    if (n !== void 0 && onLine.has(s.line)) executed.set(s.file, n + 1);
+  }
+  return executed;
+}
+function runSelected(tool, dir, selected, coverage, opts) {
+  const { files, lines: lines2 } = handed(selected);
+  const all = files.length === 0 ? [] : runMutator(tool, dir, files, coverage, { ...opts, lines: lines2 });
+  const wanted = new Set(selected.map(siteKey));
+  return {
+    outcomes: all.filter((o) => wanted.has(siteKey(o))),
+    executedPerFile: new Map(files.map((f) => [f, all.filter((o) => o.file === f).length]))
+  };
+}
+function roundsPerFile(executed, maxWorkers, cores) {
+  if (executed === 0) return { workers: 0, rounds: 0 };
+  const workers = Math.max(1, Math.min(executed, cores, maxWorkers ?? cores));
+  return { workers, rounds: Math.ceil(executed / workers) };
+}
+function mutatorCores() {
+  return import_node_os7.default.cpus().length;
+}
+function runCost(scanned, selected, maxWorkers, cores) {
+  const files = /* @__PURE__ */ new Map();
+  let rounds = 0;
+  for (const [file, executed] of handOff(scanned, selected)) {
+    const cost = { executed, ...roundsPerFile(executed, maxWorkers, cores) };
+    files.set(file, cost);
+    rounds += cost.rounds;
+  }
+  return { files, rounds, baselines: files.size > 0 ? 1 : 0 };
 }
 
 // src/commands/metrics.ts
@@ -1598,35 +1654,13 @@ function changedLinesOf(root, base, groups) {
   }
   return lines2;
 }
-function scanGroup(tool, root, group, changed) {
-  const on = (file) => changed.get(repoPath(group, file)) ?? /* @__PURE__ */ new Set();
-  const files = group.files.filter((f) => on(f).size > 0);
-  const lines2 = [...new Set(files.flatMap((f) => [...on(f)]))].sort((a, b) => a - b);
-  const scanned = scanSites(tool, import_node_path15.default.join(root, group.dir), files, lines2);
-  return { scanned, onChanged: scanned.filter((s) => on(s.file).has(s.line)) };
-}
-function byPath(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-function handed(sites) {
-  return {
-    files: [...new Set(sites.map((s) => s.file))].sort(byPath),
-    lines: [...new Set(sites.map((s) => s.line))].sort((a, b) => a - b)
-  };
-}
-function executedPerFile(scanned, sites) {
-  const { files, lines: lines2 } = handed(sites);
-  const counts = new Map(files.map((f) => [f, 0]));
-  const onLine = new Set(lines2);
-  for (const s of scanned) {
-    if (counts.has(s.file) && onLine.has(s.line)) counts.set(s.file, (counts.get(s.file) ?? 0) + 1);
-  }
-  return counts;
-}
 function selectSites(tool, root, groups, changed, maxMutants) {
   const out = /* @__PURE__ */ new Map();
   const all = groups.flatMap((group) => {
-    const { scanned, onChanged } = scanGroup(tool, root, group, changed);
+    const own = new Map(
+      group.files.map((f) => [f, changed.get(repoPath(group, f)) ?? /* @__PURE__ */ new Set()])
+    );
+    const { scanned, onChanged } = scanChanged(tool, import_node_path15.default.join(root, group.dir), own);
     out.set(group, { scanned, sites: [], selected: [] });
     return onChanged.map((site) => ({ group, site }));
   });
@@ -1647,7 +1681,6 @@ function selectSites(tool, root, groups, changed, maxMutants) {
   });
   return out;
 }
-var siteKey = (s) => `${s.file}:${s.line}`;
 function notSelectedLines(group, sel) {
   const selected = new Set(sel.selected.map(siteKey));
   const counts = /* @__PURE__ */ new Map();
@@ -1666,23 +1699,24 @@ function unitMutator(root, groups, changed, opts) {
       const sel = selection.get(group);
       const defaultCommand = group.kind === "node" ? `${pm} test` : null;
       const testCommand = opts.testCommand ?? defaultCommand;
-      const { files, lines: lines2 } = handed(sel.selected);
-      const run = { testCommand, lines: lines2, maxWorkers: opts.maxWorkers };
-      const outcomes = files.length === 0 ? [] : runMutator(tool, import_node_path15.default.join(root, group.dir), files, coverage.gap === null, run);
-      const wanted = new Set(sel.selected.map(siteKey));
-      const counted = outcomes.filter((o) => wanted.has(siteKey(o)));
-      const notSelected = sel.sites.length - sel.selected.length;
-      const ranPerFile = files.map(
-        (f) => `${repoPath(group, f)} ${outcomes.filter((o) => o.file === f).length}`
+      const { outcomes, executedPerFile } = runSelected(
+        tool,
+        import_node_path15.default.join(root, group.dir),
+        sel.selected,
+        coverage.gap === null,
+        { testCommand, maxWorkers: opts.maxWorkers }
       );
+      const notSelected = sel.sites.length - sel.selected.length;
+      const executed = [...executedPerFile.values()].reduce((a, b) => a + b, 0);
+      const ranPerFile = [...executedPerFile].map(([f, n]) => `${repoPath(group, f)} ${n}`);
       const facts = [
         `Test command: ${testCommand === null ? "mutator's default for the language" : `\`${testCommand}\``} \xB7 Coverage command: ${coverage.command === null ? "none" : `\`${coverage.command}\``}`,
-        `Sites on changed lines: ${sel.sites.length} \xB7 run: ${counted.length} \xB7 not run (uncovered): ${sel.selected.length - counted.length} \xB7 not selected (--max-mutants): ${notSelected}`,
-        `Executed by mutator, off-line sites included: ${outcomes.length}${ranPerFile.length > 0 ? ` (${ranPerFile.join(", ")})` : ""}`,
+        `Sites on changed lines: ${sel.sites.length} \xB7 run: ${outcomes.length} \xB7 not run (uncovered): ${sel.selected.length - outcomes.length} \xB7 not selected (--max-mutants): ${notSelected}`,
+        `Executed by mutator, off-line sites included: ${executed}${ranPerFile.length > 0 ? ` (${ranPerFile.join(", ")})` : ""}`,
         "",
         survivorLines(
           group,
-          counted.filter((o) => o.survived)
+          outcomes.filter((o) => o.survived)
         )
       ];
       if (notSelected > 0) {
@@ -1720,41 +1754,61 @@ function unitScope(cwd, baseRef, opts) {
   const groups = scopeGroups(changed.length > 0 ? groupFiles(root, changed) : [], opts);
   return { root, base, changed, groups };
 }
+function count(n, noun) {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
 function runPlan(cwd, baseRef, opts) {
   const { root, base, groups } = unitScope(cwd, baseRef, opts);
   const mutator = findTool("mutator");
+  const cores = mutatorCores();
+  let estimate;
   const lines2 = [
     `Mutation sites per group and file, before coverage (a run skips uncovered lines): on changed lines,${opts.maxMutants === null ? "" : " selected by the cap,"} and executed (one --lines set serves every handed file):`
   ];
   if (isMissing(mutator)) {
     lines2.push(`- mutator ${mutator.missing}`);
+    estimate = `none (mutator ${mutator.missing})`;
   } else if (groups.length === 0) {
     lines2.push("- none: no changed source files");
+    estimate = "none (no changed source files)";
   } else {
+    let coverageRuns = 0;
+    let baselines = 0;
+    let allRounds = 0;
     const changed = changedLinesOf(root, base, groups);
     const cap = opts.maxMutants;
     const selection = selectSites(mutator, root, groups, changed, cap);
     const picked = (n, groupLine) => cap === null ? "" : ` ${n} selected${groupLine ? ` (--max-mutants ${cap})` : ""},`;
     for (const group of groups) {
       const sel = selection.get(group);
-      const executed = executedPerFile(sel.scanned, sel.selected);
-      const total = [...executed.values()].reduce((a, b) => a + b, 0);
+      const cost = runCost(sel.scanned, sel.selected, opts.maxWorkers, cores);
+      const none = { executed: 0, workers: 0, rounds: 0 };
+      const files = [...new Set(sel.sites.map((s) => s.file))].map((file) => ({
+        file,
+        ...cost.files.get(file) ?? none
+      }));
+      const total = files.reduce((a, f) => a + f.executed, 0);
+      if (!("skip" in coveragePlan(root, group, opts.coverageCommand))) coverageRuns++;
+      baselines += cost.baselines;
+      allRounds += cost.rounds;
       lines2.push(
-        `- ${onlyName(group.dir)} (${group.kind}): ${sel.sites.length} on changed lines,${picked(sel.selected.length, true)} ${total} executed`
+        `- ${onlyName(group.dir)} (${group.kind}): ${sel.sites.length} on changed lines,${picked(sel.selected.length, true)} ${total} executed, ${count(cost.rounds, "round")}`
       );
-      for (const file of new Set(sel.sites.map((s) => s.file))) {
-        const own = sel.sites.filter((s) => s.file === file).length;
-        const chosen = sel.selected.filter((s) => s.file === file).length;
+      for (const f of files) {
+        const own = sel.sites.filter((s) => s.file === f.file).length;
+        const chosen = sel.selected.filter((s) => s.file === f.file).length;
         lines2.push(
-          `  - ${repoPath(group, file)}: ${own} on changed lines,${picked(chosen, false)} ${executed.get(file) ?? 0} executed`
+          `  - ${repoPath(group, f.file)}: ${own} on changed lines,${picked(chosen, false)} ${f.executed} executed, ${count(f.workers, "worker")}, ${count(f.rounds, "round")}`
         );
       }
     }
+    estimate = `${count(coverageRuns, "coverage run")} + ${count(baselines, "baseline")} + ${count(allRounds, "test-command round")}`;
   }
-  const [one, five] = import_node_os7.default.loadavg();
+  const [one, five] = import_node_os8.default.loadavg();
   lines2.push(
-    `Cores: ${import_node_os7.default.availableParallelism()}`,
-    `Load average: 1 min ${one.toFixed(2)} \xB7 5 min ${five.toFixed(2)}`
+    `Cores: ${cores}`,
+    `Load average: 1 min ${one.toFixed(2)} \xB7 5 min ${five.toFixed(2)}`,
+    `Estimate: ${estimate}`
   );
   console.log(lines2.join("\n"));
 }
@@ -2358,7 +2412,8 @@ function printUsage() {
       "  companion metrics --base <ref> --out <file> [--only <dir>]",
       "                    [--test-command <cmd>] [--coverage-command <cmd>]",
       "                    [--max-workers <n>] [--max-mutants <n>]",
-      "  companion metrics --base <ref> --plan [--only <dir>] [--max-mutants <n>]",
+      "  companion metrics --base <ref> --plan [--only <dir>] [--coverage-command <cmd>]",
+      "                    [--max-workers <n>] [--max-mutants <n>]",
       "  companion metrics --audit --out <dir> [--run-tests]",
       "",
       "Commands:",
@@ -2369,10 +2424,12 @@ function printUsage() {
       "",
       "metrics with --base (a unit's changed files):",
       "  mutator runs only the mutation sites on lines <base>...HEAD added or modified.",
-      "  --plan                  Print per group and file the sites on changed lines and the",
-      "                          sites mutator executes, the cores and the load averages;",
-      "                          with --max-mutants, the sites the cap selects and what",
-      "                          mutator executes for them; run no test and write nothing",
+      "  --plan                  Print per group and file the sites on changed lines, the",
+      "                          sites mutator executes and its workers and rounds (honouring",
+      "                          --max-workers), the cores and the load averages, then an",
+      "                          Estimate: line of coverage runs, baselines and test-command",
+      "                          rounds; with --max-mutants, the sites the cap selects and",
+      "                          what mutator executes for them; run no test, write nothing",
       "  --only <dir>            Only the groups at this repo-relative dir ('.' is the root)",
       "  --test-command <cmd>    The command mutator runs for its baseline and every mutant",
       "  --coverage-command <cmd> Replaces the coverage run: a shell command run in the group",

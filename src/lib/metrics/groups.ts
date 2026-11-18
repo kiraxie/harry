@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { resolveOnPath } from "../path-search.ts";
 import { throwIfInterrupted } from "./interrupt.ts";
+import { byPath } from "./scope.ts";
 
 export type GroupKind = "node" | "python" | "other";
 
@@ -51,7 +52,8 @@ export function groupFiles(root: string, files: string[]): Group[] {
     group.files.push(dir === "" ? rel : path.posix.relative(dir, rel));
     groups.set(key, group);
   }
-  return [...groups.values()].sort((a, b) => a.dir.localeCompare(b.dir));
+  // By each group's path prefix, so groups list in the order the cap reaches their files.
+  return [...groups.values()].sort((a, b) => byPath(repoPath(a, ""), repoPath(b, "")));
 }
 
 export function repoPath(group: Group, file: string): string {
@@ -146,8 +148,15 @@ export function pythonInterpreter(groupDir: string): string | null {
   return resolveOnPath("python3", process.env);
 }
 
+/**
+ * Whether `python` can import `module`, run from the group dir: the interpreter is
+ * resolved from there (a venv, or a version-manager shim that picks by cwd), so the
+ * cwd stays, unlike a tool's `toolCwd`. `-c` puts the cwd first on sys.path as an
+ * empty entry; dropping it keeps a project file named like the module from running.
+ */
 function canImport(python: string, module: string, cwd: string): boolean {
-  const res = spawnSync(python, ["-c", `import ${module}`], { cwd });
+  const probe = `import sys; sys.path = [p for p in sys.path if p]; import ${module}`;
+  const res = spawnSync(python, ["-c", probe], { cwd });
   throwIfInterrupted(res);
   return res.status === 0;
 }
