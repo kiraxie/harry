@@ -146,9 +146,14 @@ function writeExecutable(file: string, text: string): void {
   chmodSync(file, 0o755);
 }
 
+/** Where pip leaves an installed `name` package's metadata in a tool's venv. */
+function distInfo(name: string): string {
+  return `.venv/lib/python3.13/site-packages/${name}-0.1.0.dist-info`;
+}
+
 /**
  * Installs a stub `name` under HOME's tool dir: STUB_PRELUDE, then `body`, in a
- * one-commit repo with a built venv; `extra` maps tool-relative paths to more stub bodies.
+ * one-commit repo with a built venv holding its package and pip's; `extra` maps tool-relative paths to more stub bodies.
  */
 function installStub(
   home: string,
@@ -159,6 +164,8 @@ function installStub(
   const dir = path.join(home, ".claude", "harry", "tools", name);
   writeExecutable(path.join(dir, name), `${STUB_PRELUDE}${PYTHON_STARTUP}\n${body}\n`);
   writeExecutable(path.join(dir, ".venv/bin/python"), "#!/bin/sh\n");
+  mkdirSync(path.join(dir, distInfo(name)), { recursive: true });
+  mkdirSync(path.join(dir, ".venv/lib/python3.13/site-packages/pip-25.0.dist-info"));
   for (const [rel, text] of Object.entries(extra)) {
     writeExecutable(path.join(dir, rel), `${STUB_PRELUDE}${PYTHON_STARTUP}\n${text}\n`);
   }
@@ -295,6 +302,59 @@ test("a tool whose venv Python is not executable is not installed, while a built
   assert.match(toolSection(run.facts, "mutator"), /^\n+not installed \(no venv Python at /);
   assert.deepEqual(calls(home, "mutator"), []);
   assert.deepEqual(pmCalls(bin), []);
+});
+
+test("a tool whose venv lacks its package is reported not installed, naming sync, and its launcher never runs", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    { "src/a.ts": "// crap a 2 1\nfunction a() {} // mut > >= survived\n" },
+  );
+  const home = tempDir("harry-metrics-home-");
+  const tools = ["dryer", "crapper", "mutator"];
+  for (const tool of tools) {
+    installStub(home, tool, "");
+    rmSync(path.join(home, ".claude", "harry", "tools", tool, distInfo(tool)), {
+      recursive: true,
+    });
+  }
+  const bin = fakeBin();
+
+  const run = runMetrics(repo, home, { binDir: bin });
+
+  assert.equal(run.status, 0, run.stderr);
+  for (const tool of tools) {
+    const section = toolSection(run.facts, tool);
+    assert.ok(
+      section.includes(
+        `not installed (venv at ~/.claude/harry/tools/${tool}/.venv lacks the ${tool} package; \`/harry:sync --tools\` rebuilds it, or remove that .venv and run the launcher once by hand when sync leaves the clone as is)`,
+      ),
+      section,
+    );
+    assert.deepEqual(calls(home, tool), [], `${tool}'s launcher ran`);
+  }
+  assert.deepEqual(pmCalls(bin), []);
+});
+
+test("--plan reports mutator not installed when its venv lacks the mutator package", () => {
+  const repo = makeRepo(
+    { "package.json": PKG, "src/a.ts": "export const a = 1;\n" },
+    { "src/a.ts": "export const a = 2; // mut 2 1 killed\n" },
+  );
+  const home = tempDir("harry-metrics-home-");
+  installStub(home, "mutator", MUTATOR_FROM_MARKERS);
+  rmSync(path.join(home, ".claude", "harry", "tools", "mutator", distInfo("mutator")), {
+    recursive: true,
+  });
+
+  const res = runPlan(repo, home, fakeBin());
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(
+    res.stdout,
+    /^- mutator not installed \(venv at ~\/\.claude\/harry\/tools\/mutator\/\.venv lacks the mutator package; /m,
+    res.stdout,
+  );
+  assert.deepEqual(mutatorRuns(home), []);
 });
 
 /**

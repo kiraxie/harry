@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 
-import { toolsDir, venvPython } from "../../../scripts/lib/tools.mjs";
+import { toolsDir, venvDir, venvInstalled, venvPython } from "../../../scripts/lib/tools.mjs";
 import { git } from "../git.ts";
 import { isExecutableFile } from "../path-search.ts";
 import { throwIfInterrupted } from "./interrupt.ts";
@@ -23,19 +23,49 @@ export function displayPath(p: string): string {
   return p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p;
 }
 
-export function toolPaths(name: ToolName): { dir: string; launcher: string; python: string } {
+function toolPaths(name: ToolName): {
+  dir: string;
+  launcher: string;
+  venv: string;
+  python: string;
+} {
   const dir = path.join(toolsDir(), name);
-  return { dir, launcher: path.join(dir, name), python: venvPython(dir) };
+  return { dir, launcher: path.join(dir, name), venv: venvDir(dir), python: venvPython(dir) };
+}
+
+/** A tool that cannot run, with the reason the facts file prints for it. */
+export interface Missing {
+  missing: string;
+}
+
+export function isMissing(tool: Tool | Missing): tool is Missing {
+  return "missing" in tool;
 }
 
 // A launcher run with no venv Python builds the venv; only sync may do that, since
-// only sync can repair a build that fails halfway.
-export function findTool(name: ToolName): Tool | null {
-  const paths = toolPaths(name);
-  if (!isExecutableFile(paths.launcher) || !isExecutableFile(paths.python)) return null;
-  const head = git(paths.dir, ["rev-parse", "HEAD"]);
+// only sync can repair a build that fails halfway. A venv without the tool's package
+// is such a half-built one: the launcher would run and fail on it. The reason is
+// decided here, once, so the facts file names the check that actually failed.
+export function findTool(name: ToolName): Tool | Missing {
+  const { dir, launcher, venv, python } = toolPaths(name);
+  if (!isExecutableFile(launcher)) {
+    return {
+      missing: `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`,
+    };
+  }
+  if (!isExecutableFile(python)) {
+    return {
+      missing: `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`,
+    };
+  }
+  if (!venvInstalled(dir, name)) {
+    return {
+      missing: `not installed (venv at ${displayPath(venv)} lacks the ${name} package; \`/harry:sync --tools\` rebuilds it, or remove that .venv and run the launcher once by hand when sync leaves the clone as is)`,
+    };
+  }
+  const head = git(dir, ["rev-parse", "HEAD"]);
   const commit = head.status === 0 ? head.stdout.trim() : "unknown";
-  return { name, ...paths, commit };
+  return { name, dir, launcher, python, commit };
 }
 
 export interface ToolRun {

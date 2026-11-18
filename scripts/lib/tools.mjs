@@ -2,7 +2,7 @@
 // following upstream HEAD would run unreviewed third-party code in every unit.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { resolveOnPath } from "./path-search.mjs";
@@ -35,8 +35,40 @@ export function toolsDir() {
 }
 
 /** @param {string} clone */
+export function venvDir(clone) {
+  return join(clone, ".venv");
+}
+
+/** @param {string} clone */
 export function venvPython(clone) {
-  return join(clone, ".venv", "bin", "python");
+  return join(venvDir(clone), "bin", "python");
+}
+
+/**
+ * Whether the clone's venv holds the `name` package: pip writes a project's
+ * `<name>-*.dist-info` last, so a half-built venv has none. A missing or
+ * unreadable directory counts as not installed.
+ * @param {string} clone @param {string} name
+ */
+export function venvInstalled(clone, name) {
+  /** @param {string} dir */
+  const dirs = (dir) => {
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
+    } catch {
+      return [];
+    }
+  };
+  const lib = join(venvDir(clone), "lib");
+  return dirs(lib)
+    .filter((py) => py.startsWith("python"))
+    .some((py) =>
+      dirs(join(lib, py, "site-packages")).some(
+        (d) => d.startsWith(`${name}-`) && d.endsWith(".dist-info"),
+      ),
+    );
 }
 
 /** @param {string[]} args @param {string} [cwd] */
@@ -118,7 +150,7 @@ function removeVenv(venv) {
  * @param {string} clone @param {string} name
  */
 function buildVenv(clone, name) {
-  const venv = join(clone, ".venv");
+  const venv = venvDir(clone);
   const first = firstRun(clone, name);
   if (first === null) return null;
   if (!existsSync(venv)) return `first run failed: ${first}`;

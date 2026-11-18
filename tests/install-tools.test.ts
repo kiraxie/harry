@@ -19,7 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { PINNED_TOOLS, syncTools } from "../scripts/lib/tools.mjs";
+import { PINNED_TOOLS, syncTools, venvInstalled } from "../scripts/lib/tools.mjs";
 import { TOOL_NAMES } from "../src/lib/metrics/tools.ts";
 
 const INSTALL = path.resolve(import.meta.dirname, "../scripts/install.mjs");
@@ -411,4 +411,24 @@ test("install.mjs without --tools never touches the tools dir", () => {
 test("the pins name exactly the tools metrics looks for, each at a full commit", () => {
   assert.deepEqual(PINNED_TOOLS.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
   for (const t of PINNED_TOOLS) assert.match(t.commit, /^[0-9a-f]{40}$/, t.name);
+});
+
+test("venvInstalled holds only for the tool's own dist-info, and never throws on a missing lib", () => {
+  const cases: { name: string; dirs: string[]; want: boolean }[] = [
+    { name: "own dist-info", dirs: ["pip-25.0.dist-info", "mutator-0.1.0.dist-info"], want: true },
+    {
+      name: "only other packages",
+      dirs: ["pip-25.0.dist-info", "tree_sitter-0.25.dist-info"],
+      want: false,
+    },
+    { name: "a longer name sharing the prefix", dirs: ["mutatorx-1.0.dist-info"], want: false },
+    { name: "no .venv/lib", dirs: [], want: false },
+  ];
+  for (const c of cases) {
+    const clone = tempDir("harry-tools-venv-");
+    for (const d of c.dirs) {
+      mkdirSync(path.join(clone, ".venv/lib/python3.13/site-packages", d), { recursive: true });
+    }
+    assert.equal(venvInstalled(clone, "mutator"), c.want, c.name);
+  }
 });

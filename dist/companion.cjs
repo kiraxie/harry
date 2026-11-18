@@ -811,8 +811,26 @@ var import_node_path8 = require("node:path");
 function toolsDir() {
   return (0, import_node_path8.join)((0, import_node_os5.homedir)(), ".claude", "harry", "tools");
 }
+function venvDir(clone) {
+  return (0, import_node_path8.join)(clone, ".venv");
+}
 function venvPython(clone) {
-  return (0, import_node_path8.join)(clone, ".venv", "bin", "python");
+  return (0, import_node_path8.join)(venvDir(clone), "bin", "python");
+}
+function venvInstalled(clone, name) {
+  const dirs = (dir) => {
+    try {
+      return (0, import_node_fs8.readdirSync)(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch {
+      return [];
+    }
+  };
+  const lib = (0, import_node_path8.join)(venvDir(clone), "lib");
+  return dirs(lib).filter((py) => py.startsWith("python")).some(
+    (py) => dirs((0, import_node_path8.join)(lib, py, "site-packages")).some(
+      (d) => d.startsWith(`${name}-`) && d.endsWith(".dist-info")
+    )
+  );
 }
 
 // src/lib/metrics/tools.ts
@@ -823,14 +841,31 @@ function displayPath(p) {
 }
 function toolPaths(name) {
   const dir = import_node_path9.default.join(toolsDir(), name);
-  return { dir, launcher: import_node_path9.default.join(dir, name), python: venvPython(dir) };
+  return { dir, launcher: import_node_path9.default.join(dir, name), venv: venvDir(dir), python: venvPython(dir) };
+}
+function isMissing(tool) {
+  return "missing" in tool;
 }
 function findTool(name) {
-  const paths = toolPaths(name);
-  if (!isExecutableFile(paths.launcher) || !isExecutableFile(paths.python)) return null;
-  const head = git(paths.dir, ["rev-parse", "HEAD"]);
+  const { dir, launcher, venv, python } = toolPaths(name);
+  if (!isExecutableFile(launcher)) {
+    return {
+      missing: `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`
+    };
+  }
+  if (!isExecutableFile(python)) {
+    return {
+      missing: `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`
+    };
+  }
+  if (!venvInstalled(dir, name)) {
+    return {
+      missing: `not installed (venv at ${displayPath(venv)} lacks the ${name} package; \`/harry:sync --tools\` rebuilds it, or remove that .venv and run the launcher once by hand when sync leaves the clone as is)`
+    };
+  }
+  const head = git(dir, ["rev-parse", "HEAD"]);
   const commit = head.status === 0 ? head.stdout.trim() : "unknown";
-  return { name, ...paths, commit };
+  return { name, dir, launcher, python, commit };
 }
 function toolCwd(tool) {
   return tool.dir;
@@ -1400,13 +1435,6 @@ function renderSurvivor(s, where) {
 }
 
 // src/commands/metrics.ts
-function notInstalled(name) {
-  const { launcher, python } = toolPaths(name);
-  if (!isExecutableFile(launcher)) {
-    return `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`;
-  }
-  return `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`;
-}
 function failed(err, tool) {
   return `failed: ${err.message.trim()} (tool commit ${tool.commit})`;
 }
@@ -1419,9 +1447,9 @@ function attempt(tool, body) {
   }
 }
 function section(name, tool, body) {
-  if (tool === null) return `## ${name}
+  if (isMissing(tool)) return `## ${name}
 
-${notInstalled(name)}
+${tool.missing}
 `;
   return `## ${name} (${tool.commit.slice(0, 7)})
 
@@ -1489,16 +1517,16 @@ ${text}`;
 }
 function checkoutPhase(root, groups, tools, coverageCommand, crapperBody, mutatorBody) {
   const guarded2 = withArtifactGuard(root, ["", ...groups.map((g) => g.dir)], () => {
-    const needsCoverage = crapperBody && tools.crapper || tools.mutator;
+    const needsCoverage = crapperBody !== null && !isMissing(tools.crapper) || !isMissing(tools.mutator);
     const coverage = new Map(
       needsCoverage ? groups.map((g) => [g, measureCoverage(root, g, coverageCommand)]) : []
     );
     const covOf = (g) => coverage.get(g);
-    const crapper = crapperBody === null || tools.crapper === null ? null : attempt(tools.crapper, (tool) => {
+    const crapper = crapperBody === null || isMissing(tools.crapper) ? null : attempt(tools.crapper, (tool) => {
       const score = crapperBody(tool);
       return eachGroup(groups, tool, (g) => [covOf(g).how, score(g, covOf(g).gap)]);
     });
-    const mutator = tools.mutator === null ? null : attempt(tools.mutator, (tool) => {
+    const mutator = isMissing(tools.mutator) ? null : attempt(tools.mutator, (tool) => {
       const body = mutatorBody(tool);
       return eachGroup(groups, tool, (group) => body(group, covOf(group)));
     });
@@ -1698,8 +1726,8 @@ function runPlan(cwd, baseRef, opts) {
   const lines2 = [
     `Mutation sites per group and file, before coverage (a run skips uncovered lines): on changed lines,${opts.maxMutants === null ? "" : " selected by the cap,"} and executed (one --lines set serves every handed file):`
   ];
-  if (mutator === null) {
-    lines2.push(`- mutator ${notInstalled("mutator")}`);
+  if (isMissing(mutator)) {
+    lines2.push(`- mutator ${mutator.missing}`);
   } else if (groups.length === 0) {
     lines2.push("- none: no changed source files");
   } else {

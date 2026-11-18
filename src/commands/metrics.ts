@@ -39,14 +39,13 @@ import {
   withSnapshot,
 } from "../lib/metrics/scope.ts";
 import {
-  displayPath,
   findTool,
+  isMissing,
+  type Missing,
   TOOL_NAMES,
   type Tool,
   type ToolName,
-  toolPaths,
 } from "../lib/metrics/tools.ts";
-import { isExecutableFile } from "../lib/path-search.ts";
 
 export interface MetricsOptions {
   base?: string;
@@ -70,15 +69,7 @@ interface UnitOptions {
   maxMutants: number | null;
 }
 
-type Tools = Record<ToolName, Tool | null>;
-
-function notInstalled(name: ToolName): string {
-  const { launcher, python } = toolPaths(name);
-  if (!isExecutableFile(launcher)) {
-    return `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`;
-  }
-  return `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`;
-}
+type Tools = Record<ToolName, Tool | Missing>;
 
 function failed(err: unknown, tool: Tool): string {
   return `failed: ${(err as Error).message.trim()} (tool commit ${tool.commit})`;
@@ -93,8 +84,8 @@ function attempt(tool: Tool, body: (tool: Tool) => string): string {
   }
 }
 
-function section(name: ToolName, tool: Tool | null, body: (tool: Tool) => string): string {
-  if (tool === null) return `## ${name}\n\n${notInstalled(name)}\n`;
+function section(name: ToolName, tool: Tool | Missing, body: (tool: Tool) => string): string {
+  if (isMissing(tool)) return `## ${name}\n\n${tool.missing}\n`;
   return `## ${name} (${tool.commit.slice(0, 7)})\n\n${attempt(tool, body)}\n`;
 }
 
@@ -198,27 +189,27 @@ function checkoutPhase(
   mutatorBody: MutatorBody,
 ): Phase {
   const guarded = withArtifactGuard(root, ["", ...groups.map((g) => g.dir)], () => {
-    const needsCoverage = (crapperBody && tools.crapper) || tools.mutator;
+    const needsCoverage =
+      (crapperBody !== null && !isMissing(tools.crapper)) || !isMissing(tools.mutator);
     const coverage = new Map<Group, Coverage>(
       needsCoverage ? groups.map((g) => [g, measureCoverage(root, g, coverageCommand)]) : [],
     );
     const covOf = (g: Group) => coverage.get(g) as Coverage;
 
     const crapper =
-      crapperBody === null || tools.crapper === null
+      crapperBody === null || isMissing(tools.crapper)
         ? null
         : attempt(tools.crapper, (tool) => {
             const score = crapperBody(tool);
             return eachGroup(groups, tool, (g) => [covOf(g).how, score(g, covOf(g).gap)]);
           });
 
-    const mutator =
-      tools.mutator === null
-        ? null
-        : attempt(tools.mutator, (tool) => {
-            const body = mutatorBody(tool);
-            return eachGroup(groups, tool, (group) => body(group, covOf(group)));
-          });
+    const mutator = isMissing(tools.mutator)
+      ? null
+      : attempt(tools.mutator, (tool) => {
+          const body = mutatorBody(tool);
+          return eachGroup(groups, tool, (group) => body(group, covOf(group)));
+        });
 
     return { crapper, mutator };
   });
@@ -495,8 +486,8 @@ function runPlan(cwd: string, baseRef: string, opts: UnitOptions): void {
   const lines = [
     `Mutation sites per group and file, before coverage (a run skips uncovered lines): on changed lines,${opts.maxMutants === null ? "" : " selected by the cap,"} and executed (one --lines set serves every handed file):`,
   ];
-  if (mutator === null) {
-    lines.push(`- mutator ${notInstalled("mutator")}`);
+  if (isMissing(mutator)) {
+    lines.push(`- mutator ${mutator.missing}`);
   } else if (groups.length === 0) {
     lines.push("- none: no changed source files");
   } else {
