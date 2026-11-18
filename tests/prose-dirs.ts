@@ -22,19 +22,53 @@ export const CODE_EXEMPTIONS = ["references/audit/validate-findings.cjs"];
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const gitFiles = (...args: string[]): string[] =>
-  execFileSync("git", ["ls-files", "-z", ...args], { cwd: repoRoot, encoding: "utf-8" })
-    .split("\0")
-    .filter(Boolean);
-const deleted = new Set(gitFiles("--deleted"));
+type TrackedKind = "file" | "dir" | "untracked";
+
+// Scans read WORKING_FILES so a doc not yet added is checked before the commit. The
+// tracked list never leaves here: trackedKind only answers membership, so no scan can
+// read it, and a cite of an unadded file still fails.
+export const listRepoFiles = (
+  cwd: string,
+): { trackedKind: (rel: string) => TrackedKind; working: string[] } => {
+  const gitFiles = (...args: string[]): string[] =>
+    execFileSync("git", ["ls-files", "-z", ...args], { cwd, encoding: "utf-8" })
+      .split("\0")
+      .filter(Boolean);
+  const deleted = new Set(gitFiles("--deleted"));
+  const present = (rel: string): boolean => !deleted.has(rel);
+  const tracked = gitFiles().filter(present);
+  const trackedFiles = new Set(tracked);
+  const trackedDirs = new Set(
+    tracked.flatMap((rel) =>
+      rel
+        .split("/")
+        .slice(0, -1)
+        .map((_, i, parts) => parts.slice(0, i + 1).join("/")),
+    ),
+  );
+  const trackedKind = (rel: string): TrackedKind => {
+    const norm = path.posix.normalize(rel.split(path.sep).join("/"));
+    if (norm === ".") return "dir";
+    if (trackedFiles.has(norm)) return "file";
+    return trackedDirs.has(norm) ? "dir" : "untracked";
+  };
+  return {
+    trackedKind,
+    working: gitFiles("--cached", "--others", "--exclude-standard").filter(
+      (rel) => present(rel) && !rel.endsWith("/"),
+    ),
+  };
+};
 
 export const under =
   (dirs: string[]) =>
   (rel: string): boolean =>
     dirs.some((dir) => rel.startsWith(`${dir}/`));
 
-export const TRACKED_FILES = gitFiles().filter((rel) => !deleted.has(rel));
-export const PROSE_DIR_FILES = TRACKED_FILES.filter(under(PROSE_DIRS));
+const repoFiles = listRepoFiles(repoRoot);
+export const trackedKind = repoFiles.trackedKind;
+export const WORKING_FILES = repoFiles.working;
+export const PROSE_DIR_FILES = WORKING_FILES.filter(under(PROSE_DIRS));
 
 const parentOf = (rel: string): string => path.posix.dirname(rel);
 const isSkill = (rel: string): boolean => path.posix.basename(rel) === "SKILL.md";
@@ -64,7 +98,7 @@ export const filesUnder = (dir: string, corpus: string[] = MARKDOWN_CORPUS): str
 
 export const skillFiles = (dir: string): string[] => {
   const files = MARKDOWN_CORPUS.filter((rel) => isSkill(rel) && parentOf(parentOf(rel)) === dir);
-  assert.ok(files.length > 0, `skillFiles("${dir}"): no tracked ${dir}/<name>/SKILL.md`);
+  assert.ok(files.length > 0, `skillFiles("${dir}"): no ${dir}/<name>/SKILL.md in the corpus`);
   return files;
 };
 

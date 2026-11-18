@@ -43,8 +43,9 @@ import {
   SHIPPED_PROSE_DIRS,
   SHIPPED_TOP_LEVEL,
   TOP_LEVEL,
-  TRACKED_FILES,
+  trackedKind,
   under,
+  WORKING_FILES,
 } from "./prose-dirs.ts";
 import { headingSection, outline } from "./section.ts";
 
@@ -56,21 +57,6 @@ import { headingSection, outline } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const trackedFileSet = new Set(TRACKED_FILES);
-const trackedDirs = new Set(
-  TRACKED_FILES.flatMap((rel) =>
-    rel
-      .split("/")
-      .slice(0, -1)
-      .map((_, i, parts) => parts.slice(0, i + 1).join("/")),
-  ),
-);
-const trackedKind = (rel: string): "file" | "dir" | "untracked" => {
-  const norm = path.posix.normalize(rel.split(path.sep).join("/"));
-  if (norm === ".") return "dir";
-  if (trackedFileSet.has(norm)) return "file";
-  return trackedDirs.has(norm) ? "dir" : "untracked";
-};
 const byPath = <T>(read: (rel: string) => T): ((rel: string) => T) => {
   const seen = new Map<string, T>();
   return (rel) => {
@@ -90,7 +76,7 @@ const resolves = (candidate: string, fileDir: string): boolean =>
 const evalsMarkdown = (): string[] =>
   filesUnder(
     "evals",
-    TRACKED_FILES.filter((rel) => rel.endsWith(".md")),
+    WORKING_FILES.filter((rel) => rel.endsWith(".md")),
   );
 
 const proseFiles = (): string[] => [...READER_CORPUS, ...evalsMarkdown()];
@@ -267,38 +253,38 @@ test("no shipped file cites a repo-local .claude/ path", () => {
 });
 
 // The tracked-path check and every prose scan see a `.claude/` dir only once it is listed,
-// so the lists must equal what git tracks there (untracked `worktrees/` drops out).
-test("prose-dirs.ts lists every tracked .claude/ subdir", () => {
-  const tracked = TRACKED_FILES.filter((f) => f.startsWith(".claude/") && f.split("/").length > 2);
+// so the lists must equal what the working tree holds there (ignored `worktrees/` drops out).
+test("prose-dirs.ts lists every .claude/ subdir in the working tree", () => {
+  const files = WORKING_FILES.filter((f) => f.startsWith(".claude/") && f.split("/").length > 2);
   const dirOf = (f: string) => f.split("/").slice(0, 2).join("/");
-  const all = [...new Set(tracked.map(dirOf))].sort();
-  const prose = [...new Set(tracked.filter((f) => f.endsWith(".md")).map(dirOf))].sort();
+  const all = [...new Set(files.map(dirOf))].sort();
+  const prose = [...new Set(files.filter((f) => f.endsWith(".md")).map(dirOf))].sort();
   assert.deepEqual(all, [...REPO_LOCAL_DIRS].sort());
   assert.deepEqual(prose, [...REPO_LOCAL_PROSE_DIRS].sort());
 });
 
 const DATA_FILE_DIRS = [...SHIPPED_PROSE_DIRS, ...MANIFEST_DIRS, ...REPO_LOCAL_PROSE_DIRS];
 const nonMarkdown = (dirs: string[]): string[] =>
-  TRACKED_FILES.filter(
+  WORKING_FILES.filter(
     (f) => under(dirs)(f) && !f.endsWith(".md") && !CODE_EXEMPTIONS.includes(f),
   ).sort();
 
 test("every code exemption is a tracked file under a dir the data-file check reads", () => {
   assert.deepEqual(
-    CODE_EXEMPTIONS.filter((f) => !trackedFileSet.has(f) || !under(DATA_FILE_DIRS)(f)),
+    CODE_EXEMPTIONS.filter((f) => trackedKind(f) !== "file" || !under(DATA_FILE_DIRS)(f)),
     [],
     "a code exemption the data-file check never reaches exempts nothing — delete it",
   );
 });
 
-test("prose-dirs.ts names every tracked non-markdown file in the shipped prose and manifest dirs", () => {
+test("prose-dirs.ts names every non-markdown file in the shipped prose and manifest dirs", () => {
   assert.deepEqual(
     nonMarkdown([...SHIPPED_PROSE_DIRS, ...MANIFEST_DIRS]),
     [...SHIPPED_DATA_FILES].sort(),
   );
 });
 
-test("prose-dirs.ts names every tracked non-markdown file in the repo-local prose dirs", () => {
+test("prose-dirs.ts names every non-markdown file in the repo-local prose dirs", () => {
   assert.deepEqual(
     nonMarkdown(REPO_LOCAL_PROSE_DIRS),
     REPO_LOCAL_DATA_FILES.filter(under(REPO_LOCAL_PROSE_DIRS)).sort(),
@@ -306,7 +292,7 @@ test("prose-dirs.ts names every tracked non-markdown file in the repo-local pros
 });
 
 test("only prose-refs reads the side lists of data files", () => {
-  const readers = TRACKED_FILES.filter(
+  const readers = WORKING_FILES.filter(
     (f) =>
       f.startsWith("tests/") &&
       !["tests/prose-dirs.ts", "tests/prose-refs.test.ts"].includes(f) &&
@@ -527,16 +513,16 @@ test("every reference is cited by path from a shipped file other than itself", (
   );
 });
 
-test("no tracked file but the changelog cites a law by the retired section-number form", () => {
-  // Every tracked file, not a list of kinds: a list missed a file kind four times
+test("no working-tree file but the changelog cites a law by the retired section-number form", () => {
+  // Every working-tree file, not a list of kinds: a list missed a file kind four times
   // (test messages, scripts, eval notes, upstream.json). CHANGELOG.md is release
   // history and quotes the numbering of its day.
-  const tracked = TRACKED_FILES.filter((rel) => rel !== "CHANGELOG.md");
+  const files = WORKING_FILES.filter((rel) => rel !== "CHANGELOG.md");
   assert.ok(
-    [...SHIPPED_TOP_LEVEL, ...PROSE_NON_MD_FILES].every((rel) => tracked.includes(rel)),
-    "the scan lost the tracked files",
+    [...SHIPPED_TOP_LEVEL, ...PROSE_NON_MD_FILES].every((rel) => files.includes(rel)),
+    "the scan lost the working-tree files",
   );
-  const hits = tracked.flatMap((rel) => {
+  const hits = files.flatMap((rel) => {
     const text = readFileSync(path.join(repoRoot, rel), "utf-8");
     if (text.includes("\0")) return [];
     return text

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { MARKDOWN_CORPUS, TRACKED_FILES, under } from "./prose-dirs.ts";
+import { MARKDOWN_CORPUS, trackedKind } from "./prose-dirs.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string): string =>
@@ -13,9 +13,10 @@ const CODEX_PLUGIN_DIRS = [".codex-plugin", ".agents/plugins", "codex-skills"];
 const CODEX_PLUGIN_FILES = ["scripts/install-codex.mjs", "references/codex-role-mapping.md"];
 
 test("the repo tracks no Codex CLI plugin file", () => {
-  const tracked = TRACKED_FILES.filter(
-    (rel) => under(CODEX_PLUGIN_DIRS)(rel) || CODEX_PLUGIN_FILES.includes(rel),
-  );
+  const tracked = [
+    ...CODEX_PLUGIN_DIRS.filter((dir) => trackedKind(dir) === "dir"),
+    ...CODEX_PLUGIN_FILES.filter((rel) => trackedKind(rel) === "file"),
+  ];
   assert.deepEqual(tracked, []);
 });
 

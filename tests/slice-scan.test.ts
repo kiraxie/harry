@@ -661,7 +661,7 @@ test("no test in tests/ walks the repo root or a prose dir on disk", () => {
   assert.deepEqual(
     own,
     [],
-    `take the files from tests/prose-dirs.ts (TRACKED_FILES, PROSE_DIR_FILES, MARKDOWN_CORPUS), or add an allowlist entry with its reason:\n${own.join("\n")}`,
+    `take the files from tests/prose-dirs.ts (WORKING_FILES, PROSE_DIR_FILES, MARKDOWN_CORPUS), or add an allowlist entry with its reason:\n${own.join("\n")}`,
   );
 });
 
