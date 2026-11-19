@@ -462,9 +462,9 @@ ${reason}
 }
 
 // src/commands/metrics.ts
-var import_node_fs14 = require("node:fs");
+var import_node_fs15 = require("node:fs");
 var import_node_os8 = __toESM(require("node:os"), 1);
-var import_node_path15 = __toESM(require("node:path"), 1);
+var import_node_path16 = __toESM(require("node:path"), 1);
 
 // src/lib/git.ts
 var import_node_child_process3 = require("node:child_process");
@@ -1333,20 +1333,30 @@ ${unrestored.join("\n")}`;
 }
 
 // src/lib/metrics/mutator.ts
-var import_node_fs13 = require("node:fs");
+var import_node_child_process9 = require("node:child_process");
+var import_node_fs14 = require("node:fs");
 var import_node_os7 = __toESM(require("node:os"), 1);
-var import_node_path14 = __toESM(require("node:path"), 1);
+var import_node_path15 = __toESM(require("node:path"), 1);
+
+// src/lib/plugin-root.ts
+var import_node_fs13 = require("node:fs");
+var import_node_path14 = require("node:path");
+function pluginRoot() {
+  return (0, import_node_path14.dirname)((0, import_node_path14.dirname)((0, import_node_fs13.realpathSync)(process.argv[1])));
+}
+
+// src/lib/metrics/mutator.ts
 var siteKey = (s) => `${s.file}:${s.line}`;
 function lineAt(dir, file, byte) {
-  const buf = (0, import_node_fs13.readFileSync)(import_node_path14.default.join(dir, file));
+  const buf = (0, import_node_fs14.readFileSync)(import_node_path15.default.join(dir, file));
   let line = 1;
   for (let i = 0; i < byte && i < buf.length; i++) if (buf[i] === 10) line++;
   return line;
 }
 function snapshots(dir) {
-  const root = import_node_path14.default.join(dir, ".metrics", "mutate");
-  if (!(0, import_node_fs13.existsSync)(root)) return [];
-  return (0, import_node_fs13.readdirSync)(root, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".edn")).map((f) => import_node_path14.default.join(root, f));
+  const root = import_node_path15.default.join(dir, ".metrics", "mutate");
+  if (!(0, import_node_fs14.existsSync)(root)) return [];
+  return (0, import_node_fs14.readdirSync)(root, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".edn")).map((f) => import_node_path15.default.join(root, f));
 }
 var SCAN_HEADER = /^Scan: (\d+) mutation sites in (.+)$/;
 var SCAN_SITE = /^[* ] (.+?):(\d+) /;
@@ -1388,7 +1398,7 @@ ${tail}`);
   return sites;
 }
 function scanSites(tool, dir, handed2, lines2) {
-  const files = handed2.filter((f) => !(0, import_node_fs13.lstatSync)(import_node_path14.default.join(dir, f)).isSymbolicLink());
+  const files = handed2.filter((f) => !(0, import_node_fs14.lstatSync)(import_node_path15.default.join(dir, f)).isSymbolicLink());
   if (files.length === 0 || lines2.length === 0) return [];
   const run = runTool(tool, [
     "--root",
@@ -1418,7 +1428,7 @@ ${failureTail(run)}`);
   const wanted = new Set(files);
   const outcomes = [];
   for (const snap of snapshots(dir)) {
-    const data = parseEdn((0, import_node_fs13.readFileSync)(snap, "utf8"));
+    const data = parseEdn((0, import_node_fs14.readFileSync)(snap, "utf8"));
     for (const [id, outcome] of Object.entries(data.outcomes ?? {})) {
       const [file, , form, start, , original, mutant] = JSON.parse(id);
       if (!wanted.has(file)) continue;
@@ -1462,13 +1472,62 @@ function handOff(scanned, selected) {
   }
   return executed;
 }
+var NOT_MEASURED = {
+  baseline: "not measured: tests fail in mutator's worker without a mutant",
+  unseen: "not measured: no test sees this file in mutator's worker"
+};
+var OVERLAY_CHECK_RUNS = 2;
+var OVERLAY_VERDICTS = { baseline: ["pass", "fail"], canary: ["pass", "fail"] };
+function checkOverlay(tool, dir, file, testCommand) {
+  const script = import_node_path15.default.join(pluginRoot(), "src", "lib", "metrics", "overlay-check.py");
+  const res = (0, import_node_child_process9.spawnSync)(tool.python, [script, dir, file, testCommand ?? ""], {
+    cwd: toolCwd(tool),
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024
+  });
+  throwIfInterrupted(res);
+  if (res.error) throw res.error;
+  const run = { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  const verdict = run.status === 0 ? parseVerdict(run.stdout) : null;
+  if (verdict === null) {
+    throw new Error(
+      `overlay check of ${file} exited ${run.status} with no verdict
+${failureTail(run)}`
+    );
+  }
+  if (verdict.baseline === "fail")
+    return { file, reason: NOT_MEASURED.baseline, tail: verdict.tail };
+  if (verdict.canary === "pass") return { file, reason: NOT_MEASURED.unseen, tail: "" };
+  return null;
+}
+function parseVerdict(stdout) {
+  const last = stdout.trim().split("\n").at(-1) ?? "";
+  let parsed;
+  try {
+    parsed = JSON.parse(last);
+  } catch {
+    return null;
+  }
+  const v = parsed;
+  if (v === null || typeof v !== "object" || !OVERLAY_VERDICTS.baseline.some((b) => b === v.baseline) || !OVERLAY_VERDICTS.canary.some((c) => c === v.canary) || typeof v.tail !== "string") {
+    return null;
+  }
+  return { baseline: v.baseline, canary: v.canary, tail: v.tail };
+}
 function runSelected(tool, dir, selected, coverage, opts) {
-  const { files, lines: lines2 } = handed(selected);
+  const notMeasured = handed(selected).files.flatMap((f) => {
+    const v = checkOverlay(tool, dir, f, opts.testCommand);
+    return v === null ? [] : [v];
+  });
+  const skipped = new Set(notMeasured.map((n) => n.file));
+  const measured = selected.filter((s) => !skipped.has(s.file));
+  const { files, lines: lines2 } = handed(measured);
   const all = files.length === 0 ? [] : runMutator(tool, dir, files, coverage, { ...opts, lines: lines2 });
-  const wanted = new Set(selected.map(siteKey));
+  const wanted = new Set(measured.map(siteKey));
   return {
     outcomes: all.filter((o) => wanted.has(siteKey(o))),
-    executedPerFile: new Map(files.map((f) => [f, all.filter((o) => o.file === f).length]))
+    executedPerFile: new Map(files.map((f) => [f, all.filter((o) => o.file === f).length])),
+    notMeasured
   };
 }
 function roundsPerFile(executed, maxWorkers, cores) {
@@ -1487,7 +1546,12 @@ function runCost(scanned, selected, maxWorkers, cores) {
     files.set(file, cost);
     rounds += cost.rounds;
   }
-  return { files, rounds, baselines: files.size > 0 ? 1 : 0 };
+  return {
+    files,
+    rounds,
+    baselines: files.size > 0 ? 1 : 0,
+    checkRuns: files.size * OVERLAY_CHECK_RUNS
+  };
 }
 
 // src/commands/metrics.ts
@@ -1517,7 +1581,7 @@ function measureCoverage(root, group, override) {
   if ("skip" in plan) {
     return { gap: plan.skip, how: `complexity only: ${plan.skip}`, command: null };
   }
-  const gap = runCoverage(import_node_path15.default.join(root, group.dir), plan);
+  const gap = runCoverage(import_node_path16.default.join(root, group.dir), plan);
   return {
     gap,
     how: gap === null ? `coverage: ${plan.label}` : `complexity only: ${gap}`,
@@ -1534,8 +1598,8 @@ function beforeRun(tool, root, base, groups) {
   return withSnapshot(root, base, (snap) => {
     const out = /* @__PURE__ */ new Map();
     for (const group of groups) {
-      const dir = import_node_path15.default.join(snap, group.dir);
-      const files = group.files.filter((f) => (0, import_node_fs14.existsSync)(import_node_path15.default.join(dir, f)));
+      const dir = import_node_path16.default.join(snap, group.dir);
+      const files = group.files.filter((f) => (0, import_node_fs15.existsSync)(import_node_path16.default.join(dir, f)));
       const entries = files.length > 0 ? runCrapper(tool, dir, files, false) : [];
       out.set(group, beforeComplexity(entries));
     }
@@ -1543,7 +1607,7 @@ function beforeRun(tool, root, base, groups) {
   });
 }
 function crapperGroup(tool, root, base, group, before, coverageGap) {
-  const dir = import_node_path15.default.join(root, group.dir);
+  const dir = import_node_path16.default.join(root, group.dir);
   const after = runCrapper(tool, dir, group.files, coverageGap === null);
   const spans = functionSpans(tool, dir, group.files);
   const hits = judge(
@@ -1604,8 +1668,8 @@ function writeFacts(file, header, sections, problems) {
 ${problems.join("\n")}`);
     process.exitCode = 1;
   }
-  (0, import_node_fs14.mkdirSync)(import_node_path15.default.dirname(file), { recursive: true });
-  (0, import_node_fs14.writeFileSync)(file, facts.join("\n"));
+  (0, import_node_fs15.mkdirSync)(import_node_path16.default.dirname(file), { recursive: true });
+  (0, import_node_fs15.writeFileSync)(file, facts.join("\n"));
 }
 function loadTools() {
   return Object.fromEntries(TOOL_NAMES.map((n) => [n, findTool(n)]));
@@ -1613,7 +1677,9 @@ function loadTools() {
 function headOf(root) {
   return gitChecked(root, ["rev-parse", "HEAD"]).stdout.trim();
 }
-function survivorLines(group, survivors) {
+function survivorLines(group, outcomes, ran) {
+  if (!ran) return "No mutant ran.";
+  const survivors = outcomes.filter((o) => o.survived);
   if (survivors.length === 0) return "No mutant survived.";
   return survivors.map((s) => renderSurvivor(s, `${repoPath(group, s.file)}:${s.line}`)).join("\n");
 }
@@ -1626,7 +1692,7 @@ function auditMutator(root) {
     const testCommand = group.kind === "node" ? `${pm} test` : null;
     const outcomes = runMutator(
       tool,
-      import_node_path15.default.join(root, group.dir),
+      import_node_path16.default.join(root, group.dir),
       group.files,
       coverage.gap === null,
       {
@@ -1635,13 +1701,7 @@ function auditMutator(root) {
         maxWorkers: null
       }
     );
-    return [
-      coverageHeading(coverage),
-      survivorLines(
-        group,
-        outcomes.filter((o) => o.survived)
-      )
-    ];
+    return [coverageHeading(coverage), survivorLines(group, outcomes, outcomes.length > 0)];
   };
 }
 function changedLinesOf(root, base, groups) {
@@ -1660,7 +1720,7 @@ function selectSites(tool, root, groups, changed, maxMutants) {
     const own = new Map(
       group.files.map((f) => [f, changed.get(repoPath(group, f)) ?? /* @__PURE__ */ new Set()])
     );
-    const { scanned, onChanged } = scanChanged(tool, import_node_path15.default.join(root, group.dir), own);
+    const { scanned, onChanged } = scanChanged(tool, import_node_path16.default.join(root, group.dir), own);
     out.set(group, { scanned, sites: [], selected: [] });
     return onChanged.map((site) => ({ group, site }));
   });
@@ -1691,6 +1751,12 @@ function notSelectedLines(group, sel) {
   }
   return [...counts].map(([at, n]) => `- ${at}${n > 1 ? ` (${n} sites)` : ""}`);
 }
+function notMeasuredLines(group, notMeasured) {
+  return notMeasured.flatMap((n) => [
+    `- ${repoPath(group, n.file)}: ${n.reason}`,
+    ...n.tail === "" ? [] : n.tail.split("\n").map((l) => `    ${l}`)
+  ]);
+}
 function unitMutator(root, groups, changed, opts) {
   const pm = packageManager(root);
   return (tool) => {
@@ -1699,28 +1765,33 @@ function unitMutator(root, groups, changed, opts) {
       const sel = selection.get(group);
       const defaultCommand = group.kind === "node" ? `${pm} test` : null;
       const testCommand = opts.testCommand ?? defaultCommand;
-      const { outcomes, executedPerFile } = runSelected(
+      const { outcomes, executedPerFile, notMeasured } = runSelected(
         tool,
-        import_node_path15.default.join(root, group.dir),
+        import_node_path16.default.join(root, group.dir),
         sel.selected,
         coverage.gap === null,
         { testCommand, maxWorkers: opts.maxWorkers }
       );
-      const notSelected = sel.sites.length - sel.selected.length;
+      const unmeasured = new Set(notMeasured.map((n) => n.file));
+      const measured = (s) => !unmeasured.has(s.file);
+      const notMeasuredSites = sel.sites.length - sel.sites.filter(measured).length;
+      const uncovered = sel.selected.filter(measured).length - outcomes.length;
+      const leftOut = { ...sel, sites: sel.sites.filter(measured) };
+      const notSelected = leftOut.sites.length - sel.selected.filter(measured).length;
       const executed = [...executedPerFile.values()].reduce((a, b) => a + b, 0);
       const ranPerFile = [...executedPerFile].map(([f, n]) => `${repoPath(group, f)} ${n}`);
       const facts = [
         `Test command: ${testCommand === null ? "mutator's default for the language" : `\`${testCommand}\``} \xB7 Coverage command: ${coverage.command === null ? "none" : `\`${coverage.command}\``}`,
-        `Sites on changed lines: ${sel.sites.length} \xB7 run: ${outcomes.length} \xB7 not run (uncovered): ${sel.selected.length - outcomes.length} \xB7 not selected (--max-mutants): ${notSelected}`,
+        `Sites on changed lines: ${sel.sites.length} \xB7 run: ${outcomes.length} \xB7 not run (uncovered): ${uncovered} \xB7 not measured: ${notMeasuredSites} \xB7 not selected (--max-mutants): ${notSelected}`,
         `Executed by mutator, off-line sites included: ${executed}${ranPerFile.length > 0 ? ` (${ranPerFile.join(", ")})` : ""}`,
         "",
-        survivorLines(
-          group,
-          outcomes.filter((o) => o.survived)
-        )
+        survivorLines(group, outcomes, executed > 0)
       ];
+      if (notMeasured.length > 0) {
+        facts.push("", "Not measured:", ...notMeasuredLines(group, notMeasured));
+      }
       if (notSelected > 0) {
-        facts.push("", "Not selected (--max-mutants):", ...notSelectedLines(group, sel));
+        facts.push("", "Not selected (--max-mutants):", ...notSelectedLines(group, leftOut));
       }
       return [coverageHeading(coverage), facts.join("\n")];
     };
@@ -1730,7 +1801,7 @@ function scopeGroups(groups, opts) {
   const names = (gs) => [...new Set(gs.map((g) => onlyName(g.dir)))];
   let scoped = groups;
   if (opts.only !== null) {
-    const dir = import_node_path15.default.posix.normalize(opts.only).replace(/^\.\/|\/$/g, "");
+    const dir = import_node_path16.default.posix.normalize(opts.only).replace(/^\.\/|\/$/g, "");
     scoped = groups.filter((g) => g.dir === (dir === "." ? "" : dir));
     if (scoped.length === 0) {
       const known = names(groups);
@@ -1763,7 +1834,7 @@ function runPlan(cwd, baseRef, opts) {
   const cores = mutatorCores();
   let estimate;
   const lines2 = [
-    `Mutation sites per group and file, before coverage (a run skips uncovered lines): on changed lines,${opts.maxMutants === null ? "" : " selected by the cap,"} and executed (one --lines set serves every handed file):`
+    `Mutation sites per group and file, before coverage (a run skips uncovered lines): on changed lines,${opts.maxMutants === null ? "" : " selected by the cap,"} and executed (one --lines set serves every handed file); each handed file adds ${count(OVERLAY_CHECK_RUNS, "check run")}, mutator's worker checked before mutator runs:`
   ];
   if (isMissing(mutator)) {
     lines2.push(`- mutator ${mutator.missing}`);
@@ -1775,6 +1846,7 @@ function runPlan(cwd, baseRef, opts) {
     let coverageRuns = 0;
     let baselines = 0;
     let allRounds = 0;
+    let checkRuns = 0;
     const changed = changedLinesOf(root, base, groups);
     const cap = opts.maxMutants;
     const selection = selectSites(mutator, root, groups, changed, cap);
@@ -1791,18 +1863,19 @@ function runPlan(cwd, baseRef, opts) {
       if (!("skip" in coveragePlan(root, group, opts.coverageCommand))) coverageRuns++;
       baselines += cost.baselines;
       allRounds += cost.rounds;
+      checkRuns += cost.checkRuns;
       lines2.push(
-        `- ${onlyName(group.dir)} (${group.kind}): ${sel.sites.length} on changed lines,${picked(sel.selected.length, true)} ${total} executed, ${count(cost.rounds, "round")}`
+        `- ${onlyName(group.dir)} (${group.kind}): ${sel.sites.length} on changed lines,${picked(sel.selected.length, true)} ${total} executed, ${count(cost.rounds, "round")}, ${count(cost.checkRuns, "check run")}`
       );
       for (const f of files) {
         const own = sel.sites.filter((s) => s.file === f.file).length;
         const chosen = sel.selected.filter((s) => s.file === f.file).length;
         lines2.push(
-          `  - ${repoPath(group, f.file)}: ${own} on changed lines,${picked(chosen, false)} ${f.executed} executed, ${count(f.workers, "worker")}, ${count(f.rounds, "round")}`
+          `  - ${repoPath(group, f.file)}: ${own} on changed lines,${picked(chosen, false)} ${f.executed} executed, ${count(f.workers, "worker")}, ${count(f.rounds, "round")}, ${count(cost.files.has(f.file) ? OVERLAY_CHECK_RUNS : 0, "check run")}`
         );
       }
     }
-    estimate = `${count(coverageRuns, "coverage run")} + ${count(baselines, "baseline")} + ${count(allRounds, "test-command round")}`;
+    estimate = `${count(coverageRuns, "coverage run")} + ${count(baselines, "baseline")} + ${count(allRounds + checkRuns, "test-command round")} (${allRounds} for mutants, ${checkRuns} for overlay checks)`;
   }
   const [one, five] = import_node_os8.default.loadavg();
   lines2.push(
@@ -1839,7 +1912,7 @@ ${DRYER_SCOPE_NOTE}`;
   );
   const only = opts.only === null ? "" : ` \xB7 Only: ${opts.only}`;
   writeFacts(
-    import_node_path15.default.resolve(cwd, out),
+    import_node_path16.default.resolve(cwd, out),
     `Base: ${baseRef} (branch point ${base.slice(0, 7)}) \xB7 Head: ${head.slice(0, 7)} \xB7 Changed source files: ${changed.length}${only}`,
     [
       dryer,
@@ -1850,20 +1923,20 @@ ${DRYER_SCOPE_NOTE}`;
   );
 }
 function copyFrom(dir, rel, to) {
-  (0, import_node_fs14.mkdirSync)(import_node_path15.default.dirname(to), { recursive: true });
-  (0, import_node_fs14.copyFileSync)(import_node_path15.default.join(dir, rel), to);
+  (0, import_node_fs15.mkdirSync)(import_node_path16.default.dirname(to), { recursive: true });
+  (0, import_node_fs15.copyFileSync)(import_node_path16.default.join(dir, rel), to);
 }
 async function runAudit(cwd, out, runTests) {
   const root = getRepoRoot(cwd);
   const head = headOf(root);
   const tools = loadTools();
-  const outDir = import_node_path15.default.resolve(cwd, out);
-  (0, import_node_fs14.mkdirSync)(outDir, { recursive: true });
+  const outDir = import_node_path16.default.resolve(cwd, out);
+  (0, import_node_fs15.mkdirSync)(outDir, { recursive: true });
   const dryer = section("dryer", tools.dryer, (tool) => {
     const pairs = withSnapshot(root, head, (dir) => {
       const found = runDryer(tool, dir);
-      if ((0, import_node_fs14.existsSync)(import_node_path15.default.join(dir, ".metrics/dry.edn"))) {
-        copyFrom(dir, ".metrics/dry.edn", import_node_path15.default.join(outDir, "dry.edn"));
+      if ((0, import_node_fs15.existsSync)(import_node_path16.default.join(dir, ".metrics/dry.edn"))) {
+        copyFrom(dir, ".metrics/dry.edn", import_node_path16.default.join(outDir, "dry.edn"));
       }
       return found;
     });
@@ -1877,7 +1950,7 @@ ${DRYER_SCOPE_NOTE}`;
     tools,
     null,
     (tool) => (group, gap) => {
-      const dir = import_node_path15.default.join(root, group.dir);
+      const dir = import_node_path16.default.join(root, group.dir);
       return renderOverBar(runCrapper(tool, dir, group.files, gap === null), {
         spans: functionSpans(tool, dir, group.files),
         where: (s) => `${repoPath(group, s.file)}:${s.start}`
@@ -1890,7 +1963,7 @@ ${DRYER_SCOPE_NOTE}`;
       tool,
       () => withSnapshot(root, head, (dir) => {
         const entries = runCrapper(tool, dir, [], false);
-        copyFrom(dir, ".metrics/crap.edn", import_node_path15.default.join(outDir, "crap.edn"));
+        copyFrom(dir, ".metrics/crap.edn", import_node_path16.default.join(outDir, "crap.edn"));
         return renderOverBar(entries);
       })
     );
@@ -1906,7 +1979,7 @@ ${complexity}`];
     () => phase?.mutator ?? "skipped: runs only with --run-tests (it runs the test suite once per mutant)"
   );
   writeFacts(
-    import_node_path15.default.join(outDir, "metrics.md"),
+    import_node_path16.default.join(outDir, "metrics.md"),
     `Audit of ${head.slice(0, 7)} (tracked files)${runTests ? " \xB7 with --run-tests" : ""}`,
     [dryer, crapper, mutator],
     phase?.problems ?? []
@@ -1955,24 +2028,21 @@ async function dispatch(cwd, options) {
 }
 
 // src/commands/review.ts
-var import_node_fs16 = require("node:fs");
-var import_node_path17 = require("node:path");
+var import_node_fs17 = require("node:fs");
+var import_node_path18 = require("node:path");
 
 // src/lib/review-modes.ts
-var import_node_fs15 = require("node:fs");
-var import_node_path16 = require("node:path");
-function pluginRoot() {
-  return (0, import_node_path16.dirname)((0, import_node_path16.dirname)((0, import_node_fs15.realpathSync)(process.argv[1])));
-}
+var import_node_fs16 = require("node:fs");
+var import_node_path17 = require("node:path");
 var PER_DIFF = [
   { file: "review-rubric.md", heading: "Review standard" },
   { file: "red-green.md", heading: "Test standard (`references/red-green.md`)" }
 ];
 function loadReference(file) {
-  const refPath = (0, import_node_path16.join)(pluginRoot(), "references", file);
+  const refPath = (0, import_node_path17.join)(pluginRoot(), "references", file);
   let text;
   try {
-    text = (0, import_node_fs15.readFileSync)(refPath, "utf8");
+    text = (0, import_node_fs16.readFileSync)(refPath, "utf8");
   } catch (err) {
     throw new Error(
       `Review reference not found at ${refPath} (${err.message}). Reinstall the harry plugin.`
@@ -1986,7 +2056,7 @@ function cutSection(file, text, title) {
   const start = lines2.indexOf(`## ${title}`);
   if (start === -1) {
     throw new Error(
-      `Review reference ${(0, import_node_path16.join)(pluginRoot(), "references", file)} has no \`## ${title}\` section. Reinstall the harry plugin.`
+      `Review reference ${(0, import_node_path17.join)(pluginRoot(), "references", file)} has no \`## ${title}\` section. Reinstall the harry plugin.`
     );
   }
   const end = lines2.findIndex((line, i) => i > start && /^#{1,2} /.test(line));
@@ -2161,8 +2231,8 @@ function resolveStandard(cwd, options) {
 var REVIEW_WRITTEN = "Review written to";
 function resolveOutputDir(repoRoot) {
   const branch = getBranchOrShortSha(repoRoot);
-  const local = (0, import_node_path17.join)(getMainCheckoutRoot(repoRoot), ".local");
-  const dir = (0, import_node_fs16.existsSync)(local) && (0, import_node_fs16.statSync)(local).isDirectory() ? (0, import_node_path17.join)(local, "tmp", branch) : (0, import_node_path17.join)(resolveStateDir(repoRoot), "reviews", branch);
+  const local = (0, import_node_path18.join)(getMainCheckoutRoot(repoRoot), ".local");
+  const dir = (0, import_node_fs17.existsSync)(local) && (0, import_node_fs17.statSync)(local).isDirectory() ? (0, import_node_path18.join)(local, "tmp", branch) : (0, import_node_path18.join)(resolveStateDir(repoRoot), "reviews", branch);
   ensureDir(dir);
   return dir;
 }
@@ -2424,11 +2494,15 @@ function printUsage() {
       "",
       "metrics with --base (a unit's changed files):",
       "  mutator runs only the mutation sites on lines <base>...HEAD added or modified.",
+      "  Each file is first checked in a worker mutator builds: a file whose tests fail",
+      "  there without a mutant, or that no test sees there, is listed as not measured",
+      "  and never handed to mutator.",
       "  --plan                  Print per group and file the sites on changed lines, the",
       "                          sites mutator executes and its workers and rounds (honouring",
-      "                          --max-workers), the cores and the load averages, then an",
-      "                          Estimate: line of coverage runs, baselines and test-command",
-      "                          rounds; with --max-mutants, the sites the cap selects and",
+      "                          --max-workers) and the check's runs, the cores and the load",
+      "                          averages, then an Estimate: line of coverage runs, baselines",
+      "                          and test-command rounds (a check run counts as one round);",
+      "                          with --max-mutants, the sites the cap selects and",
       "                          what mutator executes for them; run no test, write nothing",
       "  --only <dir>            Only the groups at this repo-relative dir ('.' is the root)",
       "  --test-command <cmd>    The command mutator runs for its baseline and every mutant",

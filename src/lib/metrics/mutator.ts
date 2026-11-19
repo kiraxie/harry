@@ -1,10 +1,13 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { pluginRoot } from "../plugin-root.ts";
 import { parseEdn } from "./edn.ts";
+import { throwIfInterrupted } from "./interrupt.ts";
 import { byPath } from "./scope.ts";
-import { failureTail, runTool, type Tool } from "./tools.ts";
+import { failureTail, runTool, type Tool, toolCwd } from "./tools.ts";
 
 /** One mutant mutator ran, with the outcome its snapshot recorded. */
 export interface Outcome {
@@ -219,14 +222,92 @@ function handOff(scanned: Site[], selected: Site[]): Map<string, number> {
   return executed;
 }
 
+/** A handed file mutator's worker cannot measure, so mutator never runs it. */
+export interface NotMeasured {
+  file: string;
+  reason: string;
+  /** The worker baseline's output tail; empty for an unseen file. */
+  tail: string;
+}
+
+export const NOT_MEASURED = {
+  baseline: "not measured: tests fail in mutator's worker without a mutant",
+  unseen: "not measured: no test sees this file in mutator's worker",
+} as const;
+
+/** The overlay check runs the test command twice per handed file: the worker baseline, then the canary. */
+export const OVERLAY_CHECK_RUNS = 2;
+
+const OVERLAY_VERDICTS = { baseline: ["pass", "fail"], canary: ["pass", "fail"] } as const;
+
+/**
+ * Checks `file` (relative to `dir`) in one worker that mutator's own code builds
+ * (src/lib/metrics/overlay-check.py): a red worker baseline, or a canary that
+ * breaks the file and leaves the tests green, means mutator's outcomes for it
+ * would be false kills or false survivors. Null when mutator can measure it.
+ * A check that exits non-zero or prints no verdict throws, as a mutator failure does.
+ */
+function checkOverlay(
+  tool: Tool,
+  dir: string,
+  file: string,
+  testCommand: string | null,
+): NotMeasured | null {
+  const script = path.join(pluginRoot(), "src", "lib", "metrics", "overlay-check.py");
+  const res = spawnSync(tool.python, [script, dir, file, testCommand ?? ""], {
+    cwd: toolCwd(tool),
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  throwIfInterrupted(res);
+  if (res.error) throw res.error;
+  const run = { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  const verdict = run.status === 0 ? parseVerdict(run.stdout) : null;
+  if (verdict === null) {
+    throw new Error(
+      `overlay check of ${file} exited ${run.status} with no verdict\n${failureTail(run)}`,
+    );
+  }
+  if (verdict.baseline === "fail")
+    return { file, reason: NOT_MEASURED.baseline, tail: verdict.tail };
+  if (verdict.canary === "pass") return { file, reason: NOT_MEASURED.unseen, tail: "" };
+  return null;
+}
+
+function parseVerdict(stdout: string): { baseline: string; canary: string; tail: string } | null {
+  const last = stdout.trim().split("\n").at(-1) ?? "";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(last);
+  } catch {
+    return null;
+  }
+  const v = parsed as Record<string, unknown> | null;
+  if (
+    v === null ||
+    typeof v !== "object" ||
+    !OVERLAY_VERDICTS.baseline.some((b) => b === v.baseline) ||
+    !OVERLAY_VERDICTS.canary.some((c) => c === v.canary) ||
+    typeof v.tail !== "string"
+  ) {
+    return null;
+  }
+  return { baseline: v.baseline as string, canary: v.canary as string, tail: v.tail };
+}
+
 export interface SelectedRun {
   /** Only the outcomes of the selected sites. */
   outcomes: Outcome[];
-  /** Per handed file, the outcomes mutator recorded, off-line sites included. */
+  /** Per file mutator ran, the outcomes it recorded, off-line sites included. */
   executedPerFile: Map<string, number>;
+  /** The handed files the overlay check kept from mutator, by path. */
+  notMeasured: NotMeasured[];
 }
 
-/** Runs mutator on the `selected` sites; nothing runs when none is selected. */
+/**
+ * Checks each file handed for `selected` in mutator's worker, then runs mutator
+ * on the selected sites of the files it can measure; nothing runs when none is left.
+ */
 export function runSelected(
   tool: Tool,
   dir: string,
@@ -234,12 +315,19 @@ export function runSelected(
   coverage: boolean,
   opts: Omit<MutatorRun, "lines">,
 ): SelectedRun {
-  const { files, lines } = handed(selected);
+  const notMeasured = handed(selected).files.flatMap((f) => {
+    const v = checkOverlay(tool, dir, f, opts.testCommand);
+    return v === null ? [] : [v];
+  });
+  const skipped = new Set(notMeasured.map((n) => n.file));
+  const measured = selected.filter((s) => !skipped.has(s.file));
+  const { files, lines } = handed(measured);
   const all = files.length === 0 ? [] : runMutator(tool, dir, files, coverage, { ...opts, lines });
-  const wanted = new Set(selected.map(siteKey));
+  const wanted = new Set(measured.map(siteKey));
   return {
     outcomes: all.filter((o) => wanted.has(siteKey(o))),
     executedPerFile: new Map(files.map((f) => [f, all.filter((o) => o.file === f).length])),
+    notMeasured,
   };
 }
 
@@ -259,12 +347,16 @@ function roundsPerFile(
 }
 
 /**
- * The mutator commit `runCost` and `mutatorCores` were read at. They copy three
- * scheduling facts from it: workers per file are `worker_count` (workers.py:75,
- * sized by `os.cpu_count()`); files run one at a time, with one baseline cache per
- * invocation (cli.py:531); a baseline is cached by command and cwd (engine.py:191).
- * The executing skill's Workers bullet restates them. A test holds the mutator pin
- * to this commit, so a pin bump re-reads them.
+ * The mutator commit `runCost`, `mutatorCores` and the overlay check were read at.
+ * `runCost` and `mutatorCores` copy three scheduling facts from it: workers per file
+ * are `worker_count` (workers.py:75, sized by `os.cpu_count()`); files run one at a
+ * time, with one baseline cache per invocation (cli.py:531); a baseline is cached by
+ * command and cwd (engine.py:191). The executing skill's Workers bullet restates them.
+ * The overlay check (src/lib/metrics/overlay-check.py) builds and runs a worker with
+ * mutator's own internals: `ensure_crapper` (crapper_link.py); `CommandRunner` and
+ * `test_plan` (runner.py); `create_workers`, `delete_tree`, `mapped_cwd` and
+ * `new_run_dir` (workers.py). A test holds the mutator pin to this commit, so a pin
+ * bump re-reads them all.
  */
 export const SCHEDULE_READ_AT = "a5a0cb803b66e0cdb8bf471b3b08af701d424a41";
 
@@ -286,9 +378,14 @@ export interface RunCost {
   rounds: number;
   /** One per invocation that hands a file: one mutator call per group. */
   baselines: number;
+  /** The overlay check's test-command runs, OVERLAY_CHECK_RUNS per handed file, one after another. */
+  checkRuns: number;
 }
 
-/** What one mutator run on `selected` costs, before coverage skips any line. */
+/**
+ * What one mutator run on `selected` costs, before coverage skips any line and
+ * before the overlay check keeps any file from mutator.
+ */
 export function runCost(
   scanned: Site[],
   selected: Site[],
@@ -302,5 +399,10 @@ export function runCost(
     files.set(file, cost);
     rounds += cost.rounds;
   }
-  return { files, rounds, baselines: files.size > 0 ? 1 : 0 };
+  return {
+    files,
+    rounds,
+    baselines: files.size > 0 ? 1 : 0,
+    checkRuns: files.size * OVERLAY_CHECK_RUNS,
+  };
 }

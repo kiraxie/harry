@@ -414,13 +414,42 @@ test("the pins name exactly the tools metrics looks for, each at a full commit",
   for (const t of PINNED_TOOLS) assert.match(t.commit, /^[0-9a-f]{40}$/, t.name);
 });
 
-test("the mutator pin is the commit runCost's scheduling facts were read at", () => {
+const OVERLAY_CHECK = path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py");
+
+/** Each mutator module the overlay check imports from, with the names it takes. */
+function overlayImports(): { module: string; names: string[] }[] {
+  const text = readFileSync(OVERLAY_CHECK, "utf8");
+  return [...text.matchAll(/^from mutator\.(\w+) import (.+)$/gm)].map((m) => ({
+    module: `${m[1]}.py`,
+    names: m[2].split(",").map((n) => n.trim()),
+  }));
+}
+
+const PIN_MOVED = `the mutator pin moved: re-read worker_count (workers.py), the per-invocation baseline cache (cli.py) and its (command, cwd) key (engine.py) at the new commit, update runCost in src/lib/metrics/mutator.ts and the executing skill's Workers bullet to match; check that src/lib/metrics/overlay-check.py's imports (${overlayImports()
+  .map((i) => `${i.names.join(", ")} from ${i.module}`)
+  .join(
+    "; ",
+  )}) still build and run a worker as mutator does; then set SCHEDULE_READ_AT to the new pin`;
+
+test("the mutator pin is the commit runCost's scheduling facts and the overlay check's imports were read at", () => {
   const pin = PINNED_TOOLS.find((t) => t.name === "mutator")?.commit;
-  assert.equal(
-    pin,
-    SCHEDULE_READ_AT,
-    "the mutator pin moved: re-read worker_count (workers.py), the per-invocation baseline cache (cli.py) and its (command, cwd) key (engine.py) at the new commit, update runCost in src/lib/metrics/mutator.ts and the executing skill's Workers bullet to match, then set SCHEDULE_READ_AT to the new pin",
+  assert.equal(pin, SCHEDULE_READ_AT, PIN_MOVED);
+});
+
+test("SCHEDULE_READ_AT's comment names every mutator internal the overlay check imports", () => {
+  const source = readFileSync(
+    path.resolve(import.meta.dirname, "../src/lib/metrics/mutator.ts"),
+    "utf8",
   );
+  const doc =
+    /\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\nexport const SCHEDULE_READ_AT/.exec(source)?.[1] ?? "";
+  const imports = overlayImports();
+  assert.ok(imports.length > 0, "overlay-check.py imports nothing from mutator");
+  for (const { module, names } of imports) {
+    for (const name of names) {
+      assert.match(doc, new RegExp(`\`${name}\`[^.;]*\\(${module.replace(".", "\\.")}\\)`), name);
+    }
+  }
 });
 
 test("venvInstalled holds only for the tool's own dist-info, and never throws on a missing lib", () => {

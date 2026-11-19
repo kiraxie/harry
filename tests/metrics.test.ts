@@ -142,6 +142,37 @@ if (fs.existsSync(path.join(cwd, "json.py"))) {
 }
 `;
 
+/** Exit-0 answers that carry no verdict, by the name a `// overlay prints <name>` marker gives. */
+const BAD_ANSWERS: Record<string, string> = {
+  empty: "",
+  "non-json": "Traceback (most recent call last)\n",
+  "unknown-baseline": '{"baseline": "maybe", "canary": "fail", "tail": ""}\n',
+  "unknown-canary": '{"baseline": "pass", "canary": "", "tail": ""}\n',
+  "no-tail": '{"baseline": "pass", "canary": "fail"}\n',
+  null: "null\n",
+};
+
+/**
+ * Stub of mutator's venv python running the overlay check: a handed file marked
+ * `// overlay baseline-fail` fails the worker baseline, `// overlay unseen` leaves
+ * the canary green, `// overlay crash` exits 1 printing nothing, and
+ * `// overlay prints <name>` exits 0 printing BAD_ANSWERS[name]; any other passes.
+ */
+const OVERLAY_FROM_MARKERS = `
+const BAD_ANSWERS = ${JSON.stringify(BAD_ANSWERS)};
+const [, groupRoot, file] = args;
+const text = fs.readFileSync(path.resolve(groupRoot, file), "utf8");
+if (text.includes("// overlay crash")) { process.stderr.write("Traceback: overlay boom\\n"); process.exit(1); }
+const bad = text.match(/\\/\\/ overlay prints (\\S+)/);
+if (bad) { process.stdout.write(BAD_ANSWERS[bad[1]]); process.exit(0); }
+const answer = text.includes("// overlay baseline-fail")
+  ? { baseline: "fail", canary: "fail", tail: "not ok 1 - reads dist/x.txt\\nENOENT: dist/x.txt" }
+  : text.includes("// overlay unseen")
+    ? { baseline: "pass", canary: "pass", tail: "" }
+    : { baseline: "pass", canary: "fail", tail: "Error: harry-overlay-canary" };
+process.stdout.write(JSON.stringify(answer) + "\\n");
+`;
+
 function writeExecutable(file: string, text: string): void {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, text);
@@ -165,7 +196,10 @@ function installStub(
 ): string {
   const dir = path.join(home, ".claude", "harry", "tools", name);
   writeExecutable(path.join(dir, name), `${STUB_PRELUDE}${PYTHON_STARTUP}\n${body}\n`);
-  writeExecutable(path.join(dir, ".venv/bin/python"), "#!/bin/sh\n");
+  writeExecutable(
+    path.join(dir, ".venv/bin/python"),
+    name === "mutator" ? `${STUB_PRELUDE}\n${OVERLAY_FROM_MARKERS}\n` : "#!/bin/sh\n",
+  );
   mkdirSync(path.join(dir, distInfo(name)), { recursive: true });
   mkdirSync(path.join(dir, ".venv/lib/python3.13/site-packages/pip-25.0.dist-info"));
   for (const [rel, text] of Object.entries(extra)) {
@@ -1178,6 +1212,399 @@ test("mutator runs once per group on the changed lines and lists no survivor fro
   );
 });
 
+/** The overlay checks the stub venv python ran: script, group root, file, test command. */
+function overlayChecks(home: string): string[][] {
+  const file = path.join(home, ".claude", "harry", "tools", "mutator", ".venv/bin/calls.jsonl");
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l).args);
+}
+
+/** The files a mutator run (not a scan) was handed. */
+function mutatedFiles(home: string): string[][] {
+  const flags = new Set(["--root", "--test-command", "--max-workers", "--lines"]);
+  return mutatorRuns(home).map((c) =>
+    c.args.filter((a, i) => !a.startsWith("--") && !flags.has(c.args[i - 1])),
+  );
+}
+
+/** `src/a.ts` passes the overlay check; `src/b.ts` carries `mark`. Both change line 1. */
+function overlayRepo(mark: string): string {
+  return makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts": "export const a = 1 > 0; // mut > >= survived\n",
+      "src/b.ts": `export const b = 2 > 0; // mut > >= survived ${mark}\n`,
+    },
+  );
+}
+
+test("every handed file is checked in mutator's worker with the command mutator gets, before mutator runs", () => {
+  const repo = collisionRepo();
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const script = path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py");
+  assert.deepEqual(overlayChecks(home), [
+    [script, repo, "src/a.ts", "npm test"],
+    [script, repo, "src/b.ts", "npm test"],
+  ]);
+  assert.deepEqual(mutatedFiles(home), [["src/a.ts", "src/b.ts"]]);
+  assert.doesNotMatch(toolSection(run.facts, "mutator"), /Not measured/);
+});
+
+test("a file no test sees in mutator's worker is listed not measured, never as survivors", () => {
+  const repo = overlayRepo("// overlay unseen");
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /^Not measured:\n- src\/b\.ts: not measured: no test sees this file in mutator's worker$/m,
+    mutator,
+  );
+  assert.doesNotMatch(mutator, /src\/b\.ts:1 `>`/, mutator);
+  assert.match(mutator, /src\/a\.ts:1 `>` → `>=`/, mutator);
+  assert.match(
+    mutator,
+    /Sites on changed lines: 2 · run: 1 · not run \(uncovered\): 0 · not measured: 1 · /,
+    mutator,
+  );
+  assert.deepEqual(mutatedFiles(home), [["src/a.ts"]]);
+});
+
+test("a file whose tests fail in mutator's worker without a mutant is listed not measured with the tail, and mutator never runs it", () => {
+  const repo = overlayRepo("// overlay baseline-fail");
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /^- src\/b\.ts: not measured: tests fail in mutator's worker without a mutant\n {4}not ok 1 - reads dist\/x\.txt\n {4}ENOENT: dist\/x\.txt$/m,
+    mutator,
+  );
+  assert.doesNotMatch(mutator, /src\/b\.ts:1 `>`/, mutator);
+  assert.deepEqual(mutatedFiles(home), [["src/a.ts"]]);
+});
+
+test("with every handed file not measured, mutator does not run and the section says so", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    { "src/b.ts": "export const b = 2 > 0; // mut > >= survived // overlay unseen\n" },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(mutatorRuns(home), []);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(mutator, /run: 0 · not run \(uncovered\): 0 · not measured: 1 · /, mutator);
+  assert.match(mutator, /- src\/b\.ts: not measured: no test sees/, mutator);
+  assert.match(mutator, /^No mutant ran\.$/m, mutator);
+  assert.doesNotMatch(mutator, /No mutant survived/, mutator);
+});
+
+test("an overlay check that crashes or prints no JSON fails the mutator section with its tail", () => {
+  const repo = overlayRepo("// overlay crash");
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /failed: overlay check of src\/b\.ts exited 1 with no verdict\nTraceback: overlay boom/,
+    mutator,
+  );
+  assert.doesNotMatch(mutator, /No mutant survived|Not measured/, mutator);
+  assert.deepEqual(mutatorRuns(home), []);
+});
+
+const OVERLAY_SCRIPT = path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py");
+const REAL_MUTATOR_PYTHON = path.join(os.homedir(), ".claude/harry/tools/mutator/.venv/bin/python");
+const NO_REAL_MUTATOR = existsSync(REAL_MUTATOR_PYTHON) ? false : "mutator is not installed";
+
+/** Run dirs left under a group's target/mutation-workers. */
+function runDirs(root: string): string[] {
+  const dir = path.join(root, "target/mutation-workers");
+  return existsSync(dir) ? readdirSync(dir).filter((d) => d.startsWith("run-")) : [];
+}
+
+test("the real overlay check reads a worker baseline, a canary, and an unseen file even behind a static step, leaving no run dir", {
+  skip: NO_REAL_MUTATOR,
+}, () => {
+  const root = tempDir("harry-overlay-");
+  write(root, "package.json", "{}\n");
+  write(root, "src/a.js", "module.exports = 1;\n");
+  write(root, "dist/x.txt", "built\n");
+  const check = (command: string) => {
+    const res = spawnSync(REAL_MUTATOR_PYTHON, [OVERLAY_SCRIPT, root, "src/a.js", command], {
+      cwd: os.tmpdir(),
+      encoding: "utf8",
+    });
+    assert.equal(res.status, 0, res.stderr);
+    return JSON.parse(res.stdout) as { baseline: string; canary: string; tail: string };
+  };
+
+  const seen = check("node src/a.js");
+  const unseen = check("cat src/a.js > /dev/null");
+  // A static step parses the worker copy; the canary must pass it, so only loading the file counts.
+  const parsedOnly = check("node --check src/a.js && cat src/a.js > /dev/null");
+  // dist/ is never linked into a worker, so this passes in the root and fails there.
+  const workerOnly = check("test -f dist/x.txt || { echo 'no dist/x.txt in the worker'; exit 1; }");
+
+  assert.deepEqual([seen.baseline, seen.canary], ["pass", "fail"]);
+  assert.match(seen.tail, /harry-overlay-canary/);
+  assert.deepEqual([unseen.baseline, unseen.canary], ["pass", "pass"]);
+  assert.deepEqual([parsedOnly.baseline, parsedOnly.canary], ["pass", "pass"]);
+  assert.deepEqual([workerOnly.baseline, workerOnly.canary], ["fail", "fail"]);
+  assert.match(workerOnly.tail, /no dist\/x\.txt in the worker/);
+  assert.deepEqual(runDirs(root), []);
+  assert.equal(readFileSync(path.join(root, "src/a.js"), "utf8"), "module.exports = 1;\n");
+});
+
+const HOST_GO = spawnSync("sh", ["-c", "command -v go"], { encoding: "utf8" }).stdout.trim();
+
+/** PEP 8 E305, as flake8 and black hold it: a top-level line after an indented one needs two blank lines. */
+const E305 = `import re, sys
+text = open(sys.argv[1]).read()
+sys.exit(1 if re.findall(r"\\n[ \\t]+\\S[^\\n]*\\n\\n?[^\\s]", text) else 0)
+`;
+
+/**
+ * Per CANARIES row the real helper can run here: a fixture whose file ends in a
+ * top-level definition, a command that loads it (the canary must fail it, naming
+ * the marker), and one that only checks it statically (the canary must pass it).
+ */
+const CANARY_ROWS: {
+  language: string;
+  skip: string | false;
+  files: Record<string, string>;
+  file: string;
+  loads: string;
+  checksOnly: string;
+}[] = [
+  {
+    language: "python",
+    skip: NO_REAL_MUTATOR,
+    files: { "pkg/b.py": "def f():\n    return 1\n", "e305.py": E305 },
+    file: "pkg/b.py",
+    loads: `"${REAL_MUTATOR_PYTHON}" -c "import sys; sys.path.insert(0, 'pkg'); import b"`,
+    checksOnly: `"${REAL_MUTATOR_PYTHON}" -m py_compile pkg/b.py && "${REAL_MUTATOR_PYTHON}" e305.py pkg/b.py`,
+  },
+  {
+    language: "go",
+    skip: NO_REAL_MUTATOR || (HOST_GO === "" ? "no go on PATH" : false),
+    files: {
+      "go.mod": "module m\n\ngo 1.21\n",
+      "pkg/b.go": "package pkg\n\nfunc F() int { return 1 }\n",
+      "pkg/b_test.go":
+        'package pkg\n\nimport "testing"\n\nfunc TestF(t *testing.T) {\n\tif F() != 1 {\n\t\tt.Fatal("F")\n\t}\n}\n',
+    },
+    file: "pkg/b.go",
+    loads: "go test ./...",
+    checksOnly: 'go vet ./... && test -z "$(gofmt -l .)"',
+  },
+];
+
+for (const row of CANARY_ROWS) {
+  test(`the ${row.language} canary fails a run that loads the file and passes a static check of it`, {
+    skip: row.skip,
+  }, () => {
+    const root = tempDir("harry-overlay-row-");
+    for (const [rel, text] of Object.entries(row.files)) write(root, rel, text);
+    const check = (command: string) => {
+      const res = spawnSync(REAL_MUTATOR_PYTHON, [OVERLAY_SCRIPT, root, row.file, command], {
+        cwd: os.tmpdir(),
+        encoding: "utf8",
+      });
+      assert.equal(res.status, 0, res.stderr);
+      return JSON.parse(res.stdout) as { baseline: string; canary: string; tail: string };
+    };
+
+    const loaded = check(row.loads);
+    const checked = check(row.checksOnly);
+
+    assert.deepEqual([loaded.baseline, loaded.canary], ["pass", "fail"], loaded.tail);
+    assert.match(loaded.tail, /harry-overlay-canary/);
+    assert.deepEqual([checked.baseline, checked.canary], ["pass", "pass"], checked.tail);
+    assert.deepEqual(runDirs(root), []);
+  });
+}
+
+/** Runs `code` in mutator's venv python with the helper's globals loaded as `m` (runpy, so main() does not run). */
+function withHelper(code: string, args: string[]) {
+  const prelude = "import json, runpy, sys\nm = runpy.run_path(sys.argv[1])\n";
+  return spawnSync(REAL_MUTATOR_PYTHON, ["-c", prelude + code, OVERLAY_SCRIPT, ...args], {
+    cwd: os.tmpdir(),
+    encoding: "utf8",
+  });
+}
+
+test("a language crapper names with no canary row fails the check, naming it, with no run and no target/", {
+  skip: NO_REAL_MUTATOR,
+}, () => {
+  const root = tempDir("harry-overlay-kt-");
+  write(root, "src/a.kt", "fun a() = 1\n");
+
+  const res = withHelper(
+    'm["ensure_crapper"]().discover.EXTENSIONS[".kt"] = "kotlin"\nm["main"]([sys.argv[2], "src/a.kt", "true"])\n',
+    [root],
+  );
+
+  assert.equal(res.status, 1, res.stdout);
+  assert.match(res.stderr, /kotlin/);
+  assert.match(res.stderr, /src\/a\.kt/);
+  assert.equal(res.stdout, "");
+  assert.ok(!existsSync(path.join(root, "target")), "target/ is left");
+});
+
+test("every language the installed crapper names has a canary row or is a named syntax-canary language", {
+  skip: NO_REAL_MUTATOR,
+}, () => {
+  const res = withHelper(
+    'print(json.dumps({"syntax": sorted(m["SYNTAX_LANGUAGES"]), "known": sorted(set(m["CANARIES"]) | m["SYNTAX_LANGUAGES"]), "crapper": sorted(set(m["ensure_crapper"]().discover.EXTENSIONS.values()))}))\n',
+    [],
+  );
+
+  assert.equal(res.status, 0, res.stderr);
+  const sets = JSON.parse(res.stdout) as { syntax: string[]; known: string[]; crapper: string[] };
+  assert.deepEqual(sets.syntax, ["java", "rust"]);
+  assert.deepEqual(sets.known, sets.crapper);
+});
+
+test("a run with the real overlay check leaves git status and target/ as they were", {
+  skip: NO_REAL_MUTATOR,
+}, () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    { "src/a.ts": "export const a = 1 > 0; // mut > >= survived\n" },
+  );
+  const home = mutatorHome();
+  writeExecutable(
+    path.join(home, ".claude/harry/tools/mutator/.venv/bin/python"),
+    `#!/bin/sh\nexec "${REAL_MUTATOR_PYTHON}" "$@"\n`,
+  );
+  const before = status(repo);
+
+  // The fake npm passes every run, the canary's included: nothing sees the file.
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(
+    toolSection(run.facts, "mutator"),
+    /- src\/a\.ts: not measured: no test sees this file in mutator's worker/,
+    run.facts,
+  );
+  assert.equal(status(repo), before);
+  assert.ok(!existsSync(path.join(repo, "target")), "target/ is removed");
+});
+
+test("under a cap, every changed-line site of a rejected file is not measured, never not selected", () => {
+  const rejected = [
+    "export const a = 1 > 0; // mut > >= survived // overlay unseen",
+    "export const c = 2 > 0; // mut > >= survived",
+    "",
+  ].join("\n");
+  const repo = makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts": rejected,
+      "src/b.ts":
+        "export const b = 1 > 0; // mut > >= killed\nexport const d = 1; // mut 1 0 killed\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "1"] });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /Sites on changed lines: 4 · run: 0 · not run \(uncovered\): 0 · not measured: 2 · not selected \(--max-mutants\): 2$/m,
+    mutator,
+  );
+  assert.match(
+    mutator,
+    /^Not selected \(--max-mutants\):\n- src\/b\.ts:1\n- src\/b\.ts:2$/m,
+    mutator,
+  );
+  assert.doesNotMatch(mutator, /- src\/a\.ts:2/, mutator);
+});
+
+test("with every left-out site in a rejected file, no Not selected list is printed", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts":
+        "export const a = 1 > 0; // mut > >= survived // overlay unseen\nexport const c = 2 > 0; // mut > >= survived\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "1"] });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(mutator, /not measured: 2 · not selected \(--max-mutants\): 0$/m, mutator);
+  assert.doesNotMatch(mutator, /Not selected/, mutator);
+});
+
+test("a section where only an off-line site ran never says no mutant ran", () => {
+  const repo = makeRepo(
+    {
+      "package.json": PKG,
+      "src/b.ts": "export const b = 1; // mut 1 0 killed\nexport const c = 2;\n",
+    },
+    {
+      "src/a.ts": "export const a = 1; // mut 1 0 uncovered\n",
+      "src/b.ts":
+        "export const b = 1; // mut 1 0 killed\nexport const c = 3; // mut 3 0 uncovered\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /^Executed by mutator, off-line sites included: 1 \(src\/a\.ts 0, src\/b\.ts 1\)$/m,
+    mutator,
+  );
+  assert.match(mutator, /run: 0 · not run \(uncovered\): 2 · /, mutator);
+  assert.match(mutator, /^No mutant survived\.$/m, mutator);
+  assert.doesNotMatch(mutator, /No mutant ran/, mutator);
+});
+
+for (const name of Object.keys(BAD_ANSWERS)) {
+  test(`an overlay check that exits 0 with no verdict (${name}) fails the mutator section, never reads as a pass`, () => {
+    const repo = overlayRepo(`// overlay prints ${name}`);
+    const home = mutatorHome();
+
+    const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+    assert.equal(run.status, 0, run.stderr);
+    const mutator = toolSection(run.facts, "mutator");
+    assert.match(mutator, /failed: overlay check of src\/b\.ts exited 0 with no verdict/, mutator);
+    assert.deepEqual(mutatorRuns(home), []);
+  });
+}
+
 /**
  * A scan that lists 14 sites for `src/a.ts`, more stdout than a 12-line tail
  * holds, and skips `src/b.ts` with a reason on stderr.
@@ -1248,7 +1675,7 @@ test("a tracked symlink is not handed to mutator's scan", () => {
   for (const scan of scans) assert.ok(!scan.args.includes("src/link.ts"), scan.args.join(" "));
   assert.match(
     plan.stdout,
-    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round$/m,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round, 2 check runs$/m,
     plan.stdout,
   );
 });
@@ -1279,17 +1706,17 @@ test("--plan prints the changed-line sites per group, the cores and the load, ru
   assert.equal(res.status, 0, res.stderr);
   assert.match(
     res.stdout,
-    /^- \. \(node\): 2 on changed lines, 3 executed, 2 rounds$/m,
+    /^- \. \(node\): 2 on changed lines, 3 executed, 2 rounds, 4 check runs$/m,
     res.stdout,
   );
   assert.match(
     res.stdout,
-    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round$/m,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round, 2 check runs$/m,
     res.stdout,
   );
   assert.match(
     res.stdout,
-    /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed, 2 workers, 1 round$/m,
+    /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed, 2 workers, 1 round, 2 check runs$/m,
     res.stdout,
   );
   assert.match(res.stdout, /^Cores: 3$/m);
@@ -1324,6 +1751,7 @@ test("runCost takes mutator's workers per file, the fewest of sites, cores and -
     );
     assert.equal(cost.rounds, want.rounds, row);
     assert.equal(cost.baselines, executed > 0 ? 1 : 0, row);
+    assert.equal(cost.checkRuns, executed > 0 ? 2 : 0, row);
   }
 });
 
@@ -1338,22 +1766,22 @@ test("--plan --max-workers sets the workers and rounds it prints", () => {
   assert.equal(four.status, 0, four.stderr);
   assert.match(
     one.stdout,
-    /^- \. \(node\): 5 on changed lines, 5 executed, 5 rounds$/m,
+    /^- \. \(node\): 5 on changed lines, 5 executed, 5 rounds, 2 check runs$/m,
     one.stdout,
   );
   assert.match(
     one.stdout,
-    /^ {2}- src\/a\.ts: 5 on changed lines, 5 executed, 1 worker, 5 rounds$/m,
+    /^ {2}- src\/a\.ts: 5 on changed lines, 5 executed, 1 worker, 5 rounds, 2 check runs$/m,
     one.stdout,
   );
   assert.match(
     four.stdout,
-    /^- \. \(node\): 5 on changed lines, 5 executed, 2 rounds$/m,
+    /^- \. \(node\): 5 on changed lines, 5 executed, 2 rounds, 2 check runs$/m,
     four.stdout,
   );
   assert.match(
     four.stdout,
-    /^ {2}- src\/a\.ts: 5 on changed lines, 5 executed, 3 workers, 2 rounds$/m,
+    /^ {2}- src\/a\.ts: 5 on changed lines, 5 executed, 3 workers, 2 rounds, 2 check runs$/m,
     four.stdout,
   );
 });
@@ -1387,7 +1815,7 @@ test("--plan ends with one coverage run and one baseline per group, two groups a
   assert.equal(res.status, 0, res.stderr);
   assert.equal(
     lastLine(res.stdout),
-    "Estimate: 2 coverage runs + 2 baselines + 3 test-command rounds",
+    "Estimate: 2 coverage runs + 2 baselines + 7 test-command rounds (3 for mutants, 4 for overlay checks)",
     res.stdout,
   );
   assert.equal(status(repo), before);
@@ -1408,7 +1836,7 @@ test("--plan counts no baseline for a group the cap leaves empty", () => {
   assert.equal(res.status, 0, res.stderr);
   assert.equal(
     lastLine(res.stdout),
-    "Estimate: 2 coverage runs + 1 baseline + 1 test-command round",
+    "Estimate: 2 coverage runs + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
     res.stdout,
   );
 });
@@ -1426,13 +1854,13 @@ test("--plan counts no coverage run for a skipped coverage plan unless --coverag
   assert.equal(own.status, 0, own.stderr);
   assert.equal(
     lastLine(own.stdout),
-    "Estimate: 0 coverage runs + 1 baseline + 1 test-command round",
+    "Estimate: 0 coverage runs + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
     own.stdout,
   );
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.equal(
     lastLine(replaced.stdout),
-    "Estimate: 1 coverage run + 1 baseline + 1 test-command round",
+    "Estimate: 1 coverage run + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
     replaced.stdout,
   );
 });
@@ -1464,7 +1892,7 @@ test("--plan's python import probe never imports a module from the group dir", {
   assert.equal(res.status, 0, res.stderr);
   assert.equal(
     lastLine(res.stdout),
-    "Estimate: 0 coverage runs + 1 baseline + 1 test-command round",
+    "Estimate: 0 coverage runs + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
     res.stdout,
   );
   assert.equal(existsSync(marker), false, "the group dir's coverage.py was imported");
@@ -1683,7 +2111,7 @@ test("a site the coverage report leaves uncovered is counted as not run", () => 
   assert.equal(run.status, 0, run.stderr);
   assert.match(
     toolSection(run.facts, "mutator"),
-    /Sites on changed lines: 2 · run: 1 · not run \(uncovered\): 1 · not selected \(--max-mutants\): 0/,
+    /Sites on changed lines: 2 · run: 1 · not run \(uncovered\): 1 · not measured: 0 · not selected \(--max-mutants\): 0/,
   );
 });
 
@@ -1825,17 +2253,17 @@ test("--plan counts the sites mutator executes on the handed lines, not every sc
   assert.equal(res.status, 0, res.stderr);
   assert.match(
     res.stdout,
-    /^- \. \(node\): 2 on changed lines, 3 executed, 2 rounds$/m,
+    /^- \. \(node\): 2 on changed lines, 3 executed, 2 rounds, 4 check runs$/m,
     res.stdout,
   );
   assert.match(
     res.stdout,
-    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round$/m,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 executed, 1 worker, 1 round, 2 check runs$/m,
     res.stdout,
   );
   assert.match(
     res.stdout,
-    /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed, 2 workers, 1 round$/m,
+    /^ {2}- src\/b\.ts: 1 on changed lines, 2 executed, 2 workers, 1 round, 2 check runs$/m,
     res.stdout,
   );
   assert.doesNotMatch(res.stdout, /src\/c\.ts/, res.stdout);
@@ -1868,16 +2296,16 @@ test("--plan --max-mutants prints the cap's selection and what mutator executes 
   assert.equal(res.status, 0, res.stderr);
   assert.match(
     res.stdout,
-    /^- \. \(node\): 2 on changed lines, 1 selected \(--max-mutants 1\), 1 executed, 1 round$/m,
+    /^- \. \(node\): 2 on changed lines, 1 selected \(--max-mutants 1\), 1 executed, 1 round, 2 check runs$/m,
     res.stdout,
   );
   assert.match(
     res.stdout,
-    /^ {2}- src\/a\.ts: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round$/m,
+    /^ {2}- src\/a\.ts: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round, 2 check runs$/m,
   );
   assert.match(
     res.stdout,
-    /^ {2}- src\/b\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds$/m,
+    /^ {2}- src\/b\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds, 0 check runs$/m,
   );
   assert.deepEqual(mutatorRuns(home), []);
   assert.deepEqual(pmCalls(bin), []);
@@ -1915,7 +2343,7 @@ test("within a group, the cap and --plan's listing take paths in code-unit order
   assert.equal(plan.status, 0, plan.stderr);
   assert.match(
     plan.stdout,
-    /: on changed lines, selected by the cap, and executed .*\n.*\n {2}- src\/Button\.ts: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round\n {2}- src\/api\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds$/m,
+    /: on changed lines, selected by the cap, and executed .*\n.*\n {2}- src\/Button\.ts: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round, 2 check runs\n {2}- src\/api\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds, 0 check runs$/m,
     plan.stdout,
   );
 });
@@ -2004,11 +2432,11 @@ test("the cap and --plan take files by repo path across groups, whatever order t
   assert.equal(plan.status, 0, plan.stderr);
   assert.match(
     plan.stdout,
-    /^ {2}- src\/b\.py: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round$/m,
+    /^ {2}- src\/b\.py: 1 on changed lines, 1 selected, 1 executed, 1 worker, 1 round, 2 check runs$/m,
   );
   assert.match(
     plan.stdout,
-    /^ {2}- src\/c\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds$/m,
+    /^ {2}- src\/c\.ts: 1 on changed lines, 0 selected, 0 executed, 0 workers, 0 rounds, 0 check runs$/m,
   );
 
   const run = runMetrics(repo, home, {

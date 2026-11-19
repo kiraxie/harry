@@ -7,20 +7,11 @@
  * command shows the change, and that everything outside it is context only.
  */
 
-import { readFileSync, realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { ReviewTarget } from "./git.ts";
-
-/**
- * `process.argv[1]` rather than `import.meta` (empty in the CJS bundle) or
- * `__dirname` (absent in ESM source). The entry file sits one directory below
- * the repo root from source (`src/companion.ts`) and from the committed bundle
- * (`dist/companion.cjs`) alike, so its grandparent is the root in both.
- */
-export function pluginRoot(): string {
-  return dirname(dirname(realpathSync(process.argv[1])));
-}
+import { pluginRoot } from "./plugin-root.ts";
 
 /** One input picks the mode's whole record, so its parts can never disagree. */
 export type HandedStandard = "rereview" | "fix-check";

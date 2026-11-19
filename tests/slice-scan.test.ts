@@ -501,6 +501,12 @@ const CODE_SPAN_ALLOWED: { file: string; text: string; why: string }[] = [
     why: "the metrics facts file's mutator line, not prose",
   },
   {
+    file: "install-tools.test.ts",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the entry quotes a template literal's source verbatim
+    text: '`\\`${name}\\`[^.;]*\\\\(${module.replace(".", "\\\\.")}\\\\)`',
+    why: "a mutator name in SCHEDULE_READ_AT's TypeScript doc comment, not prose",
+  },
+  {
     file: "slice-scan.test.ts",
     text: "/`(?:[([.]|\\\\[wWdDsS])/",
     why: "the code-span scan's own pattern",
