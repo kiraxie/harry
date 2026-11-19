@@ -111,8 +111,9 @@ artifacts the run wrote and restores what existed, and `metrics` exits non-zero 
 path git sees changed. It never installs a package. With `--base`, mutator runs only the
 mutation sites on lines the unit added or modified; `--plan` is read-only and runs no test;
 the session may pass the project's own full-suite commands and a cap. The flags and what
-`--plan` prints are in `companion metrics --help`; how sites are selected and handed to
-mutator is documented in `src/commands/metrics.ts` and `src/lib/metrics/mutator.ts`. The
+`--plan` prints are in `companion metrics --help`; how sites are selected is documented in
+`src/lib/metrics/select.ts`, and how they are handed to mutator in
+`src/lib/metrics/mutator.ts`. The
 guard's lock, interrupt and recovery behavior is documented in `src/lib/metrics/guard.ts`
 and `src/lib/metrics/interrupt.ts`.
 

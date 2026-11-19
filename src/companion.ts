@@ -54,7 +54,8 @@ function printUsage(): void {
       "                          sites mutator executes and its workers and rounds (honouring",
       "                          --max-workers) and the check's runs, the cores and the load",
       "                          averages, then an Estimate: line of coverage runs, baselines",
-      "                          and test-command rounds (a check run counts as one round);",
+      "                          and test-command rounds (a check run counts as one round),",
+      "                          assuming every checked file passes the check;",
       "                          with --max-mutants, the sites the cap selects and",
       "                          what mutator executes for them; run no test, write nothing",
       "  --only <dir>            Only the groups at this repo-relative dir ('.' is the root)",
@@ -64,7 +65,9 @@ function printUsage(): void {
       "                          (both command flags need a single group dir; use --only)",
       "  --max-workers <n>       Passed to mutator: mutants of one file run at once",
       "  --max-mutants <n>       Run the first n changed-line sites by file, then line,",
-      "                          finishing the last line; the rest are listed as not run",
+      "                          finishing the last line; a file the check rejects takes",
+      "                          none of n, and the files after the cap go unchecked, their",
+      "                          sites listed as not selected",
     ].join("\n"),
   );
 }

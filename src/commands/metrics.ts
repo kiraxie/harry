@@ -26,24 +26,21 @@ import { withArtifactGuard } from "../lib/metrics/guard.ts";
 import { Interrupted, rethrowInterrupt } from "../lib/metrics/interrupt.ts";
 import {
   mutatorCores,
-  type NotMeasured,
   type Outcome,
-  OVERLAY_CHECK_RUNS,
   renderSurvivor,
   runCost,
   runMutator,
   runSelected,
   type Site,
-  scanChanged,
-  siteKey,
 } from "../lib/metrics/mutator.ts";
+import { checkFile, type NotMeasured, OVERLAY_CHECK_RUNS } from "../lib/metrics/overlay.ts";
 import {
   addedLines,
-  byPath,
   changedSourceFiles,
   trackedSourceFiles,
   withSnapshot,
 } from "../lib/metrics/scope.ts";
+import { type ChangedLines, type Selection, selectSites } from "../lib/metrics/select.ts";
 import {
   findTool,
   isMissing,
@@ -282,9 +279,6 @@ function auditMutator(root: string): MutatorBody {
   };
 }
 
-/** Changed lines per repo-relative file. */
-type ChangedLines = Map<string, Set<number>>;
-
 function changedLinesOf(root: string, base: string, groups: Group[]): ChangedLines {
   const lines: ChangedLines = new Map();
   for (const group of groups) {
@@ -296,81 +290,32 @@ function changedLinesOf(root: string, base: string, groups: Group[]): ChangedLin
   return lines;
 }
 
-interface Selection {
-  /** Every site the group's scan lists, the off-line ones included. */
-  scanned: Site[];
-  /** Every site on a changed line, by repo path, then line. */
-  sites: Site[];
-  /** The sites that run: all of them, or the first n under --max-mutants, finishing the last line. */
-  selected: Site[];
-}
-
-/**
- * Splits the unit's changed-line sites across groups. Under `maxMutants` the first
- * n by repo path, then line, are selected and the last line reached is finished
- * whole, since mutator selects by line.
- */
-function selectSites(
-  tool: Tool,
-  root: string,
-  groups: Group[],
-  changed: ChangedLines,
-  maxMutants: number | null,
-): Map<Group, Selection> {
-  const out = new Map<Group, Selection>();
-  const all = groups.flatMap((group) => {
-    const own = new Map(
-      group.files.map((f) => [f, changed.get(repoPath(group, f)) ?? new Set<number>()]),
-    );
-    const { scanned, onChanged } = scanChanged(tool, path.join(root, group.dir), own);
-    out.set(group, { scanned, sites: [], selected: [] });
-    return onChanged.map((site) => ({ group, site }));
-  });
-  const where = (e: { group: Group; site: Site }) => repoPath(e.group, e.site.file);
-  all.sort((a, b) => byPath(where(a), where(b)) || a.site.line - b.site.line);
-  let cut = all.length;
-  if (maxMutants !== null && maxMutants < all.length) {
-    cut = maxMutants;
-    const last = all[cut - 1];
-    while (
-      cut < all.length &&
-      where(all[cut]) === where(last) &&
-      all[cut].site.line === last.site.line
-    ) {
-      cut++;
-    }
-  }
-  all.forEach((e, i) => {
-    const sel = out.get(e.group) as Selection;
-    sel.sites.push(e.site);
-    if (i < cut) sel.selected.push(e.site);
-  });
-  return out;
-}
-
 /** `file:line` of each site not selected, with how many sites share the line. */
-function notSelectedLines(group: Group, sel: Selection): string[] {
-  const selected = new Set(sel.selected.map(siteKey));
+function notSelectedLines(group: Group, notSelected: Site[]): string[] {
   const counts = new Map<string, number>();
-  for (const site of sel.sites) {
-    if (selected.has(siteKey(site))) continue;
+  for (const site of notSelected) {
     const at = `${repoPath(group, site.file)}:${site.line}`;
     counts.set(at, (counts.get(at) ?? 0) + 1);
   }
   return [...counts].map(([at, n]) => `- ${at}${n > 1 ? ` (${n} sites)` : ""}`);
 }
 
+const NOT_MEASURED: Record<NotMeasured["kind"], string> = {
+  baseline: "not measured: tests fail in mutator's worker without a mutant",
+  unseen: "not measured: no test sees this file in mutator's worker",
+};
+
 /** Each file mutator's worker cannot measure, with the reason and, under it, the worker baseline's tail. */
 function notMeasuredLines(group: Group, notMeasured: NotMeasured[]): string[] {
   return notMeasured.flatMap((n) => [
-    `- ${repoPath(group, n.file)}: ${n.reason}`,
+    `- ${repoPath(group, n.file)}: ${NOT_MEASURED[n.kind]}`,
     ...(n.tail === "" ? [] : n.tail.split("\n").map((l) => `    ${l}`)),
   ]);
 }
 
 /**
  * Unit mode: only the selected sites on changed lines run, and only their outcomes
- * count. A handed file mutator's worker cannot measure is listed, never mutated.
+ * count. A file mutator's worker cannot measure is listed, never mutated.
  */
 function unitMutator(
   root: string,
@@ -379,41 +324,41 @@ function unitMutator(
   opts: UnitOptions,
 ): MutatorBody {
   const pm = packageManager(root);
+  const testCommandOf = (group: Group) =>
+    opts.testCommand ?? (group.kind === "node" ? `${pm} test` : null);
   return (tool) => {
-    const selection = selectSites(tool, root, groups, changed, opts.maxMutants);
+    const selection = selectSites(tool, root, groups, changed, opts.maxMutants, (group, file) =>
+      checkFile(tool, path.join(root, group.dir), file, testCommandOf(group)),
+    );
     return (group, coverage) => {
-      const sel = selection.get(group) as Selection;
-      const defaultCommand = group.kind === "node" ? `${pm} test` : null;
-      const testCommand = opts.testCommand ?? defaultCommand;
-      const { outcomes, executedPerFile, notMeasured } = runSelected(
+      const sel = selection.get(group) as Selection<NotMeasured>;
+      const testCommand = testCommandOf(group);
+      const { outcomes, executedPerFile } = runSelected(
         tool,
         path.join(root, group.dir),
         sel.selected,
         coverage.gap === null,
         { testCommand, maxWorkers: opts.maxWorkers },
       );
-      // Every changed-line site of a file the check rejected is not measured, the
-      // ones the cap left out included: no cap would ever measure them.
-      const unmeasured = new Set(notMeasured.map((n) => n.file));
-      const measured = (s: Site) => !unmeasured.has(s.file);
-      const notMeasuredSites = sel.sites.length - sel.sites.filter(measured).length;
-      const uncovered = sel.selected.filter(measured).length - outcomes.length;
-      const leftOut = { ...sel, sites: sel.sites.filter(measured) };
-      const notSelected = leftOut.sites.length - sel.selected.filter(measured).length;
+      const uncovered = sel.selected.length - outcomes.length;
       const executed = [...executedPerFile.values()].reduce((a, b) => a + b, 0);
       const ranPerFile = [...executedPerFile].map(([f, n]) => `${repoPath(group, f)} ${n}`);
       const facts = [
         `Test command: ${testCommand === null ? "mutator's default for the language" : `\`${testCommand}\``} · Coverage command: ${coverage.command === null ? "none" : `\`${coverage.command}\``}`,
-        `Sites on changed lines: ${sel.sites.length} · run: ${outcomes.length} · not run (uncovered): ${uncovered} · not measured: ${notMeasuredSites} · not selected (--max-mutants): ${notSelected}`,
+        `Sites on changed lines: ${sel.sites.length} · run: ${outcomes.length} · not run (uncovered): ${uncovered} · not measured: ${sel.unmeasured.length} · not selected (--max-mutants): ${sel.notSelected.length}`,
         `Executed by mutator, off-line sites included: ${executed}${ranPerFile.length > 0 ? ` (${ranPerFile.join(", ")})` : ""}`,
         "",
         survivorLines(group, outcomes, executed > 0),
       ];
-      if (notMeasured.length > 0) {
-        facts.push("", "Not measured:", ...notMeasuredLines(group, notMeasured));
+      if (sel.notMeasured.length > 0) {
+        facts.push("", "Not measured:", ...notMeasuredLines(group, sel.notMeasured));
       }
-      if (notSelected > 0) {
-        facts.push("", "Not selected (--max-mutants):", ...notSelectedLines(group, leftOut));
+      if (sel.notSelected.length > 0) {
+        facts.push(
+          "",
+          "Not selected (--max-mutants):",
+          ...notSelectedLines(group, sel.notSelected),
+        );
       }
       return [coverageHeading(coverage), facts.join("\n")];
     };
@@ -489,11 +434,12 @@ function runPlan(cwd: string, baseRef: string, opts: UnitOptions): void {
     let checkRuns = 0;
     const changed = changedLinesOf(root, base, groups);
     const cap = opts.maxMutants;
-    const selection = selectSites(mutator, root, groups, changed, cap);
+    // The plan runs no test, so it assumes every checked file passes the overlay check.
+    const selection = selectSites(mutator, root, groups, changed, cap, () => null);
     const picked = (n: number, groupLine: boolean) =>
       cap === null ? "" : ` ${n} selected${groupLine ? ` (--max-mutants ${cap})` : ""},`;
     for (const group of groups) {
-      const sel = selection.get(group) as Selection;
+      const sel = selection.get(group) as Selection<object>;
       const cost = runCost(sel.scanned, sel.selected, opts.maxWorkers, cores);
       const none = { executed: 0, workers: 0, rounds: 0 };
       const files = [...new Set(sel.sites.map((s) => s.file))].map((file) => ({
@@ -504,18 +450,25 @@ function runPlan(cwd: string, baseRef: string, opts: UnitOptions): void {
       if (!("skip" in coveragePlan(root, group, opts.coverageCommand))) coverageRuns++;
       baselines += cost.baselines;
       allRounds += cost.rounds;
-      checkRuns += cost.checkRuns;
+      // The files the walk checked: with every check passing, the files mutator is handed.
+      const groupChecks = sel.checked.length * OVERLAY_CHECK_RUNS;
+      checkRuns += groupChecks;
       lines.push(
-        `- ${onlyName(group.dir)} (${group.kind}): ${sel.sites.length} on changed lines,${picked(sel.selected.length, true)} ${total} executed, ${count(cost.rounds, "round")}, ${count(cost.checkRuns, "check run")}`,
+        `- ${onlyName(group.dir)} (${group.kind}): ${sel.sites.length} on changed lines,${picked(sel.selected.length, true)} ${total} executed, ${count(cost.rounds, "round")}, ${count(groupChecks, "check run")}`,
       );
       for (const f of files) {
         const own = sel.sites.filter((s) => s.file === f.file).length;
         const chosen = sel.selected.filter((s) => s.file === f.file).length;
         lines.push(
-          `  - ${repoPath(group, f.file)}: ${own} on changed lines,${picked(chosen, false)} ${f.executed} executed, ${count(f.workers, "worker")}, ${count(f.rounds, "round")}, ${count(cost.files.has(f.file) ? OVERLAY_CHECK_RUNS : 0, "check run")}`,
+          `  - ${repoPath(group, f.file)}: ${own} on changed lines,${picked(chosen, false)} ${f.executed} executed, ${count(f.workers, "worker")}, ${count(f.rounds, "round")}, ${count(sel.checked.includes(f.file) ? OVERLAY_CHECK_RUNS : 0, "check run")}`,
         );
       }
     }
+    const rejected =
+      cap === null
+        ? "a file it rejects runs none of its mutants"
+        : `each file it rejects adds ${count(OVERLAY_CHECK_RUNS, "check run")} and moves its share of the cap to later files`;
+    lines.push(`The estimate assumes every checked file passes the overlay check; ${rejected}.`);
     // A check run is one test-command run on its own, so it costs one round's time.
     estimate = `${count(coverageRuns, "coverage run")} + ${count(baselines, "baseline")} + ${count(allRounds + checkRuns, "test-command round")} (${allRounds} for mutants, ${checkRuns} for overlay checks)`;
   }

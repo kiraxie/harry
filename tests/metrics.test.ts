@@ -155,13 +155,15 @@ const BAD_ANSWERS: Record<string, string> = {
 /**
  * Stub of mutator's venv python running the overlay check: a handed file marked
  * `// overlay baseline-fail` fails the worker baseline, `// overlay unseen` leaves
- * the canary green, `// overlay crash` exits 1 printing nothing, and
+ * the canary green, `// overlay crash` exits 1 printing nothing,
+ * `// overlay interrupt` sends SIGINT to its process group, and
  * `// overlay prints <name>` exits 0 printing BAD_ANSWERS[name]; any other passes.
  */
 const OVERLAY_FROM_MARKERS = `
 const BAD_ANSWERS = ${JSON.stringify(BAD_ANSWERS)};
 const [, groupRoot, file] = args;
 const text = fs.readFileSync(path.resolve(groupRoot, file), "utf8");
+if (text.includes("// overlay interrupt")) { process.kill(0, "SIGINT"); setTimeout(() => {}, 5000); return; }
 if (text.includes("// overlay crash")) { process.stderr.write("Traceback: overlay boom\\n"); process.exit(1); }
 const bad = text.match(/\\/\\/ overlay prints (\\S+)/);
 if (bad) { process.stdout.write(BAD_ANSWERS[bad[1]]); process.exit(0); }
@@ -1332,6 +1334,87 @@ test("an overlay check that crashes or prints no JSON fails the mutator section 
   assert.deepEqual(mutatorRuns(home), []);
 });
 
+test("an overlay check that errors in one group fails the whole mutator section, the other group's files included", () => {
+  const repo = makeRepo(
+    {
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "packages/x/package.json": PKG,
+      "packages/y/package.json": PKG,
+    },
+    {
+      "packages/x/src/x.ts": "export const x = 1; // mut 1 0 killed\n",
+      "packages/y/src/y.ts": "export const y = 1; // mut 1 0 killed // overlay crash\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /failed: packages\/y: overlay check of src\/y\.ts exited 1 with no verdict\nTraceback: overlay boom/,
+    mutator,
+  );
+  assert.doesNotMatch(mutator, /### packages\/x/, mutator);
+  assert.deepEqual(mutatorRuns(home), []);
+});
+
+test("two groups' files at the same group-relative path are each checked and reported in their own section", () => {
+  const repo = makeRepo(
+    {
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "packages/x/package.json": PKG,
+      "packages/y/package.json": PKG,
+    },
+    {
+      "packages/x/src/index.ts": "export const x = 1; // mut 1 0 killed // overlay unseen\n",
+      "packages/y/src/index.ts": "export const y = 1; // mut 1 0 killed\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(
+    overlayChecks(home).map((args) => [path.relative(repo, args[1]), args[2]]),
+    [
+      ["packages/x", "src/index.ts"],
+      ["packages/y", "src/index.ts"],
+    ],
+  );
+  const mutator = toolSection(run.facts, "mutator");
+  const x = headingSection(mutator, "mutator section", /### packages\/x\b/);
+  const y = headingSection(mutator, "mutator section", /### packages\/y\b/);
+  assert.match(x, /^- packages\/x\/src\/index\.ts: not measured: no test sees/m, mutator);
+  assert.match(y, /Sites on changed lines: 1 · run: 1 · /, mutator);
+  assert.doesNotMatch(y, /Not measured/, mutator);
+});
+
+test("an interrupt during a non-root group's overlay check exits 128+signal, not a failed section", () => {
+  const repo = makeRepo(
+    {
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "packages/x/package.json": PKG,
+      "packages/y/package.json": PKG,
+    },
+    {
+      "packages/x/src/x.ts": "export const x = 1; // mut 1 0 killed\n",
+      "packages/y/src/y.ts": "export const y = 1; // mut 1 0 killed // overlay interrupt\n",
+    },
+  );
+  const home = mutatorHome();
+  const before = status(repo);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), detached: true });
+
+  assert.equal(run.status, 130, `signal ${run.signal}\n${run.stderr}`);
+  assert.match(run.stderr, /interrupted/i);
+  assert.equal(status(repo), before);
+});
+
 const OVERLAY_SCRIPT = path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py");
 const REAL_MUTATOR_PYTHON = path.join(os.homedir(), ".claude/harry/tools/mutator/.venv/bin/python");
 const NO_REAL_MUTATOR = existsSync(REAL_MUTATOR_PYTHON) ? false : "mutator is not installed";
@@ -1512,7 +1595,7 @@ test("a run with the real overlay check leaves git status and target/ as they we
   assert.ok(!existsSync(path.join(repo, "target")), "target/ is removed");
 });
 
-test("under a cap, every changed-line site of a rejected file is not measured, never not selected", () => {
+test("under a cap, a rejected file takes none of it and the cap is filled from the next file that passes", () => {
   const rejected = [
     "export const a = 1 > 0; // mut > >= survived // overlay unseen",
     "export const c = 2 > 0; // mut > >= survived",
@@ -1534,15 +1617,79 @@ test("under a cap, every changed-line site of a rejected file is not measured, n
   const mutator = toolSection(run.facts, "mutator");
   assert.match(
     mutator,
-    /Sites on changed lines: 4 · run: 0 · not run \(uncovered\): 0 · not measured: 2 · not selected \(--max-mutants\): 2$/m,
+    /Sites on changed lines: 4 · run: 1 · not run \(uncovered\): 0 · not measured: 2 · not selected \(--max-mutants\): 1$/m,
     mutator,
+  );
+  assert.deepEqual(mutatedFiles(home), [["src/b.ts"]]);
+  assert.deepEqual(
+    overlayChecks(home).map((args) => args[2]),
+    ["src/a.ts", "src/b.ts"],
   );
   assert.match(
     mutator,
-    /^Not selected \(--max-mutants\):\n- src\/b\.ts:1\n- src\/b\.ts:2$/m,
+    /^Not measured:\n- src\/a\.ts: not measured: no test sees this file in mutator's worker\n\n/m,
     mutator,
   );
+  assert.match(mutator, /^Not selected \(--max-mutants\):\n- src\/b\.ts:2$/m, mutator);
   assert.doesNotMatch(mutator, /- src\/a\.ts:2/, mutator);
+});
+
+test("once the cap is filled, the files after it are never checked and their sites are not selected", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts": "export const a = 1 > 0; // mut > >= killed\n",
+      "src/b.ts": "export const b = 1 > 0; // mut > >= killed\n",
+      "src/c.ts": "export const c = 1 > 0; // mut > >= killed\n",
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "1"] });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(
+    overlayChecks(home).map((args) => args[2]),
+    ["src/a.ts"],
+  );
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /^Not selected \(--max-mutants\):\n- src\/b\.ts:1\n- src\/c\.ts:1$/m,
+    mutator,
+  );
+});
+
+test("a cap that crosses from a rejected file finishes the passing file's line whole", () => {
+  const repo = makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts": "export const a = 1 > 0; // mut > >= survived // overlay unseen\n",
+      "src/b.ts": [
+        "export const b = 1 + 2; // mut 1 0 killed // mut + - survived",
+        "export const d = 3; // mut 3 0 killed",
+        "",
+      ].join("\n"),
+    },
+  );
+  const home = mutatorHome();
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), extra: ["--max-mutants", "1"] });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(mutatedFiles(home), [["src/b.ts"]]);
+  assert.deepEqual(
+    overlayChecks(home).map((args) => args[2]),
+    ["src/a.ts", "src/b.ts"],
+  );
+  assert.equal(argAfter(mutatorRuns(home)[0].args, "--lines"), "1");
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /Sites on changed lines: 4 · run: 2 · not run \(uncovered\): 0 · not measured: 1 · not selected \(--max-mutants\): 1$/m,
+    mutator,
+  );
+  assert.match(mutator, /^Not selected \(--max-mutants\):\n- src\/b\.ts:2$/m, mutator);
 });
 
 test("with every left-out site in a rejected file, no Not selected list is printed", () => {
@@ -1629,6 +1776,39 @@ test("a scan that prints no header for a handed file fails --plan and the mutato
   const mutator = toolSection(run.facts, "mutator");
   assert.match(mutator, /failed: .*mutator --scan printed no header for src\/b\.ts/s, mutator);
   assert.doesNotMatch(mutator, /No mutant survived/, mutator);
+});
+
+test("a scan error in one group fails the whole mutator section, naming the group", () => {
+  const repo = makeRepo(
+    {
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "packages/x/package.json": PKG,
+      "packages/y/package.json": PKG,
+    },
+    {
+      "packages/x/src/x.ts": "export const x = 1; // mut 1 0 killed\n",
+      "packages/y/src/y.ts": "export const y = 1; // mut 1 0 killed\n",
+    },
+  );
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+  const skipsY = `if (args.includes("--scan") && root.endsWith("packages/y")) {
+  process.stderr.write("Skipping test file src/y.ts\\n");
+  process.exit(0);
+}`;
+  installStub(home, "mutator", `${skipsY}\n${MUTATOR_FROM_MARKERS}`);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const mutator = toolSection(run.facts, "mutator");
+  assert.match(
+    mutator,
+    /failed: packages\/y: mutator --scan printed no header for src\/y\.ts/,
+    mutator,
+  );
+  assert.doesNotMatch(mutator, /### packages\/x/, mutator);
+  assert.deepEqual(mutatorRuns(home), []);
 });
 
 test("a scan that prints a handed file's header twice fails --plan, naming it", () => {
@@ -1751,7 +1931,6 @@ test("runCost takes mutator's workers per file, the fewest of sites, cores and -
     );
     assert.equal(cost.rounds, want.rounds, row);
     assert.equal(cost.baselines, executed > 0 ? 1 : 0, row);
-    assert.equal(cost.checkRuns, executed > 0 ? 2 : 0, row);
   }
 });
 
@@ -1837,6 +2016,62 @@ test("--plan counts no baseline for a group the cap leaves empty", () => {
   assert.equal(
     lastLine(res.stdout),
     "Estimate: 2 coverage runs + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
+    res.stdout,
+  );
+});
+
+/** Three files, one changed-line site each. */
+function threeFileRepo(): string {
+  return makeRepo(
+    { "package.json": PKG },
+    {
+      "src/a.ts": "export const a = 1; // mut 1 0 killed\n",
+      "src/b.ts": "export const b = 1; // mut 1 0 killed\n",
+      "src/c.ts": "export const c = 1; // mut 1 0 killed\n",
+    },
+  );
+}
+
+test("--plan under a cap counts check runs for the handed files only, assuming every checked file passes", () => {
+  const repo = threeFileRepo();
+  const home = mutatorHome();
+
+  const res = runPlan(repo, home, fakeBin(), ["--max-mutants", "1"]);
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.deepEqual(overlayChecks(home), []);
+  const lines = res.stdout.trimEnd().split("\n");
+  assert.ok(
+    lines.includes(
+      "The estimate assumes every checked file passes the overlay check; each file it rejects adds 2 check runs and moves its share of the cap to later files.",
+    ),
+    res.stdout,
+  );
+  assert.equal(
+    lastLine(res.stdout),
+    "Estimate: 1 coverage run + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
+    res.stdout,
+  );
+});
+
+test("--plan without a cap counts check runs for every file, assuming every checked file passes", () => {
+  const repo = threeFileRepo();
+  const home = mutatorHome();
+
+  const res = runPlan(repo, home, fakeBin());
+
+  assert.equal(res.status, 0, res.stderr);
+  assert.deepEqual(overlayChecks(home), []);
+  const lines = res.stdout.trimEnd().split("\n");
+  assert.ok(
+    lines.includes(
+      "The estimate assumes every checked file passes the overlay check; a file it rejects runs none of its mutants.",
+    ),
+    res.stdout,
+  );
+  assert.equal(
+    lastLine(res.stdout),
+    "Estimate: 1 coverage run + 1 baseline + 9 test-command rounds (3 for mutants, 6 for overlay checks)",
     res.stdout,
   );
 });
