@@ -43,5 +43,9 @@ node_modules
 *worktrees/
 CLAUDE.local.md
 
+# Tool work dirs metrics runs write here (mutator's worker overlays, coverage reports);
+# a scan of untracked files would otherwise read a worker's symlinks into this checkout.
+target
+
 # Behavioral-eval run artifacts — real API-spend outputs, kept local, not committed.
 evals/results/

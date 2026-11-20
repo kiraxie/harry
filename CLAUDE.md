@@ -43,6 +43,17 @@ path; don't "fix" it by lowering the floor without restoring a transpile step fo
 Use pnpm 12 natively (corepack, or a pnpm 12 install) — a pre-12 global pnpm hands off to 12 and
 rewrites `pnpm-lock.yaml`'s package-manager document in the process, dirtying the lockfile.
 
+**Metrics on this repo**: the test command is pinned, `pnpm run test:mutation`; the coverage
+command is left at its default, which covers the full suite. Mutator runs the tests in a
+worker overlay under the checkout's ignored `target/`, whose unchanged dirs are symlinks into
+the checkout; git run there acts on the enclosing checkout, and the worker has no `dist/`. A
+test started through a symlinked path loads the original files, so under the default command
+mutator would list every changed file not measured. `test:mutation` runs every test file but
+the few a worker cannot run, under `--preserve-symlinks-main` so they load the worker's
+copies; `tests/mutation-command.test.ts` holds that exclusion list, each entry with its
+reason, and the fixture copies that keep a worker run from writing into the checkout. A
+mutant only an excluded test kills reads as a survivor.
+
 **Lint and typecheck scope**: `biome.json` `files.includes` and `tsconfig.json` `include` are the
 authority; `pnpm run lint` and `pnpm run typecheck` exit 0. Each module has one type source.
 Maintainer-only scripts (the evals runner and its `scripts/lib/evals-*` modules,

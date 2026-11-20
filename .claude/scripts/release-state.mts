@@ -3,7 +3,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 
@@ -149,7 +148,7 @@ function parseArgs(argv: string[]) {
   return { target, fields, start };
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+if (import.meta.main) {
   try {
     const argv = process.argv.slice(2);
     if (argv[0] === "latest-tag") {

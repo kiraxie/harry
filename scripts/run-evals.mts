@@ -22,7 +22,7 @@ import {
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import {
   type CheckInput,
   compileCheck,
@@ -1391,6 +1391,6 @@ export function main(argv: string[], env: Env = process.env): number {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+if (import.meta.main) {
   process.exit(main(process.argv.slice(2)));
 }

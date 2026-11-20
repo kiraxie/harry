@@ -1250,8 +1250,13 @@ test("every handed file is checked in mutator's worker with the command mutator 
   const run = runMetrics(repo, home, { binDir: fakeBin() });
 
   assert.equal(run.status, 0, run.stderr);
-  const script = path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py");
-  assert.deepEqual(overlayChecks(home), [
+  // By real path: in mutator's worker overlay this test and the CLI it spawns can reach
+  // the script by different paths, one through a symlinked dir.
+  const script = realpathSync(
+    path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py"),
+  );
+  const checks = overlayChecks(home).map(([s, ...rest]) => [realpathSync(s), ...rest]);
+  assert.deepEqual(checks, [
     [script, repo, "src/a.ts", "npm test"],
     [script, repo, "src/b.ts", "npm test"],
   ]);

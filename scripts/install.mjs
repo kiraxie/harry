@@ -5,8 +5,9 @@
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
+import { isMain } from "./lib/is-main.mjs";
 import { applyMarkerBlock } from "./lib/markers.mjs";
 import { warnStale } from "./lib/stale-entries.mjs";
 import { syncTools, toolsDir } from "./lib/tools.mjs";
@@ -99,7 +100,7 @@ export function run({ remove = false, explore = false } = {}) {
 
 // Only run the CLI when invoked directly (node scripts/install.mjs), not when
 // imported by a test — importing must have no side effects on the user's files.
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+if (isMain(import.meta.url)) {
   const args = process.argv.slice(2);
   const remove = args.includes("--remove");
   const r = run({ remove, explore: args.includes("--explore") });

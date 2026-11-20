@@ -23,9 +23,11 @@ import os from "node:os";
 import path from "node:path";
 import test, { mock } from "node:test";
 import { fileURLToPath } from "node:url";
-import { run as initRun } from "../scripts/init.mjs";
-import { run as installRun } from "../scripts/install.mjs";
 import { safeWrite, tempPathFor } from "../scripts/lib/atomic-write.mjs";
+import { loadScript } from "./load-script.ts";
+
+const { run: initRun } = await loadScript(() => import("../scripts/init.mjs"));
+const { run: installRun } = await loadScript(() => import("../scripts/install.mjs"));
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";

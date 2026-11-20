@@ -8,8 +8,8 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { safeWrite } from "./lib/atomic-write.mjs";
+import { isMain } from "./lib/is-main.mjs";
 
 const ENTRIES = [".local/", "*worktrees/", "CLAUDE.local.md"];
 
@@ -52,7 +52,7 @@ export function run(targetDir, { remove = false } = {}) {
 
 // Only run the CLI when invoked directly (node scripts/init.mjs), not when
 // imported by a test — importing must have no side effects on the target dir.
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+if (isMain(import.meta.url)) {
   const args = process.argv.slice(2);
   try {
     const remove = args.includes("--remove");

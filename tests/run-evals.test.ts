@@ -36,7 +36,11 @@ import { buildBaseEnv, buildGitEnv } from "../scripts/lib/evals-env.mts";
 import { trialJail } from "../scripts/lib/evals-jail.mts";
 import { scoreResults, validateResultLines } from "../scripts/lib/evals-score.mts";
 import type { RepoState, RunLine } from "../scripts/run-evals.mts";
-import {
+import { installFakeClaude, readCalls } from "./fake-claude.ts";
+import { loadScript } from "./load-script.ts";
+import { section } from "./section.ts";
+
+const {
   buildChildEnv,
   collectRepoState,
   evaluateArtifactCheck,
@@ -51,9 +55,7 @@ import {
   restoreFixtureGitConfig,
   runEvals,
   snapshotPlugin,
-} from "../scripts/run-evals.mts";
-import { installFakeClaude, readCalls } from "./fake-claude.ts";
-import { section } from "./section.ts";
+} = await loadScript(() => import("../scripts/run-evals.mts"));
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -4139,6 +4141,7 @@ test(
       writeFileSync(runner, readFileSync(path.join(pluginRoot, "scripts", "run-evals.mts")));
       cpSync(path.join(pluginRoot, "scripts", "lib"), path.join(plugin, "scripts", "lib"), {
         recursive: true,
+        dereference: true,
       });
       writeFileSync(
         path.join(plugin, "evals", "cases.jsonl"),

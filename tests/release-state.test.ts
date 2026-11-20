@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import {
+import { loadScript } from "./load-script.ts";
+import { headingSection, section } from "./section.ts";
+
+const {
   bumpSubject,
   compareVersions,
   detectState,
@@ -14,8 +17,7 @@ import {
   latestTag,
   parseVersion,
   RELEASE_STATES,
-} from "../.claude/scripts/release-state.mts";
-import { headingSection, section } from "./section.ts";
+} = await loadScript(() => import("../.claude/scripts/release-state.mts"));
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const SCRIPT = path.join(repoRoot, ".claude/scripts/release-state.mts");
