@@ -2175,7 +2175,10 @@ function shadowedPythonRepo(marker: string): string {
     { "pyproject.toml": "[project]\nname = 'p'\n" },
     { "src/p.py": "A = 1  # // mut 1 0 killed\n" },
   );
-  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\ncoverage.py\nrunpy.py\n");
+  writeFileSync(
+    path.join(repo, ".git/info/exclude"),
+    ".venv/\n__pycache__/\ncoverage.py\nrunpy.py\n",
+  );
   // A real venv runs site, which turns an empty PYTHONPATH component into the cwd's absolute
   // path, and keeps the host's site-packages out: only PYTHONPATH or the group dir can answer.
   execFileSync(HOST_PYTHON, ["-m", "venv", "--without-pip", path.join(repo, ".venv")]);
@@ -2274,7 +2277,7 @@ test("the coverage run's target still imports a module from the group dir when P
   write(repo, "helpers.py", "");
   writeFileSync(
     path.join(repo, ".git/info/exclude"),
-    ".venv/\ncoverage.py\nrunpy.py\nhelpers.py\ntarget/\n",
+    ".venv/\n__pycache__/\ncoverage.py\nrunpy.py\nhelpers.py\ntarget/\n",
   );
   const home = tempDir("harry-metrics-home-");
   installCrapper(home);
@@ -2294,7 +2297,10 @@ test("the coverage run executes the coverage package on PYTHONPATH, never a cove
 }, () => {
   const marker = path.join(tempDir("harry-metrics-marker-"), "imported");
   const repo = shadowedPythonRepo(marker);
-  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\ncoverage.py\nrunpy.py\ntarget/\n");
+  writeFileSync(
+    path.join(repo, ".git/info/exclude"),
+    ".venv/\n__pycache__/\ncoverage.py\nrunpy.py\ntarget/\n",
+  );
   const home = tempDir("harry-metrics-home-");
   installCrapper(home);
 
