@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -74,22 +75,33 @@ export interface ToolRun {
   stderr: string;
 }
 
-// DEBT: python -m and -c put cwd first on sys.path, so a tool's own executables run from its
-// clone and get the group only as --root; that holds while a clone root has no stdlib-named
-// module — past that, a fresh empty mkdtemp cwd per run.
-export function toolCwd(tool: Tool): string {
-  return tool.dir;
+/**
+ * Starts a tool from a fresh empty dir: `-m` and `-c` put the cwd first on sys.path, so
+ * an empty one holds nothing to import, and every tool is handed the group's path as an
+ * argument, so none reads its cwd.
+ */
+function spawnTool(bin: string, args: string[]): ToolRun {
+  const cwd = mkdtempSync(path.join(os.tmpdir(), "harry-tool-"));
+  try {
+    const res = spawnSync(bin, args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    throwIfInterrupted(res);
+    if (res.error) throw res.error;
+    return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 }
 
 export function runTool(tool: Tool, args: string[]): ToolRun {
-  const res = spawnSync(tool.launcher, args, {
-    cwd: toolCwd(tool),
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024,
-  });
-  throwIfInterrupted(res);
-  if (res.error) throw res.error;
-  return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  return spawnTool(tool.launcher, args);
+}
+
+/**
+ * Runs the tool's venv python. `-P` keeps a script's own dir off sys.path too; the
+ * launcher cannot take it, and PYTHONSAFEPATH would reach the project's tests mutator runs.
+ */
+export function runToolPython(tool: Tool, args: string[]): ToolRun {
+  return spawnTool(tool.python, ["-P", ...args]);
 }
 
 /**

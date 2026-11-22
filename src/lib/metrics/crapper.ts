@@ -1,11 +1,9 @@
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseEdn } from "./edn.ts";
-import { throwIfInterrupted } from "./interrupt.ts";
 import { diffHunks } from "./scope.ts";
-import { failureTail, runTool, type Tool, toolCwd } from "./tools.ts";
+import { failureTail, runTool, runToolPython, type Tool } from "./tools.ts";
 
 export interface CrapEntry {
   name: string;
@@ -62,17 +60,9 @@ print(json.dumps(out))
 `;
 
 export function functionSpans(tool: Tool, root: string, files: string[]): FunctionSpan[] {
-  const python = tool.python;
-  const res = spawnSync(python, ["-c", SPANS_SCRIPT, root, ...files], {
-    cwd: toolCwd(tool),
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  throwIfInterrupted(res);
+  const res = runToolPython(tool, ["-c", SPANS_SCRIPT, root, ...files]);
   if (res.status !== 0) {
-    throw new Error(
-      `function spans failed (${python}): ${(res.stderr ?? res.error?.message ?? "").trim()}`,
-    );
+    throw new Error(`function spans failed (${tool.python}): ${res.stderr.trim()}`);
   }
   return JSON.parse(res.stdout) as FunctionSpan[];
 }

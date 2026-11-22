@@ -117,11 +117,13 @@ function runMetrics(repo: string, home: string, opts: RunOptions = {}): Run {
 const STUB_PRELUDE = `#!/usr/bin/env node
 const fs = require("node:fs");
 const path = require("node:path");
-const args = process.argv.slice(2);
+const argv = process.argv.slice(2);
+// A venv python stub takes -P as python does: off its argv, recorded.
+const args = argv[0] === "-P" ? argv.slice(1) : argv;
 const cwd = process.cwd();
 const argAfter = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; };
 const root = argAfter("--root") ?? cwd;
-fs.appendFileSync(path.join(__dirname, "calls.jsonl"), JSON.stringify({ args, cwd }) + "\\n");
+fs.appendFileSync(path.join(__dirname, "calls.jsonl"), JSON.stringify({ args, argv, cwd, entries: fs.readdirSync(cwd) }) + "\\n");
 const out = (rel, text) => {
   const f = path.join(root, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -219,8 +221,17 @@ function argAfter(args: string[], flag: string): string | undefined {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-function calls(home: string, name: string): { args: string[]; cwd: string }[] {
-  const file = path.join(home, ".claude", "harry", "tools", name, "calls.jsonl");
+interface StubCall {
+  args: string[];
+  /** The argv as spawned, before a python stub takes a leading -P off. */
+  argv: string[];
+  cwd: string;
+  /** The cwd's entries when the stub started. */
+  entries: string[];
+}
+
+function calls(home: string, name: string, rel = ""): StubCall[] {
+  const file = path.join(home, ".claude", "harry", "tools", name, rel, "calls.jsonl");
   if (!existsSync(file)) return [];
   return readFileSync(file, "utf8")
     .trim()
@@ -940,9 +951,11 @@ test("the before-state is the branch point, so a function base renamed later is 
   assert.doesNotMatch(toolSection(run.facts, "crapper"), /`old`/);
 });
 
+/** A project python: logs each coverage command, the module and its args, however it is started. */
 const FAKE_COVERAGE_PYTHON = `#!/bin/sh
-case "$*" in *"-m coverage "*) printf '%s\\t%s\\n' "$*" "$PWD" >> "$(dirname "$0")/../coverage-calls.tsv" ;; esac
-case "$*" in *"coverage lcov -o "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac
+case "$1" in -m) shift ;; -c) shift 2 ;; esac
+case "$1" in coverage) printf '%s\\t%s\\n' "$*" "$PWD" >> "$(dirname "$0")/../coverage-calls.tsv" ;; esac
+case "$*" in "coverage lcov -o "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac
 exit 0
 `;
 
@@ -957,6 +970,8 @@ const COVERED_CASES: {
   local: Record<string, string>;
   argv: (repo: string) => [string, string, string][];
   pythonCoverage?: (repo: string) => [string, string][];
+  /** The coverage command as the facts file prints it, when a case pins it. */
+  label?: string;
 }[] = [
   {
     name: "a vitest package with @vitest/coverage-v8",
@@ -1002,9 +1017,11 @@ const COVERED_CASES: {
     local: { ".venv/bin/python": FAKE_COVERAGE_PYTHON },
     argv: () => [],
     pythonCoverage: (repo) => [
-      ["-m coverage run -m pytest", repo],
-      ["-m coverage lcov -o target/coverage/python/lcov.info", repo],
+      ["coverage run -m pytest", repo],
+      ["coverage lcov -o target/coverage/python/lcov.info", repo],
     ],
+    label:
+      "python -m coverage run -m pytest && python -m coverage lcov -o target/coverage/python/lcov.info",
   },
 ];
 
@@ -1023,6 +1040,7 @@ for (const c of COVERED_CASES) {
 
     assert.equal(run.status, 0, run.stderr);
     assert.match(toolSection(run.facts, "crapper"), /— coverage: /, run.facts);
+    if (c.label) assert.ok(run.facts.includes(`— coverage: ${c.label}\n`), run.facts);
     assert.deepEqual(checkoutModes(home, repo), ["--use-existing-coverage"]);
     assert.deepEqual(
       pmCalls(bin).map((p) => [p.bin, p.args.join(" "), p.cwd]),
@@ -1160,6 +1178,36 @@ test("a stdlib-named file at a Python group root shadows no tool", () => {
     const roots = calls(home, tool).map((c) => argAfter(c.args, "--root"));
     assert.ok(roots.includes(repo), `${tool} --root ${roots.join(", ")}`);
   }
+});
+
+test("every tool start runs in its own fresh empty dir outside the checkout, gone once it returns, -P on the venv python only", () => {
+  const repo = makeRepo(
+    { "pyproject.toml": "[project]\nname = 'p'\n" },
+    { "src/p.py": "# // crap p 12 0\ndef p(a):\n    return a > 1  # // mut > >= survived\n" },
+  );
+  writeExecutable(path.join(repo, ".venv/bin/python"), FAKE_VENV_PYTHON);
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\n");
+  const home = tempDir("harry-metrics-home-");
+  installStub(home, "dryer", DRYER_ALL_PAIRS);
+  installCrapper(home);
+  installStub(home, "mutator", MUTATOR_FROM_MARKERS);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const launcher = ["dryer", "crapper", "mutator"].flatMap((t) => calls(home, t));
+  const python = ["crapper", "mutator"].flatMap((t) => calls(home, t, ".venv/bin"));
+  assert.ok(launcher.length >= 3, `launcher starts: ${launcher.length}`);
+  assert.equal(python.length, 2, "the crapper spans script and one overlay check");
+  const all = [...launcher, ...python];
+  assert.equal(new Set(all.map((c) => c.cwd)).size, all.length, "a cwd was reused");
+  for (const c of all) {
+    assert.deepEqual(c.entries, [], `${c.cwd} was not empty`);
+    assert.equal(existsSync(c.cwd), false, `${c.cwd} was left behind`);
+    assert.ok(!c.cwd.startsWith(`${repo}/`) && !c.cwd.startsWith(`${home}/`), c.cwd);
+  }
+  for (const c of launcher) assert.notEqual(c.argv[0], "-P", c.argv.join(" "));
+  for (const c of python) assert.equal(c.argv[0], "-P", c.argv.join(" "));
 });
 
 // --- Unit mode: changed lines, plan, commands, scope ---
@@ -1418,6 +1466,9 @@ test("an interrupt during a non-root group's overlay check exits 128+signal, not
   assert.equal(run.status, 130, `signal ${run.signal}\n${run.stderr}`);
   assert.match(run.stderr, /interrupted/i);
   assert.equal(status(repo), before);
+  const interrupted = calls(home, "mutator", ".venv/bin").at(-1);
+  assert.ok(interrupted, "no overlay check ran");
+  assert.equal(existsSync(interrupted.cwd), false, `${interrupted.cwd} was left behind`);
 });
 
 const OVERLAY_SCRIPT = path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py");
@@ -1871,12 +1922,18 @@ test("a tracked symlink is not handed to mutator's scan", () => {
  */
 const THREE_CORES = `data:text/javascript,import os from "node:os"; os.cpus = () => Array.from({ length: 3 }, () => ({})); os.availableParallelism = () => 5;`;
 
-function runPlan(repo: string, home: string, binDir: string, extra: string[] = []) {
+function runPlan(
+  repo: string,
+  home: string,
+  binDir: string,
+  extra: string[] = [],
+  env: Record<string, string> = {},
+) {
   const args = ["--import", THREE_CORES, CLI, "metrics", "--base", "main", "--plan", ...extra];
   return spawnSync(process.execPath, args, {
     cwd: repo,
     encoding: "utf8",
-    env: { ...process.env, HOME: home, PATH: `${binDir}:${process.env.PATH}` },
+    env: { ...process.env, HOME: home, PATH: `${binDir}:${process.env.PATH}`, ...env },
   });
 }
 
@@ -2109,34 +2166,143 @@ const HOST_PYTHON = spawnSync("sh", ["-c", "command -v python3"], {
   encoding: "utf8",
 }).stdout.trim();
 
-test("--plan's python import probe never imports a module from the group dir", {
-  skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
-}, () => {
+/**
+ * A Python group whose root holds a `coverage.py` and a `runpy.py`, each writing `marker` when
+ * imported. `runpy` is frozen from 3.11 on, so its shadow only bites on an older host python.
+ */
+function shadowedPythonRepo(marker: string): string {
   const repo = makeRepo(
     { "pyproject.toml": "[project]\nname = 'p'\n" },
     { "src/p.py": "A = 1  # // mut 1 0 killed\n" },
   );
-  const marker = path.join(tempDir("harry-metrics-marker-"), "imported");
-  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\ncoverage.py\n");
-  // -S keeps the host's site-packages out, so only a module in the group dir could answer.
-  writeExecutable(
-    path.join(repo, ".venv/bin/python"),
-    `#!/bin/sh\nexec "${HOST_PYTHON}" -S "$@"\n`,
-  );
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\ncoverage.py\nrunpy.py\n");
+  // A real venv runs site, which turns an empty PYTHONPATH component into the cwd's absolute
+  // path, and keeps the host's site-packages out: only PYTHONPATH or the group dir can answer.
+  execFileSync(HOST_PYTHON, ["-m", "venv", "--without-pip", path.join(repo, ".venv")]);
   write(repo, "coverage.py", `open(${JSON.stringify(marker)}, "w").write("x")\n`);
-  const home = mutatorHome();
-  const before = status(repo);
+  write(repo, "runpy.py", `open(${JSON.stringify(marker)}, "w").write("x")\n`);
+  return repo;
+}
 
-  const res = runPlan(repo, home, fakeBin());
+/** PYTHONPATH forms: none (the cwd alone), then each that puts the group dir on sys.path again. */
+const GROUP_ON_PYTHONPATH: { name: string; entry: (repo: string) => string }[] = [
+  { name: "nothing", entry: () => "" },
+  { name: "an empty component", entry: () => "/nonexistent:" },
+  { name: "`.`", entry: () => "." },
+  { name: "the group's absolute dir", entry: (repo) => repo },
+];
 
-  assert.equal(res.status, 0, res.stderr);
-  assert.equal(
-    lastLine(res.stdout),
-    "Estimate: 0 coverage runs + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
-    res.stdout,
+for (const form of GROUP_ON_PYTHONPATH) {
+  test(`with ${form.name} on PYTHONPATH, --plan's python import probe never imports a module from the group dir`, {
+    skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
+  }, () => {
+    const marker = path.join(tempDir("harry-metrics-marker-"), "imported");
+    const repo = shadowedPythonRepo(marker);
+    const home = mutatorHome();
+    const before = status(repo);
+
+    const res = runPlan(repo, home, fakeBin(), [], { PYTHONPATH: form.entry(repo) });
+
+    assert.equal(res.status, 0, res.stderr);
+    assert.equal(
+      lastLine(res.stdout),
+      "Estimate: 0 coverage runs + 1 baseline + 3 test-command rounds (1 for mutants, 2 for overlay checks)",
+      res.stdout,
+    );
+    assert.equal(
+      existsSync(marker),
+      false,
+      "a coverage.py or runpy.py in the group dir was imported",
+    );
+    assert.equal(status(repo), before);
+  });
+
+  test(`with ${form.name} on PYTHONPATH, the run's python import probe never imports a module from the group dir`, {
+    skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
+  }, () => {
+    const marker = path.join(tempDir("harry-metrics-marker-"), "imported");
+    const repo = shadowedPythonRepo(marker);
+    const home = tempDir("harry-metrics-home-");
+    installCrapper(home);
+    const before = status(repo);
+
+    const run = runMetrics(repo, home, {
+      binDir: fakeBin(),
+      env: { PYTHONPATH: form.entry(repo) },
+    });
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(toolSection(run.facts, "crapper"), /complexity only: coverage is not installed/);
+    assert.equal(
+      existsSync(marker),
+      false,
+      "a coverage.py or runpy.py in the group dir was imported",
+    );
+    assert.equal(status(repo), before);
+  });
+}
+
+/**
+ * A `coverage` package that stands in for the real one: `lcov -o <file>` writes an empty
+ * report; `run` imports `imports` first, as the tests it runs would.
+ */
+function coverageStandIn(imports: string | null = null): string {
+  const dir = tempDir("harry-metrics-coverage-");
+  write(dir, "coverage/__init__.py", "");
+  write(
+    dir,
+    "coverage/__main__.py",
+    [
+      "import os, sys",
+      "args = sys.argv[1:]",
+      ...(imports === null ? [] : [`if args[:1] == ['run']:`, `    import ${imports}`]),
+      "if args[:1] == ['lcov']:",
+      "    out = args[args.index('-o') + 1]",
+      "    os.makedirs(os.path.dirname(out), exist_ok=True)",
+      "    open(out, 'w').write('TN:\\nend_of_record\\n')",
+      "",
+    ].join("\n"),
   );
-  assert.equal(existsSync(marker), false, "the group dir's coverage.py was imported");
-  assert.equal(status(repo), before);
+  return dir;
+}
+
+test("the coverage run's target still imports a module from the group dir when PYTHONPATH names another dir", {
+  skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
+}, () => {
+  const marker = path.join(tempDir("harry-metrics-marker-"), "imported");
+  const repo = shadowedPythonRepo(marker);
+  write(repo, "helpers.py", "");
+  writeFileSync(
+    path.join(repo, ".git/info/exclude"),
+    ".venv/\ncoverage.py\nrunpy.py\nhelpers.py\ntarget/\n",
+  );
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+
+  const run = runMetrics(repo, home, {
+    binDir: fakeBin(),
+    env: { PYTHONPATH: coverageStandIn("helpers") },
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(toolSection(run.facts, "crapper"), /— coverage: python -m coverage run/, run.facts);
+  assert.equal(existsSync(marker), false, "a coverage.py or runpy.py in the group dir ran");
+});
+
+test("the coverage run executes the coverage package on PYTHONPATH, never a coverage.py in the group dir", {
+  skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
+}, () => {
+  const marker = path.join(tempDir("harry-metrics-marker-"), "imported");
+  const repo = shadowedPythonRepo(marker);
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\ncoverage.py\nrunpy.py\ntarget/\n");
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin(), env: { PYTHONPATH: coverageStandIn() } });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(toolSection(run.facts, "crapper"), /— coverage: python -m coverage run/, run.facts);
+  assert.equal(existsSync(marker), false, "a coverage.py or runpy.py in the group dir ran");
 });
 
 test("--plan with no changed source file estimates none, naming why", () => {
@@ -2334,6 +2500,54 @@ test("a default coverage plan whose first step fails names only that step", () =
     /complexity only: coverage command `python -m coverage run -m pytest` exited 2/,
   );
   assert.doesNotMatch(crapper, /coverage lcov/, crapper);
+});
+
+test("a default coverage plan whose second step fails names only that step", () => {
+  const repo = makeRepo(
+    { "pyproject.toml": "[project]\nname = 'p'\n" },
+    { "src/p.py": "# // crap p 2 1\n" },
+  );
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\n");
+  writeExecutable(
+    path.join(repo, ".venv/bin/python"),
+    `#!/bin/sh\ncase "$*" in *"coverage lcov"*) exit 3 ;; esac\nexit 0\n`,
+  );
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+
+  const run = runMetrics(repo, home, { binDir: fakeBin() });
+
+  assert.equal(run.status, 0, run.stderr);
+  const crapper = toolSection(run.facts, "crapper");
+  assert.match(
+    crapper,
+    /complexity only: coverage command `python -m coverage lcov -o target\/coverage\/python\/lcov\.info` exited 3/,
+  );
+  assert.doesNotMatch(crapper, /coverage run/, crapper);
+});
+
+test("a Python group with no venv names the PATH interpreter in its coverage command", () => {
+  const repo = makeRepo(
+    { "pyproject.toml": "[project]\nname = 'p'\n" },
+    { "src/p.py": "# // crap p 2 1\n" },
+  );
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+  const bin = fakeBin();
+  writeExecutable(
+    path.join(bin, "python3"),
+    `#!/bin/sh\ncase "$1" in -m) shift ;; -c) shift 2 ;; esac\ncase "$*" in "coverage lcov -o "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac\nexit 0\n`,
+  );
+
+  const run = runMetrics(repo, home, { binDir: bin });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.ok(
+    run.facts.includes(
+      "— coverage: python3 -m coverage run -m pytest && python3 -m coverage lcov -o target/coverage/python/lcov.info\n",
+    ),
+    run.facts,
+  );
 });
 
 test("a site the coverage report leaves uncovered is counted as not run", () => {

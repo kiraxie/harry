@@ -462,7 +462,7 @@ ${reason}
 }
 
 // src/commands/metrics.ts
-var import_node_fs15 = require("node:fs");
+var import_node_fs16 = require("node:fs");
 var import_node_os8 = __toESM(require("node:os"), 1);
 var import_node_path18 = __toESM(require("node:path"), 1);
 
@@ -558,8 +558,7 @@ function resolveReviewTarget(cwd, options = {}) {
 }
 
 // src/lib/metrics/crapper.ts
-var import_node_child_process7 = require("node:child_process");
-var import_node_fs9 = require("node:fs");
+var import_node_fs10 = require("node:fs");
 var import_node_path10 = __toESM(require("node:path"), 1);
 
 // src/lib/metrics/edn.ts
@@ -666,6 +665,12 @@ function parseEdn(text) {
   return value;
 }
 
+// src/lib/metrics/scope.ts
+var import_node_child_process4 = require("node:child_process");
+var import_node_fs7 = require("node:fs");
+var import_node_os4 = __toESM(require("node:os"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
+
 // src/lib/metrics/interrupt.ts
 var import_node_os3 = require("node:os");
 var STOP_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"];
@@ -697,10 +702,6 @@ function holdStopSignals() {
 }
 
 // src/lib/metrics/scope.ts
-var import_node_child_process4 = require("node:child_process");
-var import_node_fs7 = require("node:fs");
-var import_node_os4 = __toESM(require("node:os"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
 function byPath(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -803,6 +804,7 @@ function withSnapshot(root, ref, fn) {
 
 // src/lib/metrics/tools.ts
 var import_node_child_process6 = require("node:child_process");
+var import_node_fs9 = require("node:fs");
 var import_node_os6 = __toESM(require("node:os"), 1);
 var import_node_path9 = __toESM(require("node:path"), 1);
 
@@ -870,18 +872,22 @@ function findTool(name) {
   const commit = head.status === 0 ? head.stdout.trim() : "unknown";
   return { name, dir, launcher, python, commit };
 }
-function toolCwd(tool) {
-  return tool.dir;
+function spawnTool(bin, args) {
+  const cwd = (0, import_node_fs9.mkdtempSync)(import_node_path9.default.join(import_node_os6.default.tmpdir(), "harry-tool-"));
+  try {
+    const res = (0, import_node_child_process6.spawnSync)(bin, args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    throwIfInterrupted(res);
+    if (res.error) throw res.error;
+    return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  } finally {
+    (0, import_node_fs9.rmSync)(cwd, { recursive: true, force: true });
+  }
 }
 function runTool(tool, args) {
-  const res = (0, import_node_child_process6.spawnSync)(tool.launcher, args, {
-    cwd: toolCwd(tool),
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024
-  });
-  throwIfInterrupted(res);
-  if (res.error) throw res.error;
-  return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  return spawnTool(tool.launcher, args);
+}
+function runToolPython(tool, args) {
+  return spawnTool(tool.python, ["-P", ...args]);
 }
 function failureTail(run) {
   const tail = (text) => text.trim().split("\n").slice(-12).join("\n");
@@ -896,7 +902,7 @@ function runCrapper(tool, root, files, coverage) {
   const run = runTool(tool, [mode, "--root", root, ...files]);
   if (run.status !== 0) throw new Error(`crapper exited ${run.status}
 ${failureTail(run)}`);
-  const text = (0, import_node_fs9.readFileSync)(import_node_path10.default.join(root, ".metrics", "crap.edn"), "utf8");
+  const text = (0, import_node_fs10.readFileSync)(import_node_path10.default.join(root, ".metrics", "crap.edn"), "utf8");
   const snap = parseEdn(text);
   if (!Array.isArray(snap?.entries)) throw new Error("crap.edn has no :entries vector");
   return snap.entries;
@@ -919,17 +925,9 @@ for rel in sys.argv[2:]:
 print(json.dumps(out))
 `;
 function functionSpans(tool, root, files) {
-  const python = tool.python;
-  const res = (0, import_node_child_process7.spawnSync)(python, ["-c", SPANS_SCRIPT, root, ...files], {
-    cwd: toolCwd(tool),
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024
-  });
-  throwIfInterrupted(res);
+  const res = runToolPython(tool, ["-c", SPANS_SCRIPT, root, ...files]);
   if (res.status !== 0) {
-    throw new Error(
-      `function spans failed (${python}): ${(res.stderr ?? res.error?.message ?? "").trim()}`
-    );
+    throw new Error(`function spans failed (${tool.python}): ${res.stderr.trim()}`);
   }
   return JSON.parse(res.stdout);
 }
@@ -986,7 +984,7 @@ function renderOverBar(entries, located) {
 }
 
 // src/lib/metrics/dryer.ts
-var import_node_fs10 = require("node:fs");
+var import_node_fs11 = require("node:fs");
 var import_node_path11 = __toESM(require("node:path"), 1);
 var DRYER_SCOPE_NOTE = "dryer compares TypeScript (.ts .tsx .mts .cts), Java, Go, Rust, Python and Clojure; .js/.mjs files are not compared.";
 function runDryer(tool, dir) {
@@ -995,7 +993,7 @@ function runDryer(tool, dir) {
 ${failureTail(run)}`);
   let text;
   try {
-    text = (0, import_node_fs10.readFileSync)(import_node_path11.default.join(dir, ".metrics", "dry.edn"), "utf8");
+    text = (0, import_node_fs11.readFileSync)(import_node_path11.default.join(dir, ".metrics", "dry.edn"), "utf8");
   } catch {
     if (/No source files to analyze/.test(run.stdout)) return [];
     throw new Error(`dryer wrote no .metrics/dry.edn
@@ -1017,8 +1015,8 @@ function touching(pairs, files) {
 }
 
 // src/lib/metrics/groups.ts
-var import_node_child_process8 = require("node:child_process");
-var import_node_fs11 = require("node:fs");
+var import_node_child_process7 = require("node:child_process");
+var import_node_fs12 = require("node:fs");
 var import_node_module = require("node:module");
 var import_node_path12 = __toESM(require("node:path"), 1);
 var NODE_EXT = /* @__PURE__ */ new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
@@ -1033,7 +1031,7 @@ function nearest(root, rel, markers) {
   let dir = import_node_path12.default.posix.dirname(rel);
   for (; ; ) {
     const here = dir === "." ? "" : dir;
-    if (markers.some((m) => (0, import_node_fs11.existsSync)(import_node_path12.default.join(root, here, m)))) return here;
+    if (markers.some((m) => (0, import_node_fs12.existsSync)(import_node_path12.default.join(root, here, m)))) return here;
     if (here === "") return "";
     dir = import_node_path12.default.posix.dirname(dir);
   }
@@ -1054,13 +1052,16 @@ function repoPath(group, file) {
   return group.dir === "" ? file : `${group.dir}/${file}`;
 }
 function packageManager(root) {
-  if ((0, import_node_fs11.existsSync)(import_node_path12.default.join(root, "pnpm-lock.yaml"))) return "pnpm";
-  if ((0, import_node_fs11.existsSync)(import_node_path12.default.join(root, "yarn.lock"))) return "yarn";
+  if ((0, import_node_fs12.existsSync)(import_node_path12.default.join(root, "pnpm-lock.yaml"))) return "pnpm";
+  if ((0, import_node_fs12.existsSync)(import_node_path12.default.join(root, "yarn.lock"))) return "yarn";
   return "npm";
+}
+function step(argv, meaning = argv) {
+  return { argv, label: meaning.map((p) => import_node_path12.default.isAbsolute(p) ? import_node_path12.default.basename(p) : p).join(" ") };
 }
 function readPackage(dir) {
   try {
-    return JSON.parse((0, import_node_fs11.readFileSync)(import_node_path12.default.join(dir, "package.json"), "utf8"));
+    return JSON.parse((0, import_node_fs12.readFileSync)(import_node_path12.default.join(dir, "package.json"), "utf8"));
   } catch {
     return {};
   }
@@ -1076,7 +1077,7 @@ function resolvesFrom(dir, request) {
 function nodePlan(groupDir, pm) {
   const pkg = readPackage(groupDir);
   const scripts = pkg.scripts ?? {};
-  if (scripts.coverage) return { commands: [[pm, "run", "coverage"]] };
+  if (scripts.coverage) return { steps: [step([pm, "run", "coverage"])] };
   const usesVitest = Boolean(pkg.dependencies?.vitest ?? pkg.devDependencies?.vitest) || /\bvitest\b/.test(scripts.test ?? "");
   if (usesVitest) {
     if (!resolvesFrom(groupDir, "@vitest/coverage-v8/package.json")) {
@@ -1085,8 +1086,8 @@ function nodePlan(groupDir, pm) {
       };
     }
     return {
-      commands: [
-        [
+      steps: [
+        step([
           pm,
           "exec",
           "vitest",
@@ -1094,14 +1095,14 @@ function nodePlan(groupDir, pm) {
           "--coverage",
           "--coverage.reporter=lcov",
           "--coverage.reportsDirectory=target/coverage/typescript"
-        ]
+        ])
       ]
     };
   }
   if (!scripts.test) return { skip: "package.json has no test script" };
   return {
-    commands: [
-      [
+    steps: [
+      step([
         "npx",
         "--yes",
         "c8",
@@ -1112,20 +1113,24 @@ function nodePlan(groupDir, pm) {
         ...[...NODE_EXT].flatMap((ext) => ["--extension", ext]),
         pm,
         "test"
-      ]
+      ])
     ]
   };
 }
 function pythonInterpreter(groupDir) {
   for (const venv of [".venv", "venv"]) {
     const py = import_node_path12.default.join(groupDir, venv, "bin", "python");
-    if ((0, import_node_fs11.existsSync)(py)) return py;
+    if ((0, import_node_fs12.existsSync)(py)) return py;
   }
   return resolveOnPath("python3", process.env);
 }
+var OFF_GROUP_DIR = "import os, sys; here = os.path.realpath(os.getcwd()); sys.path = [p for p in sys.path if os.path.realpath(p or '.') != here]";
+var RUN_MODULE = `import sys; kept = sys.path; ${OFF_GROUP_DIR}; import importlib, runpy; module = sys.argv[1]; importlib.import_module(module); sys.path = kept; sys.argv = sys.argv[1:]; runpy.run_module(module, run_name='__main__', alter_sys=True)`;
+function pythonModule(python, module2, args) {
+  return step([python, "-c", RUN_MODULE, module2, ...args], [python, "-m", module2, ...args]);
+}
 function canImport(python, module2, cwd) {
-  const probe = `import sys; sys.path = [p for p in sys.path if p]; import ${module2}`;
-  const res = (0, import_node_child_process8.spawnSync)(python, ["-c", probe], { cwd });
+  const res = (0, import_node_child_process7.spawnSync)(python, ["-c", `${OFF_GROUP_DIR}; import ${module2}`], { cwd });
   throwIfInterrupted(res);
   return res.status === 0;
 }
@@ -1137,21 +1142,20 @@ function pythonPlan(groupDir) {
   }
   const runner = canImport(py, "pytest", groupDir) ? ["pytest"] : ["unittest", "discover"];
   return {
-    commands: [
-      [py, "-m", "coverage", "run", "-m", ...runner],
-      [py, "-m", "coverage", "lcov", "-o", "target/coverage/python/lcov.info"]
+    steps: [
+      pythonModule(py, "coverage", ["run", "-m", ...runner]),
+      pythonModule(py, "coverage", ["lcov", "-o", "target/coverage/python/lcov.info"])
     ]
   };
 }
 function coveragePlan(root, group, override) {
-  if (override !== null) return { commands: [["sh", "-c", override]], label: override };
   const dir = import_node_path12.default.join(root, group.dir);
-  const own = group.kind === "node" ? nodePlan(dir, packageManager(root)) : group.kind === "python" ? pythonPlan(dir) : { skip: "metrics runs coverage for JavaScript/TypeScript and Python only" };
-  return "skip" in own ? own : { commands: own.commands, label: describe(own.commands) };
+  const own = override !== null ? { steps: [{ argv: ["sh", "-c", override], label: override }] } : group.kind === "node" ? nodePlan(dir, packageManager(root)) : group.kind === "python" ? pythonPlan(dir) : { skip: "metrics runs coverage for JavaScript/TypeScript and Python only" };
+  return "skip" in own ? own : { steps: own.steps, label: own.steps.map((s) => s.label).join(" && ") };
 }
 function findLcov(dir) {
-  if (!(0, import_node_fs11.existsSync)(dir)) return false;
-  return (0, import_node_fs11.readdirSync)(dir, { recursive: true, encoding: "utf8" }).some(
+  if (!(0, import_node_fs12.existsSync)(dir)) return false;
+  return (0, import_node_fs12.readdirSync)(dir, { recursive: true, encoding: "utf8" }).some(
     (f) => import_node_path12.default.basename(f) === "lcov.info"
   );
 }
@@ -1159,27 +1163,22 @@ function hasLcovReport(groupDir) {
   return findLcov(import_node_path12.default.join(groupDir, "target", "coverage")) || findLcov(import_node_path12.default.join(groupDir, "coverage"));
 }
 function runCoverage(groupDir, plan) {
-  for (const command of plan.commands) {
-    const [bin, ...args] = command;
+  for (const { argv, label } of plan.steps) {
+    const [bin, ...args] = argv;
     const resolved = import_node_path12.default.isAbsolute(bin) ? bin : resolveOnPath(bin, process.env);
     if (resolved === null) return `${bin} is not on PATH`;
-    const res = (0, import_node_child_process8.spawnSync)(resolved, args, { cwd: groupDir, stdio: "ignore" });
+    const res = (0, import_node_child_process7.spawnSync)(resolved, args, { cwd: groupDir, stdio: "ignore" });
     throwIfInterrupted(res);
-    if (res.status !== 0) {
-      const step = plan.commands.length === 1 ? plan.label : describe([command]);
-      return `coverage command \`${step}\` exited ${res.status ?? "by signal"}`;
-    }
+    if (res.status !== 0)
+      return `coverage command \`${label}\` exited ${res.status ?? "by signal"}`;
   }
   if (!hasLcovReport(groupDir)) return `coverage command \`${plan.label}\` produced no lcov.info`;
   return null;
 }
-function describe(commands) {
-  return commands.map((c) => c.map((p) => import_node_path12.default.isAbsolute(p) ? import_node_path12.default.basename(p) : p).join(" ")).join(" && ");
-}
 
 // src/lib/metrics/guard.ts
 var import_node_crypto2 = require("node:crypto");
-var import_node_fs12 = require("node:fs");
+var import_node_fs13 = require("node:fs");
 var import_node_path13 = __toESM(require("node:path"), 1);
 var ARTIFACTS = [
   ".metrics",
@@ -1209,7 +1208,7 @@ function statusEntries(root) {
 }
 function present(p) {
   try {
-    (0, import_node_fs12.lstatSync)(p);
+    (0, import_node_fs13.lstatSync)(p);
     return true;
   } catch {
     return false;
@@ -1217,28 +1216,28 @@ function present(p) {
 }
 function fingerprint(file) {
   try {
-    const st = (0, import_node_fs12.lstatSync)(file);
-    if (st.isSymbolicLink()) return `link:${(0, import_node_fs12.readlinkSync)(file)}`;
+    const st = (0, import_node_fs13.lstatSync)(file);
+    if (st.isSymbolicLink()) return `link:${(0, import_node_fs13.readlinkSync)(file)}`;
     if (!st.isFile()) return `other:${st.mode}`;
-    return `file:${(0, import_node_crypto2.createHash)("sha256").update((0, import_node_fs12.readFileSync)(file)).digest("hex")}`;
+    return `file:${(0, import_node_crypto2.createHash)("sha256").update((0, import_node_fs13.readFileSync)(file)).digest("hex")}`;
   } catch {
     return "absent";
   }
 }
 function readManifest(stash) {
   try {
-    return (0, import_node_fs12.readFileSync)(import_node_path13.default.join(stash, "manifest"), "utf8").split("\n").filter(Boolean).map((l) => l.replace("	", " \u2192 "));
+    return (0, import_node_fs13.readFileSync)(import_node_path13.default.join(stash, "manifest"), "utf8").split("\n").filter(Boolean).map((l) => l.replace("	", " \u2192 "));
   } catch {
     return [];
   }
 }
 function claimStash(stash) {
   try {
-    (0, import_node_fs12.mkdirSync)(stash);
+    (0, import_node_fs13.mkdirSync)(stash);
   } catch (err) {
     if (err.code !== "EEXIST") throw err;
     const held = readManifest(stash);
-    const entries = (0, import_node_fs12.readdirSync)(stash).filter((e) => e !== "manifest");
+    const entries = (0, import_node_fs13.readdirSync)(stash).filter((e) => e !== "manifest");
     throw new Error(
       [
         `${stash} exists: another metrics run is in progress, or an earlier one stopped before restoring.`,
@@ -1258,7 +1257,7 @@ function withArtifactGuard(root, dirs, fn) {
   try {
     return guarded(root, dirs, stash, unrestored, fn);
   } finally {
-    if (unrestored.length === 0) (0, import_node_fs12.rmSync)(stash, { recursive: true, force: true });
+    if (unrestored.length === 0) (0, import_node_fs13.rmSync)(stash, { recursive: true, force: true });
     releaseSignals();
   }
 }
@@ -1274,7 +1273,7 @@ function guarded(root, dirs, stash, unrestored, fn) {
   const notRemoved = [];
   const remove = (p) => {
     try {
-      (0, import_node_fs12.rmSync)(p, { recursive: true, force: true });
+      (0, import_node_fs13.rmSync)(p, { recursive: true, force: true });
     } catch (err) {
       notRemoved.push(`${p} (could not remove: ${err.message})`);
     }
@@ -1283,9 +1282,9 @@ function guarded(root, dirs, stash, unrestored, fn) {
   try {
     for (const p of existed) {
       const aside = import_node_path13.default.join(stash, String(moved.length));
-      (0, import_node_fs12.appendFileSync)(import_node_path13.default.join(stash, "manifest"), `${moved.length}	${p}
+      (0, import_node_fs13.appendFileSync)(import_node_path13.default.join(stash, "manifest"), `${moved.length}	${p}
 `);
-      (0, import_node_fs12.renameSync)(p, aside);
+      (0, import_node_fs13.renameSync)(p, aside);
       moved.push([p, aside]);
     }
     outcome = { ok: true, value: fn() };
@@ -1302,8 +1301,8 @@ function guarded(root, dirs, stash, unrestored, fn) {
     }
     for (const [p, aside] of moved) {
       try {
-        (0, import_node_fs12.mkdirSync)(import_node_path13.default.dirname(p), { recursive: true });
-        (0, import_node_fs12.renameSync)(aside, p);
+        (0, import_node_fs13.mkdirSync)(import_node_path13.default.dirname(p), { recursive: true });
+        (0, import_node_fs13.renameSync)(aside, p);
       } catch (err) {
         unrestored.push(`${p} (left at ${aside}: ${err.message})`);
       }
@@ -1333,20 +1332,20 @@ ${unrestored.join("\n")}`;
 }
 
 // src/lib/metrics/mutator.ts
-var import_node_fs13 = require("node:fs");
+var import_node_fs14 = require("node:fs");
 var import_node_os7 = __toESM(require("node:os"), 1);
 var import_node_path14 = __toESM(require("node:path"), 1);
 var siteKey = (s) => `${s.file}:${s.line}`;
 function lineAt(dir, file, byte) {
-  const buf = (0, import_node_fs13.readFileSync)(import_node_path14.default.join(dir, file));
+  const buf = (0, import_node_fs14.readFileSync)(import_node_path14.default.join(dir, file));
   let line = 1;
   for (let i = 0; i < byte && i < buf.length; i++) if (buf[i] === 10) line++;
   return line;
 }
 function snapshots(dir) {
   const root = import_node_path14.default.join(dir, ".metrics", "mutate");
-  if (!(0, import_node_fs13.existsSync)(root)) return [];
-  return (0, import_node_fs13.readdirSync)(root, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".edn")).map((f) => import_node_path14.default.join(root, f));
+  if (!(0, import_node_fs14.existsSync)(root)) return [];
+  return (0, import_node_fs14.readdirSync)(root, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".edn")).map((f) => import_node_path14.default.join(root, f));
 }
 var SCAN_HEADER = /^Scan: (\d+) mutation sites in (.+)$/;
 var SCAN_SITE = /^[* ] (.+?):(\d+) /;
@@ -1388,7 +1387,7 @@ ${tail}`);
   return sites;
 }
 function scanSites(tool, dir, handed2, lines2) {
-  const files = handed2.filter((f) => !(0, import_node_fs13.lstatSync)(import_node_path14.default.join(dir, f)).isSymbolicLink());
+  const files = handed2.filter((f) => !(0, import_node_fs14.lstatSync)(import_node_path14.default.join(dir, f)).isSymbolicLink());
   if (files.length === 0 || lines2.length === 0) return [];
   const run = runTool(tool, [
     "--root",
@@ -1418,7 +1417,7 @@ ${failureTail(run)}`);
   const wanted = new Set(files);
   const outcomes = [];
   for (const snap of snapshots(dir)) {
-    const data = parseEdn((0, import_node_fs13.readFileSync)(snap, "utf8"));
+    const data = parseEdn((0, import_node_fs14.readFileSync)(snap, "utf8"));
     for (const [id, outcome] of Object.entries(data.outcomes ?? {})) {
       const [file, , form, start, , original, mutant] = JSON.parse(id);
       if (!wanted.has(file)) continue;
@@ -1491,14 +1490,13 @@ function runCost(scanned, selected, maxWorkers, cores) {
 }
 
 // src/lib/metrics/overlay.ts
-var import_node_child_process9 = require("node:child_process");
 var import_node_path16 = __toESM(require("node:path"), 1);
 
 // src/lib/plugin-root.ts
-var import_node_fs14 = require("node:fs");
+var import_node_fs15 = require("node:fs");
 var import_node_path15 = require("node:path");
 function pluginRoot() {
-  return (0, import_node_path15.dirname)((0, import_node_path15.dirname)((0, import_node_fs14.realpathSync)(process.argv[1])));
+  return (0, import_node_path15.dirname)((0, import_node_path15.dirname)((0, import_node_fs15.realpathSync)(process.argv[1])));
 }
 
 // src/lib/metrics/overlay.ts
@@ -1506,14 +1504,7 @@ var OVERLAY_CHECK_RUNS = 2;
 var OVERLAY_VERDICTS = { baseline: ["pass", "fail"], canary: ["pass", "fail"] };
 function checkFile(tool, dir, file, testCommand) {
   const script = import_node_path16.default.join(pluginRoot(), "src", "lib", "metrics", "overlay-check.py");
-  const res = (0, import_node_child_process9.spawnSync)(tool.python, [script, dir, file, testCommand ?? ""], {
-    cwd: toolCwd(tool),
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024
-  });
-  throwIfInterrupted(res);
-  if (res.error) throw res.error;
-  const run = { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  const run = runToolPython(tool, [script, dir, file, testCommand ?? ""]);
   const verdict = run.status === 0 ? parseVerdict(run.stdout) : null;
   if (verdict === null) {
     throw new Error(
@@ -1651,7 +1642,7 @@ function beforeRun(tool, root, base, groups) {
     const out = /* @__PURE__ */ new Map();
     for (const group of groups) {
       const dir = import_node_path18.default.join(snap, group.dir);
-      const files = group.files.filter((f) => (0, import_node_fs15.existsSync)(import_node_path18.default.join(dir, f)));
+      const files = group.files.filter((f) => (0, import_node_fs16.existsSync)(import_node_path18.default.join(dir, f)));
       const entries = files.length > 0 ? runCrapper(tool, dir, files, false) : [];
       out.set(group, beforeComplexity(entries));
     }
@@ -1720,8 +1711,8 @@ function writeFacts(file, header, sections, problems) {
 ${problems.join("\n")}`);
     process.exitCode = 1;
   }
-  (0, import_node_fs15.mkdirSync)(import_node_path18.default.dirname(file), { recursive: true });
-  (0, import_node_fs15.writeFileSync)(file, facts.join("\n"));
+  (0, import_node_fs16.mkdirSync)(import_node_path18.default.dirname(file), { recursive: true });
+  (0, import_node_fs16.writeFileSync)(file, facts.join("\n"));
 }
 function loadTools() {
   return Object.fromEntries(TOOL_NAMES.map((n) => [n, findTool(n)]));
@@ -1959,19 +1950,19 @@ ${DRYER_SCOPE_NOTE}`;
   );
 }
 function copyFrom(dir, rel, to) {
-  (0, import_node_fs15.mkdirSync)(import_node_path18.default.dirname(to), { recursive: true });
-  (0, import_node_fs15.copyFileSync)(import_node_path18.default.join(dir, rel), to);
+  (0, import_node_fs16.mkdirSync)(import_node_path18.default.dirname(to), { recursive: true });
+  (0, import_node_fs16.copyFileSync)(import_node_path18.default.join(dir, rel), to);
 }
 async function runAudit(cwd, out, runTests) {
   const root = getRepoRoot(cwd);
   const head = headOf(root);
   const tools = loadTools();
   const outDir = import_node_path18.default.resolve(cwd, out);
-  (0, import_node_fs15.mkdirSync)(outDir, { recursive: true });
+  (0, import_node_fs16.mkdirSync)(outDir, { recursive: true });
   const dryer = section("dryer", tools.dryer, (tool) => {
     const pairs = withSnapshot(root, head, (dir) => {
       const found = runDryer(tool, dir);
-      if ((0, import_node_fs15.existsSync)(import_node_path18.default.join(dir, ".metrics/dry.edn"))) {
+      if ((0, import_node_fs16.existsSync)(import_node_path18.default.join(dir, ".metrics/dry.edn"))) {
         copyFrom(dir, ".metrics/dry.edn", import_node_path18.default.join(outDir, "dry.edn"));
       }
       return found;
@@ -2064,11 +2055,11 @@ async function dispatch(cwd, options) {
 }
 
 // src/commands/review.ts
-var import_node_fs17 = require("node:fs");
+var import_node_fs18 = require("node:fs");
 var import_node_path20 = require("node:path");
 
 // src/lib/review-modes.ts
-var import_node_fs16 = require("node:fs");
+var import_node_fs17 = require("node:fs");
 var import_node_path19 = require("node:path");
 var PER_DIFF = [
   { file: "review-rubric.md", heading: "Review standard" },
@@ -2078,7 +2069,7 @@ function loadReference(file) {
   const refPath = (0, import_node_path19.join)(pluginRoot(), "references", file);
   let text;
   try {
-    text = (0, import_node_fs16.readFileSync)(refPath, "utf8");
+    text = (0, import_node_fs17.readFileSync)(refPath, "utf8");
   } catch (err) {
     throw new Error(
       `Review reference not found at ${refPath} (${err.message}). Reinstall the harry plugin.`
@@ -2268,7 +2259,7 @@ var REVIEW_WRITTEN = "Review written to";
 function resolveOutputDir(repoRoot) {
   const branch = getBranchOrShortSha(repoRoot);
   const local = (0, import_node_path20.join)(getMainCheckoutRoot(repoRoot), ".local");
-  const dir = (0, import_node_fs17.existsSync)(local) && (0, import_node_fs17.statSync)(local).isDirectory() ? (0, import_node_path20.join)(local, "tmp", branch) : (0, import_node_path20.join)(resolveStateDir(repoRoot), "reviews", branch);
+  const dir = (0, import_node_fs18.existsSync)(local) && (0, import_node_fs18.statSync)(local).isDirectory() ? (0, import_node_path20.join)(local, "tmp", branch) : (0, import_node_path20.join)(resolveStateDir(repoRoot), "reviews", branch);
   ensureDir(dir);
   return dir;
 }

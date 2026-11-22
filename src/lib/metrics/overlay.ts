@@ -1,9 +1,7 @@
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 
 import { pluginRoot } from "../plugin-root.ts";
-import { throwIfInterrupted } from "./interrupt.ts";
-import { failureTail, type Tool, toolCwd } from "./tools.ts";
+import { failureTail, runToolPython, type Tool } from "./tools.ts";
 
 /**
  * The overlay check: whether mutator's worker can measure a file at all. It runs
@@ -41,14 +39,7 @@ export function checkFile(
   testCommand: string | null,
 ): NotMeasured | null {
   const script = path.join(pluginRoot(), "src", "lib", "metrics", "overlay-check.py");
-  const res = spawnSync(tool.python, [script, dir, file, testCommand ?? ""], {
-    cwd: toolCwd(tool),
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  throwIfInterrupted(res);
-  if (res.error) throw res.error;
-  const run = { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  const run = runToolPython(tool, [script, dir, file, testCommand ?? ""]);
   const verdict = run.status === 0 ? parseVerdict(run.stdout) : null;
   if (verdict === null) {
     throw new Error(

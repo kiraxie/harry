@@ -68,10 +68,21 @@ export function packageManager(root: string): PackageManager {
   return "npm";
 }
 
-/** How a group's coverage report is made: commands with the label the facts print, or why not. */
-export type CoveragePlan = { commands: string[][]; label: string } | { skip: string };
+/** One coverage command, with the text a reader would type for it. */
+export interface CoverageStep {
+  argv: string[];
+  label: string;
+}
 
-type OwnPlan = { commands: string[][] } | { skip: string };
+/** How a group's coverage report is made: steps with the label the facts print, or why not. */
+export type CoveragePlan = { steps: CoverageStep[]; label: string } | { skip: string };
+
+type OwnPlan = { steps: CoverageStep[] } | { skip: string };
+
+/** A step labelled from `meaning`, the command as typed, which a wrapped `argv` departs from. */
+function step(argv: string[], meaning: string[] = argv): CoverageStep {
+  return { argv, label: meaning.map((p) => (path.isAbsolute(p) ? path.basename(p) : p)).join(" ") };
+}
 
 function readPackage(dir: string): {
   scripts?: Record<string, string>;
@@ -97,7 +108,7 @@ function resolvesFrom(dir: string, request: string): boolean {
 function nodePlan(groupDir: string, pm: PackageManager): OwnPlan {
   const pkg = readPackage(groupDir);
   const scripts = pkg.scripts ?? {};
-  if (scripts.coverage) return { commands: [[pm, "run", "coverage"]] };
+  if (scripts.coverage) return { steps: [step([pm, "run", "coverage"])] };
   const usesVitest =
     Boolean(pkg.dependencies?.vitest ?? pkg.devDependencies?.vitest) ||
     /\bvitest\b/.test(scripts.test ?? "");
@@ -108,8 +119,8 @@ function nodePlan(groupDir: string, pm: PackageManager): OwnPlan {
       };
     }
     return {
-      commands: [
-        [
+      steps: [
+        step([
           pm,
           "exec",
           "vitest",
@@ -117,14 +128,14 @@ function nodePlan(groupDir: string, pm: PackageManager): OwnPlan {
           "--coverage",
           "--coverage.reporter=lcov",
           "--coverage.reportsDirectory=target/coverage/typescript",
-        ],
+        ]),
       ],
     };
   }
   if (!scripts.test) return { skip: "package.json has no test script" };
   return {
-    commands: [
-      [
+    steps: [
+      step([
         "npx",
         "--yes",
         "c8",
@@ -135,7 +146,7 @@ function nodePlan(groupDir: string, pm: PackageManager): OwnPlan {
         ...[...NODE_EXT].flatMap((ext) => ["--extension", ext]),
         pm,
         "test",
-      ],
+      ]),
     ],
   };
 }
@@ -149,14 +160,27 @@ export function pythonInterpreter(groupDir: string): string | null {
 }
 
 /**
- * Whether `python` can import `module`, run from the group dir: the interpreter is
- * resolved from there (a venv, or a version-manager shim that picks by cwd), so the
- * cwd stays, unlike a tool's `toolCwd`. `-c` puts the cwd first on sys.path as an
- * empty entry; dropping it keeps a project file named like the module from running.
+ * Not `-P`: it is 3.11+, and a project's interpreter has no version floor; nor does it
+ * stop PYTHONPATH (an empty component, `.`, the dir) or a `.pth` line from adding the
+ * group dir back. The cwd stays, unlike a tool's: the interpreter is resolved from the
+ * group dir (a venv, or a version-manager shim that picks by cwd).
  */
+const OFF_GROUP_DIR =
+  "import os, sys; here = os.path.realpath(os.getcwd()); sys.path = [p for p in sys.path if os.path.realpath(p or '.') != here]";
+
+/**
+ * OFF_GROUP_DIR holds only while the module is imported: its target (the project's tests)
+ * needs the sys.path `python -m` gives, and coverage puts the cwd back only when sys.path[0]
+ * is not a dir. `runpy` is imported before the restore, so a group-root `runpy.py` loses too.
+ */
+const RUN_MODULE = `import sys; kept = sys.path; ${OFF_GROUP_DIR}; import importlib, runpy; module = sys.argv[1]; importlib.import_module(module); sys.path = kept; sys.argv = sys.argv[1:]; runpy.run_module(module, run_name='__main__', alter_sys=True)`;
+
+function pythonModule(python: string, module: string, args: string[]): CoverageStep {
+  return step([python, "-c", RUN_MODULE, module, ...args], [python, "-m", module, ...args]);
+}
+
 function canImport(python: string, module: string, cwd: string): boolean {
-  const probe = `import sys; sys.path = [p for p in sys.path if p]; import ${module}`;
-  const res = spawnSync(python, ["-c", probe], { cwd });
+  const res = spawnSync(python, ["-c", `${OFF_GROUP_DIR}; import ${module}`], { cwd });
   throwIfInterrupted(res);
   return res.status === 0;
 }
@@ -169,9 +193,9 @@ function pythonPlan(groupDir: string): OwnPlan {
   }
   const runner = canImport(py, "pytest", groupDir) ? ["pytest"] : ["unittest", "discover"];
   return {
-    commands: [
-      [py, "-m", "coverage", "run", "-m", ...runner],
-      [py, "-m", "coverage", "lcov", "-o", "target/coverage/python/lcov.info"],
+    steps: [
+      pythonModule(py, "coverage", ["run", "-m", ...runner]),
+      pythonModule(py, "coverage", ["lcov", "-o", "target/coverage/python/lcov.info"]),
     ],
   };
 }
@@ -181,15 +205,18 @@ function pythonPlan(groupDir: string): OwnPlan {
  * replaces the group's own plan, even one that would skip, and runs through the shell.
  */
 export function coveragePlan(root: string, group: Group, override: string | null): CoveragePlan {
-  if (override !== null) return { commands: [["sh", "-c", override]], label: override };
   const dir = path.join(root, group.dir);
   const own: OwnPlan =
-    group.kind === "node"
-      ? nodePlan(dir, packageManager(root))
-      : group.kind === "python"
-        ? pythonPlan(dir)
-        : { skip: "metrics runs coverage for JavaScript/TypeScript and Python only" };
-  return "skip" in own ? own : { commands: own.commands, label: describe(own.commands) };
+    override !== null
+      ? { steps: [{ argv: ["sh", "-c", override], label: override }] }
+      : group.kind === "node"
+        ? nodePlan(dir, packageManager(root))
+        : group.kind === "python"
+          ? pythonPlan(dir)
+          : { skip: "metrics runs coverage for JavaScript/TypeScript and Python only" };
+  return "skip" in own
+    ? own
+    : { steps: own.steps, label: own.steps.map((s) => s.label).join(" && ") };
 }
 
 function findLcov(dir: string): boolean {
@@ -211,25 +238,17 @@ export function hasLcovReport(groupDir: string): boolean {
  */
 export function runCoverage(
   groupDir: string,
-  plan: { commands: string[][]; label: string },
+  plan: { steps: CoverageStep[]; label: string },
 ): string | null {
-  for (const command of plan.commands) {
-    const [bin, ...args] = command;
+  for (const { argv, label } of plan.steps) {
+    const [bin, ...args] = argv;
     const resolved = path.isAbsolute(bin) ? bin : resolveOnPath(bin, process.env);
     if (resolved === null) return `${bin} is not on PATH`;
     const res = spawnSync(resolved, args, { cwd: groupDir, stdio: "ignore" });
     throwIfInterrupted(res);
-    if (res.status !== 0) {
-      const step = plan.commands.length === 1 ? plan.label : describe([command]);
-      return `coverage command \`${step}\` exited ${res.status ?? "by signal"}`;
-    }
+    if (res.status !== 0)
+      return `coverage command \`${label}\` exited ${res.status ?? "by signal"}`;
   }
   if (!hasLcovReport(groupDir)) return `coverage command \`${plan.label}\` produced no lcov.info`;
   return null;
-}
-
-function describe(commands: string[][]): string {
-  return commands
-    .map((c) => c.map((p) => (path.isAbsolute(p) ? path.basename(p) : p)).join(" "))
-    .join(" && ");
 }
