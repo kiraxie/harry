@@ -813,8 +813,34 @@ var import_node_child_process5 = require("node:child_process");
 var import_node_fs8 = require("node:fs");
 var import_node_os5 = require("node:os");
 var import_node_path8 = require("node:path");
+var PINNED_TOOLS = [
+  {
+    name: "crapper",
+    dist: "crapper",
+    url: "https://github.com/unclebob/crapper.git",
+    commit: "6fd92c4c9bcc56efb64a2f8743d5a2993bcfd42d"
+  },
+  {
+    name: "dryer",
+    dist: "dryer",
+    url: "https://github.com/unclebob/dryer.git",
+    commit: "66ff6d21a42c04afcad89c78a80066176d1294b0"
+  },
+  {
+    name: "mutator",
+    dist: "mutator",
+    url: "https://github.com/unclebob/mutator.git",
+    commit: "a5a0cb803b66e0cdb8bf471b3b08af701d424a41"
+  }
+];
 function toolsDir() {
   return (0, import_node_path8.join)((0, import_node_os5.homedir)(), ".claude", "harry", "tools");
+}
+function toolClone(name) {
+  return (0, import_node_path8.join)(toolsDir(), name);
+}
+function toolLauncher(clone, name) {
+  return (0, import_node_path8.join)(clone, name);
 }
 function venvDir(clone) {
   return (0, import_node_path8.join)(clone, ".venv");
@@ -822,7 +848,10 @@ function venvDir(clone) {
 function venvPython(clone) {
   return (0, import_node_path8.join)(venvDir(clone), "bin", "python");
 }
-function venvInstalled(clone, name) {
+function normalizeDist(name) {
+  return name.toLowerCase().replace(/[-_.]+/g, "_");
+}
+function venvInstalled(clone, dist) {
   const dirs = (dir) => {
     try {
       return (0, import_node_fs8.readdirSync)(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
@@ -830,12 +859,21 @@ function venvInstalled(clone, name) {
       return [];
     }
   };
+  const want = normalizeDist(dist);
   const lib = (0, import_node_path8.join)(venvDir(clone), "lib");
   return dirs(lib).filter((py) => py.startsWith("python")).some(
     (py) => dirs((0, import_node_path8.join)(lib, py, "site-packages")).some(
-      (d) => d.startsWith(`${name}-`) && d.endsWith(".dist-info")
+      (d) => d.endsWith(".dist-info") && normalizeDist(d.split("-")[0]) === want
     )
   );
+}
+function toolReadiness(clone, tool) {
+  const launcher = toolLauncher(clone, tool.name);
+  if (!isExecutableFile(launcher)) return { kind: "launcher", path: launcher };
+  const python = venvPython(clone);
+  if (!isExecutableFile(python)) return { kind: "python", path: python };
+  if (!venvInstalled(clone, tool.dist)) return { kind: "package", path: venvDir(clone) };
+  return null;
 }
 
 // src/lib/metrics/tools.ts
@@ -845,27 +883,25 @@ function displayPath(p) {
   return p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p;
 }
 function toolPaths(name) {
-  const dir = import_node_path9.default.join(toolsDir(), name);
-  return { dir, launcher: import_node_path9.default.join(dir, name), venv: venvDir(dir), python: venvPython(dir) };
+  const dir = toolClone(name);
+  return { dir, launcher: toolLauncher(dir, name), python: venvPython(dir) };
 }
 function isMissing(tool) {
   return "missing" in tool;
 }
+var NOT_INSTALLED = {
+  launcher: (at) => `expected at ${at}; \`/harry:sync --tools\` installs it`,
+  python: (at) => `no venv Python at ${at}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is`,
+  package: (at, dist) => `venv at ${at} lacks the ${dist} package; \`/harry:sync --tools\` rebuilds it, or remove that .venv and run the launcher once by hand when sync leaves the clone as is`
+};
 function findTool(name) {
-  const { dir, launcher, venv, python } = toolPaths(name);
-  if (!isExecutableFile(launcher)) {
+  const { dir, launcher, python } = toolPaths(name);
+  const pin = PINNED_TOOLS.find((t) => t.name === name);
+  if (!pin) throw new Error(`no pin for tool ${name}`);
+  const notReady = toolReadiness(dir, pin);
+  if (notReady) {
     return {
-      missing: `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`
-    };
-  }
-  if (!isExecutableFile(python)) {
-    return {
-      missing: `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`
-    };
-  }
-  if (!venvInstalled(dir, name)) {
-    return {
-      missing: `not installed (venv at ${displayPath(venv)} lacks the ${name} package; \`/harry:sync --tools\` rebuilds it, or remove that .venv and run the launcher once by hand when sync leaves the clone as is)`
+      missing: `not installed (${NOT_INSTALLED[notReady.kind](displayPath(notReady.path), pin.dist)})`
     };
   }
   const head = git(dir, ["rev-parse", "HEAD"]);

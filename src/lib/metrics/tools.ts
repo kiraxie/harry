@@ -3,9 +3,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { toolsDir, venvDir, venvInstalled, venvPython } from "../../../scripts/lib/tools.mjs";
+import {
+  type NotReady,
+  PINNED_TOOLS,
+  toolClone,
+  toolLauncher,
+  toolReadiness,
+  venvPython,
+} from "../../../scripts/lib/tools.mjs";
 import { git } from "../git.ts";
-import { isExecutableFile } from "../path-search.ts";
 import { throwIfInterrupted } from "./interrupt.ts";
 
 export const TOOL_NAMES = ["dryer", "crapper", "mutator"] as const;
@@ -24,14 +30,9 @@ export function displayPath(p: string): string {
   return p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p;
 }
 
-function toolPaths(name: ToolName): {
-  dir: string;
-  launcher: string;
-  venv: string;
-  python: string;
-} {
-  const dir = path.join(toolsDir(), name);
-  return { dir, launcher: path.join(dir, name), venv: venvDir(dir), python: venvPython(dir) };
+function toolPaths(name: ToolName): { dir: string; launcher: string; python: string } {
+  const dir = toolClone(name);
+  return { dir, launcher: toolLauncher(dir, name), python: venvPython(dir) };
 }
 
 /** A tool that cannot run, with the reason the facts file prints for it. */
@@ -43,25 +44,26 @@ export function isMissing(tool: Tool | Missing): tool is Missing {
   return "missing" in tool;
 }
 
+const NOT_INSTALLED: Record<NotReady["kind"], (at: string, dist: string) => string> = {
+  launcher: (at) => `expected at ${at}; \`/harry:sync --tools\` installs it`,
+  python: (at) =>
+    `no venv Python at ${at}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is`,
+  package: (at, dist) =>
+    `venv at ${at} lacks the ${dist} package; \`/harry:sync --tools\` rebuilds it, or remove that .venv and run the launcher once by hand when sync leaves the clone as is`,
+};
+
 // A launcher run with no venv Python builds the venv; only sync may do that, since
 // only sync can repair a build that fails halfway. A venv without the tool's package
-// is such a half-built one: the launcher would run and fail on it. The reason is
-// decided here, once, so the facts file names the check that actually failed.
+// is such a half-built one: the launcher would run and fail on it. toolReadiness, the
+// check sync also applies, decides the reason, so the facts file names the check that failed.
 export function findTool(name: ToolName): Tool | Missing {
-  const { dir, launcher, venv, python } = toolPaths(name);
-  if (!isExecutableFile(launcher)) {
+  const { dir, launcher, python } = toolPaths(name);
+  const pin = PINNED_TOOLS.find((t) => t.name === name);
+  if (!pin) throw new Error(`no pin for tool ${name}`);
+  const notReady = toolReadiness(dir, pin);
+  if (notReady) {
     return {
-      missing: `not installed (expected at ${displayPath(launcher)}; \`/harry:sync --tools\` installs it)`,
-    };
-  }
-  if (!isExecutableFile(python)) {
-    return {
-      missing: `not installed (no venv Python at ${displayPath(python)}; \`/harry:sync --tools\` builds it, or run the launcher once by hand when sync leaves the clone as is)`,
-    };
-  }
-  if (!venvInstalled(dir, name)) {
-    return {
-      missing: `not installed (venv at ${displayPath(venv)} lacks the ${name} package; \`/harry:sync --tools\` rebuilds it, or remove that .venv and run the launcher once by hand when sync leaves the clone as is)`,
+      missing: `not installed (${NOT_INSTALLED[notReady.kind](displayPath(notReady.path), pin.dist)})`,
     };
   }
   const head = git(dir, ["rev-parse", "HEAD"]);

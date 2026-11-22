@@ -5,9 +5,14 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { resolveOnPath } from "./path-search.mjs";
+import { isExecutableFile, resolveOnPath } from "./path-search.mjs";
 
-/** @typedef {{ name: string; url: string; commit: string }} PinnedTool */
+/**
+ * `dist` is the project name in the tool's pyproject.toml, read at `commit`: the
+ * package the venv must hold, which need not equal the launcher's name.
+ * @typedef {{ name: string; dist: string; url: string; commit: string }} PinnedTool
+ */
+/** @typedef {{ kind: "launcher" | "python" | "package"; path: string }} NotReady */
 /** @typedef {"cloned" | "moved" | "current" | "local changes" | "failed"} ToolOutcome */
 /** @typedef {{ name: string; outcome: ToolOutcome; detail: string }} ToolResult */
 
@@ -15,16 +20,19 @@ import { resolveOnPath } from "./path-search.mjs";
 export const PINNED_TOOLS = [
   {
     name: "crapper",
+    dist: "crapper",
     url: "https://github.com/unclebob/crapper.git",
     commit: "6fd92c4c9bcc56efb64a2f8743d5a2993bcfd42d",
   },
   {
     name: "dryer",
+    dist: "dryer",
     url: "https://github.com/unclebob/dryer.git",
     commit: "66ff6d21a42c04afcad89c78a80066176d1294b0",
   },
   {
     name: "mutator",
+    dist: "mutator",
     url: "https://github.com/unclebob/mutator.git",
     commit: "a5a0cb803b66e0cdb8bf471b3b08af701d424a41",
   },
@@ -32,6 +40,16 @@ export const PINNED_TOOLS = [
 
 export function toolsDir() {
   return join(homedir(), ".claude", "harry", "tools");
+}
+
+/** @param {string} name */
+export function toolClone(name) {
+  return join(toolsDir(), name);
+}
+
+/** @param {string} clone @param {string} name */
+export function toolLauncher(clone, name) {
+  return join(clone, name);
 }
 
 /** @param {string} clone */
@@ -44,13 +62,19 @@ export function venvPython(clone) {
   return join(venvDir(clone), "bin", "python");
 }
 
+/** @param {string} name */
+function normalizeDist(name) {
+  return name.toLowerCase().replace(/[-_.]+/g, "_");
+}
+
 /**
- * Whether the clone's venv holds the `name` package: pip writes a project's
- * `<name>-*.dist-info` last, so a half-built venv has none. A missing or
- * unreadable directory counts as not installed.
- * @param {string} clone @param {string} name
+ * Whether the clone's venv holds the `dist` package: pip writes a project's
+ * dist-info last, so a half-built venv has none. A dist-info dir is named for
+ * the normalized project name, so both sides are compared normalized. A
+ * missing or unreadable directory counts as not installed.
+ * @param {string} clone @param {string} dist
  */
-export function venvInstalled(clone, name) {
+function venvInstalled(clone, dist) {
   /** @param {string} dir */
   const dirs = (dir) => {
     try {
@@ -61,14 +85,29 @@ export function venvInstalled(clone, name) {
       return [];
     }
   };
+  const want = normalizeDist(dist);
   const lib = join(venvDir(clone), "lib");
   return dirs(lib)
     .filter((py) => py.startsWith("python"))
     .some((py) =>
       dirs(join(lib, py, "site-packages")).some(
-        (d) => d.startsWith(`${name}-`) && d.endsWith(".dist-info"),
+        (d) => d.endsWith(".dist-info") && normalizeDist(d.split("-")[0]) === want,
       ),
     );
+}
+
+/**
+ * The one test of "this tool can run", shared by sync and metrics so the two never
+ * disagree: files only, since running the launcher would build a venv.
+ * @param {string} clone @param {PinnedTool} tool @returns {NotReady | null}
+ */
+export function toolReadiness(clone, tool) {
+  const launcher = toolLauncher(clone, tool.name);
+  if (!isExecutableFile(launcher)) return { kind: "launcher", path: launcher };
+  const python = venvPython(clone);
+  if (!isExecutableFile(python)) return { kind: "python", path: python };
+  if (!venvInstalled(clone, tool.dist)) return { kind: "package", path: venvDir(clone) };
+  return null;
 }
 
 /** @param {string[]} args @param {string} [cwd] */
@@ -110,10 +149,9 @@ function update(tool, clone) {
     : { name, outcome: "moved", detail: commit };
 }
 
-/** @param {PinnedTool} tool @param {string} dir @returns {ToolResult} */
-function install(tool, dir) {
+/** @param {PinnedTool} tool @param {string} clone @returns {ToolResult} */
+function install(tool, clone) {
   const { name, url, commit } = tool;
-  const clone = join(dir, name);
   const cloned = git(["clone", "--quiet", url, clone]);
   if (!cloned.ok) return { name, outcome: "failed", detail: `clone: ${cloned.err}` };
   const err = checkout(clone, commit);
@@ -124,14 +162,18 @@ function install(tool, dir) {
 
 /**
  * Its first run builds the tool's own .venv; metrics never builds one, so a
- * tool is usable only once this has run.
- * @param {string} clone @param {string} name
+ * tool is usable only once this has run. A run counts only when it leaves the
+ * tool ready by the check metrics applies.
+ * @param {string} clone @param {PinnedTool} tool
  */
-function firstRun(clone, name) {
-  const res = spawnSync(join(clone, name), ["--help"], { cwd: clone, encoding: "utf8" });
-  return res.status === 0
-    ? null
-    : (res.stderr || res.error?.message || `exit ${res.status}`).trim();
+function firstRun(clone, tool) {
+  const res = spawnSync(toolLauncher(clone, tool.name), ["--help"], {
+    cwd: clone,
+    encoding: "utf8",
+  });
+  if (res.status !== 0) return (res.stderr || res.error?.message || `exit ${res.status}`).trim();
+  const notReady = toolReadiness(clone, tool);
+  return notReady && `not ready: ${notReady.kind} at ${notReady.path}`;
 }
 
 /** @param {string} venv */
@@ -147,16 +189,16 @@ function removeVenv(venv) {
 /**
  * The launcher builds a venv only when .venv/bin/python is missing, so a
  * half-built one left behind would fail every later run.
- * @param {string} clone @param {string} name
+ * @param {string} clone @param {PinnedTool} tool
  */
-function buildVenv(clone, name) {
+function buildVenv(clone, tool) {
   const venv = venvDir(clone);
-  const first = firstRun(clone, name);
+  const first = firstRun(clone, tool);
   if (first === null) return null;
   if (!existsSync(venv)) return `first run failed: ${first}`;
   const stale = removeVenv(venv);
   if (stale) return `first run failed: ${first}; could not remove ${venv}: ${stale}`;
-  const retry = firstRun(clone, name);
+  const retry = firstRun(clone, tool);
   if (retry === null) return null;
   const left = removeVenv(venv);
   return left
@@ -169,13 +211,12 @@ function buildVenv(clone, name) {
  * @returns {ToolResult[]}
  */
 export function syncTools({ tools = PINNED_TOOLS } = {}) {
-  const dir = toolsDir();
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(toolsDir(), { recursive: true });
   return tools.map((tool) => {
-    const clone = join(dir, tool.name);
-    const result = existsSync(clone) ? update(tool, clone) : install(tool, dir);
+    const clone = toolClone(tool.name);
+    const result = existsSync(clone) ? update(tool, clone) : install(tool, clone);
     if (result.outcome === "cloned" || result.outcome === "moved" || result.outcome === "current") {
-      const err = buildVenv(clone, tool.name);
+      const err = buildVenv(clone, tool);
       if (err) return { ...result, outcome: "failed", detail: err };
     }
     return result;

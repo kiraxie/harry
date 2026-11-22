@@ -19,9 +19,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { PINNED_TOOLS, syncTools, venvInstalled } from "../scripts/lib/tools.mjs";
+import { PINNED_TOOLS, syncTools, toolReadiness } from "../scripts/lib/tools.mjs";
 import { SCHEDULE_READ_AT } from "../src/lib/metrics/mutator.ts";
-import { TOOL_NAMES } from "../src/lib/metrics/tools.ts";
+import { findTool, isMissing, TOOL_NAMES, type ToolName } from "../src/lib/metrics/tools.ts";
 
 const INSTALL = path.resolve(import.meta.dirname, "../scripts/install.mjs");
 
@@ -51,13 +51,21 @@ interface Source {
   later: string;
 }
 
-const BUILDS_VENV = '#!/bin/sh\nmkdir -p "$(dirname "$0")/.venv"\n';
+/** Builds a venv whose --help passes, holding the dist-info of the project named in the clone's `.dist`. */
+const BUILDS_VENV = `#!/bin/sh
+dir="$(dirname "$0")"
+site="$dir/.venv/lib/python3.13/site-packages"
+mkdir -p "$dir/.venv/bin" "$site/$(cat "$dir/.dist")-1.0.dist-info"
+touch "$dir/.venv/bin/python" && chmod 755 "$dir/.venv/bin/python"
+`;
 
 /** As the real launchers do: builds the venv only when its python is missing, and needs the install to have finished. */
 const NEEDS_INSTALLED_VENV = `#!/bin/sh
-venv="$(dirname "$0")/.venv"
+dir="$(dirname "$0")"
+venv="$dir/.venv"
 if [ ! -e "$venv/bin/python" ]; then
-  mkdir -p "$venv/bin" && touch "$venv/bin/python" "$venv/installed"
+  mkdir -p "$venv/bin" "$venv/lib/python3.13/site-packages/$(cat "$dir/.dist")-1.0.dist-info"
+  touch "$venv/bin/python" "$venv/installed" && chmod 755 "$venv/bin/python"
 fi
 [ -e "$venv/installed" ] || { echo "No module named tool" >&2; exit 1; }
 `;
@@ -82,10 +90,11 @@ exit 1
 `;
 
 /** A bare repo whose first commit is the pin and whose second is newer; its launcher builds .venv. */
-function source(name: string, launcherBody = BUILDS_VENV): Source {
+function source(name: string, launcherBody = BUILDS_VENV, installs = name): Source {
   const work = tempDir(`harry-tool-${name}-`);
   git(work, ["init", "-q", "-b", "main"]);
   writeFileSync(path.join(work, ".gitignore"), ".venv/\n");
+  writeFileSync(path.join(work, ".dist"), `${installs}\n`);
   const launcher = path.join(work, name);
   writeFileSync(launcher, launcherBody);
   chmodSync(launcher, 0o755);
@@ -105,7 +114,8 @@ function sources(launcherBody = BUILDS_VENV): Source[] {
   return ["crapper", "dryer", "mutator"].map((name) => source(name, launcherBody));
 }
 
-const asTools = (s: Source[]) => s.map(({ name, url, pin }) => ({ name, url, commit: pin }));
+const asTools = (s: Source[]) =>
+  s.map(({ name, url, pin }) => ({ name, dist: name, url, commit: pin }));
 
 /** Runs `fn` with HOME at a fresh temp dir; returns the tools dir sync writes to there. */
 function inHome<T>(fn: (dir: string) => T, home = tempDir("harry-tools-home-")): T {
@@ -220,13 +230,73 @@ test("a tool that still fails after the retry is left with no venv, and its repo
   }
 });
 
-test("a tool that fails before building any venv is reported once, with no venv claimed removed", () => {
-  const src = [source("crapper", FAILS_WITHOUT_VENV)];
+test("a tool whose first run passes but leaves the venv without its package is rebuilt once, then reported not ready", () => {
+  const src = [source("mutator", BUILDS_VENV, "other_pkg")];
 
-  const results = inHome(() => syncTools({ tools: asTools(src) }));
+  const [dir, results] = inHome((d) => [d, syncTools({ tools: asTools(src) })] as const);
 
+  const venv = path.join(dir, "mutator", ".venv");
   assert.equal(results[0].outcome, "failed");
-  assert.equal(results[0].detail, "first run failed: python3: command not found");
+  assert.equal(
+    results[0].detail,
+    `first run failed twice: not ready: package at ${venv}; its .venv was removed`,
+  );
+  assert.ok(!existsSync(venv), "the half-built venv was kept");
+});
+
+test("metrics finds installed exactly the tools sync reports usable", () => {
+  const src = [
+    source("crapper"),
+    source("dryer", ALWAYS_FAILS),
+    source("mutator", BUILDS_VENV, "other_pkg"),
+  ];
+
+  const home = tempDir("harry-tools-home-");
+  const atLater = src.map(({ name, url, later }) => ({ name, dist: name, url, commit: later }));
+  for (const [run, tools, outcome] of [
+    [1, asTools(src), "cloned"],
+    [2, asTools(src), "current"],
+    [3, atLater, "moved"],
+  ] as const) {
+    const [results, found] = inHome(() => {
+      const results = syncTools({ tools });
+      return [results, results.map((r) => !isMissing(findTool(r.name as ToolName)))] as const;
+    }, home);
+
+    assert.equal(results[0].outcome, outcome, `sync ${run}`);
+    const usable = results.map((r) => ["cloned", "moved", "current"].includes(r.outcome));
+    assert.deepEqual(
+      found,
+      usable,
+      `sync ${run}: metrics and sync disagree on which tools are usable`,
+    );
+    assert.deepEqual(
+      usable,
+      [true, false, false],
+      `sync ${run}: the fixture no longer covers both answers`,
+    );
+  }
+});
+
+test("a first run that fails before building a venv reports stderr, then the spawn error, then the exit status", () => {
+  const cases = [
+    { name: "stderr", launcher: FAILS_WITHOUT_VENV, want: () => "python3: command not found" },
+    {
+      name: "spawn error",
+      launcher: "#!/nonexistent/sh\n",
+      want: (launcher: string) => `spawnSync ${launcher} ENOENT`,
+    },
+    { name: "exit status", launcher: "#!/bin/sh\nexit 3\n", want: () => "exit 3" },
+  ];
+  for (const c of cases) {
+    const src = [source("crapper", c.launcher)];
+
+    const [dir, results] = inHome((d) => [d, syncTools({ tools: asTools(src) })] as const);
+
+    assert.equal(results[0].outcome, "failed", c.name);
+    const launcher = path.join(dir, "crapper", "crapper");
+    assert.equal(results[0].detail, `first run failed: ${c.want(launcher)}`, c.name);
+  }
 });
 
 test("a venv left by the failed retry that cannot be removed is not reported as removed", () => {
@@ -409,9 +479,12 @@ test("install.mjs without --tools never touches the tools dir", () => {
   assert.ok(!existsSync(path.join(home, ".claude", "harry", "tools")));
 });
 
-test("the pins name exactly the tools metrics looks for, each at a full commit", () => {
+test("the pins name exactly the tools metrics looks for, each at a full commit with its package name", () => {
   assert.deepEqual(PINNED_TOOLS.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
-  for (const t of PINNED_TOOLS) assert.match(t.commit, /^[0-9a-f]{40}$/, t.name);
+  for (const t of PINNED_TOOLS) {
+    assert.match(t.commit, /^[0-9a-f]{40}$/, t.name);
+    assert.match(t.dist, /^\S+$/, t.name);
+  }
 });
 
 const OVERLAY_CHECK = path.resolve(import.meta.dirname, "../src/lib/metrics/overlay-check.py");
@@ -452,22 +525,74 @@ test("SCHEDULE_READ_AT's comment names every mutator internal the overlay check 
   }
 });
 
-test("venvInstalled holds only for the tool's own dist-info, and never throws on a missing lib", () => {
-  const cases: { name: string; dirs: string[]; want: boolean }[] = [
-    { name: "own dist-info", dirs: ["pip-25.0.dist-info", "mutator-0.1.0.dist-info"], want: true },
+test("toolReadiness names the first missing piece, and finds the package by the pin's dist in normalized form", () => {
+  const pin = { name: "mutator", dist: "mutator", url: "", commit: "" };
+  const cases: {
+    name: string;
+    tool?: typeof pin;
+    launcher?: boolean;
+    python?: boolean;
+    dirs?: string[];
+    want: { kind: string; path: string } | null;
+  }[] = [
+    { name: "no launcher", launcher: false, want: { kind: "launcher", path: "mutator" } },
+    { name: "no venv Python", python: false, want: { kind: "python", path: ".venv/bin/python" } },
+    { name: "no .venv/lib", want: { kind: "package", path: ".venv" } },
+    {
+      name: "own dist-info",
+      dirs: ["pip-25.0.dist-info", "mutator-0.1.0.dist-info"],
+      want: null,
+    },
     {
       name: "only other packages",
       dirs: ["pip-25.0.dist-info", "tree_sitter-0.25.dist-info"],
-      want: false,
+      want: { kind: "package", path: ".venv" },
     },
-    { name: "a longer name sharing the prefix", dirs: ["mutatorx-1.0.dist-info"], want: false },
-    { name: "no .venv/lib", dirs: [], want: false },
+    {
+      name: "a longer name sharing the prefix",
+      dirs: ["mutatorx-1.0.dist-info"],
+      want: { kind: "package", path: ".venv" },
+    },
+    {
+      name: "a dist that differs from the tool name is found by the dist",
+      tool: { ...pin, dist: "mut-core" },
+      dirs: ["mut_core-1.0.dist-info"],
+      want: null,
+    },
+    {
+      name: "a dist that differs from the tool name is not found by the tool name",
+      tool: { ...pin, dist: "mut-core" },
+      dirs: ["mutator-0.1.0.dist-info"],
+      want: { kind: "package", path: ".venv" },
+    },
+    {
+      name: "a run of separators collapses to one underscore",
+      tool: { ...pin, dist: "My--Tool" },
+      dirs: ["my_tool-1.0.dist-info"],
+      want: null,
+    },
+    {
+      name: "case, dots and dashes normalize to the dist-info form",
+      tool: { ...pin, dist: "My.Tool" },
+      dirs: ["my_tool-1.0.dist-info"],
+      want: null,
+    },
   ];
   for (const c of cases) {
-    const clone = tempDir("harry-tools-venv-");
-    for (const d of c.dirs) {
+    const clone = tempDir("harry-tools-ready-");
+    if (c.launcher !== false) {
+      writeFileSync(path.join(clone, "mutator"), "#!/bin/sh\n");
+      chmodSync(path.join(clone, "mutator"), 0o755);
+    }
+    if (c.python !== false) {
+      mkdirSync(path.join(clone, ".venv/bin"), { recursive: true });
+      writeFileSync(path.join(clone, ".venv/bin/python"), "");
+      chmodSync(path.join(clone, ".venv/bin/python"), 0o755);
+    }
+    for (const d of c.dirs ?? []) {
       mkdirSync(path.join(clone, ".venv/lib/python3.13/site-packages", d), { recursive: true });
     }
-    assert.equal(venvInstalled(clone, "mutator"), c.want, c.name);
+    const want = c.want && { kind: c.want.kind, path: path.join(clone, c.want.path) };
+    assert.deepEqual(toolReadiness(clone, c.tool ?? pin), want, c.name);
   }
 });
