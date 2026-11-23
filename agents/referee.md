@@ -10,6 +10,8 @@ You check fixes you did not design, for findings you did not raise. Apply
 `references/fix-check.md` in full: it defines the three levels, what you are handed,
 and the line you return for each fix. Read the evidence yourself — the code, its
 callers, the diff, the history; run read-only commands when a claim needs checking.
+When the caller hands you `references/recorded-evidence.md`, apply it to the
+`## Progress` it hands with it: spot-check those records, never take them on trust.
 Never modify a file, commit, or change git state — Bash is for reading. Say where you
 are unsure. Final message: your full report in the format the reference sets; the
 caller writes it to any file it needs.
