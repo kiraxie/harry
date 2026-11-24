@@ -11,17 +11,11 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { METRICS_DIRS } from "../../../scripts/lib/metrics-artifacts.mjs";
 import { gitChecked } from "../git.ts";
 import { holdStopSignals } from "./interrupt.ts";
 
-const ARTIFACTS = [
-  ".metrics",
-  ".coverage",
-  "coverage",
-  "target/coverage",
-  "target/mutation-workers",
-  "target/mutator-backup",
-];
+const ARTIFACTS = [...METRICS_DIRS, ".coverage", "coverage"];
 
 const STASH_NAME = "harry-metrics-stash";
 

@@ -1,106 +1,13 @@
 #!/usr/bin/env node
-// A snapshot, NOT a live reference to the plugin checkout: editing the plugin's
-// HARRY.md (even uncommitted) changes nothing installed until this re-runs.
+import { floorRefusal } from "./lib/node-floor.mjs";
 
-import { existsSync, readFileSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { safeWrite } from "./lib/atomic-write.mjs";
-import { isMain } from "./lib/is-main.mjs";
-import { applyMarkerBlock } from "./lib/markers.mjs";
-import { warnStale } from "./lib/stale-entries.mjs";
-import { syncTools, toolsDir } from "./lib/tools.mjs";
-
-const BEGIN = "# >>> harry >>>";
-const END = "# <<< harry <<<";
-
-const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-
-function globalPath() {
-  return process.env.HARRY_GLOBAL || join(homedir(), ".claude", "CLAUDE.md");
-}
-
-// Where the deployed snapshot of HARRY.md lives: alongside the global
-// instructions file (both under <home>/.claude in real use), so tests that point
-// HARRY_GLOBAL at a temp dir get a temp snapshot path too — never the real home.
-function snapshotPath() {
-  return join(dirname(globalPath()), "harry", "HARRY.md");
-}
-
-/** @param {string} existing @param {{ remove?: boolean; importPath?: string }} [opts] @returns {string} */
-export function applyImport(existing, { remove = false, importPath = snapshotPath() } = {}) {
-  const body = `@${importPath}`;
-  return applyMarkerBlock(existing, { begin: BEGIN, end: END, body, remove });
-}
-
-// Optional user-level Explore override (opt-in, `--explore`). A same-name
-// `~/.claude/agents/Explore.md` shadows the built-in Explore so *auto-invoked*
-// recon runs on a cheap model instead of inheriting the main-session model. It's a
-// whole standalone agent file (not a marker block), so its marker is a line inside
-// the file — `--remove` only deletes an Explore.md bearing it, never a user's own.
-const EXPLORE_MARKER = "harry:explore-override";
-const EXPLORE_SOURCE = join(pluginRoot, "scripts", "assets", "explore-override.md");
-
-function explorePath() {
-  return join(dirname(globalPath()), "agents", "Explore.md");
-}
-
-/** @typedef {"deployed" | "unchanged" | "skipped" | "removed" | "absent"} ExploreOutcome */
-
-/** @returns {ExploreOutcome} */
-function deployExplore() {
-  const dest = explorePath();
-  // Symmetric with removeExplore: never silently clobber a user's own Explore.md.
-  // Overwrite only our own marked file (idempotent redeploy); if an UNMARKED file
-  // exists, it's the user's — leave it and warn instead.
-  if (existsSync(dest) && !readFileSync(dest, "utf8").includes(EXPLORE_MARKER)) {
-    console.warn(
-      `\n  ${dest} already exists and isn't harry's — leaving it untouched.` +
-        `\n  Delete it yourself first if you want harry's Explore override.`,
-    );
-    return "skipped";
-  }
-  return safeWrite(dest, readFileSync(EXPLORE_SOURCE, "utf8")) ? "deployed" : "unchanged";
-}
-
-/** @returns {ExploreOutcome} */
-function removeExplore() {
-  const dest = explorePath();
-  if (existsSync(dest) && readFileSync(dest, "utf8").includes(EXPLORE_MARKER)) {
-    rmSync(dest);
-    return "removed";
-  }
-  return "absent";
-}
-
-/**
- * @param {{ remove?: boolean; explore?: boolean }} [opts]
- * @returns {{ path: string; imported: boolean; snapshot: boolean; explore: ExploreOutcome | null }}
- */
-export function run({ remove = false, explore = false } = {}) {
-  const path = globalPath();
-  const snapshot = snapshotPath();
-  const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
-  let snapshotChanged = false;
-  /** @type {ExploreOutcome | null} */
-  let exploreOutcome = null;
-  if (remove) {
-    exploreOutcome = removeExplore();
-  } else {
-    warnStale(existing);
-    // Deploy: copy the plugin's current HARRY.md into the snapshot location, so
-    // the wired-in @ import reads a frozen copy — not the live plugin checkout.
-    snapshotChanged = safeWrite(snapshot, readFileSync(join(pluginRoot, "HARRY.md"), "utf8"));
-    if (explore) exploreOutcome = deployExplore();
-  }
-  const imported = safeWrite(path, applyImport(existing, { remove, importPath: snapshot }));
-  return { path, imported, snapshot: snapshotChanged, explore: exploreOutcome };
-}
-
-// Only run the CLI when invoked directly (node scripts/install.mjs), not when
-// imported by a test — importing must have no side effects on the user's files.
-if (isMain(import.meta.url)) {
+const refusal = floorRefusal(process.versions.node);
+if (refusal) {
+  console.error(refusal);
+  process.exitCode = 1;
+} else {
+  const { run } = await import("./lib/install-laws.mjs");
+  const { syncTools, toolsDir } = await import("./lib/tools.mjs");
   const args = process.argv.slice(2);
   const remove = args.includes("--remove");
   const r = run({ remove, explore: args.includes("--explore") });
@@ -108,9 +15,10 @@ if (isMain(import.meta.url)) {
   const lines = [];
   if (r.imported)
     lines.push(`${remove ? "Removed harry import from" : "Wired HARRY.md into"} ${r.path}`);
-  if (r.snapshot) lines.push(`Deployed HARRY.md snapshot to ${snapshotPath()}`);
-  if (r.explore === "deployed") lines.push(`Deployed Explore override to ${explorePath()}`);
-  if (r.explore === "removed") lines.push(`Removed Explore override ${explorePath()}`);
+  if (r.snapshot.changed) lines.push(`Deployed HARRY.md snapshot to ${r.snapshot.path}`);
+  if (r.explore?.outcome === "deployed")
+    lines.push(`Deployed Explore override to ${r.explore.path}`);
+  if (r.explore?.outcome === "removed") lines.push(`Removed Explore override ${r.explore.path}`);
   if (lines.length === 0)
     lines.push(`${remove ? "No harry import to remove in" : "Already up to date:"} ${r.path}`);
   let failed = false;

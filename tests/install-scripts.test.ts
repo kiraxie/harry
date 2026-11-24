@@ -24,10 +24,9 @@ import path from "node:path";
 import test, { mock } from "node:test";
 import { fileURLToPath } from "node:url";
 import { safeWrite, tempPathFor } from "../scripts/lib/atomic-write.mjs";
-import { loadScript } from "./load-script.ts";
-
-const { run: initRun } = await loadScript(() => import("../scripts/init.mjs"));
-const { run: installRun } = await loadScript(() => import("../scripts/install.mjs"));
+import { run as initRun } from "../scripts/lib/init-ignore.mjs";
+import { run as installRun } from "../scripts/lib/install-laws.mjs";
+import { headingSection } from "./section.ts";
 
 const BEGIN = "# >>> harry >>>";
 const END = "# <<< harry <<<";
@@ -346,6 +345,34 @@ test("install.mjs: --remove deletes harry's Explore override but never a user's 
   }
 });
 
+test("install.mjs: run reports each file it acted on, by path", () => {
+  withTmp("harry-install-test-", (dir) => {
+    const global = path.join(dir, "CLAUDE.md");
+    const snapshot = { path: path.join(dir, "harry", "HARRY.md") };
+    const explore = path.join(dir, "agents", "Explore.md");
+    withGlobal(global, () => {
+      assert.deepEqual(installRun(), {
+        path: global,
+        imported: true,
+        snapshot: { ...snapshot, changed: true },
+        explore: null,
+      });
+      assert.deepEqual(installRun({ explore: true }), {
+        path: global,
+        imported: false,
+        snapshot: { ...snapshot, changed: false },
+        explore: { path: explore, outcome: "deployed" },
+      });
+      assert.deepEqual(installRun({ remove: true }), {
+        path: global,
+        imported: true,
+        snapshot: { ...snapshot, changed: false },
+        explore: { path: explore, outcome: "removed" },
+      });
+    });
+  });
+});
+
 test("init.mjs: appends plain ignore entries (no harry branding) with a .bak", () => {
   const dir = tmpDir("harry-init-test-");
   try {
@@ -408,6 +435,131 @@ test("init.mjs: --remove strips a hand-typed entry and keeps unrelated lines", (
     assert.ok(lines().includes("node_modules/"), "unrelated entries kept");
   });
 });
+
+// Mutator's worker dirs left untracked made a consumer test that lists untracked files
+// read them during a metrics run and fail on a directory symlink. Metrics writes them
+// under each group's dir, so each is ignored at any depth.
+const METRICS_ENTRIES = [
+  "**/.metrics/",
+  "**/target/coverage/",
+  "**/target/mutation-workers/",
+  "**/target/mutator-backup/",
+];
+
+// guard.ts clears what metrics writes and the project's coverage output; a dir metrics
+// writes is added to metrics-artifacts.mjs, which init reads, never to guard's own list.
+test("guard.ts's ARTIFACTS is METRICS_DIRS plus the project's coverage output", () => {
+  const guard = readFileSync(path.join(pluginRoot, "src", "lib", "metrics", "guard.ts"), "utf8");
+  const list = guard.match(/^const ARTIFACTS = \[([^\]]*)\];$/m)?.[1];
+  assert.ok(list, "src/lib/metrics/guard.ts: ARTIFACTS not found");
+  const rows = list
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean);
+  assert.deepEqual(rows, ["...METRICS_DIRS", '".coverage"', '"coverage"']);
+});
+
+const initEntries = (dir: string): string[] => {
+  initRun(dir);
+  return readFileSync(path.join(dir, ".gitignore"), "utf8").split("\n");
+};
+
+test("init.mjs: appends after exactly one blank line, whatever blank lines the file ends in", () => {
+  withTmp("harry-init-test-", (dir) => {
+    const gi = path.join(dir, ".gitignore");
+    writeFileSync(gi, "node_modules/\n\n\n");
+    initRun(dir);
+    assert.equal(
+      readFileSync(gi, "utf8"),
+      "node_modules/\n\n.local/\n*worktrees/\nCLAUDE.local.md\n**/.metrics/\n**/target/coverage/\n" +
+        "**/target/mutation-workers/\n**/target/mutator-backup/\n",
+    );
+  });
+});
+
+test("init.mjs: ignores every dir metrics writes", () => {
+  withTmp("harry-init-test-", (dir) => {
+    writeFileSync(path.join(dir, ".gitignore"), "node_modules/\n");
+    const lines = initEntries(dir);
+    for (const d of METRICS_ENTRIES) assert.ok(lines.includes(d), `${d} added`);
+  });
+});
+
+test("init.mjs: --remove takes back the metrics dirs and keeps the user's lines", () => {
+  withTmp("harry-init-test-", (dir) => {
+    const gi = path.join(dir, ".gitignore");
+    writeFileSync(gi, "node_modules/\n");
+    initRun(dir);
+    initRun(dir, { remove: true });
+    const lines = readFileSync(gi, "utf8").split("\n");
+    for (const d of METRICS_ENTRIES) assert.ok(!lines.includes(d), `${d} removed`);
+    assert.ok(lines.includes("node_modules/"), "the user's line kept");
+  });
+});
+
+// The user's own excludes file could hold target/ and answer for the repo's .gitignore,
+// so git reads no config but the repo's and -v names the rule that matched.
+function checkIgnore(cwd: string, probe: string): { status: number | null; stdout: string } {
+  const r = spawnSync(
+    "git",
+    ["-c", "core.excludesFile=/dev/null", "check-ignore", "-v", "--no-index", probe],
+    {
+      cwd,
+      encoding: "utf8",
+      env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+    },
+  );
+  return { status: r.status, stdout: r.stdout };
+}
+
+test("init.mjs: a nested group's metrics dirs are ignored, its other target/ dirs are not", () => {
+  withTmp("harry-init-test-", (dir) => {
+    const init = spawnSync("git", ["init", "-q"], {
+      cwd: dir,
+      env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+    });
+    assert.equal(init.status, 0, String(init.stderr));
+    initRun(dir);
+    for (const d of METRICS_ENTRIES) {
+      for (const probe of [`packages/web/${d.slice(3)}x`, `${d.slice(3)}x`]) {
+        const r = checkIgnore(dir, probe);
+        assert.equal(r.status, 0, `${probe} is not ignored`);
+        assert.ok(r.stdout.startsWith(".gitignore:") && r.stdout.includes(`:${d}\t`), r.stdout);
+      }
+    }
+    assert.equal(checkIgnore(dir, "packages/web/target/release/x").status, 1, "build output kept");
+  });
+});
+
+// /sync's Phase 2 tells the session what init adds; it still named three entries after
+// init had six.
+test("references/sync-migration.md Phase 2 names every entry init adds", () => {
+  const phase = headingSection(
+    readFileSync(path.join(pluginRoot, "references", "sync-migration.md"), "utf8"),
+    "references/sync-migration.md",
+    "## Phase 2 — Gitignore",
+  );
+  withTmp("harry-init-test-", (dir) => {
+    const entries = initEntries(dir).filter(Boolean);
+    assert.ok(entries.length > 0, "init adds no entry to an empty .gitignore");
+    const missing = entries.filter((e) => !phase.includes(`\`${e}\``));
+    assert.deepEqual(missing, [], "list each entry in backticks");
+  });
+});
+
+for (const own of ["target/", ".metrics/"]) {
+  test(`init.mjs: a ${own} line the user wrote survives init and --remove`, () => {
+    withTmp("harry-init-test-", (dir) => {
+      const gi = path.join(dir, ".gitignore");
+      const lines = (): string[] => readFileSync(gi, "utf8").split("\n");
+      writeFileSync(gi, `${own}\n`);
+      initRun(dir);
+      assert.ok(lines().includes(own), "kept by init");
+      initRun(dir, { remove: true });
+      assert.ok(lines().includes(own), "kept by --remove");
+    });
+  });
+}
 
 test("safeWrite: backs up once and never clobbers the .bak", () => {
   const dir = tmpDir("harry-safewrite-test-");
@@ -512,13 +664,17 @@ test("the shipped scripts reach only .mjs modules through their relative imports
     if (seen.has(file)) continue;
     seen.add(file);
     const source = readFileSync(file, "utf8");
-    for (const m of source.matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s+"(\.\.?\/[^"]+)"/gms)) {
+    // A static import or export, or an await import(): the CLIs load their library late.
+    for (const m of source.matchAll(
+      /^\s*(?:(?:import|export)\b[^;]*?\bfrom\s+|.*\bimport\()"(\.\.?\/[^"]+)"/gm,
+    )) {
       const target = path.resolve(path.dirname(file), m[1] as string);
       if (!target.endsWith(".mjs")) offenders.push(`${path.relative(pluginRoot, file)} → ${m[1]}`);
       else queue.push(target);
     }
   }
-  assert.ok(seen.size > entries.length, "the walk followed the scripts' lib imports");
+  for (const lib of ["init-ignore.mjs", "install-laws.mjs", "tools.mjs"])
+    assert.ok(seen.has(path.join(pluginRoot, "scripts", "lib", lib)), `the walk missed ${lib}`);
   assert.deepEqual(offenders, [], "a shipped script reaches a module that needs type stripping");
 });
 
@@ -626,6 +782,24 @@ test("init.mjs CLI: a file as target is one stderr line and exit 1", () => {
     writeFileSync(file, "");
     const r = cli("init.mjs", [file], {}, { expectStatus: 1 });
     assert.match(r.stderr, /^harry: not a directory: .*a-file\n$/, "one line, no stack trace");
+  });
+});
+
+// The CLI prints the paths run acted on; a prefix match cannot tell one path from another.
+test("install.mjs CLI: --explore then --remove print each file's full path", () => {
+  withTmp("harry-install-cli-", (dir) => {
+    const env = { HARRY_GLOBAL: path.join(dir, "CLAUDE.md") };
+    assert.equal(
+      cli("install.mjs", ["--explore"], env).stdout,
+      `Wired HARRY.md into ${dir}/CLAUDE.md\n` +
+        `Deployed HARRY.md snapshot to ${dir}/harry/HARRY.md\n` +
+        `Deployed Explore override to ${dir}/agents/Explore.md\n`,
+    );
+    assert.equal(
+      cli("install.mjs", ["--remove"], env).stdout,
+      `Removed harry import from ${dir}/CLAUDE.md\n` +
+        `Removed Explore override ${dir}/agents/Explore.md\n`,
+    );
   });
 });
 

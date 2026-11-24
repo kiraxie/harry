@@ -23,6 +23,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { run as initRun } from "../scripts/lib/init-ignore.mjs";
 import { runCost } from "../src/lib/metrics/mutator.ts";
 import { failureTail } from "../src/lib/metrics/tools.ts";
 import { headingSection, outline } from "./section.ts";
@@ -955,7 +956,7 @@ test("the before-state is the branch point, so a function base renamed later is 
 const FAKE_COVERAGE_PYTHON = `#!/bin/sh
 case "$1" in -m) shift ;; -c) shift 2 ;; esac
 case "$1" in coverage) printf '%s\\t%s\\n' "$*" "$PWD" >> "$(dirname "$0")/../coverage-calls.tsv" ;; esac
-case "$*" in "coverage lcov -o "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac
+case "$*" in "coverage lcov "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac
 exit 0
 `;
 
@@ -1017,11 +1018,14 @@ const COVERED_CASES: {
     local: { ".venv/bin/python": FAKE_COVERAGE_PYTHON },
     argv: () => [],
     pythonCoverage: (repo) => [
-      ["coverage run -m pytest", repo],
-      ["coverage lcov -o target/coverage/python/lcov.info", repo],
+      ["coverage run --data-file=target/coverage/python/.coverage -m pytest", repo],
+      [
+        "coverage lcov --data-file=target/coverage/python/.coverage -o target/coverage/python/lcov.info",
+        repo,
+      ],
     ],
     label:
-      "python -m coverage run -m pytest && python -m coverage lcov -o target/coverage/python/lcov.info",
+      "python -m coverage run --data-file=target/coverage/python/.coverage -m pytest && python -m coverage lcov --data-file=target/coverage/python/.coverage -o target/coverage/python/lcov.info",
   },
 ];
 
@@ -2246,8 +2250,9 @@ for (const form of GROUP_ON_PYTHONPATH) {
 }
 
 /**
- * A `coverage` package that stands in for the real one: `lcov -o <file>` writes an empty
- * report; `run` imports `imports` first, as the tests it runs would.
+ * A `coverage` package that stands in for the real one: `run` writes its data file where
+ * coverage.py would (`--data-file=`, else `./.coverage`), first importing `imports`, as the
+ * tests it runs would; `lcov -o <file>` reads that data file and writes an empty report.
  */
 function coverageStandIn(imports: string | null = null): string {
   const dir = tempDir("harry-metrics-coverage-");
@@ -2258,8 +2263,15 @@ function coverageStandIn(imports: string | null = null): string {
     [
       "import os, sys",
       "args = sys.argv[1:]",
-      ...(imports === null ? [] : [`if args[:1] == ['run']:`, `    import ${imports}`]),
+      "flag = [a for a in args if a.startswith('--data-file=')]",
+      "data = flag[0].split('=', 1)[1] if flag else '.coverage'",
+      "if args[:1] == ['run']:",
+      ...(imports === null ? [] : [`    import ${imports}`]),
+      "    os.makedirs(os.path.dirname(data) or '.', exist_ok=True)",
+      "    open(data, 'w').write('')",
       "if args[:1] == ['lcov']:",
+      "    if not os.path.exists(data):",
+      "        sys.exit('No data to report.')",
       "    out = args[args.index('-o') + 1]",
       "    os.makedirs(os.path.dirname(out), exist_ok=True)",
       "    open(out, 'w').write('TN:\\nend_of_record\\n')",
@@ -2268,6 +2280,50 @@ function coverageStandIn(imports: string | null = null): string {
   );
   return dir;
 }
+
+/** Stub mutator that records the checkout's untracked files each time it runs mutants. */
+const MUTATOR_RECORDING_STATUS = `
+if (!args.includes("--scan")) {
+  const seen = require("node:child_process").execFileSync(
+    "git",
+    ["-c", "core.excludesFile=/dev/null", "status", "--porcelain", "-uall"],
+    { cwd: root, encoding: "utf8", env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } },
+  );
+  fs.appendFileSync(process.env.STATUS_LOG, seen);
+}
+${MUTATOR_FROM_MARKERS}`;
+
+// A consumer test that lists untracked files reads whatever metrics leaves in a group dir
+// while mutator runs it; init's .gitignore is what keeps that list empty.
+test("while mutator runs a nested Python group's tests, the checkout under init's .gitignore has nothing untracked", {
+  skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
+}, () => {
+  const ignores = tempDir("harry-metrics-ignore-");
+  initRun(ignores);
+  const repo = makeRepo(
+    {
+      ".gitignore": readFileSync(path.join(ignores, ".gitignore"), "utf8"),
+      "packages/api/pyproject.toml": "[project]\nname = 'api'\n",
+    },
+    { "packages/api/src/p.py": "# // crap p 2 1\nA = 1  # // mut 1 0 killed\n" },
+  );
+  writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\n__pycache__/\n");
+  execFileSync(HOST_PYTHON, ["-m", "venv", "--without-pip", path.join(repo, "packages/api/.venv")]);
+  const home = tempDir("harry-metrics-home-");
+  installCrapper(home);
+  installStub(home, "mutator", MUTATOR_RECORDING_STATUS);
+  const log = path.join(tempDir("harry-metrics-status-"), "status.log");
+
+  const run = runMetrics(repo, home, {
+    binDir: fakeBin(),
+    env: { PYTHONPATH: coverageStandIn(), STATUS_LOG: log },
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(toolSection(run.facts, "crapper"), /— coverage: /, run.facts);
+  assert.ok(existsSync(log), `mutator ran no mutants\n${run.facts}`);
+  assert.equal(readFileSync(log, "utf8"), "");
+});
 
 test("the coverage run's target still imports a module from the group dir when PYTHONPATH names another dir", {
   skip: HOST_PYTHON === "" ? "no python3 on PATH" : false,
@@ -2503,7 +2559,7 @@ test("a default coverage plan whose first step fails names only that step", () =
   const crapper = toolSection(run.facts, "crapper");
   assert.match(
     crapper,
-    /complexity only: coverage command `python -m coverage run -m pytest` exited 2/,
+    /complexity only: coverage command `python -m coverage run --data-file=target\/coverage\/python\/\.coverage -m pytest` exited 2/,
   );
   assert.doesNotMatch(crapper, /coverage lcov/, crapper);
 });
@@ -2527,7 +2583,7 @@ test("a default coverage plan whose second step fails names only that step", () 
   const crapper = toolSection(run.facts, "crapper");
   assert.match(
     crapper,
-    /complexity only: coverage command `python -m coverage lcov -o target\/coverage\/python\/lcov\.info` exited 3/,
+    /complexity only: coverage command `python -m coverage lcov --data-file=target\/coverage\/python\/\.coverage -o target\/coverage\/python\/lcov\.info` exited 3/,
   );
   assert.doesNotMatch(crapper, /coverage run/, crapper);
 });
@@ -2542,7 +2598,7 @@ test("a Python group with no venv names the PATH interpreter in its coverage com
   const bin = fakeBin();
   writeExecutable(
     path.join(bin, "python3"),
-    `#!/bin/sh\ncase "$1" in -m) shift ;; -c) shift 2 ;; esac\ncase "$*" in "coverage lcov -o "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac\nexit 0\n`,
+    `#!/bin/sh\ncase "$1" in -m) shift ;; -c) shift 2 ;; esac\ncase "$*" in "coverage lcov "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac\nexit 0\n`,
   );
 
   const run = runMetrics(repo, home, { binDir: bin });
@@ -2550,7 +2606,7 @@ test("a Python group with no venv names the PATH interpreter in its coverage com
   assert.equal(run.status, 0, run.stderr);
   assert.ok(
     run.facts.includes(
-      "— coverage: python3 -m coverage run -m pytest && python3 -m coverage lcov -o target/coverage/python/lcov.info\n",
+      "— coverage: python3 -m coverage run --data-file=target/coverage/python/.coverage -m pytest && python3 -m coverage lcov --data-file=target/coverage/python/.coverage -o target/coverage/python/lcov.info\n",
     ),
     run.facts,
   );

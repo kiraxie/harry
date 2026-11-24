@@ -11,8 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    not code.
 2. **The `companion` runtime** (`src/` → bundled to `dist/companion.cjs`) — a TypeScript CLI that
    backs the `review` and `ask` slash commands by spawning the `codex` CLI, and `metrics`, which
-   runs external quality tools. `src/` imports `scripts/lib/tools.mjs` and
-   `scripts/lib/path-search.mjs`; nothing under `scripts/` imports `src/`.
+   runs external quality tools. `src/` imports `scripts/lib/tools.mjs`,
+   `scripts/lib/path-search.mjs` and `scripts/lib/metrics-artifacts.mjs`; nothing under
+   `scripts/` imports `src/`.
 
 `dist/companion.cjs` is **committed** — the plugin is self-contained for end users, no build step
 required to install it. Rebuild `dist/` when changing `src/`, the `scripts/lib` modules it

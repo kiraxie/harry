@@ -185,6 +185,8 @@ function canImport(python: string, module: string, cwd: string): boolean {
   return res.status === 0;
 }
 
+const PYTHON_REPORT_DIR = "target/coverage/python";
+
 function pythonPlan(groupDir: string): OwnPlan {
   const py = pythonInterpreter(groupDir);
   if (py === null) return { skip: "no python3 on PATH" };
@@ -192,10 +194,13 @@ function pythonPlan(groupDir: string): OwnPlan {
     return { skip: `coverage is not installed in ${py}; install coverage there to score coverage` };
   }
   const runner = canImport(py, "pytest", groupDir) ? ["pytest"] : ["unittest", "discover"];
+  // A flag, not COVERAGE_FILE: the tests under the run inherit an env var, and with it
+  // every other coverage instance they start would write to the same file.
+  const data = `--data-file=${PYTHON_REPORT_DIR}/.coverage`;
   return {
     steps: [
-      pythonModule(py, "coverage", ["run", "-m", ...runner]),
-      pythonModule(py, "coverage", ["lcov", "-o", "target/coverage/python/lcov.info"]),
+      pythonModule(py, "coverage", ["run", data, "-m", ...runner]),
+      pythonModule(py, "coverage", ["lcov", data, "-o", `${PYTHON_REPORT_DIR}/lcov.info`]),
     ],
   };
 }

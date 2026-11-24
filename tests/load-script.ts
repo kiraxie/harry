@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 /**
- * Loads a script whose CLI is guarded (isMain or import.meta.main) with HOME,
+ * Loads a script whose CLI is guarded by import.meta.main with HOME,
  * HARRY_GLOBAL and cwd at a fresh temp dir, so a guard that wrongly fires on import — a
  * guard mutant, in mutator's run — writes there, never into the user's ~/.claude or
  * this checkout. `load` is the test's own `() => import("…")`: the specifier must resolve

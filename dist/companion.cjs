@@ -1170,6 +1170,7 @@ function canImport(python, module2, cwd) {
   throwIfInterrupted(res);
   return res.status === 0;
 }
+var PYTHON_REPORT_DIR = "target/coverage/python";
 function pythonPlan(groupDir) {
   const py = pythonInterpreter(groupDir);
   if (py === null) return { skip: "no python3 on PATH" };
@@ -1177,10 +1178,11 @@ function pythonPlan(groupDir) {
     return { skip: `coverage is not installed in ${py}; install coverage there to score coverage` };
   }
   const runner = canImport(py, "pytest", groupDir) ? ["pytest"] : ["unittest", "discover"];
+  const data = `--data-file=${PYTHON_REPORT_DIR}/.coverage`;
   return {
     steps: [
-      pythonModule(py, "coverage", ["run", "-m", ...runner]),
-      pythonModule(py, "coverage", ["lcov", "-o", "target/coverage/python/lcov.info"])
+      pythonModule(py, "coverage", ["run", data, "-m", ...runner]),
+      pythonModule(py, "coverage", ["lcov", data, "-o", `${PYTHON_REPORT_DIR}/lcov.info`])
     ]
   };
 }
@@ -1216,14 +1218,17 @@ function runCoverage(groupDir, plan) {
 var import_node_crypto2 = require("node:crypto");
 var import_node_fs13 = require("node:fs");
 var import_node_path13 = __toESM(require("node:path"), 1);
-var ARTIFACTS = [
+
+// scripts/lib/metrics-artifacts.mjs
+var METRICS_DIRS = [
   ".metrics",
-  ".coverage",
-  "coverage",
   "target/coverage",
   "target/mutation-workers",
   "target/mutator-backup"
 ];
+
+// src/lib/metrics/guard.ts
+var ARTIFACTS = [...METRICS_DIRS, ".coverage", "coverage"];
 var STASH_NAME = "harry-metrics-stash";
 function statusEntries(root) {
   const tokens = gitChecked(root, ["status", "--porcelain", "-z", "-uall"]).stdout.split("\0");

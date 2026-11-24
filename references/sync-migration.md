@@ -18,11 +18,15 @@ What it does:
   shared with the whole team) to the target project's `.gitignore` listing the
   paths harry keeps out of version control: `.local/` (`items/`, `archive/`,
   `tmp/` scratch, `INDEX.md`/`HISTORY.md`), `*worktrees/` (worktree sandboxes, at
-  any depth — covers both `.worktrees/` and `.claude/worktrees/`), and
-  `CLAUDE.local.md` (the user's per-project specialization rules).
+  any depth — covers both `.worktrees/` and `.claude/worktrees/`),
+  `CLAUDE.local.md` (the user's per-project specialization rules), and the four
+  dirs metrics writes in a package dir, at any depth: `**/.metrics/`,
+  `**/target/coverage/`, `**/target/mutation-workers/` and
+  `**/target/mutator-backup/` (not `target/` itself, which a Rust or Maven project
+  may ignore on its own).
 - Idempotent per entry — an entry already present anywhere in the file (exact
   line match) is never duplicated.
-- `--remove` strips any line matching one of those three entries. Trade-off: with
+- `--remove` strips any line matching one of those entries. Trade-off: with
   no marker to distinguish origin, this also removes a line the user typed in by
   hand that happens to match exactly.
 
