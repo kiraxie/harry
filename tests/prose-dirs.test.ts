@@ -73,3 +73,9 @@ test("listRepoFiles lists an unadded file as working and untracked, never an ign
   ]);
   assert.deepEqual(files.working.sort(), [".gitignore", "kept.md", "new.md"]);
 });
+
+test("listRepoFiles on a directory that is not a git repository says so, naming the directory", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "harry-prose-dirs-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.throws(() => listRepoFiles(dir), names(`${dir} is not a git repository`));
+});

@@ -30,10 +30,24 @@ type TrackedKind = "file" | "dir" | "untracked";
 export const listRepoFiles = (
   cwd: string,
 ): { trackedKind: (rel: string) => TrackedKind; working: string[] } => {
-  const gitFiles = (...args: string[]): string[] =>
-    execFileSync("git", ["ls-files", "-z", ...args], { cwd, encoding: "utf-8" })
-      .split("\0")
-      .filter(Boolean);
+  const gitFiles = (...args: string[]): string[] => {
+    try {
+      return execFileSync("git", ["ls-files", "-z", ...args], {
+        cwd,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, LC_ALL: "C" },
+      })
+        .split("\0")
+        .filter(Boolean);
+    } catch (err) {
+      if (String((err as { stderr?: unknown }).stderr).includes("not a git repository"))
+        throw new Error(
+          `${cwd} is not a git repository: the prose scans list files with git, so run the tests in a clone, not a copy`,
+        );
+      throw err;
+    }
+  };
   const deleted = new Set(gitFiles("--deleted"));
   const present = (rel: string): boolean => !deleted.has(rel);
   const tracked = gitFiles().filter(present);

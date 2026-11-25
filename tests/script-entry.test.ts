@@ -179,7 +179,13 @@ test("a test reaches a shipped CLI only by type, and a guarded script only throu
   assert.deepEqual(wrong, []);
   assert.deepEqual(
     [...loaded].sort(),
-    [".claude/scripts/release-state.mts", "scripts/run-evals.mts"],
+    [
+      ".claude/scripts/item-edit.mts",
+      ".claude/scripts/release-state.mts",
+      ".claude/scripts/scratch-clone.mts",
+      ".claude/scripts/test-path.mts",
+      "scripts/run-evals.mts",
+    ],
     "loadScript serves only the repo-local guarded scripts",
   );
 });

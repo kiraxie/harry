@@ -13,8 +13,8 @@
   "packageManager": "pnpm@12.5.1",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test",
-    "test:mutation": "node --preserve-symlinks-main --test 'tests/!(build|prose-refs|version-sync).test.ts'",
+    "test": "PATH=\"$(node .claude/scripts/test-path.mts)\" node --test",
+    "test:mutation": "PATH=\"$(node .claude/scripts/test-path.mts)\" node --preserve-symlinks-main --test 'tests/!(build|prose-refs|version-sync).test.ts'",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",

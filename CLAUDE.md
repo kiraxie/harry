@@ -27,7 +27,7 @@ needs a rebuild (CI's dist drift gate fails otherwise).
 pnpm install                    # install deps
 pnpm run build                  # bundle src/companion.ts -> dist/companion.cjs (esbuild)
 pnpm test                       # node --test — runs tests/*.test.ts directly (Node >=26 native TS)
-node --test tests/review-cli.test.ts   # run a single test file
+pnpm test tests/review-cli.test.ts     # run a single test file
 pnpm run typecheck              # tsc --noEmit
 pnpm run lint                   # biome check .
 pnpm run format                 # biome format --write .
@@ -154,6 +154,15 @@ candidate is the repo-local `/distill` (`.claude/commands/distill.md`).
 `skill-authoring.md`) and `.claude/scripts/`. The marketplace installs the whole tree, but
 no plugin build loads these, so shipped prose must never cite them. `tests/prose-dirs.ts`
 names both sides of that boundary, and every prose scan derives its corpus from it.
+
+Beside `.claude/scripts/release-state.mts`, three scripts serve the maintainer's own
+sessions. `.claude/scripts/test-path.mts` prints PATH without `~/.claude/hooks/bin`, the
+maintainer's git guard wrapper; `pnpm test` and `pnpm run test:mutation` run under that
+PATH, so run a test through them, never a bare `node --test`.
+`.claude/scripts/scratch-clone.mts` makes a throwaway clone of a commit under the unit's
+`.local/tmp/<branch>/clones/` (`create <name> [--ref <commit>]`) and runs a command in it
+(`run <name> -- <command>`). `.claude/scripts/item-edit.mts` adds a `## Progress` line, or
+adds or removes a `## Follow-ups` line, in a `.local` item, the line on stdin.
 
 Placement rule: a command or reference is repo-local when it serves only maintaining harry
 itself — its own files, release, dependencies, or the authoring of its own skills and

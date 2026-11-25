@@ -93,7 +93,7 @@ test("test:mutation runs every test file but the ones a worker cannot run", () =
   // The literal tests/ prefix matters: in a worker whose tests dir is a symlink, node's
   // default discovery finds no file.
   const m = script.match(
-    /^node --preserve-symlinks-main --test '(tests\/!\(([^()']+)\)\.test\.ts)'$/,
+    /^PATH="\$\(node \.claude\/scripts\/test-path\.mts\)" node --preserve-symlinks-main --test '(tests\/!\(([^()']+)\)\.test\.ts)'$/,
   );
   assert.ok(m, `test:mutation is not the expected glob: ${script}`);
   const [, pattern, alternation] = m;
