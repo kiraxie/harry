@@ -347,3 +347,13 @@ for (const c of TAMPERED) {
     );
   });
 }
+
+test("the CLI outside a git repository exits 1 with git's reason on stderr", (t) => {
+  const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), "harry-item-edit-norepo-")));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = cli(dir, ["progress", "x"], "- a\n");
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "");
+  assert.match(r.stderr, /^item-edit: git rev-parse .* failed: fatal: not a git repository/);
+  assert.deepEqual(readdirSync(dir), []);
+});

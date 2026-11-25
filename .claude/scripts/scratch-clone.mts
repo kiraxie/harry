@@ -5,6 +5,8 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { constants } from "node:os";
 import path from "node:path";
 
+import { getStoreDir, unitTmpDir } from "../../src/lib/git.ts";
+
 const USAGE = "usage: create <name> [--ref <commit>] | run <name> -- <command>...";
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -23,12 +25,9 @@ function locate(cwd: string, name: string): string {
   if (branch === "main" || branch === "master") {
     throw new Error(`the checkout is on ${branch}; a clone belongs to a unit branch`);
   }
-  const store = path.join(
-    path.dirname(git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"])),
-    ".local",
-  );
+  const store = getStoreDir(cwd);
   if (!existsSync(store)) throw new Error(`no .local store at ${store}`);
-  return path.join(store, "tmp", branch, "clones", name);
+  return path.join(unitTmpDir(store, branch), "clones", name);
 }
 
 export function create(cwd: string, name: string, ref = "HEAD"): { clone: string } {

@@ -4,9 +4,10 @@ import { resolveTextFlag } from "../lib/context.ts";
 import {
   countBranchChanges,
   getBranchOrShortSha,
-  getMainCheckoutRoot,
   getRepoRoot,
+  getStoreDir,
   resolveReviewTarget,
+  unitTmpDir,
 } from "../lib/git.ts";
 import {
   buildReviewPrompt,
@@ -83,10 +84,10 @@ export const REVIEW_WRITTEN = "Review written to";
 
 function resolveOutputDir(repoRoot: string): string {
   const branch = getBranchOrShortSha(repoRoot);
-  const local = join(getMainCheckoutRoot(repoRoot), ".local");
+  const local = getStoreDir(repoRoot);
   const dir =
     existsSync(local) && statSync(local).isDirectory()
-      ? join(local, "tmp", branch)
+      ? unitTmpDir(local, branch)
       : join(resolveStateDir(repoRoot), "reviews", branch);
   ensureDir(dir);
   return dir;

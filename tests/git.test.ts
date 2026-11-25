@@ -10,11 +10,25 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ensureGitRepository, resolveReviewTarget } from "../src/lib/git.ts";
+import {
+  ensureGitRepository,
+  getStoreDir,
+  resolveReviewTarget,
+  unitTmpDir,
+} from "../src/lib/git.ts";
+import { WORKING_FILES } from "./prose-dirs.ts";
 
 function tmpDir(): string {
   return mkdtempSync(path.join(os.tmpdir(), "harry-git-test-"));
@@ -239,4 +253,37 @@ test("resolveReviewTarget: an undetectable default branch throws instead of gues
       "a silent fallback would diff against a ref the user never chose",
     );
   });
+});
+
+test("getStoreDir from a linked worktree names the main checkout's .local and creates nothing", () => {
+  inTempRepo("main", (dir) => {
+    write(dir, "a.txt", "one\n");
+    commitAll(dir, "init");
+    const wt = realpathSync(tmpDir());
+    try {
+      run(dir, "worktree", "add", "-q", "-b", "unit", path.join(wt, "unit"));
+      assert.equal(getStoreDir(path.join(wt, "unit")), path.join(dir, ".local"));
+      assert.equal(existsSync(path.join(dir, ".local")), false);
+      assert.equal(existsSync(path.join(wt, "unit", ".local")), false);
+    } finally {
+      rmSync(wt, { recursive: true, force: true });
+    }
+  });
+});
+
+test("unitTmpDir puts a branch, one with a slash included, under the store's tmp", () => {
+  assert.equal(unitTmpDir("/repo/.local", "unit"), "/repo/.local/tmp/unit");
+  assert.equal(unitTmpDir("/repo/.local", "feature/x"), "/repo/.local/tmp/feature/x");
+});
+
+test("the store rule is written in src/lib/git.ts and in no other code file", () => {
+  const code = WORKING_FILES.filter((rel) =>
+    /^(src|scripts|\.claude\/scripts)\/.*\.(ts|mts|mjs)$/.test(rel),
+  );
+  assert.ok(code.includes("src/lib/git.ts"));
+  const repoRoot = path.join(import.meta.dirname, "..");
+  const holders = code.filter((rel) =>
+    /--git-common-dir|"\.local"/.test(readFileSync(path.join(repoRoot, rel), "utf8")),
+  );
+  assert.deepEqual(holders, ["src/lib/git.ts"]);
 });

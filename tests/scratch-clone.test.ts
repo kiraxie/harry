@@ -245,3 +245,14 @@ test("run refuses a name with no clone", (t) => {
     /no clone named missing/,
   );
 });
+
+test("the CLI outside a git repository exits 1 with git's reason on stderr", (t) => {
+  const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), "harry-scratch-clone-norepo-")));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = spawnSync(process.execPath, [SCRIPT, "create", "x"], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "");
+  assert.match(r.stderr, /^scratch-clone: /);
+  assert.match(r.stderr, /not a git repository/);
+  assert.deepEqual(readdirSync(dir), []);
+});

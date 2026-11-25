@@ -504,13 +504,16 @@ function ensureGitRepository(cwd) {
 function getRepoRoot(cwd) {
   return gitChecked(cwd, ["rev-parse", "--show-toplevel"]).stdout.trim();
 }
-function getMainCheckoutRoot(cwd) {
+function getStoreDir(cwd) {
   const commonDir = gitChecked(cwd, [
     "rev-parse",
     "--path-format=absolute",
     "--git-common-dir"
   ]).stdout.trim();
-  return (0, import_node_path6.dirname)(commonDir);
+  return (0, import_node_path6.join)((0, import_node_path6.dirname)(commonDir), ".local");
+}
+function unitTmpDir(store, branch) {
+  return (0, import_node_path6.join)(store, "tmp", branch);
 }
 function getBranchOrShortSha(cwd) {
   const branch = gitChecked(cwd, ["branch", "--show-current"]).stdout.trim();
@@ -2299,8 +2302,8 @@ function resolveStandard(cwd, options) {
 var REVIEW_WRITTEN = "Review written to";
 function resolveOutputDir(repoRoot) {
   const branch = getBranchOrShortSha(repoRoot);
-  const local = (0, import_node_path20.join)(getMainCheckoutRoot(repoRoot), ".local");
-  const dir = (0, import_node_fs18.existsSync)(local) && (0, import_node_fs18.statSync)(local).isDirectory() ? (0, import_node_path20.join)(local, "tmp", branch) : (0, import_node_path20.join)(resolveStateDir(repoRoot), "reviews", branch);
+  const local = getStoreDir(repoRoot);
+  const dir = (0, import_node_fs18.existsSync)(local) && (0, import_node_fs18.statSync)(local).isDirectory() ? unitTmpDir(local, branch) : (0, import_node_path20.join)(resolveStateDir(repoRoot), "reviews", branch);
   ensureDir(dir);
   return dir;
 }

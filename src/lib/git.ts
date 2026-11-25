@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 import { notFoundError, resolveOnPath } from "./path-search.ts";
 
@@ -58,13 +58,17 @@ export function getRepoRoot(cwd: string): string {
   return gitChecked(cwd, ["rev-parse", "--show-toplevel"]).stdout.trim();
 }
 
-export function getMainCheckoutRoot(cwd: string): string {
+export function getStoreDir(cwd: string): string {
   const commonDir = gitChecked(cwd, [
     "rev-parse",
     "--path-format=absolute",
     "--git-common-dir",
   ]).stdout.trim();
-  return dirname(commonDir);
+  return join(dirname(commonDir), ".local");
+}
+
+export function unitTmpDir(store: string, branch: string): string {
+  return join(store, "tmp", branch);
 }
 
 export function getBranchOrShortSha(cwd: string): string {

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
@@ -11,6 +10,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+
+import { getStoreDir } from "../../src/lib/git.ts";
 
 const USAGE = "usage: <progress|followup-add|followup-remove> <slug>, the line on stdin";
 const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -133,12 +134,7 @@ function oneLine(input: string): string {
 
 function editItem(cwd: string, op: Op, slug: string, line: string): string {
   if (!SLUG_RE.test(slug)) throw new Error(`invalid slug ${JSON.stringify(slug)}`);
-  const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-  const items = path.join(path.dirname(common), ".local", "items");
+  const items = path.join(getStoreDir(cwd), "items");
   const file = path.join(items, `${slug}.md`);
   if (!existsSync(file)) throw new Error(`no item ${slug} in ${items}`);
   // Held from before the read to the rename: an edit that read the old text beside
