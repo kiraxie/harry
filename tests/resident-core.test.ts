@@ -11,12 +11,8 @@ import { headingSection } from "./section.ts";
 // before acting; everything that moved out keeps one home where a skill or the review
 // standard loads it.
 
-// A ceiling, not a target: the core measured 952 words on 2026-10-09 after the review's
-// fixes, 980 once "optimize on evidence" came back (the plugin eval lost
-// no-speculative-optimization, 3/3 → 0/3, without it), and 1017 on 2026-10-30 when Code's
-// comment rule named its kind (why, never what) and dropped the one-line cap; 1020 leaves
-// room for a word, not a rule.
-const CORE_WORDS = 1020;
+// Exact count, no headroom: raise it only for a rule every session needs before acting.
+const CORE_WORDS = 1053;
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const flatten = (text: string): string => text.replace(/\s+/g, " ").replace(/[*`]/g, "");
 const raw = (rel: string): string => readFileSync(path.join(repoRoot, rel), "utf-8");

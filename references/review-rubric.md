@@ -35,10 +35,13 @@ mutation; its report is its final message.
    operation with a side effect (a write, a commit, a PR), run twice or resumed after
    failing halfway, ends in the state one clean run leaves); type safety
    where the language offers it; integrates cleanly with surrounding code. Flag a
-   comment that says what the code does, restates a reason the code already shows,
-   or defends a workaround in place of fixing its cause; keep one that says why the
-   code is this way and not the obvious way, as short as that point allows — code
-   carries no comment by default (HARRY.md **Code**).
+   comment — a doc comment (godoc, JSDoc, docstring) or a test comment included —
+   that says what the code does, restates a reason the code or a test's name and
+   assertions already show, or defends a workaround in place of fixing its cause;
+   keep one only when, without it, a capable reader would "fix" the code to the
+   obvious way and break it, or miss a constraint from outside the code, as short as
+   that allows. Exempt: docs a published API's consumers read, or a doc comment a
+   project linter requires. Code carries no comment by default (HARRY.md **Code**).
    Also judge against the repo's own documented standards: search the repo for every
    file that says how code is written (`CONTRIBUTING.md`, `CODING_STANDARDS.md`, and the
    like); where one conflicts with a default here, the repo's wins. Skip anything
