@@ -4,9 +4,9 @@
  *
  * This table owns the walk's rule combinations — the cap, the line it finishes, the
  * per-file check and what it rejects — so a new walk case is a new row here, never a
- * new CLI test. tests/metrics.test.ts keeps what the table cannot reach: the scan and
- * the sort, the check's wiring and process count, mutator's argv, the facts file and
- * the plan's lines, group-named errors and an interrupt's exit.
+ * new CLI test. The CLI tests over tests/metrics-harness.ts keep what the table cannot
+ * reach: the scan and the sort, the check's wiring and process count, mutator's argv, the
+ * facts file and the plan's lines, group-named errors and an interrupt's exit.
  */
 
 import assert from "node:assert/strict";
