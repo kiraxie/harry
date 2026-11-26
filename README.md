@@ -118,8 +118,8 @@ every time:
 pins; a release moves the pins. They are optional: without them, everything else works
 and the metrics output says each tool is not installed.
 
-When installed, the executing skill runs `companion metrics` before review. It scores
-the unit's changed files, writes a facts file, and the reviewers must answer every line
+When installed, the executing skill runs `companion metrics` while the review reads. It scores
+the unit's changed files, writes a facts file, and the reviewer must answer every line
 in it with a finding or a reason it is not one. Nothing is a merge gate. It runs the
 project's tests for coverage and mutation testing, removes the tools' output, and fails
 loudly if a file git sees is left changed (ignored caches a test run makes, such as

@@ -75,7 +75,9 @@ lines that rules read back: `complete (commits …)` (the AC is done; resuming
 builds from the first AC without one), the review and fix-wave lines (where
 the review stands, and the findings file each names, holding what is open), the probe
 lines `AC-<n>: probe: …` and `AC-<n>: no probe ran: …` (handed to the review beside
-their AC, whose spec verdict reads them), adjudication rulings, and the **leave as is**
+their AC, whose spec verdict reads them), the `metrics failed` lines (a metrics run held
+for the user, and the ruling on it; resuming stops on one not yet ruled), adjudication
+rulings, and the **leave as is**
 records (below), which `/debt` reads from the archive. `small fix: <what> (commit <sha7>)`
 is a record only; no rule reads it back.
 

@@ -192,6 +192,19 @@ never Critical. In a fresh review, acknowledge what was done well before listing
   in the report saying why it is not one (an equivalent mutant, an incidental shape match).
   A tool marked not installed, skipped or failed is not a hit. The numbers are evidence
   for a judgment, not a merge gate.
+- **A review beside a metrics run reads only.** A review told that metrics is running in
+  the checkout runs no test there and edits no file there, a mutant replayed by hand
+  included: the run would read either as a change it left behind. Its first report, in the
+  **Output** form, holds the findings reading reaches, and after Issues a
+  `### Checks not run` section: one line per check held back and what it would settle, or
+  `none`. An AC whose verdict waits on a held check is `partial`, naming that check. Once
+  it is handed the metrics facts file and told the checkout is free, it runs the held
+  checks — one that edits a file runs in a throwaway copy of the commit, never in the
+  checkout (the read-only rule at the top of this file) — answers the facts as the
+  bullet above says, and gives the final report: the whole **Output** form again, with
+  both verdicts. A review handed another reviewer's first report in place of its own
+  treats it as its own first report: it confirms or withdraws each finding in it, with
+  the reason, and runs each check it held back.
 - **Unreadable evidence is a gap, not a failure.** An AC whose named verification path is
   missing or unreadable is at least Important and blocks `pass` for that AC
   (report it as evidence missing).
