@@ -2182,7 +2182,8 @@ var REREVIEW_MODE = [
   "",
   "- Under `### Open findings`, one line per handed finding, under its handed number: ADDRESSED or NOT ADDRESSED, with the evidence read. Attempted is not addressed.",
   "- Judge each handed finding at the levels in the Three levels section above: ADDRESSED means the cause is gone, not only this instance.",
-  "- Number new issues on from the last number handed, never from 1."
+  "- Number new issues on from the last number handed, never from 1.",
+  "- A record line under a handed finding is its author's report of a check the fix passed, not a settled fact: check it by reading the files it cites, and in that finding's line under `### Open findings` name each file you read, by its path. A finding marked `no record line` has no recorded check."
 ].join("\n");
 var MODES = {
   review: {

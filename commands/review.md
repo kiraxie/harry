@@ -72,7 +72,12 @@ above, and a dirty tree would review the working tree, not the branch.
 (`skills/executing/SKILL.md` **One fix wave**). Its file holds the open findings
 under their numbers, the fix check's verdicts and the last number in use. Each
 finding ends in `fix tier: <tier>`, its fix's own tier (`references/tier-gates.md`
-**Fixes inside a unit**), which sets what the fix's tests must show. The
+**Fixes inside a unit**), which sets what the fix's tests must show. Under each
+finding sit the record lines of its fix's own checks (a probe, a test watched failing,
+a mutant replay) from the item's `## Progress` and the absolute path of every file
+they cite, or `no record line`; the prompt says a record line is its author's report,
+checked by reading the files it cites, and asks for each file read to be named by its
+path in the finding's line. The
 prompt carries the per-diff standard plus `references/fix-check.md` **Three levels**,
 says it is a re-review, and puts the file under its own heading, so the reviewer
 answers in the rubric's re-review form (`references/review-rubric.md`). It needs

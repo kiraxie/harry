@@ -564,6 +564,26 @@ test("AC-1: the re-review mode section names the re-review form, its verdicts, t
     assert.ok(mode.includes(needle), `the mode section must say "${needle}": ${mode}`);
 });
 
+test("AC-6: the re-review mode section says a record line is its author's report, checked by reading the files it cites", () => {
+  const repo = makeBranchRepo();
+  const run = runReview(repo, ["--base", "main", "--rereview", OPEN_FINDINGS]);
+  assert.equal(run.status, 0, run.stderr);
+  const mode = section(
+    recordedPrompt(run),
+    "the re-review prompt",
+    "# Re-review mode\n",
+    "# Open findings handed to this re-review\n",
+  ).replace(/\s+/g, " ");
+  for (const needle of [
+    "A record line under a handed finding is its author's report",
+    "not a settled fact",
+    "check it by reading the files it cites",
+    "in that finding's line under `### Open findings` name each file you read, by its path",
+    "`no record line`",
+  ])
+    assert.ok(mode.includes(needle), `the mode section must say "${needle}": ${mode}`);
+});
+
 test("AC-1: a re-review carries fix-check.md's Three levels section and no other part of that file", () => {
   const repo = makeBranchRepo();
   const run = runReview(repo, ["--base", "main", "--rereview", OPEN_FINDINGS]);
@@ -654,7 +674,7 @@ test("AC-2: the fix-check target sends the reader through the whole repo and jud
 });
 
 const SPEC =
-  "AC-1 — stale sessions expire. AC-1: probe: a stale session, old → kept, new → expired";
+  "AC-1 — stale sessions expire. AC-1: probe at 1a2b3c4: a stale session, old → kept, new → expired";
 const SPEC_HEADING = "# Acceptance criteria handed to this review\n";
 const BACKGROUND = "## Background (settled facts from the working session)\n";
 

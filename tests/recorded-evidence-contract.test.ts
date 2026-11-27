@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { readProse } from "./citations.ts";
 import { headingSection, outline, section } from "./section.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -104,4 +105,18 @@ test("AC-9: both skills define a suite line's sha the same way", () => {
     return found[0];
   });
   assert.equal(clauses[0], clauses[1], "the two skills define the suite line's sha differently");
+});
+
+const lineForms = (rel: string): string[] =>
+  readProse(rel, read(rel))
+    .filter((block) => !block.fenced)
+    .flatMap((block) => block.code.map((span) => span.value))
+    .filter((value) => value.includes(" at <sha7>: "));
+
+test("AC-4: every line form in the rule file's record table is a form executing writes", () => {
+  const forms = lineForms(RULES);
+  assert.equal(forms.length, 5, `the record table holds ${forms.length} line forms`);
+  const written = lineForms(EXECUTING);
+  for (const form of forms)
+    assert.ok(written.includes(form), `executing does not write \`${form}\``);
 });
