@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -131,7 +131,7 @@ test("a default coverage plan whose first step fails names only that step", () =
   writeFileSync(path.join(repo, ".git/info/exclude"), ".venv/\n");
   writeExecutable(
     path.join(repo, ".venv/bin/python"),
-    `#!/bin/sh\ncase "$*" in *"coverage run"*) exit 2 ;; esac\nexit 0\n`,
+    `#!/bin/sh\ncase "$2" in *"import pytest_cov"|*"import xdist") exit 1 ;; esac\ncase "$*" in *"coverage run"*) exit 2 ;; esac\nexit 0\n`,
   );
   const home = tempDir("harry-metrics-home-");
   installCrapper(home);
@@ -181,7 +181,7 @@ test("a Python group with no venv names the PATH interpreter in its coverage com
   const bin = fakeBin();
   writeExecutable(
     path.join(bin, "python3"),
-    `#!/bin/sh\ncase "$1" in -m) shift ;; -c) shift 2 ;; esac\ncase "$*" in "coverage lcov "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac\nexit 0\n`,
+    `#!/bin/sh\ncase "$2" in *"import pytest_cov"|*"import xdist") exit 1 ;; esac\ncase "$1" in -m) shift ;; -c) shift 2 ;; esac\ncase "$*" in "coverage lcov "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac\nexit 0\n`,
   );
 
   const run = runMetrics(repo, home, { binDir: bin });
@@ -194,6 +194,62 @@ test("a Python group with no venv names the PATH interpreter in its coverage com
     run.facts,
   );
 });
+
+const PYTEST_PLUGIN_CASES: { name: string; missing: string[]; run: string }[] = [
+  {
+    name: "neither plugin",
+    missing: ["pytest_cov", "xdist"],
+    run: "coverage run --data-file=target/coverage/python/.coverage -m pytest",
+  },
+  {
+    name: "pytest-cov only",
+    missing: ["xdist"],
+    run: "coverage run --data-file=target/coverage/python/.coverage -m pytest -p pytest_cov --no-cov",
+  },
+  {
+    name: "xdist only",
+    missing: ["pytest_cov"],
+    run: "coverage run --data-file=target/coverage/python/.coverage -m pytest -p xdist -n 0",
+  },
+  {
+    name: "both plugins",
+    missing: [],
+    run: "coverage run --data-file=target/coverage/python/.coverage -m pytest -p pytest_cov --no-cov -p xdist -n 0",
+  },
+  {
+    name: "both plugins without pytest",
+    missing: ["pytest"],
+    run: "coverage run --data-file=target/coverage/python/.coverage -m unittest discover",
+  },
+];
+
+for (const c of PYTEST_PLUGIN_CASES) {
+  test(`the default Python coverage run turns off the pytest plugins it can import: ${c.name}`, () => {
+    const repo = makeRepo(
+      { "pyproject.toml": "[project]\nname = 'p'\n" },
+      { "src/p.py": "# // crap p 2 1\n" },
+    );
+    const home = tempDir("harry-metrics-home-");
+    installCrapper(home);
+    const bin = fakeBin();
+    const fails = c.missing.map((m) => `*"import ${m}") exit 1 ;;`).join(" ");
+    writeExecutable(
+      path.join(bin, "python3"),
+      `#!/bin/sh\ncase "$2" in ${fails} esac\ncase "$1" in -m) shift ;; -c) shift 2 ;; esac\ncase "$1" in coverage) echo "$*" >> "$(dirname "$0")/coverage-calls.log" ;; esac\ncase "$*" in "coverage lcov "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac\nexit 0\n`,
+    );
+
+    const run = runMetrics(repo, home, { binDir: bin });
+
+    assert.equal(run.status, 0, run.stderr);
+    const lcov =
+      "coverage lcov --data-file=target/coverage/python/.coverage -o target/coverage/python/lcov.info";
+    assert.equal(readFileSync(path.join(bin, "coverage-calls.log"), "utf8"), `${c.run}\n${lcov}\n`);
+    assert.ok(
+      run.facts.includes(`— coverage: python3 -m ${c.run} && python3 -m ${lcov}\n`),
+      run.facts,
+    );
+  });
+}
 
 test("a site the coverage report leaves uncovered is counted as not run", () => {
   const repo = makeRepo(

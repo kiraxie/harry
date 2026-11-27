@@ -187,13 +187,34 @@ function canImport(python: string, module: string, cwd: string): boolean {
 
 const PYTHON_REPORT_DIR = "target/coverage/python";
 
+/**
+ * Plugins a project's addopts can turn on that leave coverage run with wrong data: pytest-cov
+ * replaces its tracer, xdist runs the tests outside it. `-p` loads each first, since its flag
+ * is unrecognized where the plugin is installed but not loaded (autoload off, `-p no:cov`).
+ */
+const PYTEST_PLUGINS_OFF: [string, string[]][] = [
+  ["pytest_cov", ["--no-cov"]],
+  ["xdist", ["-n", "0"]],
+];
+
+function pytestRunner(py: string, groupDir: string): string[] {
+  return [
+    "pytest",
+    ...PYTEST_PLUGINS_OFF.filter(([plugin]) => canImport(py, plugin, groupDir)).flatMap(
+      ([plugin, off]) => ["-p", plugin, ...off],
+    ),
+  ];
+}
+
 function pythonPlan(groupDir: string): OwnPlan {
   const py = pythonInterpreter(groupDir);
   if (py === null) return { skip: "no python3 on PATH" };
   if (!canImport(py, "coverage", groupDir)) {
     return { skip: `coverage is not installed in ${py}; install coverage there to score coverage` };
   }
-  const runner = canImport(py, "pytest", groupDir) ? ["pytest"] : ["unittest", "discover"];
+  const runner = canImport(py, "pytest", groupDir)
+    ? pytestRunner(py, groupDir)
+    : ["unittest", "discover"];
   // A flag, not COVERAGE_FILE: the tests under the run inherit an env var, and with it
   // every other coverage instance they start would write to the same file.
   const data = `--data-file=${PYTHON_REPORT_DIR}/.coverage`;

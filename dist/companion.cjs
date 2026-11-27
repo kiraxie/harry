@@ -1174,13 +1174,25 @@ function canImport(python, module2, cwd) {
   return res.status === 0;
 }
 var PYTHON_REPORT_DIR = "target/coverage/python";
+var PYTEST_PLUGINS_OFF = [
+  ["pytest_cov", ["--no-cov"]],
+  ["xdist", ["-n", "0"]]
+];
+function pytestRunner(py, groupDir) {
+  return [
+    "pytest",
+    ...PYTEST_PLUGINS_OFF.filter(([plugin]) => canImport(py, plugin, groupDir)).flatMap(
+      ([plugin, off]) => ["-p", plugin, ...off]
+    )
+  ];
+}
 function pythonPlan(groupDir) {
   const py = pythonInterpreter(groupDir);
   if (py === null) return { skip: "no python3 on PATH" };
   if (!canImport(py, "coverage", groupDir)) {
     return { skip: `coverage is not installed in ${py}; install coverage there to score coverage` };
   }
-  const runner = canImport(py, "pytest", groupDir) ? ["pytest"] : ["unittest", "discover"];
+  const runner = canImport(py, "pytest", groupDir) ? pytestRunner(py, groupDir) : ["unittest", "discover"];
   const data = `--data-file=${PYTHON_REPORT_DIR}/.coverage`;
   return {
     steps: [

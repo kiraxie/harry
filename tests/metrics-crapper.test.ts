@@ -404,6 +404,7 @@ test("the before-state is the branch point, so a function base renamed later is 
 
 /** A project python: logs each coverage command, the module and its args, however it is started. */
 const FAKE_COVERAGE_PYTHON = `#!/bin/sh
+case "$2" in *"import pytest_cov"|*"import xdist") exit 1 ;; esac
 case "$1" in -m) shift ;; -c) shift 2 ;; esac
 case "$1" in coverage) printf '%s\\t%s\\n' "$*" "$PWD" >> "$(dirname "$0")/../coverage-calls.tsv" ;; esac
 case "$*" in "coverage lcov "*) mkdir -p target/coverage/python && echo TN: > target/coverage/python/lcov.info ;; esac
